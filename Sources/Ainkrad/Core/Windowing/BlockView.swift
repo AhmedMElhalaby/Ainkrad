@@ -13,6 +13,10 @@ struct BlockView: View {
         registry.allApps.first { $0.id == block.appID }
     }
 
+    private var isFocused: Bool {
+        tileLayout.focusedBlockID == block.id
+    }
+
     var body: some View {
         let tokens = environment.themeManager.tokens
 
@@ -22,6 +26,13 @@ struct BlockView: View {
             content(tokens: tokens)
         }
         .background(tokens.surface)
+        .overlay(
+            Rectangle()
+                .strokeBorder(
+                    isFocused ? tokens.accentPrimary.opacity(0.7) : .clear,
+                    lineWidth: 1
+                )
+        )
         .contentShape(Rectangle())
         .onTapGesture { tileLayout.focus(block.id) }
     }
@@ -30,10 +41,11 @@ struct BlockView: View {
         HStack(spacing: 6) {
             if let app {
                 Image(systemName: app.icon)
-                    .foregroundStyle(tokens.accentPrimary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isFocused ? tokens.accentPrimary : tokens.foreground.opacity(0.5))
                 Text(app.displayName)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tokens.foreground)
+                    .foregroundStyle(isFocused ? tokens.foreground : tokens.foreground.opacity(0.6))
             }
             Spacer()
             Button {
@@ -47,6 +59,7 @@ struct BlockView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
+        .background(isFocused ? tokens.surfaceElevated : tokens.surface)
     }
 
     @ViewBuilder

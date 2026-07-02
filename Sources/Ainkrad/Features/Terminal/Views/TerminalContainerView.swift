@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import SwiftTerm
 
 /// Hosts SwiftTerm's `LocalProcessTerminalView` (an AppKit `NSView`) inside
@@ -8,11 +9,13 @@ import SwiftTerm
 /// Architecture.md. Resize forwarding to the PTY is handled internally by
 /// SwiftTerm whenever this view's frame changes.
 struct TerminalContainerView: NSViewRepresentable {
+    @Environment(AppEnvironment.self) private var environment
     let session: TerminalSession
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
+        applyTheme(to: view)
         view.startProcess(
             executable: session.shellPath,
             args: ["-l"],
@@ -22,7 +25,18 @@ struct TerminalContainerView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {}
+    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+        applyTheme(to: nsView)
+    }
+
+    /// Applied on creation and re-applied on every SwiftUI update, so a
+    /// theme switch recolors running terminals live.
+    private func applyTheme(to view: LocalProcessTerminalView) {
+        let tokens = environment.themeManager.tokens
+        view.nativeBackgroundColor = NSColor(tokens.background)
+        view.nativeForegroundColor = NSColor(tokens.foreground)
+        view.caretColor = NSColor(tokens.accentSecondary)
+    }
 
     static func dismantleNSView(_ nsView: LocalProcessTerminalView, coordinator: Coordinator) {
         nsView.terminate()
