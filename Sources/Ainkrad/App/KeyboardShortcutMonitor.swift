@@ -55,7 +55,12 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
 
             switch characters {
             case "k" where !isShifted:
-                environment.isLauncherPresented = true
+                if environment.isLauncherPresented {
+                    environment.launcherStore.query = ""
+                    environment.isLauncherPresented = false
+                } else {
+                    environment.isLauncherPresented = true
+                }
                 return true
             case "n" where isShifted:
                 environment.workspaceManager.createWorkspace()
