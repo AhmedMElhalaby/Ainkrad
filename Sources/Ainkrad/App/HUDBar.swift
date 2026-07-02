@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The OS status strip fused with the (hidden) title bar at the very top
-/// of the screen: the system traffic lights float inside its left side,
-/// the clickable workspace dots sit on the right, over an accent hairline.
-/// Deliberately HUD language, not window chrome.
+/// The top edge of the screen — not a bar. The system traffic lights and
+/// the clickable workspace dots float directly on the sky, with no
+/// background tint and no separator, so the title-bar region is seamlessly
+/// part of the workspace.
 ///
 /// NOTE: the workspace dots intentionally supersede ADR-0008's
 /// "no persistent workspace indicator" — approved as part of the
@@ -23,15 +23,6 @@ struct HUDBar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 30)
-        .background(tokens.background.opacity(0.55))
-        .overlay(alignment: .bottom) {
-            LinearGradient(
-                colors: [.clear, tokens.accentPrimary.opacity(0.55), .clear],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(height: 1)
-        }
     }
 
     /// One diamond per workspace — the brand's diamond accent (the mark

@@ -27,6 +27,13 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            // One-part screen: no title-bar material or separator may
+            // tint the top region — the sky runs edge to edge.
+            if let window {
+                window.titlebarAppearsTransparent = true
+                window.titlebarSeparatorStyle = .none
+                window.isMovableByWindowBackground = true
+            }
             if window != nil {
                 guard monitor == nil else { return }
                 monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
