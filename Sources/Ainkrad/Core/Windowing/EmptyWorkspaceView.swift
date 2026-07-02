@@ -10,23 +10,10 @@ struct EmptyWorkspaceView: View {
         let tokens = environment.themeManager.tokens
 
         VStack(spacing: 0) {
+            // The artwork carries the wordmark and tagline itself — no
+            // native text over it.
             FloatingIslandView()
-                .frame(maxHeight: 420)
-
-            Text("AINKRAD")
-                .font(AinkradFont.display(26, weight: .semibold))
-                .kerning(10)
-                .foregroundStyle(tokens.foreground)
-                .padding(.top, 10)
-                // Kerning trails the last glyph; nudge back to optical center.
-                .offset(x: 5)
-
-            Text("BUILD · FOCUS · ELEVATE")
-                .font(AinkradFont.display(10, weight: .medium))
-                .kerning(4)
-                .foregroundStyle(tokens.accentSecondary.opacity(0.75))
-                .padding(.top, 10)
-                .offset(x: 2)
+                .frame(maxWidth: 860, maxHeight: 574)
 
             HStack(spacing: 7) {
                 keycap("⌘", tokens: tokens)
@@ -36,7 +23,7 @@ struct EmptyWorkspaceView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.45))
                     .padding(.leading, 3)
             }
-            .padding(.top, 44)
+            .padding(.top, 18)
         }
     }
 
