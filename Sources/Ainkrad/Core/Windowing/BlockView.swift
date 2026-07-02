@@ -19,6 +19,8 @@ struct BlockView: View {
     @State private var hasArrived = false
     @State private var isHoveringClose = false
     @State private var isHoveringMagnify = false
+    @State private var dropEdge: PaneEdge?
+    @State private var paneSize: CGSize = .zero
 
     private var app: BuiltInApp.Type? {
         registry.allApps.first { $0.id == block.appID }
@@ -61,19 +63,55 @@ struct BlockView: View {
                 .stroke(isFocused ? tokens.accentSecondary.opacity(0.85) : .clear, lineWidth: 1.5)
                 .padding(-2)
         )
+        .overlay(dropZoneHighlight(tokens: tokens))
         .shadow(color: isFocused ? tokens.accentPrimary.opacity(0.28) : .black.opacity(0.25), radius: isFocused ? 22 : 12)
         .opacity(isFocused ? 1 : 0.92)
         .scaleEffect(hasArrived || reduceMotion ? 1 : 0.97)
         .contentShape(Rectangle())
         .onTapGesture { tileLayout.focus(block.id) }
-        .onDrop(of: [.text], delegate: PaneReorderDropDelegate(
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PaneSizePreferenceKey.self, value: proxy.size)
+            }
+        )
+        .onPreferenceChange(PaneSizePreferenceKey.self) { paneSize = $0 }
+        .onDrop(of: [.text], delegate: PaneEdgeDropDelegate(
             targetBlockID: block.id,
-            tileLayout: tileLayout
+            tileLayout: tileLayout,
+            size: { paneSize },
+            edge: $dropEdge
         ))
         .animation(.easeOut(duration: 0.15), value: isFocused)
+        .animation(.easeOut(duration: 0.1), value: dropEdge)
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeOut(duration: 0.15)) { hasArrived = true }
+        }
+    }
+
+    /// The half of this pane the dragged pane would occupy, tinted while a
+    /// drag hovers over it — the Termius drop indicator, in our accents.
+    @ViewBuilder
+    private func dropZoneHighlight(tokens: DesignTokens) -> some View {
+        if let dropEdge {
+            let zone = RoundedRectangle(cornerRadius: 10)
+                .fill(tokens.accentPrimary.opacity(0.18))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(tokens.accentSecondary.opacity(0.6), lineWidth: 1)
+                )
+                .padding(3)
+
+            switch dropEdge {
+            case .leading:
+                zone.frame(width: max(paneSize.width / 2, 0)).frame(maxWidth: .infinity, alignment: .leading)
+            case .trailing:
+                zone.frame(width: max(paneSize.width / 2, 0)).frame(maxWidth: .infinity, alignment: .trailing)
+            case .top:
+                zone.frame(height: max(paneSize.height / 2, 0)).frame(maxHeight: .infinity, alignment: .top)
+            case .bottom:
+                zone.frame(height: max(paneSize.height / 2, 0)).frame(maxHeight: .infinity, alignment: .bottom)
+            }
         }
     }
 
@@ -131,6 +169,18 @@ struct BlockView: View {
         .onDrag {
             tileLayout.draggingBlockID = block.id
             return NSItemProvider(object: block.id.uuidString as NSString)
+        } preview: {
+            // Termius-style drag ghost: a small pill, not the whole pane.
+            HStack(spacing: 6) {
+                headerTile(tokens: tokens)
+                Text(app?.displayName ?? block.appID)
+                    .font(AinkradFont.display(11, weight: .medium))
+                    .foregroundStyle(tokens.foreground)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(tokens.surfaceElevated)
+            .clipShape(Capsule())
         }
     }
 
@@ -171,12 +221,22 @@ struct BlockView: View {
     }
 }
 
-/// Termius-style pane reordering: as the dragged pane passes over a
-/// sibling, it takes that position and the grid reflows live; the drop
-/// just ends the session.
-private struct PaneReorderDropDelegate: DropDelegate {
+private struct PaneSizePreferenceKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
+/// The Termius drop mechanism: while a dragged pane hovers, the nearest
+/// half of this pane is tracked (for the highlight); dropping performs
+/// `TileLayout.move` — joining as an equal sibling on parallel edges, or
+/// wrapping this pane into a stacked pair on perpendicular ones.
+private struct PaneEdgeDropDelegate: DropDelegate {
     let targetBlockID: UUID
     let tileLayout: TileLayout
+    let size: () -> CGSize
+    @Binding var edge: PaneEdge?
 
     func validateDrop(info: DropInfo) -> Bool {
         guard let dragging = tileLayout.draggingBlockID else { return false }
@@ -184,25 +244,38 @@ private struct PaneReorderDropDelegate: DropDelegate {
     }
 
     func dropEntered(info: DropInfo) {
-        guard let dragging = tileLayout.draggingBlockID, dragging != targetBlockID,
-              let from = tileLayout.blocks.firstIndex(where: { $0.id == dragging }),
-              let to = tileLayout.blocks.firstIndex(where: { $0.id == targetBlockID }) else { return }
-
-        if from < to {
-            // Moving forward: land after the target.
-            let successor = to + 1 < tileLayout.blocks.count ? tileLayout.blocks[to + 1].id : nil
-            tileLayout.movePane(dragging, before: successor)
-        } else {
-            tileLayout.movePane(dragging, before: targetBlockID)
-        }
+        edge = nearestEdge(to: info.location)
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
+        edge = nearestEdge(to: info.location)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        edge = nil
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        tileLayout.draggingBlockID = nil
+        let landingEdge = edge ?? nearestEdge(to: info.location)
+        defer {
+            edge = nil
+            tileLayout.draggingBlockID = nil
+        }
+        guard let dragging = tileLayout.draggingBlockID else { return false }
+        tileLayout.move(dragging, to: targetBlockID, edge: landingEdge)
         return true
+    }
+
+    private func nearestEdge(to location: CGPoint) -> PaneEdge {
+        let bounds = size()
+        guard bounds.width > 0, bounds.height > 0 else { return .trailing }
+        let dx = location.x / bounds.width - 0.5
+        let dy = location.y / bounds.height - 0.5
+        if abs(dx) > abs(dy) {
+            return dx < 0 ? .leading : .trailing
+        } else {
+            return dy < 0 ? .top : .bottom
+        }
     }
 }

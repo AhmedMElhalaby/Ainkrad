@@ -2,12 +2,12 @@ import Testing
 import Foundation
 @testable import Ainkrad
 
-@Suite("TileLayout (balanced grid)")
+@Suite("TileLayout (N-ary split tree)")
 struct TileLayoutTests {
 
     // MARK: - Basics
 
-    @Test("a new layout starts empty with no focused Block")
+    @Test("a new layout starts empty with no focused pane")
     func startsEmpty() {
         let layout = TileLayout()
         #expect(layout.isEmpty)
@@ -15,130 +15,74 @@ struct TileLayoutTests {
         #expect(layout.focusedBlockID == nil)
     }
 
-    @Test("opening apps appends panes in order and focuses the newest")
-    func openAppendsInOrder() {
+    @Test("opening apps appends equal top-level columns, newest focused")
+    func openAppendsEqualColumns() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
         let c = layout.openApp("c")
 
-        #expect(layout.blocks.map { $0.id } == [a.id, b.id, c.id])
-        #expect(layout.appIDs == ["a", "b", "c"])
+        guard case .split(let axis, let children, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(axis == .horizontal)
+        #expect(children == [.leaf(a), .leaf(b), .leaf(c)])
+        #expect(fractions.count == 3)
+        #expect(abs(fractions[0] - 1.0 / 3.0) < 0.0001)
         #expect(layout.focusedBlockID == c.id)
+        #expect(layout.appIDs == ["a", "b", "c"])
     }
 
-    @Test("multiple Blocks of the same app are allowed as distinct panes")
-    func multipleBlocksOfSameAppAllowed() {
-        let layout = TileLayout()
-        let first = layout.openApp("terminal")
-        let second = layout.openApp("terminal")
-
-        #expect(first.id != second.id)
-        #expect(layout.blocks.count == 2)
-    }
-
-    // MARK: - Balanced grid arrangement
-
-    @Test("the grid stays balanced and near-square as panes are added")
-    func gridShapePerCount() {
-        let layout = TileLayout()
-
-        layout.openApp("1")
-        #expect(layout.grid.map { $0.count } == [1])
-
-        layout.openApp("2")
-        #expect(layout.grid.map { $0.count } == [2])
-
-        layout.openApp("3")
-        #expect(layout.grid.map { $0.count } == [2, 1])
-
-        layout.openApp("4")
-        #expect(layout.grid.map { $0.count } == [2, 2])
-
-        layout.openApp("5")
-        #expect(layout.grid.map { $0.count } == [3, 2])
-
-        layout.openApp("6")
-        #expect(layout.grid.map { $0.count } == [3, 3])
-
-        layout.openApp("7")
-        #expect(layout.grid.map { $0.count } == [3, 3, 1])
-
-        layout.openApp("8")
-        #expect(layout.grid.map { $0.count } == [3, 3, 2])
-
-        layout.openApp("9")
-        #expect(layout.grid.map { $0.count } == [3, 3, 3])
-    }
-
-    @Test("grid rows are filled in pane order, row-major")
-    func gridFillsRowMajor() {
+    @Test("a single pane fills the canvas")
+    func singlePaneIsRootLeaf() {
         let layout = TileLayout()
         let a = layout.openApp("a")
-        let b = layout.openApp("b")
-        let c = layout.openApp("c")
-
-        #expect(layout.grid[0].map { $0.id } == [a.id, b.id])
-        #expect(layout.grid[1].map { $0.id } == [c.id])
-    }
-
-    @Test("row and column fractions are equalized whenever the pane count changes")
-    func fractionsEqualizeOnStructureChange() {
-        let layout = TileLayout()
-        layout.openApp("a")
-        layout.openApp("b")
-
-        // Resize, then add a pane — fractions reset to equal.
-        layout.setColumnBoundary(inRow: 0, after: 0, to: 0.8)
-        #expect(layout.columnFractions[0][0] == 0.8)
-
-        layout.openApp("c")
-
-        #expect(layout.rowFractions == [0.5, 0.5])
-        #expect(layout.columnFractions[0] == [0.5, 0.5])
-        #expect(layout.columnFractions[1] == [1.0])
+        #expect(layout.root == .leaf(a))
     }
 
     // MARK: - Close
 
-    @Test("closing a pane reflows the grid and re-equalizes")
-    func closeReflowsGrid() {
+    @Test("closing a pane re-equalizes its siblings")
+    func closeReEqualizesSiblings() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
         let c = layout.openApp("c")
 
-        layout.close(a.id)
+        layout.close(b.id)
 
-        #expect(layout.blocks.map { $0.id } == [b.id, c.id])
-        #expect(layout.grid.map { $0.count } == [2])
-        #expect(layout.columnFractions[0] == [0.5, 0.5])
+        guard case .split(_, let children, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(children == [.leaf(a), .leaf(c)])
+        #expect(fractions == [0.5, 0.5])
     }
 
-    @Test("closing the focused pane focuses its predecessor")
-    func closingFocusedFocusesPredecessor() {
+    @Test("a container left with one child collapses into it")
+    func singleChildContainerCollapses() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
+        // Stack b under a: root becomes a single vertical container.
+        layout.move(b.id, to: a.id, edge: .bottom)
+
+        layout.close(b.id)
+
+        #expect(layout.root == .leaf(a))
+    }
+
+    @Test("closing the focused pane focuses its predecessor in pane order")
+    func closingFocusedFocusesPredecessor() {
+        let layout = TileLayout()
+        _ = layout.openApp("a")
+        let b = layout.openApp("b")
         let c = layout.openApp("c")
-        #expect(layout.focusedBlockID == c.id)
 
         layout.close(c.id)
 
         #expect(layout.focusedBlockID == b.id)
-        _ = a
-    }
-
-    @Test("closing a non-focused pane keeps focus")
-    func closingNonFocusedKeepsFocus() {
-        let layout = TileLayout()
-        let a = layout.openApp("a")
-        let b = layout.openApp("b")
-        layout.focus(a.id)
-
-        layout.close(b.id)
-
-        #expect(layout.focusedBlockID == a.id)
     }
 
     @Test("closing the last pane returns to the empty state")
@@ -152,73 +96,127 @@ struct TileLayoutTests {
         #expect(layout.focusedBlockID == nil)
     }
 
-    // MARK: - Reorder (drag a pane to change its position)
+    // MARK: - Move: parallel drops join the container as an equal sibling
 
-    @Test("movePane repositions a pane within the order")
-    func movePaneRepositions() {
+    @Test("dropping on a side edge inserts as an equal sibling column")
+    func parallelDropInsertsSibling() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
         let c = layout.openApp("c")
 
-        layout.movePane(c.id, before: a.id)
+        // Drag c onto a's leading edge: [c, a, b] as equal thirds.
+        layout.move(c.id, to: a.id, edge: .leading)
 
-        #expect(layout.blocks.map { $0.id } == [c.id, a.id, b.id])
+        guard case .split(let axis, let children, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(axis == .horizontal)
+        #expect(children == [.leaf(c), .leaf(a), .leaf(b)])
+        #expect(abs(fractions[0] - 1.0 / 3.0) < 0.0001)
+        #expect(layout.focusedBlockID == c.id)
     }
 
-    @Test("movePane to the end works via nil target")
-    func movePaneToEnd() {
+    @Test("dropping on a trailing edge lands after the target")
+    func trailingDropLandsAfterTarget() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
         let c = layout.openApp("c")
 
-        layout.movePane(a.id, before: nil)
+        layout.move(a.id, to: b.id, edge: .trailing)
 
-        #expect(layout.blocks.map { $0.id } == [b.id, c.id, a.id])
+        guard case .split(_, let children, _) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(children == [.leaf(b), .leaf(a), .leaf(c)])
     }
 
-    @Test("movePane onto itself is a no-op")
-    func movePaneOntoSelfIsNoOp() {
+    // MARK: - Move: perpendicular drops wrap the target
+
+    @Test("dropping on a bottom edge stacks the pane under the target")
+    func perpendicularDropWrapsTarget() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
+        let c = layout.openApp("c")
 
-        layout.movePane(a.id, before: a.id)
+        // Drag c under b: b's slot becomes a vertical pair, thirds → halves.
+        layout.move(c.id, to: b.id, edge: .bottom)
 
-        #expect(layout.blocks.map { $0.id } == [a.id, b.id])
+        guard case .split(let axis, let children, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(axis == .horizontal)
+        #expect(fractions == [0.5, 0.5])
+        #expect(children[0] == .leaf(a))
+        #expect(children[1] == .split(axis: .vertical, children: [.leaf(b), .leaf(c)], fractions: [0.5, 0.5]))
     }
 
-    // MARK: - Resize boundaries
-
-    @Test("setRowBoundary adjusts adjacent row fractions within limits")
-    func setRowBoundaryAdjustsFractions() {
+    @Test("moving the last sibling out of a container collapses it")
+    func movingOutCollapsesContainer() {
         let layout = TileLayout()
-        layout.openApp("a")
-        layout.openApp("b")
-        layout.openApp("c") // 2 rows
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        layout.move(b.id, to: a.id, edge: .bottom)
+        // Root is now a vertical pair [a, b].
 
-        layout.setRowBoundary(after: 0, to: 0.7)
-        #expect(abs(layout.rowFractions[0] - 0.7) < 0.0001)
-        #expect(abs(layout.rowFractions[1] - 0.3) < 0.0001)
+        layout.move(b.id, to: a.id, edge: .trailing)
 
-        // Clamped so no row collapses below 10%.
-        layout.setRowBoundary(after: 0, to: 0.99)
-        #expect(layout.rowFractions[0] <= 0.9)
+        #expect(layout.root == .split(axis: .horizontal, children: [.leaf(a), .leaf(b)], fractions: [0.5, 0.5]))
     }
 
-    @Test("setColumnBoundary adjusts adjacent column fractions in one row only")
-    func setColumnBoundaryAdjustsOneRow() {
+    @Test("moving a pane onto itself is a no-op")
+    func moveOntoSelfIsNoOp() {
         let layout = TileLayout()
-        layout.openApp("a")
-        layout.openApp("b")
-        layout.openApp("c")
-        layout.openApp("d") // 2x2
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        let before = layout.root
 
-        layout.setColumnBoundary(inRow: 0, after: 0, to: 0.65)
+        layout.move(a.id, to: a.id, edge: .leading)
 
-        #expect(abs(layout.columnFractions[0][0] - 0.65) < 0.0001)
-        #expect(layout.columnFractions[1] == [0.5, 0.5])
+        #expect(layout.root == before)
+        _ = b
+    }
+
+    // MARK: - Resize
+
+    @Test("setBoundary adjusts adjacent sibling fractions within a container")
+    func setBoundaryAdjustsFractions() {
+        let layout = TileLayout()
+        _ = layout.openApp("a")
+        _ = layout.openApp("b")
+        _ = layout.openApp("c")
+
+        // Boundary after the first third moved to 50%.
+        layout.setBoundary(path: [], after: 0, to: 0.5)
+
+        guard case .split(_, _, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(abs(fractions[0] - 0.5) < 0.0001)
+        #expect(abs(fractions[1] - (1.0 / 3.0 + 1.0 / 3.0 - 0.5)) < 0.0001)
+        #expect(abs(fractions[2] - 1.0 / 3.0) < 0.0001)
+    }
+
+    @Test("setBoundary clamps so no sibling collapses below its minimum")
+    func setBoundaryClamps() {
+        let layout = TileLayout()
+        _ = layout.openApp("a")
+        _ = layout.openApp("b")
+
+        layout.setBoundary(path: [], after: 0, to: 0.99)
+
+        guard case .split(_, _, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(fractions[0] <= 0.9 + 0.0001)
+        #expect(fractions[1] >= 0.1 - 0.0001)
     }
 
     // MARK: - Magnify
@@ -266,9 +264,8 @@ struct TileLayoutTests {
         let b = layout.openApp("b")
         layout.toggleMagnify(a.id)
 
-        layout.movePane(a.id, before: nil)
+        layout.move(a.id, to: b.id, edge: .bottom)
 
         #expect(layout.magnifiedBlockID == nil)
-        _ = b
     }
 }

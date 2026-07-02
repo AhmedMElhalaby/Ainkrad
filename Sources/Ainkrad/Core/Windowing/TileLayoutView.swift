@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// Renders one workspace's balanced pane grid, or the empty-state hint
-/// when it has no open panes. See Window & Tile Management Architecture.md.
+/// Renders one workspace's pane tree, or the empty-state hint when it has
+/// no open panes. See Window & Tile Management Architecture.md.
 struct TileLayoutView: View {
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
@@ -10,10 +10,10 @@ struct TileLayoutView: View {
     var body: some View {
         if tileLayout.isEmpty {
             EmptyWorkspaceView()
-        } else {
+        } else if let root = tileLayout.root {
             // Breathing room around the floating panes — the sky stays
             // visible at the canvas edges.
-            GridLayoutView(tileLayout: tileLayout, registry: registry)
+            PaneTreeView(node: root, path: [], tileLayout: tileLayout, registry: registry)
                 .padding([.horizontal, .bottom], 10)
                 .padding(.top, 4)
                 .animation(.easeInOut(duration: 0.2), value: tileLayout.magnifiedBlockID)
@@ -22,99 +22,88 @@ struct TileLayoutView: View {
     }
 }
 
-/// The Termius-style balanced grid: rows of equal-by-default panes with
-/// energy-seam boundaries between rows and columns. While a pane is
-/// magnified, everything else collapses to zero (but stays mounted, so
-/// sessions keep running) and the magnified pane fills the canvas.
-struct GridLayoutView: View {
+/// Recursively renders one node of the N-ary split tree: a pane for a
+/// leaf, or children laid along the container's axis with energy seams
+/// between them. While a pane is magnified, every container on its path
+/// gives it 100% and collapses the rest to zero (still mounted, so
+/// sessions keep running).
+struct PaneTreeView: View {
+    let node: PaneNode
+    let path: [Int]
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
 
     var body: some View {
+        switch node {
+        case .leaf(let block):
+            BlockView(block: block, tileLayout: tileLayout, registry: registry)
+        case .split(let axis, let children, let fractions):
+            container(axis: axis, children: children, fractions: fractions)
+        }
+    }
+
+    private func container(axis: PaneAxis, children: [PaneNode], fractions: [Double]) -> some View {
         GeometryReader { proxy in
-            let grid = tileLayout.grid
-            let magnifiedID = tileLayout.magnifiedBlockID
-            let gap: CGFloat = magnifiedID == nil ? 8 : 0
-            let rowFractions = effectiveRowFractions(grid: grid, magnifiedID: magnifiedID)
-            let rowSeams = CGFloat(max(grid.count - 1, 0)) * gap
-            let availableHeight = max(proxy.size.height - rowSeams, 0)
+            let isMagnifyActive = tileLayout.magnifiedBlockID != nil
+            let gap: CGFloat = isMagnifyActive ? 0 : 8
+            let effective = effectiveFractions(children: children, fractions: fractions, isMagnifyActive: isMagnifyActive)
+            let total = axis == .horizontal ? proxy.size.width : proxy.size.height
+            let available = max(total - CGFloat(children.count - 1) * gap, 0)
+            let spaceName = "pane-container-\(path.map(String.init).joined(separator: "."))"
 
-            VStack(spacing: 0) {
-                ForEach(Array(grid.enumerated()), id: \.offset) { rowIndex, row in
-                    gridRow(
-                        row,
-                        rowIndex: rowIndex,
-                        magnifiedID: magnifiedID,
-                        gap: gap,
-                        width: proxy.size.width
-                    )
-                    .frame(height: availableHeight * rowFractions[rowIndex])
+            let stack = axis == .horizontal
+                ? AnyLayout(HStackLayout(spacing: 0))
+                : AnyLayout(VStackLayout(spacing: 0))
 
-                    if rowIndex < grid.count - 1 {
-                        SeamView(axis: .horizontal, gap: gap, isDisabled: magnifiedID != nil) { location in
-                            tileLayout.setRowBoundary(after: rowIndex, to: location.y / max(proxy.size.height, 1))
+            stack {
+                ForEach(Array(children.enumerated()), id: \.offset) { index, child in
+                    PaneTreeView(node: child, path: path + [index], tileLayout: tileLayout, registry: registry)
+                        .frame(
+                            width: axis == .horizontal ? available * effective[index] : nil,
+                            height: axis == .vertical ? available * effective[index] : nil
+                        )
+
+                    if index < children.count - 1 {
+                        SeamView(
+                            axis: axis,
+                            gap: gap,
+                            isDisabled: isMagnifyActive,
+                            coordinateSpace: spaceName
+                        ) { location in
+                            let position = axis == .horizontal
+                                ? location.x / max(proxy.size.width, 1)
+                                : location.y / max(proxy.size.height, 1)
+                            tileLayout.setBoundary(path: path, after: index, to: position)
                         }
                     }
                 }
             }
-        }
-        .coordinateSpace(name: "tile-grid")
-    }
-
-    private func gridRow(_ row: [Block], rowIndex: Int, magnifiedID: UUID?, gap: CGFloat, width: CGFloat) -> some View {
-        let columnFractions = effectiveColumnFractions(row: row, rowIndex: rowIndex, magnifiedID: magnifiedID)
-        let columnSeams = CGFloat(max(row.count - 1, 0)) * gap
-        let availableWidth = max(width - columnSeams, 0)
-
-        return HStack(spacing: 0) {
-            ForEach(Array(row.enumerated()), id: \.element.id) { columnIndex, block in
-                BlockView(block: block, tileLayout: tileLayout, registry: registry)
-                    .frame(width: availableWidth * columnFractions[columnIndex])
-
-                if columnIndex < row.count - 1 {
-                    SeamView(axis: .vertical, gap: gap, isDisabled: magnifiedID != nil) { location in
-                        tileLayout.setColumnBoundary(inRow: rowIndex, after: columnIndex, to: location.x / max(width, 1))
-                    }
-                }
-            }
+            .coordinateSpace(name: spaceName)
         }
     }
 
-    /// Stored fractions, overridden while magnified: the magnified pane's
-    /// row/column takes 1.0 and everything else 0. Falls back to equal
-    /// shares if stored fractions are momentarily out of sync.
-    private func effectiveRowFractions(grid: [[Block]], magnifiedID: UUID?) -> [Double] {
-        if let magnifiedID {
-            return grid.map { row in row.contains(where: { $0.id == magnifiedID }) ? 1.0 : 0.0 }
+    /// Stored fractions, overridden while a pane is magnified: the child
+    /// whose subtree holds it takes 1.0, everything else 0.
+    private func effectiveFractions(children: [PaneNode], fractions: [Double], isMagnifyActive: Bool) -> [Double] {
+        if isMagnifyActive {
+            return children.map { tileLayout.subtreeContainsMagnifiedBlock($0) ? 1.0 : 0.0 }
         }
-        let stored = tileLayout.rowFractions
-        guard stored.count == grid.count else {
-            return Array(repeating: 1.0 / Double(max(grid.count, 1)), count: grid.count)
+        guard fractions.count == children.count else {
+            return Array(repeating: 1.0 / Double(max(children.count, 1)), count: children.count)
         }
-        return stored
-    }
-
-    private func effectiveColumnFractions(row: [Block], rowIndex: Int, magnifiedID: UUID?) -> [Double] {
-        if let magnifiedID {
-            return row.map { $0.id == magnifiedID ? 1.0 : 0.0 }
-        }
-        let stored = tileLayout.columnFractions
-        guard stored.indices.contains(rowIndex), stored[rowIndex].count == row.count else {
-            return Array(repeating: 1.0 / Double(max(row.count, 1)), count: row.count)
-        }
-        return stored[rowIndex]
+        return fractions
     }
 }
 
-/// An energy seam between panes: a thin accent gradient line centered in
-/// the gap that brightens on hover and while dragging to resize.
+/// An energy seam between sibling panes: a thin accent gradient line in
+/// the gap, with a grabber capsule that brightens on hover and while
+/// dragging to resize.
 private struct SeamView: View {
-    enum Axis { case horizontal, vertical }
-
     @Environment(AppEnvironment.self) private var environment
-    let axis: Axis
+    let axis: PaneAxis
     let gap: CGFloat
     let isDisabled: Bool
+    let coordinateSpace: String
     let onResize: (CGPoint) -> Void
 
     @State private var isHovering = false
@@ -125,13 +114,22 @@ private struct SeamView: View {
         let isLit = (isHovering || isDragging) && !isDisabled
 
         Group {
-            if axis == .vertical {
+            if axis == .horizontal {
+                // Children side by side → vertical seam line.
                 LinearGradient(
                     colors: [.clear, tokens.accentSecondary.opacity(isLit ? 0.9 : 0.22), .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .frame(width: isLit ? 2 : 1)
+                .overlay {
+                    if isLit {
+                        Capsule()
+                            .fill(tokens.accentSecondary)
+                            .frame(width: 3, height: 22)
+                            .shadow(color: tokens.accentSecondary.opacity(0.9), radius: 4)
+                    }
+                }
             } else {
                 LinearGradient(
                     colors: [.clear, tokens.accentSecondary.opacity(isLit ? 0.9 : 0.22), .clear],
@@ -139,16 +137,24 @@ private struct SeamView: View {
                     endPoint: .trailing
                 )
                 .frame(height: isLit ? 2 : 1)
+                .overlay {
+                    if isLit {
+                        Capsule()
+                            .fill(tokens.accentSecondary)
+                            .frame(width: 22, height: 3)
+                            .shadow(color: tokens.accentSecondary.opacity(0.9), radius: 4)
+                    }
+                }
             }
         }
         .shadow(color: isLit ? tokens.accentSecondary.opacity(0.7) : .clear, radius: 5)
         .frame(
-            width: axis == .vertical ? gap : nil,
-            height: axis == .horizontal ? gap : nil
+            width: axis == .horizontal ? gap : nil,
+            height: axis == .vertical ? gap : nil
         )
         .contentShape(Rectangle().inset(by: -2))
         .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .named("tile-grid"))
+            DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinateSpace))
                 .onChanged { value in
                     guard !isDisabled else { return }
                     isDragging = true
@@ -160,7 +166,7 @@ private struct SeamView: View {
             isHovering = hovering
             guard !isDisabled else { return }
             if hovering {
-                (axis == .vertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
+                (axis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
             } else {
                 NSCursor.arrow.set()
             }
