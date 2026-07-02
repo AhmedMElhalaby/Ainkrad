@@ -9,6 +9,9 @@ struct SplitView<First: View, Second: View>: View {
     @Environment(AppEnvironment.self) private var environment
     let axis: SplitAxis
     let ratio: Double
+    /// True while a magnified Block collapses this split — the gap and
+    /// seam disappear so the magnified side fills the canvas.
+    var isCollapsed = false
     let resizeAnchorID: UUID?
     let tileLayout: TileLayout
     @ViewBuilder let first: () -> First
@@ -19,7 +22,7 @@ struct SplitView<First: View, Second: View>: View {
 
     /// The visible gap between Blocks; the seam line draws centered in it
     /// and the drag hit area spans the whole gap plus a little more.
-    private let gap: CGFloat = 8
+    private var gap: CGFloat { isCollapsed ? 0 : 8 }
 
     var body: some View {
         GeometryReader { proxy in
@@ -45,7 +48,7 @@ struct SplitView<First: View, Second: View>: View {
     @ViewBuilder
     private func seam(totalLength: CGFloat) -> some View {
         let tokens = environment.themeManager.tokens
-        let isLit = isHovering || isDragging
+        let isLit = (isHovering || isDragging) && !isCollapsed
         let line = Group {
             if axis == .vertical {
                 LinearGradient(
@@ -70,7 +73,7 @@ struct SplitView<First: View, Second: View>: View {
         )
         .animation(.easeOut(duration: 0.12), value: isLit)
 
-        if let resizeAnchorID {
+        if let resizeAnchorID, !isCollapsed {
             line
                 .contentShape(Rectangle().inset(by: -2))
                 .gesture(

@@ -1,14 +1,38 @@
 import Foundation
 import Observation
 
+/// Which edge of a target Block a dragged Block is dropped on — decides
+/// the split axis and order for drag-to-rearrange.
+enum BlockDropEdge {
+    case leading, trailing, top, bottom
+
+    var axis: SplitAxis {
+        switch self {
+        case .leading, .trailing: return .vertical
+        case .top, .bottom: return .horizontal
+        }
+    }
+
+    /// Whether the moved Block lands before the target in the new split.
+    var insertsFirst: Bool {
+        self == .leading || self == .top
+    }
+}
+
 /// One workspace's tile tree: opening an app fills an empty layout or
 /// splits the focused Block (vertical, new Block second); closing a Block
-/// promotes its sibling; the last close returns to the empty state. See
-/// Window & Tile Management Architecture.md.
+/// promotes its sibling; the last close returns to the empty state.
+/// Blocks can be moved onto another Block's edge (drag-to-rearrange) and
+/// temporarily magnified to fill the canvas. See Window & Tile Management
+/// Architecture.md.
 @Observable
 final class TileLayout {
     private(set) var root: TileNode?
     private(set) var focusedBlockID: UUID?
+    private(set) var magnifiedBlockID: UUID?
+    /// Transient drag context for drag-to-rearrange: set while a Block
+    /// header drag session is live so drop targets can identify the source.
+    var draggingBlockID: UUID?
 
     init() {}
 
@@ -33,6 +57,7 @@ final class TileLayout {
         }
 
         focusedBlockID = newBlock.id
+        magnifiedBlockID = nil
         return newBlock
     }
 
@@ -45,6 +70,9 @@ final class TileLayout {
         if focusedBlockID == id {
             focusedBlockID = self.root.map(Self.firstLeafID)
         }
+        if magnifiedBlockID == id {
+            magnifiedBlockID = nil
+        }
     }
 
     func focus(_ id: UUID) {
@@ -54,6 +82,40 @@ final class TileLayout {
     func setRatio(_ ratio: Double, for blockID: UUID) {
         guard let root else { return }
         self.root = Self.settingRatio(ratio, forLeafID: blockID, in: root)
+    }
+
+    /// Drag-to-rearrange: removes the Block from its slot (sibling
+    /// promotes) and re-splits it onto the target Block's given edge. The
+    /// moved Block keeps focus; any magnification is cleared.
+    func move(_ id: UUID, to targetID: UUID, edge: BlockDropEdge) {
+        guard id != targetID, let root else { return }
+        guard let block = Self.firstBlock(withID: id, in: root) else { return }
+
+        let removal = Self.removing(id, from: root)
+        guard removal.found, let remaining = removal.node,
+              Self.containsBlock(targetID, in: remaining) else { return }
+
+        self.root = Self.replacing(remaining, leafID: targetID) { targetBlock in
+            edge.insertsFirst
+                ? .split(axis: edge.axis, ratio: 0.5, first: .leaf(block), second: .leaf(targetBlock))
+                : .split(axis: edge.axis, ratio: 0.5, first: .leaf(targetBlock), second: .leaf(block))
+        }
+        focusedBlockID = id
+        magnifiedBlockID = nil
+    }
+
+    /// Temporarily zooms one Block to the full canvas (toggle). Structural
+    /// changes (open/close/move) clear it.
+    func toggleMagnify(_ id: UUID) {
+        guard let root, Self.containsBlock(id, in: root) else { return }
+        magnifiedBlockID = magnifiedBlockID == id ? nil : id
+    }
+
+    /// Whether `node` contains the magnified Block — the rendering layer
+    /// uses this to collapse the other side of each split.
+    func subtreeContainsMagnifiedBlock(_ node: TileNode) -> Bool {
+        guard let magnifiedBlockID else { return false }
+        return Self.containsBlock(magnifiedBlockID, in: node)
     }
 
     // MARK: - Pure tree operations
@@ -105,6 +167,19 @@ final class TileLayout {
         case .leaf(let block): return block.id
         case .split(_, _, let first, _): return firstLeafID(in: first)
         }
+    }
+
+    private static func firstBlock(withID id: UUID, in node: TileNode) -> Block? {
+        switch node {
+        case .leaf(let block):
+            return block.id == id ? block : nil
+        case .split(_, _, let first, let second):
+            return firstBlock(withID: id, in: first) ?? firstBlock(withID: id, in: second)
+        }
+    }
+
+    private static func containsBlock(_ id: UUID, in node: TileNode) -> Bool {
+        firstBlock(withID: id, in: node) != nil
     }
 
     private static func settingRatio(_ ratio: Double, forLeafID id: UUID, in node: TileNode) -> TileNode {

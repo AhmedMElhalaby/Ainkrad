@@ -13,6 +13,7 @@ struct TileLayoutView: View {
             TileNodeView(node: root, tileLayout: tileLayout, registry: registry)
                 .padding([.horizontal, .bottom], 10)
                 .padding(.top, 4)
+                .animation(.easeInOut(duration: 0.2), value: tileLayout.magnifiedBlockID)
         } else {
             EmptyWorkspaceView()
         }
@@ -20,7 +21,9 @@ struct TileLayoutView: View {
 }
 
 /// Recursively renders one node of the split tree: a Block for a leaf, or
-/// two child nodes divided by a (possibly draggable) divider for a split.
+/// two child nodes divided by an energy seam for a split. While a Block is
+/// magnified, every split on its path collapses fully toward it — the
+/// other side shrinks to zero but stays mounted, so sessions keep running.
 struct TileNodeView: View {
     let node: TileNode
     let tileLayout: TileLayout
@@ -31,7 +34,20 @@ struct TileNodeView: View {
         case .leaf(let block):
             BlockView(block: block, tileLayout: tileLayout, registry: registry)
         case .split(let axis, let ratio, let first, let second):
-            SplitView(axis: axis, ratio: ratio, resizeAnchorID: resizeAnchorID(first: first, second: second), tileLayout: tileLayout) {
+            let collapsedRatio: Double? = {
+                guard tileLayout.magnifiedBlockID != nil else { return nil }
+                if tileLayout.subtreeContainsMagnifiedBlock(first) { return 1.0 }
+                if tileLayout.subtreeContainsMagnifiedBlock(second) { return 0.0 }
+                return nil
+            }()
+
+            SplitView(
+                axis: axis,
+                ratio: collapsedRatio ?? ratio,
+                isCollapsed: collapsedRatio != nil,
+                resizeAnchorID: resizeAnchorID(first: first, second: second),
+                tileLayout: tileLayout
+            ) {
                 TileNodeView(node: first, tileLayout: tileLayout, registry: registry)
             } second: {
                 TileNodeView(node: second, tileLayout: tileLayout, registry: registry)

@@ -87,6 +87,13 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     layout.close(focusedBlockID)
                 }
                 return true
+            case "f", "F":
+                guard isShifted else { return false }
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                if let focusedBlockID = layout.focusedBlockID {
+                    layout.toggleMagnify(focusedBlockID)
+                }
+                return true
             default:
                 if !isShifted, let number = Int(characters), (1...9).contains(number) {
                     environment.workspaceManager.switchToWorkspace(at: number - 1)

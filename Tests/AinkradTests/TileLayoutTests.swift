@@ -111,4 +111,123 @@ struct TileLayoutTests {
 
         #expect(layout.appIDs == ["terminal", "settings", "terminal"])
     }
+
+    // MARK: - Drag-to-rearrange (move)
+
+    @Test("moving a Block onto another's trailing edge splits vertically, moved Block second")
+    func moveToTrailingEdge() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        let c = layout.openApp("c")
+        // Tree: split(split(a, b-was-replaced...)) — actual: a | (b | c) after two opens?
+        // openApp splits the focused leaf: after 3 opens the tree is
+        // split(a, split(b, c)) — c focused.
+
+        layout.move(a.id, to: c.id, edge: .trailing)
+
+        // a removed (its sibling promotes), then re-split onto c's right.
+        #expect(layout.root == .split(
+            axis: .vertical, ratio: 0.5,
+            first: .leaf(b),
+            second: .split(axis: .vertical, ratio: 0.5, first: .leaf(c), second: .leaf(a))
+        ))
+        #expect(layout.focusedBlockID == a.id)
+    }
+
+    @Test("moving a Block onto another's top edge splits horizontally, moved Block first")
+    func moveToTopEdge() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+
+        layout.move(b.id, to: a.id, edge: .top)
+
+        #expect(layout.root == .split(axis: .horizontal, ratio: 0.5, first: .leaf(b), second: .leaf(a)))
+    }
+
+    @Test("moving a Block onto itself is a no-op")
+    func moveOntoSelfIsNoOp() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        let before = layout.root
+
+        layout.move(b.id, to: b.id, edge: .leading)
+
+        #expect(layout.root == before)
+        _ = a
+    }
+
+    @Test("moving the only Block is a no-op")
+    func moveOnlyBlockIsNoOp() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+
+        layout.move(a.id, to: a.id, edge: .top)
+
+        #expect(layout.root == .leaf(a))
+    }
+
+    // MARK: - Magnify
+
+    @Test("toggleMagnify magnifies a Block and toggles back off")
+    func toggleMagnifyTogglesOnAndOff() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        layout.openApp("b")
+
+        layout.toggleMagnify(a.id)
+        #expect(layout.magnifiedBlockID == a.id)
+
+        layout.toggleMagnify(a.id)
+        #expect(layout.magnifiedBlockID == nil)
+    }
+
+    @Test("magnifying a different Block replaces the current magnification")
+    func magnifyDifferentBlockReplaces() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+
+        layout.toggleMagnify(a.id)
+        layout.toggleMagnify(b.id)
+
+        #expect(layout.magnifiedBlockID == b.id)
+    }
+
+    @Test("closing the magnified Block clears magnification")
+    func closingMagnifiedClearsMagnification() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        layout.openApp("b")
+        layout.toggleMagnify(a.id)
+
+        layout.close(a.id)
+
+        #expect(layout.magnifiedBlockID == nil)
+    }
+
+    @Test("opening an app clears magnification")
+    func openingAppClearsMagnification() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        layout.toggleMagnify(a.id)
+
+        layout.openApp("b")
+
+        #expect(layout.magnifiedBlockID == nil)
+    }
+
+    @Test("moving a Block clears magnification")
+    func movingBlockClearsMagnification() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        layout.toggleMagnify(a.id)
+
+        layout.move(a.id, to: b.id, edge: .bottom)
+
+        #expect(layout.magnifiedBlockID == nil)
+    }
 }
