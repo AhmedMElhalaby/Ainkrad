@@ -1,10 +1,9 @@
 import Observation
 
-/// Backs the ⌘K App Launcher overlay: fuzzy-filtered Apps and Workspaces
-/// sections, and the actions selecting a result performs. See ADR-0008 App
-/// Launcher & Workspace Switching and Navigation & Settings Architecture.md.
-/// The overlay UI itself (summon/dismiss, keyboard navigation) is a
-/// separate rendering layer built on top of this store.
+/// Backs the ⌘K Launcher overlay: fuzzy-filtered enabled apps and the
+/// open-app action. Workspace management deliberately does NOT live here —
+/// it has its own surface and shortcut (see ADR-0008's implementation
+/// note). The overlay UI is a separate rendering layer on this store.
 @MainActor
 @Observable
 final class LauncherStore {
@@ -22,34 +21,7 @@ final class LauncherStore {
         registry.enabledApps.filter { fuzzyMatches(query: query, target: $0.displayName) }
     }
 
-    var workspaceResults: [LauncherWorkspaceResult] {
-        let activeID = workspaceManager.activeWorkspaceID
-        let workspaceRows = workspaceManager.workspaces.enumerated().map { index, workspace in
-            LauncherWorkspaceResult.workspace(
-                workspace,
-                label: "Workspace \(index + 1)",
-                isCurrent: workspace.id == activeID
-            )
-        }
-        let rows = workspaceRows + [.newWorkspace]
-
-        return rows.filter { result in
-            switch result {
-            case .workspace(_, let label, _): return fuzzyMatches(query: query, target: label)
-            case .newWorkspace: return fuzzyMatches(query: query, target: "New Workspace")
-            }
-        }
-    }
-
     func selectApp(_ app: BuiltInApp.Type) {
         workspaceManager.activeWorkspace.tileLayout.openApp(app.id)
-    }
-
-    func selectWorkspace(_ workspace: Workspace) {
-        workspaceManager.switchTo(workspace.id)
-    }
-
-    func selectNewWorkspace() {
-        workspaceManager.createWorkspace()
     }
 }

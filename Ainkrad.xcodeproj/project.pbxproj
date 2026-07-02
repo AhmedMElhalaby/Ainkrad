@@ -10,7 +10,6 @@
 		0058DD406B977501AA94C422 /* BlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C741E419826340CA2B8D839 /* BlockView.swift */; };
 		03C27D65F427621CAF4AE8BE /* Block.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40550DB341B80FAE437D9590 /* Block.swift */; };
 		07953ACE5B6DE3D2A33F0A92 /* SplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B9753245D3471D67B81516 /* SplitView.swift */; };
-		14814883A35ABB82CF653003 /* LauncherWorkspaceResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D785D7B524AA401464F427 /* LauncherWorkspaceResult.swift */; };
 		1C20795AE19296557A69E565 /* DockIconUpdating.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0145B980204FED7B2F4423AE /* DockIconUpdating.swift */; };
 		201D5C30583B72C76564AFBA /* KeyboardShortcutMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 649628EA8CA139CA6072DE17 /* KeyboardShortcutMonitor.swift */; };
 		209CFA1D89715A548402A53C /* LauncherStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE806151A0D03EE1D4080F70 /* LauncherStoreTests.swift */; };
@@ -136,7 +135,6 @@
 		A0D9CA886CDC937BF8906E17 /* TileNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileNode.swift; sourceTree = "<group>"; };
 		AFA75383C7B73DC074CBE237 /* AmbientSkyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientSkyView.swift; sourceTree = "<group>"; };
 		B6D04EE6764BCB3E7C97F305 /* TerminalSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSettingsTests.swift; sourceTree = "<group>"; };
-		B7D785D7B524AA401464F427 /* LauncherWorkspaceResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherWorkspaceResult.swift; sourceTree = "<group>"; };
 		BC23D1A043CEBDF6D3E2DFE2 /* TerminalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalApp.swift; sourceTree = "<group>"; };
 		BCB3B5B1879ED69D9BE48DAC /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		BFC56FAB234F241A554F655E /* TerminalSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionTests.swift; sourceTree = "<group>"; };
@@ -280,7 +278,6 @@
 				7D8CF8DC77DB4FF03D842DE1 /* FuzzyMatch.swift */,
 				4F45991A7A5F1EE3122D4933 /* LauncherStore.swift */,
 				59F0C79FEE008C71747ABCB3 /* LauncherView.swift */,
-				B7D785D7B524AA401464F427 /* LauncherWorkspaceResult.swift */,
 			);
 			path = Launcher;
 			sourceTree = "<group>";
@@ -546,7 +543,6 @@
 				201D5C30583B72C76564AFBA /* KeyboardShortcutMonitor.swift in Sources */,
 				6FBAE7DC9D837FF276B5082B /* LauncherStore.swift in Sources */,
 				3741B905834CEC8005B7066C /* LauncherView.swift in Sources */,
-				14814883A35ABB82CF653003 /* LauncherWorkspaceResult.swift in Sources */,
 				4D416BE1AD1D2ED4509C36AC /* Log.swift in Sources */,
 				4A18DE56B38BAB1D89665814 /* PTYReaper.swift in Sources */,
 				F191A579C408B4DF684F7712 /* RootView.swift in Sources */,
@@ -608,7 +604,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_722077A7-845A-41AB-999E-FA5A950D7DD0" /* SwiftTerm */;
+			productRef = "TEMP_8237FE7B-98AE-4D69-A1C0-6DE244A1A7CB" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -857,7 +853,7 @@
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_722077A7-845A-41AB-999E-FA5A950D7DD0" /* SwiftTerm */ = {
+		"TEMP_8237FE7B-98AE-4D69-A1C0-6DE244A1A7CB" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;

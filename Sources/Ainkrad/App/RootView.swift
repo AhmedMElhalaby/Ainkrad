@@ -21,13 +21,18 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .ignoresSafeArea(edges: .top)
+            // The workspace recedes while the Launcher is summoned.
+            .blur(radius: environment.isLauncherPresented ? 14 : 0)
+            .animation(.easeOut(duration: 0.18), value: environment.isLauncherPresented)
 
             if environment.isLauncherPresented {
                 LauncherView(store: environment.launcherStore) {
                     environment.isLauncherPresented = false
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
         }
+        .animation(.easeOut(duration: 0.16), value: environment.isLauncherPresented)
         .background(KeyboardShortcutMonitor(environment: environment))
     }
 }

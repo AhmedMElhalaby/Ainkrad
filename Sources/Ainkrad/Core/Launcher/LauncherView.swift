@@ -1,9 +1,47 @@
 import SwiftUI
+import AppKit
 
-/// The ⌘K overlay: a centered search field with Apps and Workspaces
-/// sections below, fuzzy-filtered together as the user types. See
-/// ADR-0008 App Launcher & Workspace Switching.
+/// Four corner brackets — the targeting-cursor treatment for the selected
+/// Launcher row.
+struct TargetingBrackets: Shape {
+    var length: CGFloat = 8
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        // Top-left
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + length))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + length, y: rect.minY))
+        // Top-right
+        path.move(to: CGPoint(x: rect.maxX - length, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + length))
+        // Bottom-right
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
+        // Bottom-left
+        path.move(to: CGPoint(x: rect.minX + length, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - length))
+        return path
+    }
+}
+
+/// The ⌘K summon: the workspace behind dims and blurs (see RootView), and
+/// a glowing command deck floats above it — command field, Spotlight-style
+/// app rows with the neon tile artwork, targeting brackets on the
+/// selection. Apps only: workspace management lives on its own surface.
 struct LauncherView: View {
+    /// Plain value snapshot of an app's display fields — iterating SwiftUI
+    /// containers over `BuiltInApp.Type` metatypes crashes the Xcode 27
+    /// beta SILGen (same workaround as BuiltInAppsSettingsView).
+    private struct AppRow: Identifiable {
+        let id: String
+        let displayName: String
+        let icon: String
+    }
+
     @Environment(AppEnvironment.self) private var environment
     @Bindable var store: LauncherStore
     let onDismiss: () -> Void
@@ -11,127 +49,175 @@ struct LauncherView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var selectedIndex = 0
 
-    private enum Row {
-        case app(BuiltInApp.Type)
-        case workspace(LauncherWorkspaceResult)
-    }
-
-    private var rows: [Row] {
-        store.appResults.map(Row.app) + store.workspaceResults.map(Row.workspace)
+    private var appRows: [AppRow] {
+        store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
     }
 
     var body: some View {
         let tokens = environment.themeManager.tokens
+        let results = appRows
 
         ZStack {
-            Color.black.opacity(0.25)
+            Color.black.opacity(0.42)
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
 
-            panel(tokens: tokens)
+            panel(results: results, tokens: tokens)
+                .frame(width: 620)
+                .offset(y: -60)
         }
         .onAppear { isSearchFocused = true }
     }
 
-    private func panel(tokens: DesignTokens) -> some View {
-        let currentRows = rows
+    private func panel(results: [AppRow], tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            commandField(results: results, tokens: tokens)
 
-        return VStack(alignment: .leading, spacing: 0) {
-            TextField("Search apps…", text: $store.query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .foregroundStyle(tokens.foreground)
-                .padding(12)
-                .focused($isSearchFocused)
-                .onKeyPress(.escape) { dismiss(); return .handled }
-                .onKeyPress(.downArrow) { move(by: 1, count: currentRows.count); return .handled }
-                .onKeyPress(.upArrow) { move(by: -1, count: currentRows.count); return .handled }
-                .onKeyPress(.return) { select(currentRows); return .handled }
+            LinearGradient(
+                colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 1)
 
-            Divider()
+            Text("APPS")
+                .font(AinkradFont.mono(9, weight: .medium))
+                .kerning(2.5)
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 6)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    section(title: "Apps", range: appRange(in: currentRows), rows: currentRows, tokens: tokens)
-                    section(title: "Workspaces", range: workspaceRange(in: currentRows), rows: currentRows, tokens: tokens)
+            if results.isEmpty {
+                Text("No matching apps")
+                    .font(AinkradFont.display(13))
+                    .foregroundStyle(tokens.foreground.opacity(0.35))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+            } else {
+                VStack(spacing: 2) {
+                    ForEach(Array(results.enumerated()), id: \.element.id) { index, row in
+                        rowView(row, isSelected: index == selectedIndex, tokens: tokens)
+                            .onTapGesture {
+                                selectedIndex = index
+                                select(results)
+                            }
+                    }
                 }
-                .padding(8)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
             }
-            .frame(maxHeight: 320)
+
+            footer(tokens: tokens)
         }
-        .frame(width: 480)
-        .background(tokens.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(radius: 24)
+        .background(tokens.background.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
+        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
         .onChange(of: store.query) { _, _ in selectedIndex = 0 }
     }
 
-    @ViewBuilder
-    private func section(title: String, range: Range<Int>?, rows: [Row], tokens: DesignTokens) -> some View {
-        if let range, !range.isEmpty {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(tokens.foreground.opacity(0.5))
-                .padding(.horizontal, 6)
-                .padding(.top, 6)
+    private func commandField(results: [AppRow], tokens: DesignTokens) -> some View {
+        HStack(spacing: 12) {
+            ChevronMark()
+                .fill(tokens.accentSecondary)
+                .frame(width: 16, height: 14)
+                .shadow(color: tokens.accentSecondary.opacity(0.9), radius: 6)
 
-            ForEach(range, id: \.self) { index in
-                rowView(rows[index], isSelected: index == selectedIndex, tokens: tokens)
-                    .onTapGesture {
-                        selectedIndex = index
-                        select(rows)
-                    }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func rowView(_ row: Row, isSelected: Bool, tokens: DesignTokens) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon(for: row))
-                .foregroundStyle(tokens.accentPrimary)
-                .frame(width: 16)
-            Text(label(for: row))
+            TextField("Summon an app…", text: $store.query)
+                .textFieldStyle(.plain)
+                .font(AinkradFont.display(17))
                 .foregroundStyle(tokens.foreground)
+                .tint(tokens.accentSecondary)
+                .focused($isSearchFocused)
+                .onKeyPress(.escape) { dismiss(); return .handled }
+                .onKeyPress(.downArrow) { move(by: 1, count: results.count); return .handled }
+                .onKeyPress(.upArrow) { move(by: -1, count: results.count); return .handled }
+                .onKeyPress(.return) { select(results); return .handled }
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 56)
+    }
+
+    private func rowView(_ row: AppRow, isSelected: Bool, tokens: DesignTokens) -> some View {
+        HStack(spacing: 12) {
+            tile(for: row, tokens: tokens)
+
+            Text(row.displayName)
+                .font(AinkradFont.display(14, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(isSelected ? 1 : 0.75))
+
             Spacer()
-            if case .workspace(.workspace(_, _, let isCurrent)) = row, isCurrent {
-                Text("current")
-                    .font(.system(size: 11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
+
+            if isSelected {
+                Text("↩")
+                    .font(AinkradFont.mono(11))
+                    .foregroundStyle(tokens.accentSecondary.opacity(0.8))
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(isSelected ? tokens.accentPrimary.opacity(0.18) : .clear)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 10)
+        .frame(height: 48)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
+        )
+        .overlay(
+            TargetingBrackets()
+                .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.5)
+                .padding(1)
+        )
         .contentShape(Rectangle())
+        .animation(.easeOut(duration: 0.12), value: selectedIndex)
     }
 
-    private func icon(for row: Row) -> String {
-        switch row {
-        case .app(let app): return app.icon
-        case .workspace(.workspace): return "square"
-        case .workspace(.newWorkspace): return "plus.square"
+    /// The app's neon tile artwork when bundled (Spotlight-style), else a
+    /// themed mini-tile around its SF Symbol.
+    @ViewBuilder
+    private func tile(for row: AppRow, tokens: DesignTokens) -> some View {
+        let assetName = "AppTile-\(row.id)-\(environment.themeManager.currentTheme.rawValue)"
+
+        if NSImage(named: assetName) != nil {
+            Image(assetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 32, height: 32)
+        } else {
+            RoundedRectangle(cornerRadius: 7)
+                .fill(tokens.surfaceElevated)
+                .frame(width: 32, height: 32)
+                .overlay(
+                    Image(systemName: row.icon)
+                        .font(.system(size: 14))
+                        .foregroundStyle(tokens.accentSecondary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(tokens.accentPrimary.opacity(0.3), lineWidth: 1)
+                )
         }
     }
 
-    private func label(for row: Row) -> String {
-        switch row {
-        case .app(let app): return app.displayName
-        case .workspace(.workspace(_, let label, _)): return label
-        case .workspace(.newWorkspace): return "New Workspace"
+    private func footer(tokens: DesignTokens) -> some View {
+        HStack {
+            Spacer()
+            Text("↑↓ navigate    ↩ open    esc dismiss")
+                .font(AinkradFont.mono(9))
+                .kerning(0.5)
+                .foregroundStyle(tokens.foreground.opacity(0.35))
         }
-    }
-
-    private func appRange(in rows: [Row]) -> Range<Int>? {
-        let count = rows.filter { if case .app = $0 { return true } else { return false } }.count
-        return count > 0 ? 0..<count : nil
-    }
-
-    private func workspaceRange(in rows: [Row]) -> Range<Int>? {
-        let appCount = rows.filter { if case .app = $0 { return true } else { return false } }.count
-        let workspaceCount = rows.count - appCount
-        return workspaceCount > 0 ? appCount..<rows.count : nil
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
     }
 
     private func move(by delta: Int, count: Int) {
@@ -139,16 +225,10 @@ struct LauncherView: View {
         selectedIndex = (selectedIndex + delta + count) % count
     }
 
-    private func select(_ rows: [Row]) {
-        guard rows.indices.contains(selectedIndex) else { return }
-        switch rows[selectedIndex] {
-        case .app(let app):
-            store.selectApp(app)
-        case .workspace(.workspace(let workspace, _, _)):
-            store.selectWorkspace(workspace)
-        case .workspace(.newWorkspace):
-            store.selectNewWorkspace()
-        }
+    private func select(_ results: [AppRow]) {
+        guard results.indices.contains(selectedIndex),
+              let app = store.appResults.first(where: { $0.id == results[selectedIndex].id }) else { return }
+        store.selectApp(app)
         dismiss()
     }
 
