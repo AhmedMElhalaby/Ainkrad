@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The single window's content: every workspace's tile layout stays
-/// mounted (hidden when inactive) so running sessions survive switching;
-/// the Launcher and Workspace Overview overlay on top when summoned.
+/// The single window's content: every workspace — and every tab within it
+/// — stays mounted (hidden when inactive) so running sessions survive
+/// switching; the Launcher and Workspace Overview overlay on top when
+/// summoned.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -24,22 +25,30 @@ struct RootView: View {
                 VStack(spacing: 0) {
                     HUDBar()
 
-                    // ALL workspaces stay in the hierarchy — switching
-                    // only toggles visibility, so PTY-backed sessions in
-                    // background workspaces keep running.
-                    ZStack {
-                        ForEach(environment.workspaceManager.workspaces) { workspace in
-                            let isActive = workspace.id == environment.workspaceManager.activeWorkspaceID
-                            TileLayoutView(
-                                tileLayout: workspace.tileLayout,
-                                registry: environment.registry
-                            )
-                            .opacity(isActive ? 1 : 0)
-                            .allowsHitTesting(isActive)
-                            .accessibilityHidden(!isActive)
+                    ForEach(environment.workspaceManager.workspaces) { workspace in
+                        let isActiveWorkspace = workspace.id == environment.workspaceManager.activeWorkspaceID
+
+                        VStack(spacing: 0) {
+                            if !workspace.isMain, isActiveWorkspace {
+                                TabStripView(workspace: workspace)
+                            }
+
+                            ZStack {
+                                ForEach(workspace.tabs) { tab in
+                                    let isActiveTab = tab.id == workspace.selectedTabID
+                                    TabContentView(tab: tab, registry: environment.registry)
+                                        .opacity(isActiveTab ? 1 : 0)
+                                        .allowsHitTesting(isActiveTab)
+                                        .accessibilityHidden(!isActiveTab)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
+                        .opacity(isActiveWorkspace ? 1 : 0)
+                        .allowsHitTesting(isActiveWorkspace)
+                        .accessibilityHidden(!isActiveWorkspace)
+                        .frame(maxWidth: .infinity, maxHeight: isActiveWorkspace ? .infinity : 0)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .ignoresSafeArea(edges: .top)
             }

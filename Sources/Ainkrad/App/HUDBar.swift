@@ -56,7 +56,7 @@ struct HUDBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("\(workspace.name)\(index < 9 ? " — ⌘\(index + 1)" : "")")
+                .help(workspace.name)
             }
         }
         .animation(.easeOut(duration: 0.18), value: manager.activeWorkspaceID)

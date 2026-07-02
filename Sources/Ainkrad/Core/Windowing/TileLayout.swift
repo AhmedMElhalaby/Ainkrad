@@ -8,6 +8,11 @@ enum PaneAxis: Equatable {
     case vertical
 }
 
+/// A direction for keyboard focus movement and resizing (⌘/⌘⇧ arrows).
+enum PaneDirection {
+    case left, right, up, down
+}
+
 /// Which edge of a target pane a dragged pane is dropped on.
 enum PaneEdge {
     case leading, trailing, top, bottom
@@ -45,16 +50,18 @@ indirect enum PaneNode: Equatable {
 ///   container.
 /// - Closing/moving out re-equalizes the affected container and collapses
 ///   single-child containers.
-/// - Sibling boundaries resize (10% minimum); one pane can be temporarily
-///   magnified to the full canvas.
+/// - Sibling boundaries resize (10% minimum). Focus Mode (a Tab-level
+///   view mode) renders by collapsing toward the focused pane without
+///   touching this tree.
 @Observable
 final class TileLayout {
     private(set) var root: PaneNode?
     private(set) var focusedBlockID: UUID?
-    private(set) var magnifiedBlockID: UUID?
     /// Transient drag context: set while a pane header drag session is
     /// live so drop targets can identify the source.
     var draggingBlockID: UUID?
+    /// Invoked after any structural change — persistence hooks in here.
+    var onStructuralChange: (() -> Void)?
 
     private static let minimumFraction = 0.1
 
@@ -93,7 +100,7 @@ final class TileLayout {
         }
 
         focusedBlockID = block.id
-        magnifiedBlockID = nil
+        onStructuralChange?()
         return block
     }
 
@@ -108,9 +115,7 @@ final class TileLayout {
             let survivors = blocks
             focusedBlockID = survivors.isEmpty ? nil : survivors[min(max(index - 1, 0), survivors.count - 1)].id
         }
-        if magnifiedBlockID == id {
-            magnifiedBlockID = nil
-        }
+        onStructuralChange?()
     }
 
     func focus(_ id: UUID) {
@@ -131,14 +136,7 @@ final class TileLayout {
 
         self.root = Self.inserting(block, at: targetID, edge: edge, in: remaining)
         focusedBlockID = id
-        magnifiedBlockID = nil
-    }
-
-    /// Temporarily zooms one pane to the full canvas (toggle). Structural
-    /// changes (open/close/move) clear it.
-    func toggleMagnify(_ id: UUID) {
-        guard blocks.contains(where: { $0.id == id }) else { return }
-        magnifiedBlockID = magnifiedBlockID == id ? nil : id
+        onStructuralChange?()
     }
 
     /// Drags the boundary after child `index` of the container at `path`
@@ -150,11 +148,167 @@ final class TileLayout {
         self.root = Self.settingBoundary(path: ArraySlice(path), after: index, to: position, in: root)
     }
 
-    /// Whether `node` contains the magnified pane — the rendering layer
-    /// collapses every sibling outside its path.
-    func subtreeContainsMagnifiedBlock(_ node: PaneNode) -> Bool {
-        guard let magnifiedBlockID else { return false }
-        return Self.collectBlocks(node).contains(where: { $0.id == magnifiedBlockID })
+    /// Whether `node` contains the given pane — Focus Mode's rendering
+    /// collapses every sibling outside the focused pane's path.
+    func subtreeContains(_ id: UUID, in node: PaneNode) -> Bool {
+        Self.collectBlocks(node).contains(where: { $0.id == id })
+    }
+
+    /// Splits a panel: opens a NEW panel of the same app on the given edge
+    /// of it.
+    @discardableResult
+    func split(_ id: UUID, edge: PaneEdge) -> Block? {
+        guard let source = blocks.first(where: { $0.id == id }) else { return nil }
+        let block = Block(appID: source.appID)
+        insertExisting(block, at: id, edge: edge)
+        return block
+    }
+
+    /// Splits the focused panel (⌘D right, ⌘⇧D down).
+    @discardableResult
+    func splitFocused(_ edge: PaneEdge) -> Block? {
+        guard let focusedBlockID else { return nil }
+        return split(focusedBlockID, edge: edge)
+    }
+
+    /// Duplicates a panel beside itself (same app, fresh instance).
+    @discardableResult
+    func duplicate(_ id: UUID) -> Block? {
+        guard let source = blocks.first(where: { $0.id == id }) else { return nil }
+        let copy = Block(appID: source.appID, title: source.title)
+        insertExisting(copy, at: id, edge: .trailing)
+        return copy
+    }
+
+    /// Removes a panel from this layout WITHOUT discarding it — used to
+    /// move panels between tabs. Returns the removed Block.
+    func extract(_ id: UUID) -> Block? {
+        guard let root, let block = blocks.first(where: { $0.id == id }) else { return nil }
+        let paneOrder = blocks
+        let index = paneOrder.firstIndex(where: { $0.id == id }) ?? 0
+        self.root = Self.removing(id, from: root)
+        if focusedBlockID == id {
+            let survivors = blocks
+            focusedBlockID = survivors.isEmpty ? nil : survivors[min(max(index - 1, 0), survivors.count - 1)].id
+        }
+        onStructuralChange?()
+        return block
+    }
+
+    /// Attaches an existing panel (e.g. moved from another tab) as a new
+    /// equal top-level column, and focuses it.
+    func attach(_ block: Block) {
+        switch root {
+        case nil:
+            root = .leaf(block)
+        case .leaf(let existing):
+            root = .split(axis: .horizontal, children: [.leaf(existing), .leaf(block)], fractions: Self.equalFractions(2))
+        case .split(.horizontal, var children, _):
+            children.append(.leaf(block))
+            root = .split(axis: .horizontal, children: children, fractions: Self.equalFractions(children.count))
+        case .split(let axis, let children, let fractions):
+            root = .split(
+                axis: .horizontal,
+                children: [.split(axis: axis, children: children, fractions: fractions), .leaf(block)],
+                fractions: Self.equalFractions(2)
+            )
+        }
+        focusedBlockID = block.id
+        onStructuralChange?()
+    }
+
+    /// Wholesale root replacement (persistence restore / duplication).
+    func replaceRoot(_ node: PaneNode?) {
+        root = node
+        focusedBlockID = blocks.first?.id
+    }
+
+    /// Re-equalizes every container's fractions (Reset Layout).
+    func resetLayout() {
+        guard let root else { return }
+        self.root = Self.equalizing(root)
+        onStructuralChange?()
+    }
+
+    // MARK: - Geometry (keyboard navigation & resize)
+
+    /// Unit-space (0…1 × 0…1) frames for every pane, ignoring gaps —
+    /// drives directional focus movement.
+    func paneFrames() -> [UUID: CGRect] {
+        guard let root else { return [:] }
+        var frames: [UUID: CGRect] = [:]
+        Self.collectFrames(root, rect: CGRect(x: 0, y: 0, width: 1, height: 1), into: &frames)
+        return frames
+    }
+
+    /// Moves focus to the nearest pane in the given direction (⌘arrows).
+    func focusNeighbor(_ direction: PaneDirection) {
+        guard let focusedBlockID else { return }
+        let frames = paneFrames()
+        guard let origin = frames[focusedBlockID] else { return }
+
+        var best: (id: UUID, distance: CGFloat)?
+        for (id, frame) in frames where id != focusedBlockID {
+            let isCandidate: Bool
+            switch direction {
+            case .left: isCandidate = frame.midX < origin.midX - 0.001 && overlaps(frame.minY..<frame.maxY, origin.minY..<origin.maxY)
+            case .right: isCandidate = frame.midX > origin.midX + 0.001 && overlaps(frame.minY..<frame.maxY, origin.minY..<origin.maxY)
+            case .up: isCandidate = frame.midY < origin.midY - 0.001 && overlaps(frame.minX..<frame.maxX, origin.minX..<origin.maxX)
+            case .down: isCandidate = frame.midY > origin.midY + 0.001 && overlaps(frame.minX..<frame.maxX, origin.minX..<origin.maxX)
+            }
+            guard isCandidate else { continue }
+            let dx = frame.midX - origin.midX
+            let dy = frame.midY - origin.midY
+            let distance = dx * dx + dy * dy
+            if best == nil || distance < best!.distance {
+                best = (id, distance)
+            }
+        }
+        if let best {
+            self.focusedBlockID = best.id
+        }
+    }
+
+    /// Grows the focused pane toward `direction` by `delta` (⌘⇧arrows):
+    /// finds the nearest ancestor container along that axis where the
+    /// focused subtree has a boundary on that side, and shifts it.
+    func resizeFocused(_ direction: PaneDirection, delta: Double = 0.04) {
+        guard let root, let focusedBlockID else { return }
+        guard let path = Self.pathTo(focusedBlockID, in: root) else { return }
+        let axis: PaneAxis = (direction == .left || direction == .right) ? .horizontal : .vertical
+        let growsTrailing = direction == .right || direction == .down
+
+        for depth in stride(from: path.count - 1, through: 0, by: -1) {
+            let containerPath = Array(path.prefix(depth))
+            let childIndex = path[depth]
+            guard let container = Self.node(at: ArraySlice(containerPath), in: root),
+                  case .split(let containerAxis, let children, let fractions) = container,
+                  containerAxis == axis else { continue }
+
+            let boundaryIndex = growsTrailing ? childIndex : childIndex - 1
+            guard boundaryIndex >= 0, boundaryIndex < children.count - 1 else { continue }
+
+            let cumulative = fractions.prefix(boundaryIndex + 1).reduce(0, +)
+            let newPosition = cumulative + (growsTrailing ? delta : -delta)
+            setBoundary(path: containerPath, after: boundaryIndex, to: newPosition)
+            onStructuralChange?()
+            return
+        }
+    }
+
+    private func overlaps(_ a: Range<CGFloat>, _ b: Range<CGFloat>) -> Bool {
+        a.lowerBound < b.upperBound && b.lowerBound < a.upperBound
+    }
+
+    private func insertExisting(_ block: Block, at targetID: UUID, edge: PaneEdge) {
+        guard let root else {
+            self.root = .leaf(block)
+            focusedBlockID = block.id
+            return
+        }
+        self.root = Self.inserting(block, at: targetID, edge: edge, in: root)
+        focusedBlockID = block.id
+        onStructuralChange?()
     }
 
     // MARK: - Pure tree operations
@@ -252,6 +406,71 @@ final class TileLayout {
         fractions[index] = newFirst
         fractions[index + 1] = pairSum - newFirst
         return .split(axis: axis, children: children, fractions: fractions)
+    }
+}
+
+extension TileLayout {
+    static func collectFrames(_ node: PaneNode, rect: CGRect, into frames: inout [UUID: CGRect]) {
+        switch node {
+        case .leaf(let block):
+            frames[block.id] = rect
+        case .split(let axis, let children, let fractions):
+            var offset: CGFloat = 0
+            for (child, fraction) in zip(children, fractions) {
+                let childRect: CGRect
+                if axis == .horizontal {
+                    childRect = CGRect(
+                        x: rect.minX + rect.width * offset,
+                        y: rect.minY,
+                        width: rect.width * fraction,
+                        height: rect.height
+                    )
+                } else {
+                    childRect = CGRect(
+                        x: rect.minX,
+                        y: rect.minY + rect.height * offset,
+                        width: rect.width,
+                        height: rect.height * fraction
+                    )
+                }
+                collectFrames(child, rect: childRect, into: &frames)
+                offset += fraction
+            }
+        }
+    }
+
+    /// Child-index path from the root to the pane, or nil if absent.
+    static func pathTo(_ id: UUID, in node: PaneNode) -> [Int]? {
+        switch node {
+        case .leaf(let block):
+            return block.id == id ? [] : nil
+        case .split(_, let children, _):
+            for (index, child) in children.enumerated() {
+                if let subPath = pathTo(id, in: child) {
+                    return [index] + subPath
+                }
+            }
+            return nil
+        }
+    }
+
+    static func node(at path: ArraySlice<Int>, in node: PaneNode) -> PaneNode? {
+        guard let step = path.first else { return node }
+        guard case .split(_, let children, _) = node, children.indices.contains(step) else { return nil }
+        return Self.node(at: path.dropFirst(), in: children[step])
+    }
+
+    static func equalizing(_ node: PaneNode) -> PaneNode {
+        switch node {
+        case .leaf:
+            return node
+        case .split(let axis, let children, _):
+            return .split(
+                axis: axis,
+                children: children.map(equalizing),
+                fractions: Array(repeating: 1.0 / Double(max(children.count, 1)), count: children.count)
+            )
+        }
     }
 }
 

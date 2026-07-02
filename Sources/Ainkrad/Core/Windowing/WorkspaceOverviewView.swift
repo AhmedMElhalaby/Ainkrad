@@ -55,7 +55,7 @@ struct WorkspaceOverviewView: View {
     /// Themed confirmation shown only when deleting a workspace that still
     /// has apps open — an empty workspace deletes without ceremony.
     private func deleteConfirmation(_ workspace: Workspace, tokens: DesignTokens) -> some View {
-        let appCount = workspace.tileLayout.appIDs.count
+        let appCount = workspace.appIDs.count
 
         return VStack(spacing: 14) {
             Text("Delete “\(workspace.name)”?")
@@ -130,7 +130,7 @@ struct WorkspaceOverviewView: View {
 
     /// Empty workspaces delete immediately; ones with open apps confirm.
     private func requestDeletion(_ workspace: Workspace) {
-        if workspace.tileLayout.appIDs.isEmpty {
+        if workspace.appIDs.isEmpty {
             environment.workspaceManager.deleteWorkspace(workspace.id)
             selectedIndex = min(selectedIndex, environment.workspaceManager.workspaces.count - 1)
         } else {
@@ -230,7 +230,7 @@ struct WorkspaceOverviewView: View {
     private func card(_ workspace: Workspace, index: Int, tokens: DesignTokens) -> some View {
         let isActive = workspace.id == environment.workspaceManager.activeWorkspaceID
         let isSelected = index == selectedIndex
-        let appIDs = workspace.tileLayout.appIDs
+        let appIDs = workspace.appIDs
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -280,11 +280,6 @@ struct WorkspaceOverviewView: View {
                         .foregroundStyle(tokens.accentSecondary.opacity(0.9))
                 }
                 Spacer()
-                if index < 9 {
-                    Text("⌘\(index + 1)")
-                        .font(AinkradFont.mono(9))
-                        .foregroundStyle(tokens.foreground.opacity(0.35))
-                }
             }
         }
         .padding(12)
