@@ -11,6 +11,10 @@ struct AinkradApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            // Menu items for discoverability/mouse use. The actual
+            // keyboard delivery goes through KeyboardShortcutMonitor's
+            // local event monitor, which is reliable regardless of how
+            // the app was launched — see its doc comment.
             CommandGroup(after: .newItem) {
                 Button("Open Launcher") {
                     environment.isLauncherPresented = true
@@ -21,13 +25,6 @@ struct AinkradApp: App {
                     environment.workspaceManager.createWorkspace()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-
-                ForEach(1...9, id: \.self) { number in
-                    Button("Switch to Workspace \(number)") {
-                        environment.workspaceManager.switchToWorkspace(at: number - 1)
-                    }
-                    .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
-                }
             }
         }
     }

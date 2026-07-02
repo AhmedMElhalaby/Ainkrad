@@ -20,5 +20,6 @@ struct RootView: View {
                 }
             }
         }
+        .background(KeyboardShortcutMonitor(environment: environment))
     }
 }
