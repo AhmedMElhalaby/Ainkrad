@@ -1,6 +1,7 @@
 .build/
 .swiftpm/
-*.xcodeproj
+xcuserdata/
+*.xcuserstate
 .DS_Store
 
 # Claude Code / session tooling — not part of the product

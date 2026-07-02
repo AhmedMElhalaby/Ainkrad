@@ -1,0 +1,53 @@
+name: Ainkrad
+options:
+  bundleIdPrefix: com.ainkrad
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+
+targets:
+  Ainkrad:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Ainkrad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        ENABLE_PREVIEWS: YES
+
+  AinkradTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AinkradTests
+    dependencies:
+      - target: Ainkrad
+        embed: false
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Ainkrad:
+    build:
+      targets:
+        Ainkrad: all
+        AinkradTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - AinkradTests
