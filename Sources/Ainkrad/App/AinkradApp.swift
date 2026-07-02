@@ -2,7 +2,12 @@ import SwiftUI
 
 @main
 struct AinkradApp: App {
-    @State private var environment = AppEnvironment.bootstrap()
+    @State private var environment: AppEnvironment
+
+    init() {
+        FontRegistrar.registerBundledFonts()
+        _environment = State(initialValue: AppEnvironment.bootstrap())
+    }
 
     var body: some Scene {
         WindowGroup {

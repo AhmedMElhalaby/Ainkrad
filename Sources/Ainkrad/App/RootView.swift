@@ -8,11 +8,16 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            environment.themeManager.tokens.background.ignoresSafeArea()
-            TileLayoutView(
-                tileLayout: environment.workspaceManager.activeWorkspace.tileLayout,
-                registry: environment.registry
-            )
+            AmbientSkyView()
+
+            VStack(spacing: 0) {
+                HUDBar()
+                TileLayoutView(
+                    tileLayout: environment.workspaceManager.activeWorkspace.tileLayout,
+                    registry: environment.registry
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
 
             if environment.isLauncherPresented {
                 LauncherView(store: environment.launcherStore) {
