@@ -28,11 +28,10 @@ final class AppEnvironment {
 
     /// Assembles a real `AppEnvironment` backed by `UserDefaults` and
     /// `NSApplication`. `defaults` defaults to `.standard`; tests pass an
-    /// isolated suite. The Built-in App list is empty until the Terminal
-    /// and Settings Features are implemented.
+    /// isolated suite.
     static func bootstrap(defaults: UserDefaults = .standard) -> AppEnvironment {
         let settingsStore = UserDefaultsSettingsStore(defaults: defaults)
-        let registry = BuiltInAppRegistry(apps: [], settingsStore: settingsStore)
+        let registry = BuiltInAppRegistry(apps: [TerminalApp.self], settingsStore: settingsStore)
         let themeManager = ThemeManager(
             settingsStore: settingsStore,
             dockIconUpdater: AppKitDockIconUpdater()

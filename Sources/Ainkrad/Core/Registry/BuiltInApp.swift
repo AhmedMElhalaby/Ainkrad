@@ -9,6 +9,6 @@ protocol BuiltInApp {
     /// hardcoded color, so every Built-in App is theme-correct by default.
     static var icon: String { get }
     static var isEnabledByDefault: Bool { get }
-    static func makeRootView() -> AnyView
-    static func makeSettingsView() -> AnyView
+    @MainActor static func makeRootView() -> AnyView
+    @MainActor static func makeSettingsView() -> AnyView
 }

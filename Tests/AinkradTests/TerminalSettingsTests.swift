@@ -13,7 +13,7 @@ final class TerminalSettingsTests {
     @Test("defaults to nil shell and working directory with no prior write")
     func defaultsToNilFields() {
         let store = UserDefaultsSettingsStore(defaults: defaults)
-        let loaded = store.get(TerminalSettings.self, forKey: "terminal-settings") ?? TerminalSettings()
+        let loaded = store.get(TerminalSettings.self, forKey: TerminalSettings.storeKey) ?? TerminalSettings()
         #expect(loaded.defaultShell == nil)
         #expect(loaded.defaultWorkingDirectory == nil)
     }
@@ -24,9 +24,9 @@ final class TerminalSettingsTests {
         var settings = TerminalSettings()
         settings.defaultShell = "/bin/bash"
         settings.defaultWorkingDirectory = URL(fileURLWithPath: "/tmp")
-        store.set(settings, forKey: "terminal-settings")
+        store.set(settings, forKey: TerminalSettings.storeKey)
 
-        let loaded = store.get(TerminalSettings.self, forKey: "terminal-settings")
+        let loaded = store.get(TerminalSettings.self, forKey: TerminalSettings.storeKey)
 
         #expect(loaded?.defaultShell == "/bin/bash")
         #expect(loaded?.defaultWorkingDirectory == URL(fileURLWithPath: "/tmp"))
