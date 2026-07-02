@@ -35,6 +35,7 @@
 		53807F482E2D5A51560E127E /* TerminalSessionFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C57EAD4A5A548653DE584E /* TerminalSessionFactory.swift */; };
 		550AFD98E97E81CF04E8ADA6 /* GlobalSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFB1C343238DEAE0B6FE856B /* GlobalSettingsTests.swift */; };
 		657B3390FD7DD75011149FB5 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45089E2113B3B5A4E855DA5 /* Color+Hex.swift */; };
+		6993B1171794755879B27C5D /* FloatingIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D07AA259FF4A6712CA6B72C /* FloatingIslandView.swift */; };
 		6C36EB880DFFB27230EC45C0 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83BDC029690B113A77930DE9 /* Typography.swift */; };
 		6D17A3652F1284E79474C05C /* WorkingDirectoryResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05051E1E1842E0BBBEF817 /* WorkingDirectoryResolverTests.swift */; };
 		6D99475B5BF46598F160079B /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C5C156BBB8E637E1FF31E61 /* SettingsStore.swift */; };
@@ -103,6 +104,7 @@
 		2737E3F90F63D84E81F725A9 /* AinkradTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AinkradTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		297EDAC0EAD000AC1F001980 /* SettingsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsApp.swift; sourceTree = "<group>"; };
 		2C741E419826340CA2B8D839 /* BlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockView.swift; sourceTree = "<group>"; };
+		2D07AA259FF4A6712CA6B72C /* FloatingIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingIslandView.swift; sourceTree = "<group>"; };
 		37C493F65F3072D1234CEFC4 /* BuiltInAppRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInAppRegistry.swift; sourceTree = "<group>"; };
 		3BC2348219CEBF9EECE80980 /* PTYIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTYIntegrationTests.swift; sourceTree = "<group>"; };
 		3CF995D8A612C557B4DB6457 /* ThemeManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManagerTests.swift; sourceTree = "<group>"; };
@@ -195,6 +197,7 @@
 				FE6915B1D164030D51333E27 /* AppEnvironment.swift */,
 				F43BA95BAB5C6F3CC5754C3F /* AppKitDockIconUpdater.swift */,
 				D6C1E4782B5376B1D70F0580 /* EmblemView.swift */,
+				2D07AA259FF4A6712CA6B72C /* FloatingIslandView.swift */,
 				26E96C0B6C87DF7AA9404061 /* HUDBar.swift */,
 				649628EA8CA139CA6072DE17 /* KeyboardShortcutMonitor.swift */,
 				EB3DEC6CCCA805296B1508FC /* RootView.swift */,
@@ -535,6 +538,7 @@
 				1C20795AE19296557A69E565 /* DockIconUpdating.swift in Sources */,
 				461D4C1082462F6C2D77F890 /* EmblemView.swift in Sources */,
 				AABAABC565908F570FD5657F /* EmptyWorkspaceView.swift in Sources */,
+				6993B1171794755879B27C5D /* FloatingIslandView.swift in Sources */,
 				F96144EF0145FF07C10E5885 /* FuzzyMatch.swift in Sources */,
 				99462C7CCE5983EB33106A5F /* GeneralSettingsView.swift in Sources */,
 				DF15FB0E453FF7A46AF7EA86 /* GlobalSettings.swift in Sources */,
@@ -604,7 +608,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_8605E6C9-CC21-4BD9-9A60-7E8FA243A994" /* SwiftTerm */;
+			productRef = "TEMP_722077A7-845A-41AB-999E-FA5A950D7DD0" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -853,7 +857,7 @@
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_8605E6C9-CC21-4BD9-9A60-7E8FA243A994" /* SwiftTerm */ = {
+		"TEMP_722077A7-845A-41AB-999E-FA5A950D7DD0" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;

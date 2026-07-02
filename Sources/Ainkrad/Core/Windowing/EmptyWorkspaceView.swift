@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The empty workspace: the ambient sky shows through, with the breathing
-/// emblem, wordmark, and a HUD-style Launcher prompt at center. See
-/// Navigation & Settings Architecture.md.
+/// The empty workspace: the ambient sky shows through, with the floating
+/// island artwork, wordmark, and a HUD-style Launcher prompt at center.
+/// See Navigation & Settings Architecture.md.
 struct EmptyWorkspaceView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -10,13 +10,14 @@ struct EmptyWorkspaceView: View {
         let tokens = environment.themeManager.tokens
 
         VStack(spacing: 0) {
-            EmblemView()
+            FloatingIslandView()
+                .frame(maxHeight: 420)
 
             Text("AINKRAD")
                 .font(AinkradFont.display(26, weight: .semibold))
                 .kerning(10)
                 .foregroundStyle(tokens.foreground)
-                .padding(.top, 34)
+                .padding(.top, 10)
                 // Kerning trails the last glyph; nudge back to optical center.
                 .offset(x: 5)
 

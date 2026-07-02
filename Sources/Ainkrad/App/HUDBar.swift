@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// The OS status strip along the top of the window: wordmark on the left,
-/// workspace readout and clock on the right, separated from the canvas by
-/// an accent hairline. Deliberately HUD language — thin, luminous, mono
+/// workspace dots and clock on the right, separated from the canvas by an
+/// accent hairline. Deliberately HUD language — thin, luminous, mono
 /// readouts — not window chrome.
 ///
-/// NOTE: the workspace readout intentionally deviates from ADR-0008's
-/// "no persistent workspace indicator" — flagged for review as part of the
-/// OS-direction visual redesign.
+/// NOTE: the workspace dots intentionally supersede ADR-0008's
+/// "no persistent workspace indicator" — approved as part of the
+/// OS-direction visual redesign (clickable, brand-diamond styling).
 struct HUDBar: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -28,7 +28,7 @@ struct HUDBar: View {
             Spacer()
 
             HStack(spacing: 16) {
-                workspaceReadout(tokens: tokens)
+                workspaceDots(tokens: tokens)
                 clock(tokens: tokens)
             }
         }
@@ -45,14 +45,32 @@ struct HUDBar: View {
         }
     }
 
-    private func workspaceReadout(tokens: DesignTokens) -> some View {
+    /// One diamond per workspace — the brand's diamond accent (the mark
+    /// inside the chevron), not a generic dot. The active one glows in
+    /// accentSecondary; clicking any switches to it.
+    private func workspaceDots(tokens: DesignTokens) -> some View {
         let manager = environment.workspaceManager
-        let position = (manager.workspaces.firstIndex(where: { $0.id == manager.activeWorkspaceID }) ?? 0) + 1
 
-        return Text(String(format: "WS %02d / %02d", position, manager.workspaces.count))
-            .font(AinkradFont.mono(10, weight: .medium))
-            .kerning(1)
-            .foregroundStyle(tokens.accentSecondary.opacity(0.9))
+        return HStack(spacing: 8) {
+            ForEach(Array(manager.workspaces.enumerated()), id: \.element.id) { index, workspace in
+                let isActive = workspace.id == manager.activeWorkspaceID
+
+                Button {
+                    manager.switchTo(workspace.id)
+                } label: {
+                    Rectangle()
+                        .fill(isActive ? tokens.accentSecondary : tokens.foreground.opacity(0.28))
+                        .frame(width: isActive ? 7 : 5, height: isActive ? 7 : 5)
+                        .rotationEffect(.degrees(45))
+                        .shadow(color: isActive ? tokens.accentSecondary.opacity(0.9) : .clear, radius: 4)
+                        .frame(width: 11, height: 11)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Workspace \(index + 1)\(index < 9 ? " — ⌘\(index + 1)" : "")")
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: manager.activeWorkspaceID)
     }
 
     private func clock(tokens: DesignTokens) -> some View {
