@@ -8,7 +8,11 @@ struct TileLayoutView: View {
 
     var body: some View {
         if let root = tileLayout.root {
+            // Breathing room around the floating Block panels — the sky
+            // stays visible at the canvas edges.
             TileNodeView(node: root, tileLayout: tileLayout, registry: registry)
+                .padding([.horizontal, .bottom], 10)
+                .padding(.top, 4)
         } else {
             EmptyWorkspaceView()
         }

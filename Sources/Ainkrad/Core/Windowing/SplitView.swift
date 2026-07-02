@@ -1,10 +1,12 @@
 import SwiftUI
 import AppKit
 
-/// Two non-overlapping panes divided by a thin, draggable divider. When
-/// `resizeAnchorID` is nil the split has no leaf child `TileLayout.setRatio`
-/// can address, so the divider is static.
+/// Two non-overlapping panes separated by an "energy seam": a thin accent
+/// gradient line in the gap between floating Blocks that brightens on
+/// hover and while dragging. When `resizeAnchorID` is nil the split has no
+/// leaf child `TileLayout.setRatio` can address, so the seam is static.
 struct SplitView<First: View, Second: View>: View {
+    @Environment(AppEnvironment.self) private var environment
     let axis: SplitAxis
     let ratio: Double
     let resizeAnchorID: UUID?
@@ -12,12 +14,17 @@ struct SplitView<First: View, Second: View>: View {
     @ViewBuilder let first: () -> First
     @ViewBuilder let second: () -> Second
 
-    private let dividerThickness: CGFloat = 1
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    /// The visible gap between Blocks; the seam line draws centered in it
+    /// and the drag hit area spans the whole gap plus a little more.
+    private let gap: CGFloat = 8
 
     var body: some View {
         GeometryReader { proxy in
             let totalLength = axis == .vertical ? proxy.size.width : proxy.size.height
-            let firstLength = max(0, totalLength * ratio - dividerThickness / 2)
+            let firstLength = max(0, totalLength * ratio - gap / 2)
 
             let stack = axis == .vertical
                 ? AnyLayout(HStackLayout(spacing: 0))
@@ -29,41 +36,63 @@ struct SplitView<First: View, Second: View>: View {
                         width: axis == .vertical ? firstLength : nil,
                         height: axis == .horizontal ? firstLength : nil
                     )
-                divider(totalLength: totalLength)
+                seam(totalLength: totalLength)
                 second()
             }
         }
     }
 
     @ViewBuilder
-    private func divider(totalLength: CGFloat) -> some View {
-        let shape = Rectangle()
-            .fill(.white.opacity(0.08))
-            .frame(
-                width: axis == .vertical ? dividerThickness : nil,
-                height: axis == .horizontal ? dividerThickness : nil
-            )
+    private func seam(totalLength: CGFloat) -> some View {
+        let tokens = environment.themeManager.tokens
+        let isLit = isHovering || isDragging
+        let line = Group {
+            if axis == .vertical {
+                LinearGradient(
+                    colors: [.clear, tokens.accentSecondary.opacity(isLit ? 0.9 : 0.22), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: isLit ? 2 : 1)
+            } else {
+                LinearGradient(
+                    colors: [.clear, tokens.accentSecondary.opacity(isLit ? 0.9 : 0.22), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: isLit ? 2 : 1)
+            }
+        }
+        .shadow(color: isLit ? tokens.accentSecondary.opacity(0.7) : .clear, radius: 5)
+        .frame(
+            width: axis == .vertical ? gap : nil,
+            height: axis == .horizontal ? gap : nil
+        )
+        .animation(.easeOut(duration: 0.12), value: isLit)
 
         if let resizeAnchorID {
-            shape
-                .contentShape(Rectangle().inset(by: -3))
+            line
+                .contentShape(Rectangle().inset(by: -2))
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
+                            isDragging = true
                             let offset = axis == .vertical ? value.location.x : value.location.y
                             let newRatio = min(max(offset / totalLength, 0.1), 0.9)
                             tileLayout.setRatio(newRatio, for: resizeAnchorID)
                         }
+                        .onEnded { _ in isDragging = false }
                 )
-                .onHover { isHovering in
-                    if isHovering {
+                .onHover { hovering in
+                    isHovering = hovering
+                    if hovering {
                         (axis == .vertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
                     } else {
                         NSCursor.arrow.set()
                     }
                 }
         } else {
-            shape
+            line
         }
     }
 }
