@@ -43,7 +43,7 @@ final class AppEnvironmentTests {
     func bootstrapAssemblesRealDependencies() {
         let environment = AppEnvironment.bootstrap(defaults: defaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        #expect(environment.registry.allApps.map { $0.id } == ["terminal"])
+        #expect(environment.registry.allApps.map { $0.id } == ["terminal", "settings"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
     }

@@ -31,7 +31,7 @@ final class AppEnvironment {
     /// isolated suite.
     static func bootstrap(defaults: UserDefaults = .standard) -> AppEnvironment {
         let settingsStore = UserDefaultsSettingsStore(defaults: defaults)
-        let registry = BuiltInAppRegistry(apps: [TerminalApp.self], settingsStore: settingsStore)
+        let registry = BuiltInAppRegistry(apps: [TerminalApp.self, SettingsApp.self], settingsStore: settingsStore)
         let themeManager = ThemeManager(
             settingsStore: settingsStore,
             dockIconUpdater: AppKitDockIconUpdater()
