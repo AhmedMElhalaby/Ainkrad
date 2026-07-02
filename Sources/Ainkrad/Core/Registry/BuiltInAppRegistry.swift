@@ -30,5 +30,6 @@ final class BuiltInAppRegistry {
     func setEnabled(_ enabled: Bool, for id: String) {
         enabledOverrides[id] = enabled
         settingsStore.set(enabledOverrides, forKey: Self.enabledStateKey)
+        Log.registry.info("Built-in App \(id, privacy: .public) \(enabled ? "enabled" : "disabled", privacy: .public)")
     }
 }

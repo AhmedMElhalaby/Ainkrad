@@ -29,5 +29,6 @@ final class ThemeManager {
         settingsStore.set(settings, forKey: Self.settingsKey)
 
         dockIconUpdater.updateDockIcon(for: theme)
+        Log.settings.info("Theme changed to \(theme.rawValue, privacy: .public)")
     }
 }

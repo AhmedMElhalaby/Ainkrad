@@ -43,6 +43,7 @@ struct TerminalSessionFactory {
             notices.append("The configured working directory “\(configuredDirectory.path)” isn’t usable, so \(resolution.url.path) was used instead.")
         }
 
+        Log.terminal.info("Terminal session resolved: shell \(shellPath, privacy: .public), cwd \(resolution.url.path, privacy: .public), \(notices.count) notice(s)")
         return TerminalSession(
             workingDirectory: resolution.url,
             shellPath: shellPath,

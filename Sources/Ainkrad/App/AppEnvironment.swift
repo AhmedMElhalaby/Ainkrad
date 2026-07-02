@@ -37,6 +37,7 @@ final class AppEnvironment {
             dockIconUpdater: AppKitDockIconUpdater()
         )
         let workspaceManager = WorkspaceManager()
+        Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered Built-in Apps")
         return AppEnvironment(
             settingsStore: settingsStore,
             registry: registry,
