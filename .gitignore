@@ -1,0 +1,9 @@
+.build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+
+# Claude Code / session tooling — not part of the product
+.claude/
+.mcp.json
+skill-observations/
