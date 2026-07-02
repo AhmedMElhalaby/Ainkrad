@@ -1,11 +1,11 @@
 import Foundation
+import Observation
 
 /// One workspace's tile tree: opening an app fills an empty layout or
 /// splits the focused Block (vertical, new Block second); closing a Block
 /// promotes its sibling; the last close returns to the empty state. See
-/// Window & Tile Management Architecture.md. Rendering (SwiftUI view,
-/// divider drag gesture) is a separate layer built on top of this pure
-/// model.
+/// Window & Tile Management Architecture.md.
+@Observable
 final class TileLayout {
     private(set) var root: TileNode?
     private(set) var focusedBlockID: UUID?

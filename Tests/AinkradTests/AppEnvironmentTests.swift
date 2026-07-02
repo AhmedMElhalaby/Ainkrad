@@ -22,25 +22,29 @@ final class AppEnvironmentTests {
         let registry = BuiltInAppRegistry(apps: [], settingsStore: settingsStore)
         let themeManager = ThemeManager(settingsStore: settingsStore, dockIconUpdater: SpyDockIconUpdater())
         let workspaceManager = WorkspaceManager()
+        let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
 
         let environment = AppEnvironment(
             settingsStore: settingsStore,
             registry: registry,
             themeManager: themeManager,
-            workspaceManager: workspaceManager
+            workspaceManager: workspaceManager,
+            launcherStore: launcherStore
         )
 
         #expect(environment.registry === registry)
         #expect(environment.themeManager === themeManager)
         #expect(environment.workspaceManager === workspaceManager)
+        #expect(environment.launcherStore === launcherStore)
     }
 
-    @Test("bootstrap() assembles a working environment backed by real UserDefaults")
+    @Test("bootstrap() assembles a working environment backed by real UserDefaults, Launcher dismissed")
     @MainActor
     func bootstrapAssemblesRealDependencies() {
         let environment = AppEnvironment.bootstrap(defaults: defaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
         #expect(environment.registry.allApps.isEmpty)
         #expect(environment.workspaceManager.workspaces.count == 1)
+        #expect(environment.isLauncherPresented == false)
     }
 }

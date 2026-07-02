@@ -3,22 +3,27 @@ import Foundation
 /// The composition root, assembled once in `AinkradApp.init` and injected
 /// via `.environment(_:)`. See State, Persistence & Dependency Injection.md.
 @MainActor
+@Observable
 final class AppEnvironment {
     let settingsStore: SettingsStore
     let registry: BuiltInAppRegistry
     let themeManager: ThemeManager
     let workspaceManager: WorkspaceManager
+    let launcherStore: LauncherStore
+    var isLauncherPresented = false
 
     init(
         settingsStore: SettingsStore,
         registry: BuiltInAppRegistry,
         themeManager: ThemeManager,
-        workspaceManager: WorkspaceManager
+        workspaceManager: WorkspaceManager,
+        launcherStore: LauncherStore
     ) {
         self.settingsStore = settingsStore
         self.registry = registry
         self.themeManager = themeManager
         self.workspaceManager = workspaceManager
+        self.launcherStore = launcherStore
     }
 
     /// Assembles a real `AppEnvironment` backed by `UserDefaults` and
@@ -32,11 +37,13 @@ final class AppEnvironment {
             settingsStore: settingsStore,
             dockIconUpdater: AppKitDockIconUpdater()
         )
+        let workspaceManager = WorkspaceManager()
         return AppEnvironment(
             settingsStore: settingsStore,
             registry: registry,
             themeManager: themeManager,
-            workspaceManager: WorkspaceManager()
+            workspaceManager: workspaceManager,
+            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager)
         )
     }
 }
