@@ -1,20 +1,22 @@
 import Foundation
 import Observation
 
-/// Multiple workspaces, each with its own independent tile layout.
-/// Switching is keyboard-only (`⌘1`-`⌘9`, `⌘⇧N`) — see
-/// ADR-0008 App Launcher & Workspace Switching. Tile geometry is
-/// session-only and never persisted; only one workspace exists at launch.
+/// Multiple workspaces, each with its own independent tile layout. The
+/// first workspace is the **main** one — the permanent home island (see
+/// Workspace). Switching: `⌘1`-`⌘9` by position, `⌘⇧N` create, clickable
+/// HUD diamonds, and the `⌥Tab` Workspace Overview. Tile geometry is
+/// session-only and never persisted.
 @MainActor
 @Observable
 final class WorkspaceManager {
     private(set) var workspaces: [Workspace]
     private(set) var activeWorkspaceID: UUID
+    private var createdCount = 1
 
     init() {
-        let first = Workspace()
-        self.workspaces = [first]
-        self.activeWorkspaceID = first.id
+        let main = Workspace(name: "Main", isMain: true)
+        self.workspaces = [main]
+        self.activeWorkspaceID = main.id
     }
 
     var activeWorkspace: Workspace {
@@ -23,10 +25,25 @@ final class WorkspaceManager {
 
     @discardableResult
     func createWorkspace() -> Workspace {
-        let workspace = Workspace()
+        createdCount += 1
+        let workspace = Workspace(name: "Workspace \(createdCount)")
         workspaces.append(workspace)
         activeWorkspaceID = workspace.id
         return workspace
+    }
+
+    /// The main workspace is permanent; deleting the active workspace
+    /// falls back to main.
+    func deleteWorkspace(_ id: UUID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }), !workspace.isMain else { return }
+        workspaces.removeAll { $0.id == id }
+        if activeWorkspaceID == id {
+            activeWorkspaceID = workspaces.first(where: { $0.isMain })!.id
+        }
+    }
+
+    func moveWorkspace(fromOffsets source: IndexSet, toOffset destination: Int) {
+        workspaces.move(fromOffsets: source, toOffset: destination)
     }
 
     func switchTo(_ id: UUID) {

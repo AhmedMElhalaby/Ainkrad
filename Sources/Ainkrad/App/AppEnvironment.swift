@@ -11,6 +11,7 @@ final class AppEnvironment {
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
     var isLauncherPresented = false
+    var isWorkspaceOverviewPresented = false
 
     init(
         settingsStore: SettingsStore,

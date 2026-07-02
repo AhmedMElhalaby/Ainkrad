@@ -21,7 +21,14 @@ final class LauncherStore {
         registry.enabledApps.filter { fuzzyMatches(query: query, target: $0.displayName) }
     }
 
+    /// The main workspace is the home island and stays empty: summoning an
+    /// app from it spawns a fresh workspace (and switches to it). On any
+    /// other workspace the app splits into the current layout.
     func selectApp(_ app: BuiltInApp.Type) {
-        workspaceManager.activeWorkspace.tileLayout.openApp(app.id)
+        if workspaceManager.activeWorkspace.isMain {
+            workspaceManager.createWorkspace().tileLayout.openApp(app.id)
+        } else {
+            workspaceManager.activeWorkspace.tileLayout.openApp(app.id)
+        }
     }
 }

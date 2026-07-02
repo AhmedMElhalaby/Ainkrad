@@ -1,17 +1,20 @@
 import SwiftUI
 
-/// The single window's content: the active workspace's tile layout, with
-/// the Launcher overlaid on top when summoned. See
-/// Navigation & Settings Architecture.md.
+/// The single window's content: every workspace's tile layout stays
+/// mounted (hidden when inactive) so running sessions survive switching;
+/// the Launcher and Workspace Overview overlay on top when summoned.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
+    private var isOverlayPresented: Bool {
+        environment.isLauncherPresented || environment.isWorkspaceOverviewPresented
+    }
+
     var body: some View {
         ZStack {
-            // Sky and workspace blur TOGETHER while the Launcher is
-            // summoned — blurring only the workspace would rasterize it
-            // separately and break the island artwork's screen-blend
-            // against the sky (its black background would reappear).
+            // Sky and workspace blur TOGETHER while an overlay is up —
+            // blurring only the workspace would rasterize it separately
+            // from the sky and visibly seam the composition.
             ZStack {
                 AmbientSkyView()
 
@@ -20,15 +23,27 @@ struct RootView: View {
                 // inside it.
                 VStack(spacing: 0) {
                     HUDBar()
-                    TileLayoutView(
-                        tileLayout: environment.workspaceManager.activeWorkspace.tileLayout,
-                        registry: environment.registry
-                    )
+
+                    // ALL workspaces stay in the hierarchy — switching
+                    // only toggles visibility, so PTY-backed sessions in
+                    // background workspaces keep running.
+                    ZStack {
+                        ForEach(environment.workspaceManager.workspaces) { workspace in
+                            let isActive = workspace.id == environment.workspaceManager.activeWorkspaceID
+                            TileLayoutView(
+                                tileLayout: workspace.tileLayout,
+                                registry: environment.registry
+                            )
+                            .opacity(isActive ? 1 : 0)
+                            .allowsHitTesting(isActive)
+                            .accessibilityHidden(!isActive)
+                        }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .ignoresSafeArea(edges: .top)
             }
-            .blur(radius: environment.isLauncherPresented ? 14 : 0)
+            .blur(radius: isOverlayPresented ? 14 : 0)
 
             if environment.isLauncherPresented {
                 LauncherView(store: environment.launcherStore) {
@@ -36,8 +51,15 @@ struct RootView: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
+
+            if environment.isWorkspaceOverviewPresented {
+                WorkspaceOverviewView {
+                    environment.isWorkspaceOverviewPresented = false
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
         }
-        .animation(.easeOut(duration: 0.16), value: environment.isLauncherPresented)
+        .animation(.easeOut(duration: 0.16), value: isOverlayPresented)
         .background(KeyboardShortcutMonitor(environment: environment))
     }
 }

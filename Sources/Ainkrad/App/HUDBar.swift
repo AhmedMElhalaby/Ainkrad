@@ -38,16 +38,25 @@ struct HUDBar: View {
                 Button {
                     manager.switchTo(workspace.id)
                 } label: {
-                    Rectangle()
-                        .fill(isActive ? tokens.accentSecondary : tokens.foreground.opacity(0.28))
-                        .frame(width: isActive ? 7 : 5, height: isActive ? 7 : 5)
-                        .rotationEffect(.degrees(45))
-                        .shadow(color: isActive ? tokens.accentSecondary.opacity(0.9) : .clear, radius: 4)
-                        .frame(width: 11, height: 11)
-                        .contentShape(Rectangle())
+                    Group {
+                        if workspace.isMain {
+                            // The home island wears the chevron mark.
+                            ChevronMark()
+                                .fill(isActive ? tokens.accentSecondary : tokens.foreground.opacity(0.35))
+                                .frame(width: isActive ? 10 : 8, height: isActive ? 8.5 : 7)
+                        } else {
+                            Rectangle()
+                                .fill(isActive ? tokens.accentSecondary : tokens.foreground.opacity(0.28))
+                                .frame(width: isActive ? 7 : 5, height: isActive ? 7 : 5)
+                                .rotationEffect(.degrees(45))
+                        }
+                    }
+                    .shadow(color: isActive ? tokens.accentSecondary.opacity(0.9) : .clear, radius: 4)
+                    .frame(width: 12, height: 11)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Workspace \(index + 1)\(index < 9 ? " — ⌘\(index + 1)" : "")")
+                .help("\(workspace.name)\(index < 9 ? " — ⌘\(index + 1)" : "")")
             }
         }
         .animation(.easeOut(duration: 0.18), value: manager.activeWorkspaceID)

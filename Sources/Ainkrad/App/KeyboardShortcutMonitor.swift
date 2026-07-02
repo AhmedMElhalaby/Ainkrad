@@ -49,12 +49,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
+            // ⌥Tab toggles the Workspace Overview (keyCode 48 = Tab).
+            if event.keyCode == 48,
+               event.modifierFlags.contains(.option),
+               !event.modifierFlags.contains(.command) {
+                environment.isLauncherPresented = false
+                environment.isWorkspaceOverviewPresented.toggle()
+                return true
+            }
+
             guard event.modifierFlags.contains(.command),
                   let characters = event.charactersIgnoringModifiers else { return false }
             let isShifted = event.modifierFlags.contains(.shift)
 
             switch characters {
             case "k" where !isShifted:
+                environment.isWorkspaceOverviewPresented = false
                 if environment.isLauncherPresented {
                     environment.launcherStore.query = ""
                     environment.isLauncherPresented = false
@@ -64,6 +74,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 return true
             case "n" where isShifted:
                 environment.workspaceManager.createWorkspace()
+                // A hidden workspace's terminal must not keep receiving
+                // keystrokes after the switch.
+                window?.makeFirstResponder(nil)
                 return true
             case "w" where !isShifted:
                 let layout = environment.workspaceManager.activeWorkspace.tileLayout
@@ -74,6 +87,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             default:
                 if !isShifted, let number = Int(characters), (1...9).contains(number) {
                     environment.workspaceManager.switchToWorkspace(at: number - 1)
+                    window?.makeFirstResponder(nil)
                     return true
                 }
                 return false

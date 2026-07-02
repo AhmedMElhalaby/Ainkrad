@@ -30,6 +30,12 @@ struct AinkradApp: App {
                     environment.workspaceManager.createWorkspace()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                Button("Workspaces…") {
+                    environment.isLauncherPresented = false
+                    environment.isWorkspaceOverviewPresented.toggle()
+                }
+                .keyboardShortcut(.tab, modifiers: .option)
             }
         }
     }

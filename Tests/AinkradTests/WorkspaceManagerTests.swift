@@ -6,14 +6,16 @@ import Foundation
 @MainActor
 struct WorkspaceManagerTests {
 
-    @Test("starts with exactly one workspace, which is active")
+    @Test("starts with exactly one workspace — the main one, named Main, active")
     func startsWithOneActiveWorkspace() {
         let manager = WorkspaceManager()
         #expect(manager.workspaces.count == 1)
         #expect(manager.activeWorkspace.id == manager.workspaces[0].id)
+        #expect(manager.workspaces[0].isMain)
+        #expect(manager.workspaces[0].name == "Main")
     }
 
-    @Test("createWorkspace adds a new workspace and switches to it")
+    @Test("createWorkspace adds a named, non-main workspace and switches to it")
     func createWorkspaceSwitchesToIt() {
         let manager = WorkspaceManager()
         let original = manager.activeWorkspace
@@ -23,6 +25,76 @@ struct WorkspaceManagerTests {
         #expect(manager.workspaces.count == 2)
         #expect(manager.activeWorkspace.id == created.id)
         #expect(created.id != original.id)
+        #expect(!created.isMain)
+        #expect(created.name == "Workspace 2")
+    }
+
+    @Test("deleteWorkspace removes a non-main workspace")
+    func deleteRemovesNonMainWorkspace() {
+        let manager = WorkspaceManager()
+        let created = manager.createWorkspace()
+
+        manager.deleteWorkspace(created.id)
+
+        #expect(manager.workspaces.count == 1)
+        #expect(manager.workspaces[0].isMain)
+    }
+
+    @Test("the main workspace cannot be deleted")
+    func mainWorkspaceCannotBeDeleted() {
+        let manager = WorkspaceManager()
+        let main = manager.workspaces[0]
+
+        manager.deleteWorkspace(main.id)
+
+        #expect(manager.workspaces.count == 1)
+    }
+
+    @Test("deleting the active workspace falls back to the main workspace")
+    func deletingActiveFallsBackToMain() {
+        let manager = WorkspaceManager()
+        let created = manager.createWorkspace()
+        #expect(manager.activeWorkspace.id == created.id)
+
+        manager.deleteWorkspace(created.id)
+
+        #expect(manager.activeWorkspace.isMain)
+    }
+
+    @Test("deleting an inactive workspace keeps the active one active")
+    func deletingInactiveKeepsActive() {
+        let manager = WorkspaceManager()
+        let second = manager.createWorkspace()
+        let third = manager.createWorkspace()
+
+        manager.deleteWorkspace(second.id)
+
+        #expect(manager.activeWorkspace.id == third.id)
+    }
+
+    @Test("moveWorkspace reorders, and index-based switching follows the new order")
+    func moveWorkspaceReorders() {
+        let manager = WorkspaceManager()
+        let second = manager.createWorkspace()
+        let third = manager.createWorkspace()
+        let mainID = manager.workspaces[0].id
+
+        // Move the third workspace to position 1 (right after main).
+        manager.moveWorkspace(fromOffsets: IndexSet(integer: 2), toOffset: 1)
+
+        #expect(manager.workspaces.map { $0.id } == [mainID, third.id, second.id])
+        manager.switchToWorkspace(at: 1)
+        #expect(manager.activeWorkspace.id == third.id)
+    }
+
+    @Test("a workspace can be renamed")
+    func workspaceCanBeRenamed() {
+        let manager = WorkspaceManager()
+        let created = manager.createWorkspace()
+
+        created.name = "Research"
+
+        #expect(manager.workspaces[1].name == "Research")
     }
 
     @Test("each workspace has its own independent TileLayout")

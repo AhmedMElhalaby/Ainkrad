@@ -99,4 +99,16 @@ struct TileLayoutTests {
 
         #expect(layout.root == .split(axis: .vertical, ratio: 0.3, first: .leaf(terminal), second: .leaf(settings)))
     }
+
+    @Test("appIDs lists every open Block's app in leaf order")
+    func appIDsListsOpenApps() {
+        let layout = TileLayout()
+        #expect(layout.appIDs.isEmpty)
+
+        layout.openApp("terminal")
+        layout.openApp("settings")
+        layout.openApp("terminal")
+
+        #expect(layout.appIDs == ["terminal", "settings", "terminal"])
+    }
 }

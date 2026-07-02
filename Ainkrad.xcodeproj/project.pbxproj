@@ -30,6 +30,7 @@
 		4804C1110019631F72FF3FD3 /* TileLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5D64284413FC97494AA1CA /* TileLayout.swift */; };
 		4A18DE56B38BAB1D89665814 /* PTYReaper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BD0B41265027A314830DB40 /* PTYReaper.swift */; };
 		4AB28BD832FBD3A730D93821 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33C345F52575983C81FE1D6 /* SettingsRootView.swift */; };
+		4B23E06053DC708532231D52 /* WorkspaceOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B5C0E7469E7D23791A8EFB /* WorkspaceOverviewView.swift */; };
 		4D416BE1AD1D2ED4509C36AC /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11937F5900E9BFE274765D5 /* Log.swift */; };
 		53807F482E2D5A51560E127E /* TerminalSessionFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C57EAD4A5A548653DE584E /* TerminalSessionFactory.swift */; };
 		550AFD98E97E81CF04E8ADA6 /* GlobalSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFB1C343238DEAE0B6FE856B /* GlobalSettingsTests.swift */; };
@@ -89,6 +90,7 @@
 /* Begin PBXFileReference section */
 		0145B980204FED7B2F4423AE /* DockIconUpdating.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockIconUpdating.swift; sourceTree = "<group>"; };
 		04F5A703D9672DA74E7B1D77 /* UserDefaultsSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaultsSettingsStore.swift; sourceTree = "<group>"; };
+		05B5C0E7469E7D23791A8EFB /* WorkspaceOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceOverviewView.swift; sourceTree = "<group>"; };
 		060A0A9DED5236D83325596D /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
 		08C44B41D33CFA643875664B /* Exo2.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Exo2.ttf; sourceTree = "<group>"; };
 		08E67E70103DFF2EC1E6EAF7 /* Ainkrad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ainkrad.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -356,6 +358,7 @@
 				A0D9CA886CDC937BF8906E17 /* TileNode.swift */,
 				BCB3B5B1879ED69D9BE48DAC /* Workspace.swift */,
 				5E76DABDA86DFA521443E228 /* WorkspaceManager.swift */,
+				05B5C0E7469E7D23791A8EFB /* WorkspaceOverviewView.swift */,
 			);
 			path = Windowing;
 			sourceTree = "<group>";
@@ -568,6 +571,7 @@
 				B5EDC5709F2FE1952DC99217 /* WorkingDirectoryResolver.swift in Sources */,
 				3FA0FA3EFD5ED9B90886C683 /* Workspace.swift in Sources */,
 				39FC5AB6288CC5E0A75475BE /* WorkspaceManager.swift in Sources */,
+				4B23E06053DC708532231D52 /* WorkspaceOverviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -604,7 +608,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_8237FE7B-98AE-4D69-A1C0-6DE244A1A7CB" /* SwiftTerm */;
+			productRef = "TEMP_598CF775-7810-438C-B1FE-FC96348D8C31" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -853,7 +857,7 @@
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_8237FE7B-98AE-4D69-A1C0-6DE244A1A7CB" /* SwiftTerm */ = {
+		"TEMP_598CF775-7810-438C-B1FE-FC96348D8C31" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;

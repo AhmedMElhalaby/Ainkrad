@@ -14,6 +14,12 @@ final class TileLayout {
 
     var isEmpty: Bool { root == nil }
 
+    /// Every open Block's app id, in leaf order — the Workspace Overview's
+    /// "what's inside" summary.
+    var appIDs: [String] {
+        root.map(Self.collectAppIDs) ?? []
+    }
+
     @discardableResult
     func openApp(_ appID: String) -> Block {
         let newBlock = Block(appID: appID)
@@ -51,6 +57,15 @@ final class TileLayout {
     }
 
     // MARK: - Pure tree operations
+
+    private static func collectAppIDs(in node: TileNode) -> [String] {
+        switch node {
+        case .leaf(let block):
+            return [block.appID]
+        case .split(_, _, let first, let second):
+            return collectAppIDs(in: first) + collectAppIDs(in: second)
+        }
+    }
 
     private static func replacing(_ node: TileNode, leafID: UUID, with replacement: (Block) -> TileNode) -> TileNode {
         switch node {
