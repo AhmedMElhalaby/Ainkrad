@@ -15,6 +15,7 @@ struct WorkspaceOverviewView: View {
     @State private var renamingWorkspaceID: UUID?
     @State private var renameDraft = ""
     @State private var draggedWorkspaceID: UUID?
+    @State private var pendingDeletion: Workspace?
     @FocusState private var focus: FocusTarget?
 
     private enum FocusTarget: Hashable {
@@ -36,10 +37,104 @@ struct WorkspaceOverviewView: View {
             panel(workspaces: workspaces, tokens: tokens)
                 .frame(width: 700)
                 .offset(y: -40)
+                .overlay {
+                    if let pendingDeletion {
+                        deleteConfirmation(pendingDeletion, tokens: tokens)
+                            .offset(y: -40)
+                            .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    }
+                }
         }
+        .animation(.easeOut(duration: 0.14), value: pendingDeletion?.id)
         .onAppear {
             selectedIndex = workspaces.firstIndex(where: { $0.id == environment.workspaceManager.activeWorkspaceID }) ?? 0
             focus = .panel
+        }
+    }
+
+    /// Themed confirmation shown only when deleting a workspace that still
+    /// has apps open — an empty workspace deletes without ceremony.
+    private func deleteConfirmation(_ workspace: Workspace, tokens: DesignTokens) -> some View {
+        let appCount = workspace.tileLayout.appIDs.count
+
+        return VStack(spacing: 14) {
+            Text("Delete “\(workspace.name)”?")
+                .font(AinkradFont.display(15, weight: .semibold))
+                .foregroundStyle(tokens.foreground)
+            Text("\(appCount) app\(appCount == 1 ? " is" : "s are") still open in it. Their sessions will end.")
+                .font(AinkradFont.display(12))
+                .foregroundStyle(tokens.foreground.opacity(0.6))
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 10) {
+                Button {
+                    pendingDeletion = nil
+                } label: {
+                    Text("Cancel")
+                        .font(AinkradFont.display(12, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.75))
+                        .frame(width: 96, height: 30)
+                        .background(tokens.surfaceElevated.opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7)
+                                .strokeBorder(tokens.accentPrimary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+
+                Button {
+                    confirmDeletion(workspace)
+                } label: {
+                    Text("Delete")
+                        .font(AinkradFont.display(12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 96, height: 30)
+                        .background(Color(hex: "E5484D").opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7)
+                                .strokeBorder(Color(hex: "E5484D"), lineWidth: 1)
+                        )
+                        .shadow(color: Color(hex: "E5484D").opacity(0.5), radius: 10)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(.top, 2)
+        }
+        .padding(24)
+        .frame(width: 340)
+        .background(tokens.background.opacity(0.97))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [tokens.accentSecondary.opacity(0.5), tokens.accentPrimary.opacity(0.2)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: .black.opacity(0.55), radius: 26, y: 8)
+    }
+
+    private func confirmDeletion(_ workspace: Workspace) {
+        environment.workspaceManager.deleteWorkspace(workspace.id)
+        selectedIndex = min(selectedIndex, environment.workspaceManager.workspaces.count - 1)
+        pendingDeletion = nil
+    }
+
+    /// Empty workspaces delete immediately; ones with open apps confirm.
+    private func requestDeletion(_ workspace: Workspace) {
+        if workspace.tileLayout.appIDs.isEmpty {
+            environment.workspaceManager.deleteWorkspace(workspace.id)
+            selectedIndex = min(selectedIndex, environment.workspaceManager.workspaces.count - 1)
+        } else {
+            pendingDeletion = workspace
         }
     }
 
@@ -100,27 +195,32 @@ struct WorkspaceOverviewView: View {
         .focusable()
         .focused($focus, equals: .panel)
         .focusEffectDisabled()
-        // While a rename field is active, the panel's keys stand down so
-        // Return/Escape reach the TextField (commit/cancel) instead of
-        // switching workspaces or dismissing.
+        // While a rename field or the delete confirmation is active, the
+        // panel's keys stand down: Return/Escape belong to that surface
+        // (TextField commit/cancel, confirmation default/cancel actions).
         .onKeyPress(.escape) {
+            if pendingDeletion != nil { pendingDeletion = nil; return .handled }
             guard renamingWorkspaceID == nil else { return .ignored }
             onDismiss(); return .handled
         }
         .onKeyPress(.rightArrow) {
-            guard renamingWorkspaceID == nil else { return .ignored }
+            guard renamingWorkspaceID == nil, pendingDeletion == nil else { return .ignored }
             moveSelection(by: 1); return .handled
         }
         .onKeyPress(.leftArrow) {
-            guard renamingWorkspaceID == nil else { return .ignored }
+            guard renamingWorkspaceID == nil, pendingDeletion == nil else { return .ignored }
             moveSelection(by: -1); return .handled
         }
         .onKeyPress(.return) {
+            if let pendingDeletion {
+                confirmDeletion(pendingDeletion)
+                return .handled
+            }
             guard renamingWorkspaceID == nil else { return .ignored }
             activateSelection(); return .handled
         }
         .onKeyPress(.deleteForward) {
-            guard renamingWorkspaceID == nil else { return .ignored }
+            guard renamingWorkspaceID == nil, pendingDeletion == nil else { return .ignored }
             deleteSelection(); return .handled
         }
     }
@@ -159,8 +259,7 @@ struct WorkspaceOverviewView: View {
 
                 if !workspace.isMain {
                     Button {
-                        environment.workspaceManager.deleteWorkspace(workspace.id)
-                        selectedIndex = min(selectedIndex, environment.workspaceManager.workspaces.count - 1)
+                        requestDeletion(workspace)
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
@@ -327,9 +426,8 @@ struct WorkspaceOverviewView: View {
 
     private func deleteSelection() {
         let workspaces = environment.workspaceManager.workspaces
-        guard workspaces.indices.contains(selectedIndex) else { return }
-        environment.workspaceManager.deleteWorkspace(workspaces[selectedIndex].id)
-        selectedIndex = min(selectedIndex, environment.workspaceManager.workspaces.count - 1)
+        guard workspaces.indices.contains(selectedIndex), !workspaces[selectedIndex].isMain else { return }
+        requestDeletion(workspaces[selectedIndex])
     }
 
     private func beginRename(_ workspace: Workspace) {
