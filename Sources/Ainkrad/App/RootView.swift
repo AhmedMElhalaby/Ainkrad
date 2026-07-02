@@ -10,6 +10,8 @@ struct RootView: View {
         ZStack {
             AmbientSkyView()
 
+            // Extends under the (hidden) title bar so the HUD is the top of
+            // the screen itself — the traffic lights float inside it.
             VStack(spacing: 0) {
                 HUDBar()
                 TileLayoutView(
@@ -18,6 +20,7 @@ struct RootView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .ignoresSafeArea(edges: .top)
 
             if environment.isLauncherPresented {
                 LauncherView(store: environment.launcherStore) {

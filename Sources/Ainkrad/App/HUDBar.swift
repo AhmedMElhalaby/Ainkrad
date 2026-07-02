@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The OS status strip along the top of the window: wordmark on the left,
-/// workspace dots and clock on the right, separated from the canvas by an
-/// accent hairline. Deliberately HUD language — thin, luminous, mono
-/// readouts — not window chrome.
+/// The OS status strip fused with the (hidden) title bar at the very top
+/// of the screen: the system traffic lights float inside its left side,
+/// the clickable workspace dots sit on the right, over an accent hairline.
+/// Deliberately HUD language, not window chrome.
 ///
 /// NOTE: the workspace dots intentionally supersede ADR-0008's
 /// "no persistent workspace indicator" — approved as part of the
@@ -15,22 +15,11 @@ struct HUDBar: View {
         let tokens = environment.themeManager.tokens
 
         HStack(spacing: 0) {
-            HStack(spacing: 8) {
-                ChevronMark()
-                    .fill(tokens.accentSecondary)
-                    .frame(width: 13, height: 11)
-                Text("AINKRAD")
-                    .font(AinkradFont.display(11, weight: .semibold))
-                    .kerning(3.5)
-                    .foregroundStyle(tokens.foreground.opacity(0.85))
-            }
-
+            // Left side intentionally empty — the system traffic lights
+            // occupy this region of the fused title bar.
             Spacer()
 
-            HStack(spacing: 16) {
-                workspaceDots(tokens: tokens)
-                clock(tokens: tokens)
-            }
+            workspaceDots(tokens: tokens)
         }
         .padding(.horizontal, 14)
         .frame(height: 30)
@@ -71,14 +60,5 @@ struct HUDBar: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: manager.activeWorkspaceID)
-    }
-
-    private func clock(tokens: DesignTokens) -> some View {
-        TimelineView(.everyMinute) { context in
-            Text(context.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-                .font(AinkradFont.mono(10, weight: .medium))
-                .kerning(1)
-                .foregroundStyle(tokens.foreground.opacity(0.6))
-        }
     }
 }
