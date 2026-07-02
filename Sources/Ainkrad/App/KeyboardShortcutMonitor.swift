@@ -28,11 +28,14 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             // One-part screen: no title-bar material or separator may
-            // tint the top region — the sky runs edge to edge.
+            // tint the top region — the sky runs edge to edge. The window
+            // deliberately does NOT move by background drag — it would
+            // steal in-app drags (e.g. Workspace Overview card reorder);
+            // the top strip still drags the window.
             if let window {
                 window.titlebarAppearsTransparent = true
                 window.titlebarSeparatorStyle = .none
-                window.isMovableByWindowBackground = true
+                window.isMovableByWindowBackground = false
             }
             if window != nil {
                 guard monitor == nil else { return }

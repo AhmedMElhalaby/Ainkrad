@@ -15,21 +15,30 @@ struct EmptyWorkspaceView: View {
             FloatingIslandView()
                 .frame(maxWidth: 860, maxHeight: 574)
 
-            HStack(spacing: 7) {
-                keycap("⌘", tokens: tokens)
-                keycap("K", tokens: tokens)
-                Text("to open an app")
-                    .font(AinkradFont.display(12))
-                    .foregroundStyle(tokens.foreground.opacity(0.45))
-                    .padding(.leading, 3)
+            VStack(alignment: .leading, spacing: 10) {
+                shortcutHint(keys: ["⌘", "K"], label: "to open an app", tokens: tokens)
+                shortcutHint(keys: ["⌥", "⇥"], label: "to manage workspaces", tokens: tokens)
             }
             .padding(.top, 18)
         }
     }
 
+    private func shortcutHint(keys: [String], label: String, tokens: DesignTokens) -> some View {
+        HStack(spacing: 7) {
+            ForEach(keys, id: \.self) { key in
+                keycap(key, tokens: tokens)
+            }
+            Text(label)
+                .font(AinkradFont.display(12))
+                .kerning(0.5)
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+                .padding(.leading, 3)
+        }
+    }
+
     private func keycap(_ label: String, tokens: DesignTokens) -> some View {
         Text(label)
-            .font(AinkradFont.mono(11, weight: .medium))
+            .font(AinkradFont.display(11, weight: .medium))
             .foregroundStyle(tokens.foreground.opacity(0.8))
             .frame(width: 24, height: 22)
             .background(tokens.surfaceElevated.opacity(0.8))

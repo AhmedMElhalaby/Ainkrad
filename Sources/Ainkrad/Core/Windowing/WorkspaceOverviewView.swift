@@ -100,11 +100,29 @@ struct WorkspaceOverviewView: View {
         .focusable()
         .focused($focus, equals: .panel)
         .focusEffectDisabled()
-        .onKeyPress(.escape) { onDismiss(); return .handled }
-        .onKeyPress(.rightArrow) { moveSelection(by: 1); return .handled }
-        .onKeyPress(.leftArrow) { moveSelection(by: -1); return .handled }
-        .onKeyPress(.return) { activateSelection(); return .handled }
-        .onKeyPress(.deleteForward) { deleteSelection(); return .handled }
+        // While a rename field is active, the panel's keys stand down so
+        // Return/Escape reach the TextField (commit/cancel) instead of
+        // switching workspaces or dismissing.
+        .onKeyPress(.escape) {
+            guard renamingWorkspaceID == nil else { return .ignored }
+            onDismiss(); return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            guard renamingWorkspaceID == nil else { return .ignored }
+            moveSelection(by: 1); return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            guard renamingWorkspaceID == nil else { return .ignored }
+            moveSelection(by: -1); return .handled
+        }
+        .onKeyPress(.return) {
+            guard renamingWorkspaceID == nil else { return .ignored }
+            activateSelection(); return .handled
+        }
+        .onKeyPress(.deleteForward) {
+            guard renamingWorkspaceID == nil else { return .ignored }
+            deleteSelection(); return .handled
+        }
     }
 
     // MARK: - Cards
