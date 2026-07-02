@@ -42,6 +42,13 @@ targets:
     dependencies:
       - target: Ainkrad
         embed: false
+      # SwiftTerm is deliberately NOT linked here: the test bundle loads the
+      # host app, which already contains SwiftTerm. Linking it again
+      # duplicates every ObjC class (runtime warning + crashes). Tests can
+      # still `import SwiftTerm` — the module compiles against the build
+      # products' .swiftmodule and links against the host at runtime.
+      - package: SwiftTerm
+        link: false
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

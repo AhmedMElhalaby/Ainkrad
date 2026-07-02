@@ -39,7 +39,9 @@ struct TerminalContainerView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: LocalProcessTerminalView, coordinator: Coordinator) {
+        let pid = nsView.process.shellPid
         nsView.terminate()
+        PTYReaper.reapAfterTerminate(pid)
     }
 
     func makeCoordinator() -> Coordinator {
