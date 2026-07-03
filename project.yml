@@ -14,9 +14,10 @@ settings:
     CODE_SIGNING_ALLOWED: NO
 
 packages:
+  # Vendored SwiftTerm (1.13.0) with a local patch disabling resize
+  # line-reflow (which duplicated output). See Vendor/SwiftTerm.
   SwiftTerm:
-    url: https://github.com/migueldeicaza/SwiftTerm
-    exactVersion: "1.13.0"
+    path: Vendor/SwiftTerm
 
 targets:
   Ainkrad:

@@ -130,6 +130,7 @@
 		5E76DABDA86DFA521443E228 /* WorkspaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceManager.swift; sourceTree = "<group>"; };
 		6308EBD66B3FE61DD5F2684F /* TileLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileLayoutTests.swift; sourceTree = "<group>"; };
 		649628EA8CA139CA6072DE17 /* KeyboardShortcutMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutMonitor.swift; sourceTree = "<group>"; };
+		65153B438B11093BE425BE9C /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
 		667F7D8D8C59641C3DD91D35 /* TileLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileLayoutView.swift; sourceTree = "<group>"; };
 		66E117B602C699905EFD09C2 /* TerminalSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSettings.swift; sourceTree = "<group>"; };
 		698A802C04CF01892CE4C82E /* TerminalSessionFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionFactoryTests.swift; sourceTree = "<group>"; };
@@ -187,6 +188,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		04142C1C41CE1748325B81B4 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				65153B438B11093BE425BE9C /* SwiftTerm */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		0B368FC4EEF01473E35EA1EF /* Logging */ = {
 			isa = PBXGroup;
 			children = (
@@ -268,6 +277,7 @@
 		2D9AB3AB384F716E5816BB5C = {
 			isa = PBXGroup;
 			children = (
+				04142C1C41CE1748325B81B4 /* Packages */,
 				EC840A2834A142ED8FC83B22 /* Sources */,
 				49D0FB2A60D7BB2097D7D267 /* Tests */,
 				1DBD2D226169FEE6149FE0DF /* Products */,
@@ -517,7 +527,7 @@
 			mainGroup = 2D9AB3AB384F716E5816BB5C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				196325019F2B4F1D72A33024 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1DBD2D226169FEE6149FE0DF /* Products */;
@@ -640,7 +650,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_928FF5C7-6405-4C94-9137-A5E5F1193D99" /* SwiftTerm */;
+			productRef = "TEMP_F94BE438-3991-4BFB-B6C6-BCD4F5A70A14" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -872,26 +882,20 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
-			requirement = {
-				kind = exactVersion;
-				version = 1.13.0;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		196325019F2B4F1D72A33024 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/SwiftTerm;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		758B303533356EE56D29B53E /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_928FF5C7-6405-4C94-9137-A5E5F1193D99" /* SwiftTerm */ = {
+		"TEMP_F94BE438-3991-4BFB-B6C6-BCD4F5A70A14" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
