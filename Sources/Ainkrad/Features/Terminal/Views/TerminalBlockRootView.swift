@@ -24,6 +24,14 @@ struct TerminalBlockRootView: View {
                         noticeBanner(session.startupNotices)
                     }
                     TerminalContainerView(session: session, appearance: appearance)
+                        .background {
+                            // When the terminal is translucent, a Material
+                            // behind it blurs the app's own island/sky so it
+                            // shows through as frosted glass.
+                            if appearance.backgroundOpacity < 1 {
+                                Rectangle().fill(.ultraThinMaterial)
+                            }
+                        }
                 }
             } else {
                 Color.clear
