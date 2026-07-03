@@ -11,6 +11,7 @@ import AppKit
 /// (see `paneGeometry`). Structural changes therefore MOVE views instead
 /// of re-creating them — a dragged terminal keeps its live session.
 struct TileLayoutView: View {
+    @Environment(AppEnvironment.self) private var environment
     let workspace: Workspace
     let registry: BuiltInAppRegistry
 
@@ -40,6 +41,15 @@ struct TileLayoutView: View {
             let geometry = tileLayout.paneGeometry(in: proxy.size, gap: 8, collapseTo: collapseTo)
 
             ZStack(alignment: .topLeading) {
+                // One shared workspace backdrop behind every pane, so
+                // translucent terminals reveal slices of a SINGLE blurred
+                // island rather than each carrying its own. Only present when
+                // transparency is enabled (otherwise opaque panes cover it).
+                if environment.terminalSettingsStore.settings.backgroundOpacity < 1 {
+                    workspaceBackdrop
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+
                 // One stable view per panel — identity is the Block id, so
                 // moves/splits/closes reposition instead of re-creating.
                 // `.position` (not `.offset`) so the layout/hit-test frame
@@ -67,6 +77,29 @@ struct TileLayoutView: View {
                 .spring(response: 0.32, dampingFraction: 0.82),
                 value: structureSignature
             )
+        }
+    }
+
+    /// The single blurred floating island shared by the whole workspace —
+    /// revealed through translucent terminals (all panes see the same image,
+    /// so it reads as one background with the windows floating on top).
+    private var workspaceBackdrop: some View {
+        let tokens = environment.themeManager.tokens
+        return ZStack {
+            tokens.background
+            Image(islandAsset)
+                .resizable()
+                .scaledToFit()
+                .blur(radius: 30)
+                .padding(40)
+        }
+    }
+
+    /// Island art ships in two accents; new themes use the nearer one.
+    private var islandAsset: String {
+        switch environment.themeManager.currentTheme {
+        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
+        default: return "Island-NeonBlue"
         }
     }
 
