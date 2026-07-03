@@ -84,10 +84,31 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
 
             guard event.modifierFlags.contains(.command) else { return false }
             let isShifted = event.modifierFlags.contains(.shift)
+            let isOption = event.modifierFlags.contains(.option)
+
+            // ⌘⌥←/→ cycle to the previous/next workspace (wrapping around),
+            // the quick companion to the ⌘1-9 direct jumps.
+            if isOption,
+               !environment.isLauncherPresented,
+               !environment.isWorkspaceOverviewPresented {
+                switch event.keyCode {
+                case 123:
+                    environment.workspaceManager.switchToPreviousWorkspace()
+                    window?.makeFirstResponder(nil)
+                    return true
+                case 124:
+                    environment.workspaceManager.switchToNextWorkspace()
+                    window?.makeFirstResponder(nil)
+                    return true
+                default:
+                    break
+                }
+            }
 
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
-            // only while no overlay owns the keyboard.
-            if !environment.isLauncherPresented && !environment.isWorkspaceOverviewPresented {
+            // only while no overlay owns the keyboard (and never when ⌥ is
+            // held, which is the workspace-cycle chord above).
+            if !isOption, !environment.isLauncherPresented && !environment.isWorkspaceOverviewPresented {
                 let direction: PaneDirection? = switch event.keyCode {
                 case 123: .left
                 case 124: .right

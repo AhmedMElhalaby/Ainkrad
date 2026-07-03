@@ -157,4 +157,54 @@ struct WorkspaceManagerTests {
 
         #expect(manager.activeWorkspace.id == active.id)
     }
+
+    @Test("switchToNextWorkspace advances in order and wraps around to the first")
+    func nextWorkspaceCyclesForward() {
+        let manager = WorkspaceManager()
+        let main = manager.workspaces[0]
+        let second = manager.createWorkspace()
+        let third = manager.createWorkspace()
+        manager.switchTo(main.id)
+
+        manager.switchToNextWorkspace()
+        #expect(manager.activeWorkspace.id == second.id)
+
+        manager.switchToNextWorkspace()
+        #expect(manager.activeWorkspace.id == third.id)
+
+        // Past the last one wraps back to the first.
+        manager.switchToNextWorkspace()
+        #expect(manager.activeWorkspace.id == main.id)
+    }
+
+    @Test("switchToPreviousWorkspace steps back in order and wraps around to the last")
+    func previousWorkspaceCyclesBackward() {
+        let manager = WorkspaceManager()
+        let main = manager.workspaces[0]
+        let second = manager.createWorkspace()
+        let third = manager.createWorkspace()
+        manager.switchTo(main.id)
+
+        // Before the first wraps to the last.
+        manager.switchToPreviousWorkspace()
+        #expect(manager.activeWorkspace.id == third.id)
+
+        manager.switchToPreviousWorkspace()
+        #expect(manager.activeWorkspace.id == second.id)
+
+        manager.switchToPreviousWorkspace()
+        #expect(manager.activeWorkspace.id == main.id)
+    }
+
+    @Test("cycling is a no-op with only one workspace")
+    func cyclingWithSingleWorkspaceIsNoOp() {
+        let manager = WorkspaceManager()
+        let only = manager.activeWorkspace
+
+        manager.switchToNextWorkspace()
+        #expect(manager.activeWorkspace.id == only.id)
+
+        manager.switchToPreviousWorkspace()
+        #expect(manager.activeWorkspace.id == only.id)
+    }
 }

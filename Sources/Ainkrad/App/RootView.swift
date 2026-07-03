@@ -26,20 +26,13 @@ struct RootView: View {
 
                     // ALL workspaces stay in the hierarchy — switching
                     // only toggles visibility, so PTY-backed sessions in
-                    // background workspaces keep running.
-                    ZStack {
-                        ForEach(environment.workspaceManager.workspaces) { workspace in
-                            let isActive = workspace.id == environment.workspaceManager.activeWorkspaceID
-                            TileLayoutView(
-                                workspace: workspace,
-                                registry: environment.registry
-                            )
-                            .opacity(isActive ? 1 : 0)
-                            .allowsHitTesting(isActive)
-                            .accessibilityHidden(!isActive)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // background workspaces keep running. They're laid out
+                    // as a horizontal carousel: the active one sits at
+                    // center, the others wait one screen-width to either
+                    // side by their order, so switching slides the new
+                    // workspace in from the direction it lives (spatially
+                    // matching the HUD's workspace row).
+                    workspaceCarousel
                 }
                 .ignoresSafeArea(edges: .top)
             }
@@ -61,5 +54,28 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.16), value: isOverlayPresented)
         .background(KeyboardShortcutMonitor(environment: environment))
+    }
+
+    private var workspaceCarousel: some View {
+        GeometryReader { proxy in
+            let manager = environment.workspaceManager
+            let activeIndex = manager.workspaces.firstIndex { $0.id == manager.activeWorkspaceID } ?? 0
+
+            ZStack {
+                ForEach(Array(manager.workspaces.enumerated()), id: \.element.id) { index, workspace in
+                    let isActive = index == activeIndex
+                    TileLayoutView(workspace: workspace, registry: environment.registry)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .opacity(isActive ? 1 : 0)
+                        .offset(x: CGFloat(index - activeIndex) * proxy.size.width)
+                        .allowsHitTesting(isActive)
+                        .accessibilityHidden(!isActive)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+            .animation(.spring(response: 0.42, dampingFraction: 0.88), value: manager.activeWorkspaceID)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

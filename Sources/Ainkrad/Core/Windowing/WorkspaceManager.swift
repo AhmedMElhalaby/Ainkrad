@@ -71,6 +71,23 @@ final class WorkspaceManager {
         onStateChange?()
     }
 
+    /// Cycles to the next workspace in order, wrapping past the last back
+    /// to the first (`⌘⌥→`). A no-op with a single workspace.
+    func switchToNextWorkspace() { cycleActiveWorkspace(by: 1) }
+
+    /// Cycles to the previous workspace in order, wrapping before the first
+    /// around to the last (`⌘⌥←`). A no-op with a single workspace.
+    func switchToPreviousWorkspace() { cycleActiveWorkspace(by: -1) }
+
+    private func cycleActiveWorkspace(by delta: Int) {
+        let count = workspaces.count
+        guard count > 1,
+              let current = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
+        let next = ((current + delta) % count + count) % count
+        activeWorkspaceID = workspaces[next].id
+        onStateChange?()
+    }
+
     // MARK: - Persistence
 
     /// Explicit save trigger for mutations that don't flow through the
