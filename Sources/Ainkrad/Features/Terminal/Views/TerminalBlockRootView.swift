@@ -25,11 +25,12 @@ struct TerminalBlockRootView: View {
                     }
                     TerminalContainerView(session: session, appearance: appearance)
                         .background {
-                            // When the terminal is translucent, a Material
-                            // behind it blurs the app's own island/sky so it
-                            // shows through as frosted glass.
+                            // When the terminal is translucent, the blurred
+                            // floating island shows behind the glass. Rendered
+                            // explicitly (not a Material backdrop, which can't
+                            // sample through the hosted terminal view).
                             if appearance.backgroundOpacity < 1 {
-                                Rectangle().fill(.ultraThinMaterial)
+                                transparencyBackdrop
                             }
                         }
                 }
@@ -40,6 +41,30 @@ struct TerminalBlockRootView: View {
         .onAppear {
             guard session == nil else { return }
             session = TerminalSessionFactory(settingsStore: environment.settingsStore).makeSession()
+        }
+    }
+
+    /// The blurred floating island shown behind a translucent terminal. The
+    /// translucent terminal background (its alpha = the transparency setting)
+    /// composites over this, so the island reads as frosted glass.
+    private var transparencyBackdrop: some View {
+        let tokens = environment.themeManager.tokens
+        return ZStack {
+            tokens.background
+            Image(islandAsset)
+                .resizable()
+                .scaledToFit()
+                .blur(radius: 26)
+                .padding(20)
+        }
+    }
+
+    /// Island art ships in two accents; new themes use the nearer one (mirrors
+    /// FloatingIslandView).
+    private var islandAsset: String {
+        switch environment.themeManager.currentTheme {
+        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
+        default: return "Island-NeonBlue"
         }
     }
 
