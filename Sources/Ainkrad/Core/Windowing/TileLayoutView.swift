@@ -17,7 +17,7 @@ struct TileLayoutView: View {
                 .padding([.horizontal, .bottom], 10)
                 .padding(.top, 4)
                 .animation(.easeInOut(duration: 0.2), value: tileLayout.magnifiedBlockID)
-                .animation(.easeOut(duration: 0.18), value: tileLayout.appIDs)
+                .animation(.spring(response: 0.32, dampingFraction: 0.82), value: tileLayout.appIDs)
         }
     }
 }

@@ -34,6 +34,22 @@ struct BlockView: View {
         tileLayout.magnifiedBlockID == block.id
     }
 
+    /// True while this pane's header drag session is live — it "lifts":
+    /// dims and shrinks slightly until dropped or released.
+    private var isBeingDragged: Bool {
+        tileLayout.draggingBlockID == block.id
+    }
+
+    private var paneOpacity: Double {
+        if isBeingDragged { return 0.45 }
+        return isFocused ? 1 : 0.92
+    }
+
+    private var paneScale: CGFloat {
+        if !hasArrived && !reduceMotion { return 0.97 }
+        return isBeingDragged ? 0.98 : 1
+    }
+
     var body: some View {
         let tokens = environment.themeManager.tokens
 
@@ -65,10 +81,11 @@ struct BlockView: View {
         )
         .overlay(dropZoneHighlight(tokens: tokens))
         .shadow(color: isFocused ? tokens.accentPrimary.opacity(0.28) : .black.opacity(0.25), radius: isFocused ? 22 : 12)
-        .opacity(isFocused ? 1 : 0.92)
-        .scaleEffect(hasArrived || reduceMotion ? 1 : 0.97)
+        .opacity(paneOpacity)
+        .scaleEffect(paneScale)
         .contentShape(Rectangle())
         .onTapGesture { tileLayout.focus(block.id) }
+        .animation(.easeOut(duration: 0.15), value: isBeingDragged)
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(key: PaneSizePreferenceKey.self, value: proxy.size)
@@ -89,29 +106,47 @@ struct BlockView: View {
         }
     }
 
-    /// The half of this pane the dragged pane would occupy, tinted while a
-    /// drag hovers over it — the Termius drop indicator, in our accents.
+    /// The half of this pane the dragged pane would occupy — a live drop
+    /// preview in the targeting language: accent wash, corner brackets,
+    /// and a split-direction glyph, animating between edges as the drag
+    /// moves.
     @ViewBuilder
     private func dropZoneHighlight(tokens: DesignTokens) -> some View {
         if let dropEdge {
+            let isHorizontal = dropEdge == .leading || dropEdge == .trailing
             let zone = RoundedRectangle(cornerRadius: 10)
-                .fill(tokens.accentPrimary.opacity(0.18))
+                .fill(tokens.accentPrimary.opacity(0.16))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(tokens.accentSecondary.opacity(0.6), lineWidth: 1)
+                        .strokeBorder(tokens.accentSecondary.opacity(0.65), lineWidth: 1)
+                )
+                .overlay(
+                    TargetingBrackets(length: 9)
+                        .stroke(tokens.accentSecondary.opacity(0.9), lineWidth: 1.5)
+                        .padding(4)
+                )
+                .overlay(
+                    Image(systemName: isHorizontal ? "rectangle.split.2x1" : "rectangle.split.1x2")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+                        .shadow(color: tokens.accentSecondary.opacity(0.8), radius: 6)
                 )
                 .padding(3)
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
 
-            switch dropEdge {
-            case .leading:
-                zone.frame(width: max(paneSize.width / 2, 0)).frame(maxWidth: .infinity, alignment: .leading)
-            case .trailing:
-                zone.frame(width: max(paneSize.width / 2, 0)).frame(maxWidth: .infinity, alignment: .trailing)
-            case .top:
-                zone.frame(height: max(paneSize.height / 2, 0)).frame(maxHeight: .infinity, alignment: .top)
-            case .bottom:
-                zone.frame(height: max(paneSize.height / 2, 0)).frame(maxHeight: .infinity, alignment: .bottom)
+            Group {
+                switch dropEdge {
+                case .leading:
+                    zone.frame(width: max(paneSize.width / 2, 0)).frame(maxWidth: .infinity, alignment: .leading)
+                case .trailing:
+                    zone.frame(width: max(paneSize.width / 2, 0)).frame(maxWidth: .infinity, alignment: .trailing)
+                case .top:
+                    zone.frame(height: max(paneSize.height / 2, 0)).frame(maxHeight: .infinity, alignment: .top)
+                case .bottom:
+                    zone.frame(height: max(paneSize.height / 2, 0)).frame(maxHeight: .infinity, alignment: .bottom)
+                }
             }
+            .allowsHitTesting(false)
         }
     }
 
@@ -181,6 +216,18 @@ struct BlockView: View {
             .padding(.vertical, 5)
             .background(tokens.surfaceElevated)
             .clipShape(Capsule())
+        }
+        .contextMenu {
+            Button("Split Right") { tileLayout.split(block.id, edge: .trailing) }
+                .keyboardShortcut("d", modifiers: .command)
+            Button("Split Down") { tileLayout.split(block.id, edge: .bottom) }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+            Divider()
+            Button(isMagnified ? "Restore Layout" : "Magnify") { tileLayout.toggleMagnify(block.id) }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+            Divider()
+            Button("Close", role: .destructive) { tileLayout.close(block.id) }
+                .keyboardShortcut("w", modifiers: .command)
         }
     }
 

@@ -24,6 +24,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
     final class MonitoringView: NSView {
         var environment: AppEnvironment?
         private var monitor: Any?
+        private var mouseUpMonitor: Any?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -45,9 +46,29 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     }
                     return nil
                 }
-            } else if let monitor {
-                NSEvent.removeMonitor(monitor)
-                self.monitor = nil
+                // Pane drags set a transient "dragging" flag; if the drag
+                // ends outside any drop target, no delegate fires — clear
+                // it on mouse-up so the lifted pane settles back.
+                mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+                    if let environment = self?.environment {
+                        let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                        if layout.draggingBlockID != nil {
+                            DispatchQueue.main.async {
+                                layout.draggingBlockID = nil
+                            }
+                        }
+                    }
+                    return event
+                }
+            } else {
+                if let monitor {
+                    NSEvent.removeMonitor(monitor)
+                    self.monitor = nil
+                }
+                if let mouseUpMonitor {
+                    NSEvent.removeMonitor(mouseUpMonitor)
+                    self.mouseUpMonitor = nil
+                }
             }
         }
 
@@ -93,6 +114,11 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 if let focusedBlockID = layout.focusedBlockID {
                     layout.toggleMagnify(focusedBlockID)
                 }
+                return true
+            case "d", "D":
+                // Split the focused pane: ⌘D right, ⌘⇧D down.
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                layout.splitFocused(isShifted ? .bottom : .trailing)
                 return true
             default:
                 if !isShifted, let number = Int(characters), (1...9).contains(number) {

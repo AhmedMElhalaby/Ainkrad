@@ -141,6 +141,26 @@ final class TileLayout {
         magnifiedBlockID = magnifiedBlockID == id ? nil : id
     }
 
+    /// Splits a pane: opens a NEW pane of the same app on the given edge —
+    /// joining its container as an equal sibling when the edge is parallel
+    /// to it, or wrapping it into a stacked 50/50 pair when perpendicular.
+    @discardableResult
+    func split(_ id: UUID, edge: PaneEdge) -> Block? {
+        guard let root, let source = blocks.first(where: { $0.id == id }) else { return nil }
+        let block = Block(appID: source.appID)
+        self.root = Self.inserting(block, at: id, edge: edge, in: root)
+        focusedBlockID = block.id
+        magnifiedBlockID = nil
+        return block
+    }
+
+    /// Splits the focused pane (⌘D right, ⌘⇧D down).
+    @discardableResult
+    func splitFocused(_ edge: PaneEdge) -> Block? {
+        guard let focusedBlockID else { return nil }
+        return split(focusedBlockID, edge: edge)
+    }
+
     /// Drags the boundary after child `index` of the container at `path`
     /// (child indices from the root) to cumulative `position` (0…1 of that
     /// container's extent). Adjacent siblings share the delta; no sibling

@@ -600,7 +600,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_A0073ED6-0DD5-4B89-8BFD-02B19B905AC5" /* SwiftTerm */;
+			productRef = "TEMP_2FEBB3F6-1C75-42BC-8BD1-285653E8850E" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -849,7 +849,7 @@
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_A0073ED6-0DD5-4B89-8BFD-02B19B905AC5" /* SwiftTerm */ = {
+		"TEMP_2FEBB3F6-1C75-42BC-8BD1-285653E8850E" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;

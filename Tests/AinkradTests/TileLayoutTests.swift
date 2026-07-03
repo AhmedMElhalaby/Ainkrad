@@ -219,6 +219,58 @@ struct TileLayoutTests {
         #expect(fractions[1] >= 0.1 - 0.0001)
     }
 
+    // MARK: - Split commands
+
+    @Test("split(right) opens a new pane of the same app as an equal sibling")
+    func splitRightInsertsSibling() {
+        let layout = TileLayout()
+        let a = layout.openApp("terminal")
+        _ = layout.openApp("settings")
+
+        let created = layout.split(a.id, edge: .trailing)
+
+        guard case .split(let axis, let children, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(axis == .horizontal)
+        #expect(children.count == 3)
+        #expect(layout.appIDs == ["terminal", "terminal", "settings"])
+        #expect(abs(fractions[0] - 1.0 / 3.0) < 0.0001)
+        #expect(layout.focusedBlockID == created?.id)
+    }
+
+    @Test("splitFocused(down) wraps the focused pane into a stacked pair")
+    func splitFocusedDownWraps() {
+        let layout = TileLayout()
+        _ = layout.openApp("terminal")
+        let b = layout.openApp("settings")
+
+        layout.splitFocused(.bottom)
+
+        guard case .split(_, let children, _) = layout.root,
+              case .split(let innerAxis, let inner, _) = children[1] else {
+            Issue.record("expected nested split under the focused pane")
+            return
+        }
+        #expect(innerAxis == .vertical)
+        #expect(inner.count == 2)
+        if case .leaf(let first) = inner[0] { #expect(first.id == b.id) }
+        #expect(layout.appIDs == ["terminal", "settings", "settings"])
+    }
+
+    @Test("splitting clears magnification")
+    func splittingClearsMagnification() {
+        let layout = TileLayout()
+        let a = layout.openApp("terminal")
+        _ = layout.openApp("settings")
+        layout.toggleMagnify(a.id)
+
+        layout.split(a.id, edge: .trailing)
+
+        #expect(layout.magnifiedBlockID == nil)
+    }
+
     // MARK: - Magnify
 
     @Test("toggleMagnify magnifies a pane and toggles back off")
