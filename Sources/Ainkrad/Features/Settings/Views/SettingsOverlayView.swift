@@ -9,7 +9,14 @@ struct SettingsOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
     let onDismiss: () -> Void
 
-    @State private var selection: SettingsSection = .appearance
+    @State private var selection: SettingsSection
+
+    /// `focusedAppID` opens the overlay directly on that app's settings —
+    /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
+    init(focusedAppID: String? = nil, onDismiss: @escaping () -> Void) {
+        self.onDismiss = onDismiss
+        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .appearance)
+    }
 
     /// A value snapshot of a registered app for the sidebar — iterating
     /// `BuiltInApp.Type` metatypes in a SwiftUI container crashes the Xcode 27

@@ -10,6 +10,13 @@ struct RootView: View {
         environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
     }
 
+    /// The app of the focused pane in the active workspace, so Settings can
+    /// open directly on that app's section (e.g. Terminal when one is focused).
+    private var focusedAppID: String? {
+        let layout = environment.workspaceManager.activeWorkspace.tileLayout
+        return layout.blocks.first { $0.id == layout.focusedBlockID }?.appID
+    }
+
     var body: some View {
         ZStack {
             // Sky and workspace blur TOGETHER while an overlay is up —
@@ -53,7 +60,7 @@ struct RootView: View {
             }
 
             if environment.isSettingsPresented {
-                SettingsOverlayView {
+                SettingsOverlayView(focusedAppID: focusedAppID) {
                     environment.isSettingsPresented = false
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))

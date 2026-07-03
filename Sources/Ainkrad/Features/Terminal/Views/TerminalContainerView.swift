@@ -2,33 +2,37 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
-/// A `LocalProcessTerminalView` that coalesces window live-resizes: while the
-/// user drags a window/pane edge, SwiftTerm would reflow (and SIGWINCH the
-/// shell) on every pixel tick, which floods prompt redraws — with prompts like
-/// Powerlevel10k that produces stacked, torn output. We freeze the terminal
-/// size during the live resize and commit the final size once it ends, so the
-/// shell sees a single clean resize.
+/// A `LocalProcessTerminalView` that **debounces resizes**. SwiftTerm reflows
+/// and SIGWINCHes the shell on every pixel of a resize; with a prompt like
+/// Powerlevel10k that floods redraws and produces stacked, torn output. We
+/// defer the actual resize until the size has been quiet for a moment, so a
+/// drag produces a single clean reflow instead of hundreds. (This is
+/// independent of `inLiveResize`, which doesn't reliably propagate through
+/// SwiftUI's hosting view.)
 final class AinkradTerminalView: LocalProcessTerminalView {
-    private var pendingLiveResizeSize: NSSize?
+    private var pendingSize: NSSize?
+    private var commitWork: DispatchWorkItem?
+    private var isCommitting = false
 
     override func setFrameSize(_ newSize: NSSize) {
-        if inLiveResize {
-            pendingLiveResizeSize = newSize
+        // A commit (or an unchanged size) goes straight through.
+        if isCommitting || newSize == frame.size {
+            super.setFrameSize(newSize)
             return
         }
-        super.setFrameSize(newSize)
-    }
-
-    override func viewDidEndLiveResize() {
-        super.viewDidEndLiveResize()
-        if let size = pendingLiveResizeSize {
-            pendingLiveResizeSize = nil
-            super.setFrameSize(size)
+        pendingSize = newSize
+        commitWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let size = self.pendingSize else { return }
+            self.isCommitting = true
+            self.setFrameSize(size)          // re-enters via the fast path above
+            self.isCommitting = false
+            let terminal = self.getTerminal()
+            terminal.refresh(startRow: 0, endRow: max(terminal.rows - 1, 0))
+            self.needsDisplay = true
         }
-        // One clean repaint after the drag settles.
-        let terminal = getTerminal()
-        terminal.refresh(startRow: 0, endRow: max(terminal.rows - 1, 0))
-        needsDisplay = true
+        commitWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
 }
 
