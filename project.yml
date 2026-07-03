@@ -14,12 +14,9 @@ settings:
     CODE_SIGNING_ALLOWED: NO
 
 packages:
-  # SwiftTerm 1.13.0 fork with a one-commit patch disabling line-reflow on
-  # resize (upstream's re-wrap duplicates terminal output during resize).
-  # Fork: github.com/AhmedMElhalaby/SwiftTerm @ ainkrad-no-reflow.
   SwiftTerm:
-    url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: 65b5cc0923f38ff63be50a2ee0e00bef3a0db9d2
+    url: https://github.com/migueldeicaza/SwiftTerm
+    exactVersion: "1.13.0"
 
 targets:
   Ainkrad:

@@ -517,7 +517,7 @@
 			mainGroup = 2D9AB3AB384F716E5816BB5C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				10D7594E9AF93549EA214161 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1DBD2D226169FEE6149FE0DF /* Products */;
@@ -640,7 +640,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_71F71804-58E0-476D-8DAA-84308E2742BC" /* SwiftTerm */;
+			productRef = "TEMP_0F1A3215-8DF3-42AB-ACA4-6330A95C3073" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -873,12 +873,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		10D7594E9AF93549EA214161 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+		4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/AhmedMElhalaby/SwiftTerm";
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
 			requirement = {
-				kind = revision;
-				revision = 65b5cc0923f38ff63be50a2ee0e00bef3a0db9d2;
+				kind = exactVersion;
+				version = 1.13.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -886,12 +886,12 @@
 /* Begin XCSwiftPackageProductDependency section */
 		758B303533356EE56D29B53E /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 10D7594E9AF93549EA214161 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_71F71804-58E0-476D-8DAA-84308E2742BC" /* SwiftTerm */ = {
+		"TEMP_0F1A3215-8DF3-42AB-ACA4-6330A95C3073" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 10D7594E9AF93549EA214161 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */

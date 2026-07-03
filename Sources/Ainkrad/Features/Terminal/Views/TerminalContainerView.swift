@@ -2,50 +2,38 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
-/// A `LocalProcessTerminalView` that **debounces the PTY window size**.
+/// A `LocalProcessTerminalView` that **snaps the resize on release**.
 ///
-/// SwiftTerm reflows the buffer *and* pushes the new size to the shell on every
-/// pixel of a resize. That SIGWINCH flood makes prompts like Powerlevel10k
-/// redraw repeatedly, leaving stacked/duplicated output. We can't override the
-/// (public, non-open) `sizeChanged`, but `getWindowSize()` is `open` and is
-/// what `sizeChanged` reads before calling `TIOCSWINSZ` — so during a rapid
-/// resize we keep reporting the last *committed* size (no size change → no
-/// SIGWINCH) and push the real size to the PTY once, after the resize settles.
-/// The visible buffer still reflows live, so there's no lag.
+/// SwiftTerm reflows the buffer and SIGWINCHes the shell on every pixel of a
+/// resize; the repeated reflows/redraws duplicate output (badly with prompts
+/// like Powerlevel10k). Instead of resizing continuously, we defer the actual
+/// resize until the size has been quiet briefly — so the terminal reflows and
+/// the shell repaints exactly ONCE, cleanly. The window/pane chrome resizes
+/// live; the terminal content holds during the drag and snaps to fit on
+/// release. This needs no SwiftTerm patch (a single reflow is correct).
 final class AinkradTerminalView: LocalProcessTerminalView {
-    private var committedSize: winsize?
-    private var pendingSize: winsize?
+    private var pendingSize: NSSize?
     private var commitWork: DispatchWorkItem?
+    private var committing = false
 
-    override func getWindowSize() -> winsize {
-        let real = super.getWindowSize()
-        pendingSize = real
-
-        // First call (process start) commits immediately.
-        guard let committed = committedSize else {
-            committedSize = real
-            return real
+    override func setFrameSize(_ newSize: NSSize) {
+        // The re-entrant commit (below) performs the real resize.
+        if committing {
+            super.setFrameSize(newSize)
+            return
         }
-
-        scheduleCommit()
-        return committed
-    }
-
-    /// After the size has been quiet briefly, push the real size to the PTY
-    /// once (one SIGWINCH → one clean prompt redraw) and repaint.
-    private func scheduleCommit() {
+        // Otherwise remember the target and (re)schedule a single commit once
+        // the size stops changing — so mid-drag ticks never reflow.
+        pendingSize = newSize
         commitWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, let size = self.pendingSize, self.process?.running == true else { return }
-            self.committedSize = size
-            var s = size
-            _ = PseudoTerminalHelpers.setWinSize(masterPtyDescriptor: self.process.childfd, windowSize: &s)
-            let terminal = self.getTerminal()
-            terminal.refresh(startRow: 0, endRow: max(terminal.rows - 1, 0))
-            self.needsDisplay = true
+            guard let self, let size = self.pendingSize else { return }
+            self.committing = true
+            self.setFrameSize(size)   // re-enters → super path: one real resize + reflow
+            self.committing = false
         }
         commitWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
     }
 }
 
