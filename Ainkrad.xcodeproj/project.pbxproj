@@ -650,7 +650,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_F94BE438-3991-4BFB-B6C6-BCD4F5A70A14" /* SwiftTerm */;
+			productRef = "TEMP_54275783-E75D-4627-9117-CECE25AAB7D1" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -894,7 +894,7 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = SwiftTerm;
 		};
-		"TEMP_F94BE438-3991-4BFB-B6C6-BCD4F5A70A14" /* SwiftTerm */ = {
+		"TEMP_54275783-E75D-4627-9117-CECE25AAB7D1" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SwiftTerm;
 		};

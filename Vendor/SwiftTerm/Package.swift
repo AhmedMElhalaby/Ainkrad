@@ -23,8 +23,13 @@ let package = Package(
             name: "SwiftTerm",
             path: "Sources/SwiftTerm",
             exclude: ["Mac/README.md"],
+            // Copy the Metal shader raw instead of `.process` (which compiles
+            // it and requires the on-demand Metal toolchain — a build-time
+            // fragility). Ainkrad never enables SwiftTerm's Metal renderer, so
+            // the compiled `default.metallib` is never loaded; `Bundle.module`
+            // still exists for the code that references it.
             resources: [
-                .process("Apple/Metal/Shaders.metal"),
+                .copy("Apple/Metal/Shaders.metal"),
             ]
         ),
     ],
