@@ -92,6 +92,13 @@ struct BlockView: View {
         .contentShape(Rectangle())
         .onTapGesture { tileLayout.focus(block.id) }
         .animation(.easeOut(duration: 0.15), value: isBeingDragged)
+        // When the drag session ends (drop landed elsewhere, or released
+        // over no target), drop any lingering preview highlight — SwiftUI
+        // doesn't reliably call dropExited on panes the drag merely passed
+        // over, so this is the guaranteed clear.
+        .onChange(of: tileLayout.draggingBlockID) { _, newValue in
+            if newValue == nil { dropEdge = nil }
+        }
         .onDrop(of: [.text], delegate: PaneEdgeDropDelegate(
             targetBlockID: block.id,
             tileLayout: tileLayout,
