@@ -355,6 +355,54 @@ struct TileLayoutTests {
         #expect(abs(fractions[0] - 0.54) < 0.0001)
     }
 
+    // MARK: - Pixel geometry (flat rendering)
+
+    @Test("paneGeometry frames account for the gap and cover the canvas")
+    func paneGeometryFramesAccountForGap() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+
+        let geometry = layout.paneGeometry(in: CGSize(width: 208, height: 100), gap: 8)
+
+        #expect(geometry.frames[a.id] == CGRect(x: 0, y: 0, width: 100, height: 100))
+        #expect(geometry.frames[b.id] == CGRect(x: 108, y: 0, width: 100, height: 100))
+        #expect(geometry.seams.count == 1)
+        #expect(geometry.seams[0].frame == CGRect(x: 100, y: 0, width: 8, height: 100))
+        #expect(geometry.seams[0].path == [])
+        #expect(geometry.seams[0].index == 0)
+    }
+
+    @Test("paneGeometry with collapseTo gives the target everything, zero to the rest, no seams")
+    func paneGeometryCollapses() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+
+        let geometry = layout.paneGeometry(in: CGSize(width: 200, height: 100), gap: 8, collapseTo: a.id)
+
+        #expect(geometry.frames[a.id] == CGRect(x: 0, y: 0, width: 200, height: 100))
+        #expect(geometry.frames[b.id]?.width == 0)
+        #expect(geometry.seams.isEmpty)
+    }
+
+    @Test("every pane gets a frame in nested layouts")
+    func paneGeometryCoversNestedLayouts() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        let c = layout.openApp("c")
+        layout.move(c.id, to: b.id, edge: .bottom)
+
+        let geometry = layout.paneGeometry(in: CGSize(width: 400, height: 300), gap: 8)
+
+        #expect(geometry.frames.count == 3)
+        #expect(geometry.seams.count == 2)
+        #expect(geometry.frames[a.id]?.height == 300)
+        #expect(geometry.frames[b.id]?.minY == 0)
+        #expect(geometry.frames[c.id]!.minY > geometry.frames[b.id]!.minY)
+    }
+
     // MARK: - Persistence
 
     @Test("a layout snapshot round-trips through JSON with identical structure")

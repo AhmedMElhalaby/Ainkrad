@@ -2,9 +2,14 @@ import SwiftUI
 import AppKit
 
 /// One workspace's content: its pane tree in Split Mode, or Focus Mode —
-/// the focused panel filling the canvas (the tree collapses toward it
-/// without being modified) with the other panels reachable from a compact
-/// switcher rail. Empty workspaces show the island empty state.
+/// the focused panel filling the canvas with the other panels reachable
+/// from a compact switcher rail. Empty workspaces show the island empty
+/// state.
+///
+/// RENDERING CONTRACT: every panel renders exactly once, in a flat layer
+/// keyed by its stable Block id; the layout tree only computes frames
+/// (see `paneGeometry`). Structural changes therefore MOVE views instead
+/// of re-creating them — a dragged terminal keeps its live session.
 struct TileLayoutView: View {
     let workspace: Workspace
     let registry: BuiltInAppRegistry
@@ -14,16 +19,9 @@ struct TileLayoutView: View {
     var body: some View {
         if tileLayout.isEmpty {
             EmptyWorkspaceView()
-        } else if let root = tileLayout.root {
+        } else {
             HStack(spacing: 0) {
-                PaneTreeView(
-                    node: root,
-                    path: [],
-                    tileLayout: tileLayout,
-                    registry: registry,
-                    collapseTo: workspace.viewMode == .focus ? tileLayout.focusedBlockID : nil,
-                    workspace: workspace
-                )
+                paneCanvas
 
                 if workspace.viewMode == .focus, tileLayout.blocks.count > 1 {
                     FocusSwitcherRail(workspace: workspace)
@@ -33,9 +31,47 @@ struct TileLayoutView: View {
             .padding([.horizontal, .bottom], 10)
             .padding(.top, 4)
             .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
-            .animation(.easeInOut(duration: 0.2), value: workspace.viewMode == .focus ? tileLayout.focusedBlockID : nil)
-            .animation(.spring(response: 0.32, dampingFraction: 0.82), value: tileLayout.appIDs)
         }
+    }
+
+    private var paneCanvas: some View {
+        GeometryReader { proxy in
+            let collapseTo = workspace.viewMode == .focus ? tileLayout.focusedBlockID : nil
+            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: 8, collapseTo: collapseTo)
+
+            ZStack(alignment: .topLeading) {
+                // One stable view per panel — identity is the Block id, so
+                // moves/splits/closes reposition instead of re-creating.
+                ForEach(tileLayout.blocks) { block in
+                    let frame = geometry.frames[block.id] ?? .zero
+                    BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace)
+                        .frame(width: max(frame.width, 0), height: max(frame.height, 0))
+                        .offset(x: frame.minX, y: frame.minY)
+                        .opacity(frame.width < 1 || frame.height < 1 ? 0 : 1)
+                        .allowsHitTesting(frame.width >= 1 && frame.height >= 1)
+                }
+
+                ForEach(geometry.seams) { seam in
+                    SeamView(placement: seam, tileLayout: tileLayout)
+                        .frame(width: seam.frame.width, height: seam.frame.height)
+                        .offset(x: seam.frame.minX, y: seam.frame.minY)
+                }
+            }
+            .coordinateSpace(name: "pane-canvas")
+            .animation(
+                .spring(response: 0.32, dampingFraction: 0.82),
+                value: structureSignature
+            )
+        }
+    }
+
+    /// Frame changes animate only when the STRUCTURE changes (move, open,
+    /// close, mode toggle) — seam drags mutate fractions without touching
+    /// this signature, so resizing stays direct and un-animated.
+    private var structureSignature: String {
+        let order = tileLayout.blocks.map { $0.id.uuidString }.joined(separator: ",")
+        let mode = workspace.viewMode == .focus ? (tileLayout.focusedBlockID?.uuidString ?? "") : "split"
+        return order + "|" + mode
     }
 }
 
@@ -114,115 +150,30 @@ private struct FocusSwitcherRail: View {
     }
 }
 
-/// Recursively renders one node of the N-ary split tree: a pane for a
-/// leaf, or children laid along the container's axis with energy seams
-/// between them. When `collapseTo` is set (Focus Mode), every container
-/// gives that pane's subtree 100% and collapses the rest to zero — still
-/// mounted, so sessions keep running; the stored tree is untouched.
-struct PaneTreeView: View {
-    let node: PaneNode
-    let path: [Int]
-    let tileLayout: TileLayout
-    let registry: BuiltInAppRegistry
-    var collapseTo: UUID?
-    var workspace: Workspace?
-
-    var body: some View {
-        switch node {
-        case .leaf(let block):
-            BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace)
-        case .split(let axis, let children, let fractions):
-            container(axis: axis, children: children, fractions: fractions)
-        }
-    }
-
-    private func container(axis: PaneAxis, children: [PaneNode], fractions: [Double]) -> some View {
-        GeometryReader { proxy in
-            let isCollapsing = collapseTo != nil
-            let gap: CGFloat = isCollapsing ? 0 : 8
-            let effective = effectiveFractions(children: children, fractions: fractions)
-            let total = axis == .horizontal ? proxy.size.width : proxy.size.height
-            let available = max(total - CGFloat(children.count - 1) * gap, 0)
-            let spaceName = "pane-container-\(path.map(String.init).joined(separator: "."))"
-
-            let stack = axis == .horizontal
-                ? AnyLayout(HStackLayout(spacing: 0))
-                : AnyLayout(VStackLayout(spacing: 0))
-
-            stack {
-                ForEach(Array(children.enumerated()), id: \.offset) { index, child in
-                    PaneTreeView(
-                        node: child,
-                        path: path + [index],
-                        tileLayout: tileLayout,
-                        registry: registry,
-                        collapseTo: collapseTo,
-                        workspace: workspace
-                    )
-                    .frame(
-                        width: axis == .horizontal ? available * effective[index] : nil,
-                        height: axis == .vertical ? available * effective[index] : nil
-                    )
-
-                    if index < children.count - 1 {
-                        SeamView(
-                            axis: axis,
-                            gap: gap,
-                            isDisabled: isCollapsing,
-                            coordinateSpace: spaceName
-                        ) { location in
-                            let position = axis == .horizontal
-                                ? location.x / max(proxy.size.width, 1)
-                                : location.y / max(proxy.size.height, 1)
-                            tileLayout.setBoundary(path: path, after: index, to: position)
-                        } onCommit: {
-                            tileLayout.onStructuralChange?()
-                        }
-                    }
-                }
-            }
-            .coordinateSpace(name: spaceName)
-        }
-    }
-
-    private func effectiveFractions(children: [PaneNode], fractions: [Double]) -> [Double] {
-        if let collapseTo {
-            return children.map { tileLayout.subtreeContains(collapseTo, in: $0) ? 1.0 : 0.0 }
-        }
-        guard fractions.count == children.count else {
-            return Array(repeating: 1.0 / Double(max(children.count, 1)), count: children.count)
-        }
-        return fractions
-    }
-}
-
-/// An energy seam between sibling panes: a thin accent gradient line in
-/// the gap, with a grabber capsule that brightens on hover and while
-/// dragging to resize.
+/// An energy seam between sibling panes, absolutely positioned by its
+/// `SeamPlacement`: a thin accent gradient line in the gap, with a grabber
+/// capsule that brightens on hover and while dragging to resize.
 private struct SeamView: View {
     @Environment(AppEnvironment.self) private var environment
-    let axis: PaneAxis
-    let gap: CGFloat
-    let isDisabled: Bool
-    let coordinateSpace: String
-    let onResize: (CGPoint) -> Void
-    var onCommit: () -> Void = {}
+    let placement: SeamPlacement
+    let tileLayout: TileLayout
 
     @State private var isHovering = false
     @State private var isDragging = false
 
     var body: some View {
         let tokens = environment.themeManager.tokens
-        let isLit = (isHovering || isDragging) && !isDisabled
+        let isLit = isHovering || isDragging
 
         Group {
-            if axis == .horizontal {
+            if placement.axis == .horizontal {
                 LinearGradient(
                     colors: [.clear, tokens.accentSecondary.opacity(isLit ? 0.9 : 0.22), .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .frame(width: isLit ? 2 : 1)
+                .frame(maxWidth: .infinity)
                 .overlay {
                     if isLit {
                         Capsule()
@@ -238,6 +189,7 @@ private struct SeamView: View {
                     endPoint: .trailing
                 )
                 .frame(height: isLit ? 2 : 1)
+                .frame(maxHeight: .infinity)
                 .overlay {
                     if isLit {
                         Capsule()
@@ -249,28 +201,24 @@ private struct SeamView: View {
             }
         }
         .shadow(color: isLit ? tokens.accentSecondary.opacity(0.7) : .clear, radius: 5)
-        .frame(
-            width: axis == .horizontal ? gap : nil,
-            height: axis == .vertical ? gap : nil
-        )
         .contentShape(Rectangle().inset(by: -2))
         .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinateSpace))
+            DragGesture(minimumDistance: 0, coordinateSpace: .named("pane-canvas"))
                 .onChanged { value in
-                    guard !isDisabled else { return }
                     isDragging = true
-                    onResize(value.location)
+                    let location = placement.axis == .horizontal ? value.location.x : value.location.y
+                    let position = (location - placement.containerOrigin) / max(placement.containerLength, 1)
+                    tileLayout.setBoundary(path: placement.path, after: placement.index, to: position)
                 }
                 .onEnded { _ in
                     isDragging = false
-                    onCommit()
+                    tileLayout.onStructuralChange?()
                 }
         )
         .onHover { hovering in
             isHovering = hovering
-            guard !isDisabled else { return }
             if hovering {
-                (axis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
+                (placement.axis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
             } else {
                 NSCursor.arrow.set()
             }

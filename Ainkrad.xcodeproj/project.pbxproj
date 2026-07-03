@@ -51,6 +51,7 @@
 		99462C7CCE5983EB33106A5F /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEAA258BAA4186E5055B51C8 /* GeneralSettingsView.swift */; };
 		9B5B07C1A4FDD1FC811FC518 /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 060A0A9DED5236D83325596D /* TerminalSession.swift */; };
 		A233D7228C39ED00193736E7 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 914D4400EB9AE393DF9DC2CA /* DesignTokens.swift */; };
+		A77160C185271DB35B0F8AE0 /* PaneGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DC4E1FC86878DA3BE3549A5 /* PaneGeometry.swift */; };
 		AABAABC565908F570FD5657F /* EmptyWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7383E57E64EEFCC3DD5EE883 /* EmptyWorkspaceView.swift */; };
 		B1273134D335F619D84D6FFE /* BuiltInAppRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37C493F65F3072D1234CEFC4 /* BuiltInAppRegistry.swift */; };
 		B219B697C90507666FD459D3 /* JetBrainsMono.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 49E00D15C1E88DA6778E4F9E /* JetBrainsMono.ttf */; };
@@ -130,6 +131,7 @@
 		83BDC029690B113A77930DE9 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
 		87ED593FA5C51C910BBE015A /* DesignTokensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokensTests.swift; sourceTree = "<group>"; };
 		8BD0B41265027A314830DB40 /* PTYReaper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTYReaper.swift; sourceTree = "<group>"; };
+		8DC4E1FC86878DA3BE3549A5 /* PaneGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneGeometry.swift; sourceTree = "<group>"; };
 		914D4400EB9AE393DF9DC2CA /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		95E66C194CC035FF720514DF /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
 		9CC38B9B253A299BF41367F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -354,6 +356,7 @@
 				2C741E419826340CA2B8D839 /* BlockView.swift */,
 				7383E57E64EEFCC3DD5EE883 /* EmptyWorkspaceView.swift */,
 				C6D5C9641B7E4DBD4C12E2FE /* LayoutPersistence.swift */,
+				8DC4E1FC86878DA3BE3549A5 /* PaneGeometry.swift */,
 				1A5D64284413FC97494AA1CA /* TileLayout.swift */,
 				667F7D8D8C59641C3DD91D35 /* TileLayoutView.swift */,
 				BCB3B5B1879ED69D9BE48DAC /* Workspace.swift */,
@@ -549,6 +552,7 @@
 				F21464FE91AA2B7FB42CFD1D /* LayoutPersistence.swift in Sources */,
 				4D416BE1AD1D2ED4509C36AC /* Log.swift in Sources */,
 				4A18DE56B38BAB1D89665814 /* PTYReaper.swift in Sources */,
+				A77160C185271DB35B0F8AE0 /* PaneGeometry.swift in Sources */,
 				F191A579C408B4DF684F7712 /* RootView.swift in Sources */,
 				85B7FFC073B7757667BBE019 /* SettingsApp.swift in Sources */,
 				4AB28BD832FBD3A730D93821 /* SettingsRootView.swift in Sources */,
@@ -608,7 +612,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_86737782-2725-470B-B999-E6FE38951AC1" /* SwiftTerm */;
+			productRef = "TEMP_6900E580-4D07-4A5A-B227-CA7CE4160DDD" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -857,7 +861,7 @@
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_86737782-2725-470B-B999-E6FE38951AC1" /* SwiftTerm */ = {
+		"TEMP_6900E580-4D07-4A5A-B227-CA7CE4160DDD" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
