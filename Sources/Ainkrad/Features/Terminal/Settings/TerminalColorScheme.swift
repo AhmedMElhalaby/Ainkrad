@@ -22,20 +22,11 @@ extension Theme {
         case .solarizedDark:
             return TerminalPalette(background: "002B36", foreground: "839496", cursor: "93A1A1", ansi: TerminalColorScheme.solarizedDark.ansi)
         case .nord:
-            return TerminalPalette(background: "2E3440", foreground: "D8DEE9", cursor: "88C0D0", ansi: [
-                "3B4252", "BF616A", "A3BE8C", "EBCB8B", "81A1C1", "B48EAD", "88C0D0", "E5E9F0",
-                "4C566A", "BF616A", "A3BE8C", "EBCB8B", "81A1C1", "B48EAD", "8FBCBB", "ECEFF4",
-            ])
+            return TerminalPalette(background: "2E3440", foreground: "D8DEE9", cursor: "88C0D0", ansi: TerminalColorScheme.nord.ansi)
         case .tokyoNight:
-            return TerminalPalette(background: "1A1B26", foreground: "C0CAF5", cursor: "7AA2F7", ansi: [
-                "15161E", "F7768E", "9ECE6A", "E0AF68", "7AA2F7", "BB9AF7", "7DCFFF", "A9B1D6",
-                "414868", "F7768E", "9ECE6A", "E0AF68", "7AA2F7", "BB9AF7", "7DCFFF", "C0CAF5",
-            ])
+            return TerminalPalette(background: "1A1B26", foreground: "C0CAF5", cursor: "7AA2F7", ansi: TerminalColorScheme.tokyoNight.ansi)
         case .gruvbox:
-            return TerminalPalette(background: "282828", foreground: "EBDBB2", cursor: "FE8019", ansi: [
-                "282828", "CC241D", "98971A", "D79921", "458588", "B16286", "689D6A", "A89984",
-                "928374", "FB4934", "B8BB26", "FABD2F", "83A598", "D3869B", "8EC07C", "EBDBB2",
-            ])
+            return TerminalPalette(background: "282828", foreground: "EBDBB2", cursor: "FE8019", ansi: TerminalColorScheme.gruvbox.ansi)
         }
     }
 }
@@ -54,7 +45,9 @@ struct TerminalColorScheme: Identifiable, Equatable {
 
     static let matchThemeID = "match-theme"
 
-    static let all: [TerminalColorScheme] = [matchTheme, dracula, solarizedDark]
+    static let all: [TerminalColorScheme] = [
+        matchTheme, dracula, nord, tokyoNight, gruvbox, solarizedDark, monokai, oneDark, catppuccinMocha,
+    ]
 
     /// The scheme for an id, falling back to Match Theme for unknown ids.
     static func scheme(id: String) -> TerminalColorScheme {
@@ -95,6 +88,78 @@ struct TerminalColorScheme: Identifiable, Equatable {
         ansi: [
             "073642", "DC322F", "859900", "B58900", "268BD2", "D33682", "2AA198", "EEE8D5",
             "002B36", "CB4B16", "586E75", "657B83", "839496", "6C71C4", "93A1A1", "FDF6E3",
+        ]
+    )
+
+    static let nord = TerminalColorScheme(
+        id: "nord",
+        name: "Nord",
+        background: "2E3440",
+        foreground: "D8DEE9",
+        cursor: "88C0D0",
+        ansi: [
+            "3B4252", "BF616A", "A3BE8C", "EBCB8B", "81A1C1", "B48EAD", "88C0D0", "E5E9F0",
+            "4C566A", "BF616A", "A3BE8C", "EBCB8B", "81A1C1", "B48EAD", "8FBCBB", "ECEFF4",
+        ]
+    )
+
+    static let tokyoNight = TerminalColorScheme(
+        id: "tokyo-night",
+        name: "Tokyo Night",
+        background: "1A1B26",
+        foreground: "C0CAF5",
+        cursor: "7AA2F7",
+        ansi: [
+            "15161E", "F7768E", "9ECE6A", "E0AF68", "7AA2F7", "BB9AF7", "7DCFFF", "A9B1D6",
+            "414868", "F7768E", "9ECE6A", "E0AF68", "7AA2F7", "BB9AF7", "7DCFFF", "C0CAF5",
+        ]
+    )
+
+    static let gruvbox = TerminalColorScheme(
+        id: "gruvbox",
+        name: "Gruvbox",
+        background: "282828",
+        foreground: "EBDBB2",
+        cursor: "FE8019",
+        ansi: [
+            "282828", "CC241D", "98971A", "D79921", "458588", "B16286", "689D6A", "A89984",
+            "928374", "FB4934", "B8BB26", "FABD2F", "83A598", "D3869B", "8EC07C", "EBDBB2",
+        ]
+    )
+
+    static let monokai = TerminalColorScheme(
+        id: "monokai",
+        name: "Monokai",
+        background: "272822",
+        foreground: "F8F8F2",
+        cursor: "F8F8F0",
+        ansi: [
+            "272822", "F92672", "A6E22E", "F4BF75", "66D9EF", "AE81FF", "A1EFE4", "F8F8F2",
+            "75715E", "F92672", "A6E22E", "F4BF75", "66D9EF", "AE81FF", "A1EFE4", "F9F8F5",
+        ]
+    )
+
+    static let oneDark = TerminalColorScheme(
+        id: "one-dark",
+        name: "One Dark",
+        background: "282C34",
+        foreground: "ABB2BF",
+        cursor: "528BFF",
+        ansi: [
+            "282C34", "E06C75", "98C379", "E5C07B", "61AFEF", "C678DD", "56B6C2", "ABB2BF",
+            "5C6370", "E06C75", "98C379", "E5C07B", "61AFEF", "C678DD", "56B6C2", "FFFFFF",
+        ]
+    )
+
+    static let catppuccinMocha = TerminalColorScheme(
+        id: "catppuccin-mocha",
+        name: "Catppuccin Mocha",
+        background: "1E1E2E",
+        foreground: "CDD6F4",
+        cursor: "F5E0DC",
+        ansi: [
+            "45475A", "F38BA8", "A6E3A1", "F9E2AF", "89B4FA", "F5C2E7", "94E2D5", "BAC2DE",
+            "585B70", "F38BA8", "A6E3A1", "F9E2AF", "89B4FA", "F5C2E7", "94E2D5", "A6ADC8",
         ]
     )
 }

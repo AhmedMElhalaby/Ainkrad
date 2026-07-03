@@ -17,6 +17,7 @@ struct TerminalContainerView: NSViewRepresentable {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
         apply(appearance, to: view, coordinator: context.coordinator)
+        Self.configureScroller(view)
         view.startProcess(
             executable: session.shellPath,
             args: ["-l"],
@@ -28,12 +29,27 @@ struct TerminalContainerView: NSViewRepresentable {
 
     func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
         apply(appearance, to: nsView, coordinator: context.coordinator)
+        Self.configureScroller(nsView)
+    }
+
+    /// Makes the terminal's scrollbar an overlay scroller — hidden at rest,
+    /// appearing only while scrolling — instead of SwiftTerm's always-on
+    /// legacy bar.
+    private static func configureScroller(_ view: NSView) {
+        for case let scroller as NSScroller in view.subviews {
+            scroller.scrollerStyle = .overlay
+        }
     }
 
     /// Applies the resolved appearance: ANSI palette, bg/fg/caret/selection,
     /// font, cursor style + blink, Option-as-Meta, and (only when it changed)
-    /// the scrollback size.
+    /// the scrollback size. Skips entirely when nothing changed — crucially,
+    /// a window resize does NOT change the appearance, so we don't re-set the
+    /// font mid-resize (that runs resetFont/selectNone and garbles reflow).
     private func apply(_ appearance: TerminalRenderAppearance, to view: LocalProcessTerminalView, coordinator: Coordinator) {
+        guard coordinator.appliedAppearance != appearance else { return }
+        coordinator.appliedAppearance = appearance
+
         let palette = appearance.ansi.compactMap(Self.terminalColor(hex:))
         if palette.count == 16 {
             view.installColors(palette)
@@ -111,6 +127,9 @@ struct TerminalContainerView: NSViewRepresentable {
 
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         private let session: TerminalSession
+        /// Last appearance applied, so resize ticks (which don't change it)
+        /// skip the expensive font/color re-apply.
+        var appliedAppearance: TerminalRenderAppearance?
         /// Last scrollback size pushed to the view, so we only rebuild history
         /// when it actually changes.
         var appliedScrollback: Int?
