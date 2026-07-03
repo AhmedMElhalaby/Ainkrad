@@ -42,19 +42,24 @@ struct TileLayoutView: View {
             ZStack(alignment: .topLeading) {
                 // One stable view per panel — identity is the Block id, so
                 // moves/splits/closes reposition instead of re-creating.
+                // `.position` (not `.offset`) so the layout/hit-test frame
+                // tracks where the pane is drawn — otherwise every pane's
+                // drop & tap region stays pinned at the top-leading corner
+                // and drag-to-rearrange targets the wrong pane.
                 ForEach(tileLayout.blocks) { block in
                     let frame = geometry.frames[block.id] ?? .zero
-                    BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace)
+                    let isVisible = frame.width >= 1 && frame.height >= 1
+                    BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace, paneSize: frame.size)
                         .frame(width: max(frame.width, 0), height: max(frame.height, 0))
-                        .offset(x: frame.minX, y: frame.minY)
-                        .opacity(frame.width < 1 || frame.height < 1 ? 0 : 1)
-                        .allowsHitTesting(frame.width >= 1 && frame.height >= 1)
+                        .position(x: frame.midX, y: frame.midY)
+                        .opacity(isVisible ? 1 : 0)
+                        .allowsHitTesting(isVisible)
                 }
 
                 ForEach(geometry.seams) { seam in
                     SeamView(placement: seam, tileLayout: tileLayout)
                         .frame(width: seam.frame.width, height: seam.frame.height)
-                        .offset(x: seam.frame.minX, y: seam.frame.minY)
+                        .position(x: seam.frame.midX, y: seam.frame.midY)
                 }
             }
             .coordinateSpace(name: "pane-canvas")

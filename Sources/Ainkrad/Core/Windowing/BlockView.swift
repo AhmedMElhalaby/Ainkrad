@@ -16,12 +16,17 @@ struct BlockView: View {
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
     var workspace: Workspace?
+    /// The pane's exact pixel size, supplied by the layout (see
+    /// `paneGeometry`). Feeding it in directly — rather than reading it back
+    /// through a preference key — keeps the drop delegate's edge math from
+    /// ever seeing a stale zero size (which would force every drop to the
+    /// `.trailing` fallback, making perpendicular splits impossible).
+    var paneSize: CGSize = .zero
 
     @State private var hasArrived = false
     @State private var isHoveringClose = false
     @State private var isHoveringMagnify = false
     @State private var dropEdge: PaneEdge?
-    @State private var paneSize: CGSize = .zero
 
     private var app: BuiltInApp.Type? {
         registry.allApps.first { $0.id == block.appID }
@@ -87,12 +92,6 @@ struct BlockView: View {
         .contentShape(Rectangle())
         .onTapGesture { tileLayout.focus(block.id) }
         .animation(.easeOut(duration: 0.15), value: isBeingDragged)
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: PaneSizePreferenceKey.self, value: proxy.size)
-            }
-        )
-        .onPreferenceChange(PaneSizePreferenceKey.self) { paneSize = $0 }
         .onDrop(of: [.text], delegate: PaneEdgeDropDelegate(
             targetBlockID: block.id,
             tileLayout: tileLayout,
@@ -274,13 +273,6 @@ struct BlockView: View {
         } else {
             tokens.surface
         }
-    }
-}
-
-private struct PaneSizePreferenceKey: PreferenceKey {
-    static let defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
     }
 }
 
