@@ -71,7 +71,8 @@ struct BlockView: View {
 
             content(tokens: tokens)
         }
-        .background(tokens.surface.opacity(0.88))
+        // The body is clear so a translucent terminal reveals the blurred
+        // island/sky behind the pane; an opaque terminal fills it solidly.
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -211,7 +212,8 @@ struct BlockView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
-        .background(isFocused ? tokens.surfaceElevated.opacity(0.65) : .clear)
+        // Solid header (the pane body is now clear for terminal transparency).
+        .background(isFocused ? tokens.surfaceElevated.opacity(0.92) : tokens.surface.opacity(0.9))
         .contentShape(Rectangle())
         .onDrag {
             tileLayout.draggingBlockID = block.id
@@ -279,8 +281,9 @@ struct BlockView: View {
     @ViewBuilder
     private func content(tokens: DesignTokens) -> some View {
         if let app {
+            // Fills the body edge-to-edge; the app provides its own background
+            // (opaque, or translucent-over-blur for terminal transparency).
             app.makeRootView()
-                .padding(6)
         } else {
             tokens.surface
         }

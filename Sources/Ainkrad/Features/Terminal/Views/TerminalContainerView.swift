@@ -46,22 +46,51 @@ struct TerminalContainerView: NSViewRepresentable {
     let session: TerminalSession
     let appearance: TerminalRenderAppearance
 
-    func makeNSView(context: Context) -> AinkradTerminalView {
-        let view = AinkradTerminalView(frame: .zero)
-        view.processDelegate = context.coordinator
-        apply(appearance, to: view, coordinator: context.coordinator)
-        context.coordinator.installScrollReveal(for: view)
-        view.startProcess(
+    func makeNSView(context: Context) -> NSView {
+        // A container holds a blur view behind the terminal, so a translucent
+        // terminal background reveals the ambient island/sky (within-window
+        // blur) rather than a flat wash. The pane chrome behind is clear
+        // (see BlockView) so the blur samples the sky, not the panel surface.
+        let container = NSView()
+
+        let blur = NSVisualEffectView()
+        blur.blendingMode = .withinWindow
+        blur.material = .underWindowBackground
+        blur.state = .active
+        blur.translatesAutoresizingMaskIntoConstraints = false
+
+        let terminal = AinkradTerminalView(frame: .zero)
+        terminal.processDelegate = context.coordinator
+        terminal.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(blur)
+        container.addSubview(terminal)
+        NSLayoutConstraint.activate([
+            blur.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            blur.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            blur.topAnchor.constraint(equalTo: container.topAnchor),
+            blur.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            terminal.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            terminal.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            terminal.topAnchor.constraint(equalTo: container.topAnchor),
+            terminal.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
+        context.coordinator.terminal = terminal
+        context.coordinator.blurView = blur
+        apply(appearance, coordinator: context.coordinator)
+        context.coordinator.installScrollReveal(for: terminal)
+        terminal.startProcess(
             executable: session.shellPath,
             args: ["-l"],
             environment: nil,
             currentDirectory: session.workingDirectory.path
         )
-        return view
+        return container
     }
 
-    func updateNSView(_ nsView: AinkradTerminalView, context: Context) {
-        apply(appearance, to: nsView, coordinator: context.coordinator)
+    func updateNSView(_ nsView: NSView, context: Context) {
+        apply(appearance, coordinator: context.coordinator)
     }
 
     /// Applies the resolved appearance: ANSI palette, bg/fg/caret/selection,
@@ -69,7 +98,8 @@ struct TerminalContainerView: NSViewRepresentable {
     /// when it changed) the scrollback size. Skips entirely when nothing
     /// changed — crucially, a resize does NOT change the appearance, so we
     /// don't re-set the font mid-resize (that runs resetFont/selectNone).
-    private func apply(_ appearance: TerminalRenderAppearance, to view: AinkradTerminalView, coordinator: Coordinator) {
+    private func apply(_ appearance: TerminalRenderAppearance, coordinator: Coordinator) {
+        guard let view = coordinator.terminal else { return }
         guard coordinator.appliedAppearance != appearance else { return }
         coordinator.appliedAppearance = appearance
 
@@ -77,12 +107,15 @@ struct TerminalContainerView: NSViewRepresentable {
         if palette.count == 16 {
             view.installColors(palette)
         }
-        // Translucent background: alpha < 1 lets the ambient backdrop show
-        // through. The layer must be non-opaque for the alpha to take effect.
+        // Translucent background: alpha < 1 lets the blurred backdrop show
+        // through. The layer must be non-opaque for the alpha to take effect;
+        // the blur view behind is only needed when translucent.
+        let isTranslucent = appearance.backgroundOpacity < 1
         view.nativeBackgroundColor = Self.nsColor(hex: appearance.background)
             .withAlphaComponent(CGFloat(appearance.backgroundOpacity))
         view.wantsLayer = true
-        view.layer?.isOpaque = appearance.backgroundOpacity >= 1
+        view.layer?.isOpaque = !isTranslucent
+        coordinator.blurView?.isHidden = !isTranslucent
         view.nativeForegroundColor = Self.nsColor(hex: appearance.foreground)
         view.caretColor = Self.nsColor(hex: appearance.cursor)
         view.selectedTextBackgroundColor = Self.nsColor(hex: appearance.selection)
@@ -138,10 +171,11 @@ struct TerminalContainerView: NSViewRepresentable {
             ?? NSFont.monospacedSystemFont(ofSize: CGFloat(size), weight: .regular)
     }
 
-    static func dismantleNSView(_ nsView: AinkradTerminalView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.teardown()
-        let pid = nsView.process.shellPid
-        nsView.terminate()
+        guard let terminal = coordinator.terminal else { return }
+        let pid = terminal.process.shellPid
+        terminal.terminate()
         PTYReaper.reapAfterTerminate(pid)
     }
 
@@ -157,6 +191,11 @@ struct TerminalContainerView: NSViewRepresentable {
         /// Last scrollback size pushed to the view, so we only rebuild history
         /// when it actually changes.
         var appliedScrollback: Int?
+
+        /// The hosted terminal and the blur behind it (kept because the
+        /// representable's NSView is now a container).
+        var terminal: AinkradTerminalView?
+        weak var blurView: NSVisualEffectView?
 
         private weak var terminalView: NSView?
         private weak var scroller: NSScroller?
