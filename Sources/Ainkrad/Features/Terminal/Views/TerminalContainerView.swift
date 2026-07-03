@@ -2,40 +2,12 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
-/// A `LocalProcessTerminalView` that **snaps the resize on release**.
-///
-/// SwiftTerm reflows the buffer and SIGWINCHes the shell on every pixel of a
-/// resize; the repeated reflows/redraws duplicate output (badly with prompts
-/// like Powerlevel10k). Instead of resizing continuously, we defer the actual
-/// resize until the size has been quiet briefly — so the terminal reflows and
-/// the shell repaints exactly ONCE, cleanly. The window/pane chrome resizes
-/// live; the terminal content holds during the drag and snaps to fit on
-/// release. This needs no SwiftTerm patch (a single reflow is correct).
-final class AinkradTerminalView: LocalProcessTerminalView {
-    private var pendingSize: NSSize?
-    private var commitWork: DispatchWorkItem?
-    private var committing = false
-
-    override func setFrameSize(_ newSize: NSSize) {
-        // The re-entrant commit (below) performs the real resize.
-        if committing {
-            super.setFrameSize(newSize)
-            return
-        }
-        // Otherwise remember the target and (re)schedule a single commit once
-        // the size stops changing — so mid-drag ticks never reflow.
-        pendingSize = newSize
-        commitWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, let size = self.pendingSize else { return }
-            self.committing = true
-            self.setFrameSize(size)   // re-enters → super path: one real resize + reflow
-            self.committing = false
-        }
-        commitWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
-    }
-}
+/// The terminal view. Resize behaves normally (live, fills the pane); the
+/// output-duplication-on-resize fix lives in the SwiftTerm fork, which
+/// disables SwiftTerm's line-reflow (the re-wrap that duplicated output). No
+/// app-side resize hacks — those caused a residual artifact and, worse, an
+/// empty gap while dragging.
+final class AinkradTerminalView: LocalProcessTerminalView {}
 
 /// Hosts the terminal (an AppKit `NSView`) inside SwiftUI. Spawns the session's
 /// PTY-backed login shell on creation and terminates it deterministically when
