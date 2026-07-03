@@ -6,16 +6,17 @@ import SwiftTerm
 /// SwiftUI. Spawns the session's PTY-backed login shell on creation and
 /// terminates it deterministically when this view leaves the hierarchy —
 /// see ADR-0002 Terminal Emulation Approach and Terminal App
-/// Architecture.md. Resize forwarding to the PTY is handled internally by
-/// SwiftTerm whenever this view's frame changes.
+/// Architecture.md. The resolved `appearance` (colors + ANSI palette + font)
+/// is applied on creation and re-applied on every update, so a theme,
+/// color-scheme, or font change restyles running terminals live.
 struct TerminalContainerView: NSViewRepresentable {
-    @Environment(AppEnvironment.self) private var environment
     let session: TerminalSession
+    let appearance: TerminalRenderAppearance
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
-        applyTheme(to: view)
+        apply(appearance, to: view)
         view.startProcess(
             executable: session.shellPath,
             args: ["-l"],
@@ -26,16 +27,50 @@ struct TerminalContainerView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
-        applyTheme(to: nsView)
+        apply(appearance, to: nsView)
     }
 
-    /// Applied on creation and re-applied on every SwiftUI update, so a
-    /// theme switch recolors running terminals live.
-    private func applyTheme(to view: LocalProcessTerminalView) {
-        let tokens = environment.themeManager.tokens
-        view.nativeBackgroundColor = NSColor(tokens.background)
-        view.nativeForegroundColor = NSColor(tokens.foreground)
-        view.caretColor = NSColor(tokens.accentSecondary)
+    /// Applies the resolved appearance: the 16-color ANSI palette, then the
+    /// background/foreground/caret, then the font.
+    private func apply(_ appearance: TerminalRenderAppearance, to view: LocalProcessTerminalView) {
+        let palette = appearance.ansi.compactMap(Self.terminalColor(hex:))
+        if palette.count == 16 {
+            view.installColors(palette)
+        }
+        view.nativeBackgroundColor = Self.nsColor(hex: appearance.background)
+        view.nativeForegroundColor = Self.nsColor(hex: appearance.foreground)
+        view.caretColor = Self.nsColor(hex: appearance.cursor)
+        view.font = Self.font(family: appearance.fontFamily, size: appearance.fontSize)
+    }
+
+    // MARK: - Color / font conversion
+
+    private static func rgb(hex: String) -> (r: UInt8, g: UInt8, b: UInt8)? {
+        var value = hex
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 6, let int = UInt32(value, radix: 16) else { return nil }
+        return (UInt8((int >> 16) & 0xFF), UInt8((int >> 8) & 0xFF), UInt8(int & 0xFF))
+    }
+
+    private static func nsColor(hex: String) -> NSColor {
+        guard let c = rgb(hex: hex) else { return .black }
+        return NSColor(
+            srgbRed: CGFloat(c.r) / 255,
+            green: CGFloat(c.g) / 255,
+            blue: CGFloat(c.b) / 255,
+            alpha: 1
+        )
+    }
+
+    private static func terminalColor(hex: String) -> SwiftTerm.Color? {
+        guard let c = rgb(hex: hex) else { return nil }
+        // SwiftTerm.Color components are 16-bit; scale 8-bit up by 257.
+        return SwiftTerm.Color(red: UInt16(c.r) * 257, green: UInt16(c.g) * 257, blue: UInt16(c.b) * 257)
+    }
+
+    private static func font(family: String, size: Double) -> NSFont {
+        NSFont(name: family, size: CGFloat(size))
+            ?? NSFont.monospacedSystemFont(ofSize: CGFloat(size), weight: .regular)
     }
 
     static func dismantleNSView(_ nsView: LocalProcessTerminalView, coordinator: Coordinator) {

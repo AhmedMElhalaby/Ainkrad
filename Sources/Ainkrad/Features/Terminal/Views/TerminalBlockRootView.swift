@@ -9,13 +9,21 @@ struct TerminalBlockRootView: View {
     @State private var isNoticeDismissed = false
 
     var body: some View {
-        Group {
+        // Reading the settings store and theme here means a color-scheme,
+        // font, or theme change re-evaluates this body and hands the container
+        // a fresh appearance, restyling the running terminal live.
+        let appearance = TerminalAppearanceResolver.resolve(
+            settings: environment.terminalSettingsStore.settings,
+            theme: environment.themeManager.currentTheme
+        )
+
+        return Group {
             if let session {
                 VStack(spacing: 0) {
                     if !session.startupNotices.isEmpty && !isNoticeDismissed {
                         noticeBanner(session.startupNotices)
                     }
-                    TerminalContainerView(session: session)
+                    TerminalContainerView(session: session, appearance: appearance)
                 }
             } else {
                 Color.clear

@@ -10,6 +10,7 @@ final class AppEnvironment {
     let themeManager: ThemeManager
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
+    let terminalSettingsStore: TerminalSettingsStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -19,13 +20,15 @@ final class AppEnvironment {
         registry: BuiltInAppRegistry,
         themeManager: ThemeManager,
         workspaceManager: WorkspaceManager,
-        launcherStore: LauncherStore
+        launcherStore: LauncherStore,
+        terminalSettingsStore: TerminalSettingsStore
     ) {
         self.settingsStore = settingsStore
         self.registry = registry
         self.themeManager = themeManager
         self.workspaceManager = workspaceManager
         self.launcherStore = launcherStore
+        self.terminalSettingsStore = terminalSettingsStore
     }
 
     /// Assembles a real `AppEnvironment` backed by `UserDefaults` and
@@ -62,7 +65,8 @@ final class AppEnvironment {
             registry: registry,
             themeManager: themeManager,
             workspaceManager: workspaceManager,
-            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager)
+            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
+            terminalSettingsStore: TerminalSettingsStore(store: settingsStore)
         )
     }
 }

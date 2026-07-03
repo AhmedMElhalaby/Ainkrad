@@ -23,19 +23,22 @@ final class AppEnvironmentTests {
         let themeManager = ThemeManager(settingsStore: settingsStore, dockIconUpdater: SpyDockIconUpdater())
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
+        let terminalSettingsStore = TerminalSettingsStore(store: settingsStore)
 
         let environment = AppEnvironment(
             settingsStore: settingsStore,
             registry: registry,
             themeManager: themeManager,
             workspaceManager: workspaceManager,
-            launcherStore: launcherStore
+            launcherStore: launcherStore,
+            terminalSettingsStore: terminalSettingsStore
         )
 
         #expect(environment.registry === registry)
         #expect(environment.themeManager === themeManager)
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
+        #expect(environment.terminalSettingsStore === terminalSettingsStore)
     }
 
     @Test("bootstrap() assembles a working environment backed by real UserDefaults, Launcher dismissed")
