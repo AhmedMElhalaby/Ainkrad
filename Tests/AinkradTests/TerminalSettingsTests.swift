@@ -38,6 +38,22 @@ final class TerminalSettingsTests {
         #expect(settings.colorSchemeID == TerminalColorScheme.matchThemeID)
         #expect(settings.fontFamily == nil)
         #expect(settings.fontSize == nil)
+        #expect(settings.cursorShape == .block)
+        #expect(settings.cursorBlink == true)
+        #expect(settings.optionAsMeta == true)
+        #expect(settings.scrollbackLines == 1000)
+        #expect(settings.cursorColor == nil)
+        #expect(settings.selectionColor == nil)
+        #expect(settings.backgroundOpacity == 1.0)
+    }
+
+    @Test("background opacity resolves and clamps to 0.2...1.0")
+    func backgroundOpacityClamps() {
+        var settings = TerminalSettings()
+        settings.backgroundOpacity = 0.05
+        #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).backgroundOpacity == 0.2)
+        settings.backgroundOpacity = 0.7
+        #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).backgroundOpacity == 0.7)
     }
 
     @Test("appearance fields round-trip through SettingsStore")
@@ -119,5 +135,31 @@ struct TerminalAppearanceResolverTests {
     @Test("An unknown scheme id falls back to Match Theme")
     func unknownSchemeFallsBack() {
         #expect(TerminalColorScheme.scheme(id: "does-not-exist").id == TerminalColorScheme.matchThemeID)
+    }
+
+    @Test("Cursor/scrollback/behavior fields pass through to the resolved appearance")
+    func behaviorFieldsResolve() {
+        var settings = TerminalSettings()
+        settings.cursorShape = .bar
+        settings.cursorBlink = false
+        settings.optionAsMeta = false
+        settings.scrollbackLines = 5000
+        let r = TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue)
+        #expect(r.cursorShape == .bar)
+        #expect(r.cursorBlink == false)
+        #expect(r.optionAsMeta == false)
+        #expect(r.scrollback == 5000)
+    }
+
+    @Test("An explicit cursor color overrides the scheme cursor; selection has a default")
+    func colorOverridesResolve() {
+        var settings = TerminalSettings()
+        settings.cursorColor = "FF0000"
+        let r = TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue)
+        #expect(r.cursor == "FF0000")
+        #expect(!r.selection.isEmpty)
+
+        settings.selectionColor = "00FF00"
+        #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).selection == "00FF00")
     }
 }

@@ -19,6 +19,10 @@ struct TerminalSettingsView: View {
 
     private var settings: TerminalSettings { environment.terminalSettingsStore.settings }
 
+    private var resolved: TerminalRenderAppearance {
+        TerminalAppearanceResolver.resolve(settings: settings, theme: environment.themeManager.currentTheme)
+    }
+
     var body: some View {
         let tokens = environment.themeManager.tokens
 
@@ -58,6 +62,141 @@ struct TerminalSettingsView: View {
                 fontSizeControl(tokens: tokens)
             }
             .padding(.top, 4)
+
+            cursorControls(tokens: tokens)
+
+            HStack(spacing: 16) {
+                colorControl(
+                    label: "Cursor Color",
+                    override: settings.cursorColor,
+                    resolvedHex: resolved.cursor,
+                    tokens: tokens
+                ) { newHex in environment.terminalSettingsStore.update { $0.cursorColor = newHex } }
+
+                colorControl(
+                    label: "Selection Color",
+                    override: settings.selectionColor,
+                    resolvedHex: resolved.selection,
+                    tokens: tokens
+                ) { newHex in environment.terminalSettingsStore.update { $0.selectionColor = newHex } }
+            }
+
+            transparencyControl(tokens: tokens)
+        }
+    }
+
+    private func transparencyControl(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Background Transparency")
+                    .font(AinkradFont.display(12, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.85))
+                Spacer()
+                Text("\(Int((1 - settings.backgroundOpacity) * 100))%")
+                    .font(AinkradFont.mono(11))
+                    .foregroundStyle(tokens.accentSecondary.opacity(0.8))
+            }
+            Slider(
+                value: Binding(
+                    get: { settings.backgroundOpacity },
+                    set: { v in environment.terminalSettingsStore.update { $0.backgroundOpacity = v } }
+                ),
+                in: 0.2...1.0
+            )
+            .tint(tokens.accentPrimary)
+            Text("Lets the ambient backdrop show through the terminal.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+        }
+        .padding(.top, 2)
+    }
+
+    private func cursorControls(tokens: DesignTokens) -> some View {
+        HStack(alignment: .bottom, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Cursor")
+                    .font(AinkradFont.display(12, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.85))
+                HStack(spacing: 4) {
+                    ForEach(TerminalCursorShape.allCases, id: \.self) { shape in
+                        cursorShapeButton(shape, tokens: tokens)
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                Text("Blink")
+                    .font(AinkradFont.display(12))
+                    .foregroundStyle(tokens.foreground.opacity(0.7))
+                NeonToggle(
+                    isOn: Binding(
+                        get: { settings.cursorBlink },
+                        set: { v in environment.terminalSettingsStore.update { $0.cursorBlink = v } }
+                    ),
+                    tokens: tokens
+                )
+            }
+            .padding(.bottom, 5)
+        }
+    }
+
+    private func cursorShapeButton(_ shape: TerminalCursorShape, tokens: DesignTokens) -> some View {
+        let isSelected = settings.cursorShape == shape
+        let icon: String = switch shape {
+        case .block: "rectangle.fill"
+        case .underline: "underline"
+        case .bar: "cursorarrow.click"
+        }
+        return Button {
+            environment.terminalSettingsStore.update { $0.cursorShape = shape }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundStyle(isSelected ? tokens.foreground : tokens.foreground.opacity(0.5))
+                .frame(width: 40, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(isSelected ? tokens.accentPrimary.opacity(0.18) : tokens.surfaceElevated.opacity(0.5))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(isSelected ? tokens.accentPrimary.opacity(0.5) : .clear, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(shape.rawValue.capitalized)
+    }
+
+    private func colorControl(
+        label: String,
+        override: String?,
+        resolvedHex: String,
+        tokens: DesignTokens,
+        set: @escaping (String?) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(AinkradFont.display(12, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+            HStack(spacing: 8) {
+                ColorPicker(
+                    "",
+                    selection: Binding(
+                        get: { Color(hex: override ?? resolvedHex) },
+                        set: { set($0.hexString) }
+                    ),
+                    supportsOpacity: false
+                )
+                .labelsHidden()
+
+                if override != nil {
+                    Button("Reset") { set(nil) }
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.accentSecondary)
+                        .buttonStyle(.plain)
+                }
+            }
         }
     }
 
@@ -269,6 +408,56 @@ struct TerminalSettingsView: View {
                         .strokeBorder(tokens.accentPrimary.opacity(0.2), lineWidth: 1)
                 )
             }
+
+            toggleRow(
+                label: "Use Option as Meta key",
+                help: "Send ⌥ as Meta/Esc+ (for tmux, emacs, and shell editing).",
+                isOn: Binding(
+                    get: { settings.optionAsMeta },
+                    set: { v in environment.terminalSettingsStore.update { $0.optionAsMeta = v } }
+                ),
+                tokens: tokens
+            )
+
+            field(label: "Scrollback Lines", tokens: tokens) {
+                HStack(spacing: 0) {
+                    stepperButton("minus", tokens: tokens) {
+                        environment.terminalSettingsStore.update { $0.scrollbackLines = max(0, $0.scrollbackLines - 500) }
+                    }
+                    Text("\(settings.scrollbackLines)")
+                        .font(AinkradFont.mono(12))
+                        .foregroundStyle(tokens.foreground)
+                        .frame(width: 64)
+                    stepperButton("plus", tokens: tokens) {
+                        environment.terminalSettingsStore.update { $0.scrollbackLines = min(100_000, $0.scrollbackLines + 500) }
+                    }
+                }
+                .frame(width: 124, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(tokens.surfaceElevated.opacity(0.5))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(tokens.accentPrimary.opacity(0.2), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func toggleRow(label: String, help: String, isOn: Binding<Bool>, tokens: DesignTokens) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(AinkradFont.display(12, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.85))
+                Text(help)
+                    .font(AinkradFont.display(11))
+                    .foregroundStyle(tokens.foreground.opacity(0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            NeonToggle(isOn: isOn, tokens: tokens)
         }
     }
 

@@ -16,7 +16,7 @@ struct TerminalContainerView: NSViewRepresentable {
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
-        apply(appearance, to: view)
+        apply(appearance, to: view, coordinator: context.coordinator)
         view.startProcess(
             executable: session.shellPath,
             args: ["-l"],
@@ -27,20 +27,46 @@ struct TerminalContainerView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
-        apply(appearance, to: nsView)
+        apply(appearance, to: nsView, coordinator: context.coordinator)
     }
 
-    /// Applies the resolved appearance: the 16-color ANSI palette, then the
-    /// background/foreground/caret, then the font.
-    private func apply(_ appearance: TerminalRenderAppearance, to view: LocalProcessTerminalView) {
+    /// Applies the resolved appearance: ANSI palette, bg/fg/caret/selection,
+    /// font, cursor style + blink, Option-as-Meta, and (only when it changed)
+    /// the scrollback size.
+    private func apply(_ appearance: TerminalRenderAppearance, to view: LocalProcessTerminalView, coordinator: Coordinator) {
         let palette = appearance.ansi.compactMap(Self.terminalColor(hex:))
         if palette.count == 16 {
             view.installColors(palette)
         }
+        // Translucent background: alpha < 1 lets the ambient backdrop show
+        // through. The layer must be non-opaque for the alpha to take effect.
         view.nativeBackgroundColor = Self.nsColor(hex: appearance.background)
+            .withAlphaComponent(CGFloat(appearance.backgroundOpacity))
+        view.wantsLayer = true
+        view.layer?.isOpaque = appearance.backgroundOpacity >= 1
         view.nativeForegroundColor = Self.nsColor(hex: appearance.foreground)
         view.caretColor = Self.nsColor(hex: appearance.cursor)
+        view.selectedTextBackgroundColor = Self.nsColor(hex: appearance.selection)
         view.font = Self.font(family: appearance.fontFamily, size: appearance.fontSize)
+        view.optionAsMetaKey = appearance.optionAsMeta
+        view.getTerminal().setCursorStyle(Self.cursorStyle(shape: appearance.cursorShape, blink: appearance.cursorBlink))
+
+        // Rebuilding history is comparatively heavy — only when it changes.
+        if coordinator.appliedScrollback != appearance.scrollback {
+            view.changeScrollback(appearance.scrollback)
+            coordinator.appliedScrollback = appearance.scrollback
+        }
+    }
+
+    private static func cursorStyle(shape: TerminalCursorShape, blink: Bool) -> CursorStyle {
+        switch (shape, blink) {
+        case (.block, true): return .blinkBlock
+        case (.block, false): return .steadyBlock
+        case (.underline, true): return .blinkUnderline
+        case (.underline, false): return .steadyUnderline
+        case (.bar, true): return .blinkBar
+        case (.bar, false): return .steadyBar
+        }
     }
 
     // MARK: - Color / font conversion
@@ -85,6 +111,9 @@ struct TerminalContainerView: NSViewRepresentable {
 
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         private let session: TerminalSession
+        /// Last scrollback size pushed to the view, so we only rebuild history
+        /// when it actually changes.
+        var appliedScrollback: Int?
 
         init(session: TerminalSession) {
             self.session = session

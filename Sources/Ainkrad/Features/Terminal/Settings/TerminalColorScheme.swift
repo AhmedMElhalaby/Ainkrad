@@ -1,3 +1,25 @@
+/// The terminal colors a theme's "Match App Theme" scheme renders with — the
+/// terminal counterpart of the app's `DesignTokens`.
+struct TerminalPalette {
+    let background: String
+    let foreground: String
+    let cursor: String
+    let ansi: [String]
+}
+
+extension Theme {
+    /// The terminal palette for this theme's Match-Theme scheme. Extended as
+    /// new themes are added (see the themes work).
+    var terminalPalette: TerminalPalette {
+        switch self {
+        case .neonBlue:
+            return TerminalPalette(background: "0A0E17", foreground: "E2E8F0", cursor: "22D3EE", ansi: TerminalColorScheme.matchTheme.ansi)
+        case .cyberPurple:
+            return TerminalPalette(background: "080814", foreground: "EDE9FE", cursor: "C084FC", ansi: TerminalColorScheme.matchTheme.ansi)
+        }
+    }
+}
+
 /// A selectable terminal color scheme. `background`/`foreground`/`cursor` are
 /// hex strings, or `nil` for the special "Match App Theme" scheme which
 /// derives them from the active app theme. `ansi` is always the full 16-color
