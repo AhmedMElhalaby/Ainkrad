@@ -27,11 +27,15 @@ struct TileLayoutView: View {
                 if workspace.viewMode == .focus, tileLayout.blocks.count > 1 {
                     FocusSwitcherRail(workspace: workspace)
                         .padding(.leading, 8)
+                        // Only the rail fades in/out; the panes must NOT
+                        // animate their size on a Focus toggle (that flood of
+                        // intermediate resizes duplicates terminal output).
+                        .transition(.opacity)
+                        .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
                 }
             }
             .padding([.horizontal, .bottom], 10)
             .padding(.top, 4)
-            .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
         }
     }
 
@@ -104,12 +108,14 @@ struct TileLayoutView: View {
     }
 
     /// Frame changes animate only when the STRUCTURE changes (move, open,
-    /// close, mode toggle) — seam drags mutate fractions without touching
-    /// this signature, so resizing stays direct and un-animated.
+    /// close) — seam drags mutate fractions without touching this signature,
+    /// so resizing stays direct and un-animated. Focus Mode is deliberately
+    /// EXCLUDED: animating the collapse/expand would drive the terminal
+    /// through many intermediate sizes (and big height changes) in a fraction
+    /// of a second, re-triggering the resize output duplication. Focus Mode
+    /// therefore snaps in one step → one clean reflow.
     private var structureSignature: String {
-        let order = tileLayout.blocks.map { $0.id.uuidString }.joined(separator: ",")
-        let mode = workspace.viewMode == .focus ? (tileLayout.focusedBlockID?.uuidString ?? "") : "split"
-        return order + "|" + mode
+        tileLayout.blocks.map { $0.id.uuidString }.joined(separator: ",")
     }
 }
 
