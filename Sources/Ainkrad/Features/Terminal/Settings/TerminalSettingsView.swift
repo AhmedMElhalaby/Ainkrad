@@ -15,14 +15,7 @@ struct TerminalSettingsView: View {
     @State private var isChoosingFolder = false
     @State private var isLoaded = false
 
-    /// Common monospaced families, narrowed to those actually installed.
-    private static let candidateFonts = [
-        "JetBrains Mono", "SF Mono", "Menlo", "Monaco", "Courier New", "Fira Code", "Hack",
-    ]
-
-    private var availableFonts: [String] {
-        Self.candidateFonts.filter { NSFont(name: $0, size: 12) != nil }
-    }
+    private var availableFonts: [String] { MonospacedFonts.available() }
 
     private var settings: TerminalSettings { environment.terminalSettingsStore.settings }
 

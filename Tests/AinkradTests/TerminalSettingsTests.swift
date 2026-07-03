@@ -105,8 +105,8 @@ struct TerminalAppearanceResolverTests {
     @Test("Font falls back to defaults when unset, and passes explicit values through")
     func fontResolution() {
         let dflt = TerminalAppearanceResolver.resolve(settings: TerminalSettings(), theme: .neonBlue)
-        #expect(!dflt.fontFamily.isEmpty)
-        #expect(dflt.fontSize == 13)
+        #expect(dflt.fontFamily == "MesloLGS NF")
+        #expect(dflt.fontSize == 15)
 
         var custom = TerminalSettings()
         custom.fontFamily = "Menlo"

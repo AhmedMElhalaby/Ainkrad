@@ -45,6 +45,7 @@
 		7296A14A301A8FC99640C97E /* AppEnvironmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95E66C194CC035FF720514DF /* AppEnvironmentTests.swift */; };
 		742F43C56EBBE47CDBF4AECC /* TerminalSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC56FAB234F241A554F655E /* TerminalSessionTests.swift */; };
 		7E1343675C741E26A143CBD4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9CC38B9B253A299BF41367F1 /* Assets.xcassets */; };
+		7E5778031BBC2198BE4A541B /* MonospacedFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = C973AE2FF3BF5507F8B653D7 /* MonospacedFonts.swift */; };
 		83669310EC18868D74BA9BD3 /* WorkspaceManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D964014F6F829D4AD7F990CF /* WorkspaceManagerTests.swift */; };
 		84A3DA56411F166F708ABFA5 /* TerminalContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B9F72E3F635559E1750804 /* TerminalContainerView.swift */; };
 		879B3215A256EC76463FA1BF /* AppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = D64132026E0F227ACF3E41D2 /* AppIcon.swift */; };
@@ -71,6 +72,7 @@
 		E6E712FB3824C49EA3375EE0 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B5FE5AACEB88F07F5699FF /* ThemeManager.swift */; };
 		EED24E5C71C53785F2136CEE /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6915B1D164030D51333E27 /* AppEnvironment.swift */; };
 		EF0EB53DEA451069FE9CFFBD /* UserDefaultsSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F5A703D9672DA74E7B1D77 /* UserDefaultsSettingsStore.swift */; };
+		EFBF86E96D8486C564853476 /* MesloLGSNF-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 38D938BE96DF18601537B23C /* MesloLGSNF-Regular.ttf */; };
 		F019B85575A1C505B0CD8948 /* SettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523D36920BC7554E362590E9 /* SettingsControls.swift */; };
 		F191A579C408B4DF684F7712 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3DEC6CCCA805296B1508FC /* RootView.swift */; };
 		F197739B0657262CF67D225A /* TileLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6308EBD66B3FE61DD5F2684F /* TileLayoutTests.swift */; };
@@ -112,6 +114,7 @@
 		2C741E419826340CA2B8D839 /* BlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockView.swift; sourceTree = "<group>"; };
 		2D07AA259FF4A6712CA6B72C /* FloatingIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingIslandView.swift; sourceTree = "<group>"; };
 		37C493F65F3072D1234CEFC4 /* BuiltInAppRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInAppRegistry.swift; sourceTree = "<group>"; };
+		38D938BE96DF18601537B23C /* MesloLGSNF-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MesloLGSNF-Regular.ttf"; sourceTree = "<group>"; };
 		3BC2348219CEBF9EECE80980 /* PTYIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTYIntegrationTests.swift; sourceTree = "<group>"; };
 		3CF995D8A612C557B4DB6457 /* ThemeManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManagerTests.swift; sourceTree = "<group>"; };
 		40550DB341B80FAE437D9590 /* Block.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Block.swift; sourceTree = "<group>"; };
@@ -151,6 +154,7 @@
 		C2CE8BF5FABA704761016AB9 /* TerminalSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSettingsView.swift; sourceTree = "<group>"; };
 		C45089E2113B3B5A4E855DA5 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		C6D5C9641B7E4DBD4C12E2FE /* LayoutPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutPersistence.swift; sourceTree = "<group>"; };
+		C973AE2FF3BF5507F8B653D7 /* MonospacedFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonospacedFonts.swift; sourceTree = "<group>"; };
 		CCA8B230C56ECF9CEC9363D4 /* LayoutPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutPersistenceTests.swift; sourceTree = "<group>"; };
 		CCBF6DA43CE18B0921DD5EB1 /* TerminalBlockRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalBlockRootView.swift; sourceTree = "<group>"; };
 		D4402A2F220B5119483DA830 /* SettingsOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsOverlayView.swift; sourceTree = "<group>"; };
@@ -256,6 +260,7 @@
 			children = (
 				08C44B41D33CFA643875664B /* Exo2.ttf */,
 				49E00D15C1E88DA6778E4F9E /* JetBrainsMono.ttf */,
+				38D938BE96DF18601537B23C /* MesloLGSNF-Regular.ttf */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -345,6 +350,7 @@
 		8181DA55C0A4209FB2B0E429 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				C973AE2FF3BF5507F8B653D7 /* MonospacedFonts.swift */,
 				046E958F98AE6D85B7AC60A4 /* TerminalAppearance.swift */,
 				EC122922257D38E153AB7C0E /* TerminalColorScheme.swift */,
 				66E117B602C699905EFD09C2 /* TerminalSettings.swift */,
@@ -532,6 +538,7 @@
 				7E1343675C741E26A143CBD4 /* Assets.xcassets in Resources */,
 				2CD0AB04A708BC1516C9590C /* Exo2.ttf in Resources */,
 				B219B697C90507666FD459D3 /* JetBrainsMono.ttf in Resources */,
+				EFBF86E96D8486C564853476 /* MesloLGSNF-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,6 +574,7 @@
 				3741B905834CEC8005B7066C /* LauncherView.swift in Sources */,
 				F21464FE91AA2B7FB42CFD1D /* LayoutPersistence.swift in Sources */,
 				4D416BE1AD1D2ED4509C36AC /* Log.swift in Sources */,
+				7E5778031BBC2198BE4A541B /* MonospacedFonts.swift in Sources */,
 				4A18DE56B38BAB1D89665814 /* PTYReaper.swift in Sources */,
 				A77160C185271DB35B0F8AE0 /* PaneGeometry.swift in Sources */,
 				F191A579C408B4DF684F7712 /* RootView.swift in Sources */,
@@ -632,7 +640,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_34F79298-F9F4-4F01-8141-FE5D7863E7C3" /* SwiftTerm */;
+			productRef = "TEMP_928FF5C7-6405-4C94-9137-A5E5F1193D99" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -881,7 +889,7 @@
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_34F79298-F9F4-4F01-8141-FE5D7863E7C3" /* SwiftTerm */ = {
+		"TEMP_928FF5C7-6405-4C94-9137-A5E5F1193D99" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4D754EF5C4B396030D116176 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;

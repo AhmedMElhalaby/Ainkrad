@@ -15,8 +15,8 @@ struct TerminalRenderAppearance: Equatable {
 /// Pure resolution of `TerminalSettings` (+ the active theme) into a concrete
 /// `TerminalRenderAppearance`. No AppKit here — kept unit-testable.
 enum TerminalAppearanceResolver {
-    static let defaultFontFamily = "JetBrains Mono"
-    static let defaultFontSize: Double = 13
+    static let defaultFontFamily = "MesloLGS NF"
+    static let defaultFontSize: Double = 15
 
     static func resolve(settings: TerminalSettings, theme: Theme) -> TerminalRenderAppearance {
         let scheme = TerminalColorScheme.scheme(id: settings.colorSchemeID)
