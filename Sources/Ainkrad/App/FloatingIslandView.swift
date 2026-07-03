@@ -13,9 +13,10 @@ struct FloatingIslandView: View {
     @State private var isHovering = false
 
     private var imageName: String {
+        // Island art ships in two accents; new themes use the nearer one.
         switch environment.themeManager.currentTheme {
-        case .neonBlue: return "Island-NeonBlue"
-        case .cyberPurple: return "Island-CyberPurple"
+        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
+        default: return "Island-NeonBlue"
         }
     }
 

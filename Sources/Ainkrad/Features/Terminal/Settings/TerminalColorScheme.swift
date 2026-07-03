@@ -8,14 +8,34 @@ struct TerminalPalette {
 }
 
 extension Theme {
-    /// The terminal palette for this theme's Match-Theme scheme. Extended as
-    /// new themes are added (see the themes work).
+    /// The terminal palette for this theme's Match-Theme scheme — the terminal
+    /// counterpart of the app `DesignTokens`, so "Match App Theme" makes the
+    /// terminal look like the active theme.
     var terminalPalette: TerminalPalette {
         switch self {
         case .neonBlue:
             return TerminalPalette(background: "0A0E17", foreground: "E2E8F0", cursor: "22D3EE", ansi: TerminalColorScheme.matchTheme.ansi)
         case .cyberPurple:
             return TerminalPalette(background: "080814", foreground: "EDE9FE", cursor: "C084FC", ansi: TerminalColorScheme.matchTheme.ansi)
+        case .dracula:
+            return TerminalPalette(background: "282A36", foreground: "F8F8F2", cursor: "BD93F9", ansi: TerminalColorScheme.dracula.ansi)
+        case .solarizedDark:
+            return TerminalPalette(background: "002B36", foreground: "839496", cursor: "93A1A1", ansi: TerminalColorScheme.solarizedDark.ansi)
+        case .nord:
+            return TerminalPalette(background: "2E3440", foreground: "D8DEE9", cursor: "88C0D0", ansi: [
+                "3B4252", "BF616A", "A3BE8C", "EBCB8B", "81A1C1", "B48EAD", "88C0D0", "E5E9F0",
+                "4C566A", "BF616A", "A3BE8C", "EBCB8B", "81A1C1", "B48EAD", "8FBCBB", "ECEFF4",
+            ])
+        case .tokyoNight:
+            return TerminalPalette(background: "1A1B26", foreground: "C0CAF5", cursor: "7AA2F7", ansi: [
+                "15161E", "F7768E", "9ECE6A", "E0AF68", "7AA2F7", "BB9AF7", "7DCFFF", "A9B1D6",
+                "414868", "F7768E", "9ECE6A", "E0AF68", "7AA2F7", "BB9AF7", "7DCFFF", "C0CAF5",
+            ])
+        case .gruvbox:
+            return TerminalPalette(background: "282828", foreground: "EBDBB2", cursor: "FE8019", ansi: [
+                "282828", "CC241D", "98971A", "D79921", "458588", "B16286", "689D6A", "A89984",
+                "928374", "FB4934", "B8BB26", "FABD2F", "83A598", "D3869B", "8EC07C", "EBDBB2",
+            ])
         }
     }
 }

@@ -6,10 +6,14 @@ enum AppIconChoice: String, Codable, CaseIterable {
     case blue
     case purple
 
+    /// Themes whose Auto icon uses the purple variant (the app ships only the
+    /// two dark icons, so each theme maps to the nearer one).
+    private static let purpleFamily: Set<Theme> = [.cyberPurple, .dracula, .tokyoNight]
+
     /// The concrete icon this choice resolves to for a given theme.
     func resolvedIcon(for theme: Theme) -> AppIcon {
         switch self {
-        case .auto: return theme == .cyberPurple ? .purple : .blue
+        case .auto: return Self.purpleFamily.contains(theme) ? .purple : .blue
         case .blue: return .blue
         case .purple: return .purple
         }

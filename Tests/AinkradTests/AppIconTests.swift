@@ -16,6 +16,15 @@ struct AppIconTests {
         #expect(AppIconChoice.purple.resolvedIcon(for: .neonBlue) == .purple)
     }
 
+    @Test("Auto maps purple-family themes to the purple icon, others to blue")
+    func autoMapsNewThemes() {
+        #expect(AppIconChoice.auto.resolvedIcon(for: .dracula) == .purple)
+        #expect(AppIconChoice.auto.resolvedIcon(for: .tokyoNight) == .purple)
+        #expect(AppIconChoice.auto.resolvedIcon(for: .nord) == .blue)
+        #expect(AppIconChoice.auto.resolvedIcon(for: .gruvbox) == .blue)
+        #expect(AppIconChoice.auto.resolvedIcon(for: .solarizedDark) == .blue)
+    }
+
     @Test("Each resolved icon maps to its bundled asset")
     func resolvedIconAssetNames() {
         #expect(AppIcon.blue.assetName == "AppIcon-NeonBlue")

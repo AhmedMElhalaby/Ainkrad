@@ -8,10 +8,7 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
-    private static let themeDisplayNames: [Theme: String] = [
-        .neonBlue: "Neon Blue",
-        .cyberPurple: "Cyber Purple",
-    ]
+    private let columns = [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 10)]
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -20,7 +17,7 @@ struct AppearanceSettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
 
-                HStack(spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(Theme.allCases, id: \.self) { theme in
                         themeCard(theme, tokens: tokens)
                     }
@@ -55,7 +52,7 @@ struct AppearanceSettingsView: View {
                     )
                     .shadow(color: themeTokens.accentPrimary.opacity(isSelected ? 0.6 : 0), radius: 8)
 
-                Text(Self.themeDisplayNames[theme] ?? theme.rawValue)
+                Text(theme.displayName)
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
 

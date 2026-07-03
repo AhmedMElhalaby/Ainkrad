@@ -9,10 +9,24 @@ struct ThemeTests {
         #expect(Theme.allCases.first == .neonBlue)
     }
 
-    @Test("exactly two themes exist for M1")
-    func exactlyTwoThemes() {
-        #expect(Theme.allCases.count == 2)
-        #expect(Theme.allCases.contains(.cyberPurple))
+    @Test("the brand themes plus the ported well-known palettes are present")
+    func allThemesPresent() {
+        #expect(Theme.allCases.count == 7)
+        for theme in [Theme.cyberPurple, .dracula, .nord, .tokyoNight, .gruvbox, .solarizedDark] {
+            #expect(Theme.allCases.contains(theme))
+        }
+    }
+
+    @Test("every theme resolves to distinct-looking tokens and a 16-color terminal palette")
+    func everyThemeResolves() {
+        var backgrounds = Set<String>()
+        for theme in Theme.allCases {
+            #expect(theme.terminalPalette.ansi.count == 16)
+            backgrounds.insert(theme.terminalPalette.background)
+            _ = theme.tokens // must not trap
+        }
+        // Each theme has its own terminal background.
+        #expect(backgrounds.count == Theme.allCases.count)
     }
 }
 
