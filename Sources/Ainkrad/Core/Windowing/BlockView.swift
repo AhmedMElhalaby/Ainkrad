@@ -119,7 +119,11 @@ struct BlockView: View {
     /// moves.
     @ViewBuilder
     private func dropZoneHighlight(tokens: DesignTokens) -> some View {
-        if let dropEdge {
+        // A drop preview only means anything while a drag is in flight —
+        // gating on the live drag flag (which every render observes)
+        // guarantees the highlight vanishes the instant the drag ends, even
+        // if a stale `dropEdge` lingers from a pane the drag passed over.
+        if let dropEdge, tileLayout.draggingBlockID != nil {
             let isHorizontal = dropEdge == .leading || dropEdge == .trailing
             let zone = RoundedRectangle(cornerRadius: 10)
                 .fill(tokens.accentPrimary.opacity(0.16))
