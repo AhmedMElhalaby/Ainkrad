@@ -2,25 +2,50 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
-/// A `LocalProcessTerminalView` that stays fully responsive during resize but
-/// forces one clean repaint shortly after the size settles. SwiftTerm's live
-/// reflow can leave transient display garble with prompts like Powerlevel10k;
-/// repainting from the (correct) buffer after the drag clears it — without
-/// freezing or lagging the resize itself.
+/// A `LocalProcessTerminalView` that **debounces the PTY window size**.
+///
+/// SwiftTerm reflows the buffer *and* pushes the new size to the shell on every
+/// pixel of a resize. That SIGWINCH flood makes prompts like Powerlevel10k
+/// redraw repeatedly, leaving stacked/duplicated output. We can't override the
+/// (public, non-open) `sizeChanged`, but `getWindowSize()` is `open` and is
+/// what `sizeChanged` reads before calling `TIOCSWINSZ` — so during a rapid
+/// resize we keep reporting the last *committed* size (no size change → no
+/// SIGWINCH) and push the real size to the PTY once, after the resize settles.
+/// The visible buffer still reflows live, so there's no lag.
 final class AinkradTerminalView: LocalProcessTerminalView {
-    private var refreshWork: DispatchWorkItem?
+    private var committedSize: winsize?
+    private var pendingSize: winsize?
+    private var commitWork: DispatchWorkItem?
 
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        refreshWork?.cancel()
+    override func getWindowSize() -> winsize {
+        let real = super.getWindowSize()
+        pendingSize = real
+
+        // First call (process start) commits immediately.
+        guard let committed = committedSize else {
+            committedSize = real
+            return real
+        }
+
+        scheduleCommit()
+        return committed
+    }
+
+    /// After the size has been quiet briefly, push the real size to the PTY
+    /// once (one SIGWINCH → one clean prompt redraw) and repaint.
+    private func scheduleCommit() {
+        commitWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
+            guard let self, let size = self.pendingSize, self.process?.running == true else { return }
+            self.committedSize = size
+            var s = size
+            _ = PseudoTerminalHelpers.setWinSize(masterPtyDescriptor: self.process.childfd, windowSize: &s)
             let terminal = self.getTerminal()
             terminal.refresh(startRow: 0, endRow: max(terminal.rows - 1, 0))
             self.needsDisplay = true
         }
-        refreshWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
+        commitWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
 }
 
