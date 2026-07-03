@@ -31,7 +31,7 @@ struct RootView: View {
                         ForEach(environment.workspaceManager.workspaces) { workspace in
                             let isActive = workspace.id == environment.workspaceManager.activeWorkspaceID
                             TileLayoutView(
-                                tileLayout: workspace.tileLayout,
+                                workspace: workspace,
                                 registry: environment.registry
                             )
                             .opacity(isActive ? 1 : 0)

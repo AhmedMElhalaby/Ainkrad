@@ -15,6 +15,7 @@ struct BlockView: View {
     let block: Block
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
+    var workspace: Workspace?
 
     @State private var hasArrived = false
     @State private var isHoveringClose = false
@@ -30,8 +31,8 @@ struct BlockView: View {
         tileLayout.focusedBlockID == block.id
     }
 
-    private var isMagnified: Bool {
-        tileLayout.magnifiedBlockID == block.id
+    private var isInFocusMode: Bool {
+        workspace?.viewMode == .focus
     }
 
     /// True while this pane's header drag session is live — it "lifts":
@@ -163,13 +164,14 @@ struct BlockView: View {
 
             Spacer()
 
-            if tileLayout.appIDs.count > 1 {
+            if let workspace, tileLayout.appIDs.count > 1 {
                 Button {
-                    tileLayout.toggleMagnify(block.id)
+                    tileLayout.focus(block.id)
+                    workspace.viewMode = isInFocusMode ? .split : .focus
                 } label: {
-                    Image(systemName: isMagnified ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    Image(systemName: isInFocusMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(isMagnified ? tokens.accentSecondary : tokens.foreground.opacity(isHoveringMagnify ? 0.95 : 0.5))
+                        .foregroundStyle(isInFocusMode ? tokens.accentSecondary : tokens.foreground.opacity(isHoveringMagnify ? 0.95 : 0.5))
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
@@ -178,7 +180,7 @@ struct BlockView: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isHoveringMagnify = $0 }
-                .help(isMagnified ? "Restore layout (⌘⇧F)" : "Magnify (⌘⇧F)")
+                .help(isInFocusMode ? "Back to Split Mode (⌘M)" : "Focus Mode (⌘M)")
             }
 
             Button {
@@ -222,9 +224,16 @@ struct BlockView: View {
                 .keyboardShortcut("d", modifiers: .command)
             Button("Split Down") { tileLayout.split(block.id, edge: .bottom) }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
+            Button("Duplicate") { tileLayout.duplicate(block.id) }
             Divider()
-            Button(isMagnified ? "Restore Layout" : "Magnify") { tileLayout.toggleMagnify(block.id) }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
+            if let workspace {
+                Button(isInFocusMode ? "Back to Split Mode" : "Focus Mode") {
+                    tileLayout.focus(block.id)
+                    workspace.viewMode = isInFocusMode ? .split : .focus
+                }
+                .keyboardShortcut("m", modifiers: .command)
+            }
+            Button("Reset Layout") { tileLayout.resetLayout() }
             Divider()
             Button("Close", role: .destructive) { tileLayout.close(block.id) }
                 .keyboardShortcut("w", modifiers: .command)

@@ -259,65 +259,122 @@ struct TileLayoutTests {
         #expect(layout.appIDs == ["terminal", "settings", "settings"])
     }
 
-    @Test("splitting clears magnification")
-    func splittingClearsMagnification() {
+    // MARK: - Duplicate / reset
+
+    @Test("duplicate copies a pane beside itself")
+    func duplicateCopiesPane() {
         let layout = TileLayout()
         let a = layout.openApp("terminal")
-        _ = layout.openApp("settings")
-        layout.toggleMagnify(a.id)
 
-        layout.split(a.id, edge: .trailing)
+        let copy = layout.duplicate(a.id)
 
-        #expect(layout.magnifiedBlockID == nil)
+        #expect(copy?.appID == "terminal")
+        #expect(layout.appIDs == ["terminal", "terminal"])
+        #expect(layout.focusedBlockID == copy?.id)
     }
 
-    // MARK: - Magnify
-
-    @Test("toggleMagnify magnifies a pane and toggles back off")
-    func toggleMagnifyTogglesOnAndOff() {
+    @Test("resetLayout re-equalizes every container")
+    func resetLayoutEqualizes() {
         let layout = TileLayout()
-        let a = layout.openApp("a")
-        layout.openApp("b")
+        _ = layout.openApp("a")
+        _ = layout.openApp("b")
+        layout.setBoundary(path: [], after: 0, to: 0.8)
 
-        layout.toggleMagnify(a.id)
-        #expect(layout.magnifiedBlockID == a.id)
+        layout.resetLayout()
 
-        layout.toggleMagnify(a.id)
-        #expect(layout.magnifiedBlockID == nil)
+        guard case .split(_, _, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(fractions == [0.5, 0.5])
     }
 
-    @Test("closing the magnified pane clears magnification")
-    func closingMagnifiedClearsMagnification() {
-        let layout = TileLayout()
-        let a = layout.openApp("a")
-        layout.openApp("b")
-        layout.toggleMagnify(a.id)
+    // MARK: - Geometry & keyboard
 
-        layout.close(a.id)
-
-        #expect(layout.magnifiedBlockID == nil)
-    }
-
-    @Test("opening an app clears magnification")
-    func openingAppClearsMagnification() {
-        let layout = TileLayout()
-        let a = layout.openApp("a")
-        layout.toggleMagnify(a.id)
-
-        layout.openApp("b")
-
-        #expect(layout.magnifiedBlockID == nil)
-    }
-
-    @Test("moving a pane clears magnification")
-    func movingPaneClearsMagnification() {
+    @Test("paneFrames tiles the unit square by the stored fractions")
+    func paneFramesTileUnitSquare() {
         let layout = TileLayout()
         let a = layout.openApp("a")
         let b = layout.openApp("b")
-        layout.toggleMagnify(a.id)
 
-        layout.move(a.id, to: b.id, edge: .bottom)
+        let frames = layout.paneFrames()
 
-        #expect(layout.magnifiedBlockID == nil)
+        #expect(frames[a.id] == CGRect(x: 0, y: 0, width: 0.5, height: 1))
+        #expect(frames[b.id] == CGRect(x: 0.5, y: 0, width: 0.5, height: 1))
+    }
+
+    @Test("focusNeighbor moves focus directionally, no-op at edges")
+    func focusNeighborMovesDirectionally() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        let c = layout.openApp("c")
+        layout.focus(a.id)
+
+        layout.focusNeighbor(.right)
+        #expect(layout.focusedBlockID == b.id)
+
+        layout.focusNeighbor(.right)
+        #expect(layout.focusedBlockID == c.id)
+
+        layout.focusNeighbor(.right)
+        #expect(layout.focusedBlockID == c.id)
+
+        layout.focusNeighbor(.left)
+        #expect(layout.focusedBlockID == b.id)
+    }
+
+    @Test("focusNeighbor crosses into stacked panes vertically")
+    func focusNeighborCrossesVertically() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        let b = layout.openApp("b")
+        layout.move(b.id, to: a.id, edge: .bottom)
+        layout.focus(a.id)
+
+        layout.focusNeighbor(.down)
+        #expect(layout.focusedBlockID == b.id)
+
+        layout.focusNeighbor(.up)
+        #expect(layout.focusedBlockID == a.id)
+    }
+
+    @Test("resizeFocused grows the focused pane toward the direction")
+    func resizeFocusedGrows() {
+        let layout = TileLayout()
+        let a = layout.openApp("a")
+        _ = layout.openApp("b")
+        layout.focus(a.id)
+
+        layout.resizeFocused(.right)
+
+        guard case .split(_, _, let fractions) = layout.root else {
+            Issue.record("expected a root split")
+            return
+        }
+        #expect(abs(fractions[0] - 0.54) < 0.0001)
+    }
+
+    // MARK: - Persistence
+
+    @Test("a layout snapshot round-trips through JSON with identical structure")
+    func snapshotRoundTripsThroughJSON() throws {
+        let layout = TileLayout()
+        let a = layout.openApp("terminal")
+        _ = layout.openApp("settings")
+        let c = layout.openApp("terminal")
+        layout.move(c.id, to: a.id, edge: .bottom)
+        layout.setBoundary(path: [], after: 0, to: 0.7)
+
+        let snapshot = try #require(layout.snapshot())
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(PaneSnapshot.self, from: data)
+
+        let restored = TileLayout()
+        restored.apply(decoded)
+
+        #expect(restored.snapshot() == snapshot)
+        #expect(restored.appIDs == layout.appIDs)
+        #expect(restored.focusedBlockID == restored.blocks.first?.id)
     }
 }
