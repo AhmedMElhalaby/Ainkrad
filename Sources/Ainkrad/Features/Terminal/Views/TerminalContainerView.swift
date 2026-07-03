@@ -2,22 +2,51 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
-/// Hosts SwiftTerm's `LocalProcessTerminalView` (an AppKit `NSView`) inside
-/// SwiftUI. Spawns the session's PTY-backed login shell on creation and
-/// terminates it deterministically when this view leaves the hierarchy —
-/// see ADR-0002 Terminal Emulation Approach and Terminal App
-/// Architecture.md. The resolved `appearance` (colors + ANSI palette + font)
-/// is applied on creation and re-applied on every update, so a theme,
-/// color-scheme, or font change restyles running terminals live.
+/// A `LocalProcessTerminalView` that coalesces window live-resizes: while the
+/// user drags a window/pane edge, SwiftTerm would reflow (and SIGWINCH the
+/// shell) on every pixel tick, which floods prompt redraws — with prompts like
+/// Powerlevel10k that produces stacked, torn output. We freeze the terminal
+/// size during the live resize and commit the final size once it ends, so the
+/// shell sees a single clean resize.
+final class AinkradTerminalView: LocalProcessTerminalView {
+    private var pendingLiveResizeSize: NSSize?
+
+    override func setFrameSize(_ newSize: NSSize) {
+        if inLiveResize {
+            pendingLiveResizeSize = newSize
+            return
+        }
+        super.setFrameSize(newSize)
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        if let size = pendingLiveResizeSize {
+            pendingLiveResizeSize = nil
+            super.setFrameSize(size)
+        }
+        // One clean repaint after the drag settles.
+        let terminal = getTerminal()
+        terminal.refresh(startRow: 0, endRow: max(terminal.rows - 1, 0))
+        needsDisplay = true
+    }
+}
+
+/// Hosts the terminal (an AppKit `NSView`) inside SwiftUI. Spawns the session's
+/// PTY-backed login shell on creation and terminates it deterministically when
+/// this view leaves the hierarchy — see ADR-0002 and Terminal App
+/// Architecture.md. The resolved `appearance` (colors + ANSI palette + font +
+/// cursor + transparency) applies live; the scrollbar is hidden until the user
+/// scrolls.
 struct TerminalContainerView: NSViewRepresentable {
     let session: TerminalSession
     let appearance: TerminalRenderAppearance
 
-    func makeNSView(context: Context) -> LocalProcessTerminalView {
-        let view = LocalProcessTerminalView(frame: .zero)
+    func makeNSView(context: Context) -> AinkradTerminalView {
+        let view = AinkradTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
         apply(appearance, to: view, coordinator: context.coordinator)
-        Self.configureScroller(view)
+        context.coordinator.installScrollReveal(for: view)
         view.startProcess(
             executable: session.shellPath,
             args: ["-l"],
@@ -27,26 +56,16 @@ struct TerminalContainerView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+    func updateNSView(_ nsView: AinkradTerminalView, context: Context) {
         apply(appearance, to: nsView, coordinator: context.coordinator)
-        Self.configureScroller(nsView)
-    }
-
-    /// Makes the terminal's scrollbar an overlay scroller — hidden at rest,
-    /// appearing only while scrolling — instead of SwiftTerm's always-on
-    /// legacy bar.
-    private static func configureScroller(_ view: NSView) {
-        for case let scroller as NSScroller in view.subviews {
-            scroller.scrollerStyle = .overlay
-        }
     }
 
     /// Applies the resolved appearance: ANSI palette, bg/fg/caret/selection,
-    /// font, cursor style + blink, Option-as-Meta, and (only when it changed)
-    /// the scrollback size. Skips entirely when nothing changed — crucially,
-    /// a window resize does NOT change the appearance, so we don't re-set the
-    /// font mid-resize (that runs resetFont/selectNone and garbles reflow).
-    private func apply(_ appearance: TerminalRenderAppearance, to view: LocalProcessTerminalView, coordinator: Coordinator) {
+    /// font, cursor style + blink, Option-as-Meta, transparency, and (only
+    /// when it changed) the scrollback size. Skips entirely when nothing
+    /// changed — crucially, a resize does NOT change the appearance, so we
+    /// don't re-set the font mid-resize (that runs resetFont/selectNone).
+    private func apply(_ appearance: TerminalRenderAppearance, to view: AinkradTerminalView, coordinator: Coordinator) {
         guard coordinator.appliedAppearance != appearance else { return }
         coordinator.appliedAppearance = appearance
 
@@ -115,7 +134,8 @@ struct TerminalContainerView: NSViewRepresentable {
             ?? NSFont.monospacedSystemFont(ofSize: CGFloat(size), weight: .regular)
     }
 
-    static func dismantleNSView(_ nsView: LocalProcessTerminalView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: AinkradTerminalView, coordinator: Coordinator) {
+        coordinator.teardown()
         let pid = nsView.process.shellPid
         nsView.terminate()
         PTYReaper.reapAfterTerminate(pid)
@@ -134,8 +154,50 @@ struct TerminalContainerView: NSViewRepresentable {
         /// when it actually changes.
         var appliedScrollback: Int?
 
+        private weak var terminalView: NSView?
+        private weak var scroller: NSScroller?
+        private var scrollMonitor: Any?
+        private var hideWork: DispatchWorkItem?
+
         init(session: TerminalSession) {
             self.session = session
+        }
+
+        /// Hides SwiftTerm's always-on scrollbar and reveals it only while the
+        /// pointer is scrolling over this terminal, hiding again shortly after.
+        @MainActor
+        func installScrollReveal(for view: NSView) {
+            terminalView = view
+            let scroller = view.subviews.compactMap { $0 as? NSScroller }.first
+            self.scroller = scroller
+            scroller?.scrollerStyle = .overlay
+            scroller?.isHidden = true
+
+            scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                self?.handleScroll(event)
+                return event
+            }
+        }
+
+        @MainActor
+        private func handleScroll(_ event: NSEvent) {
+            guard let view = terminalView, let scroller, event.window === view.window else { return }
+            let point = view.convert(event.locationInWindow, from: nil)
+            guard view.bounds.contains(point) else { return }
+
+            scroller.isHidden = false
+            hideWork?.cancel()
+            let work = DispatchWorkItem { [weak scroller] in scroller?.isHidden = true }
+            hideWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: work)
+        }
+
+        func teardown() {
+            hideWork?.cancel()
+            if let scrollMonitor {
+                NSEvent.removeMonitor(scrollMonitor)
+                self.scrollMonitor = nil
+            }
         }
 
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
