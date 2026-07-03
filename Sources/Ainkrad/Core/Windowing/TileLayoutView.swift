@@ -41,8 +41,13 @@ struct TileLayoutView: View {
 
     private var paneCanvas: some View {
         GeometryReader { proxy in
-            let collapseTo = workspace.viewMode == .focus ? tileLayout.focusedBlockID : nil
-            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: 8, collapseTo: collapseTo)
+            // Always compute the normal split geometry. Focus Mode is handled
+            // in the view (below) WITHOUT collapsing panes to zero size —
+            // zero-resizing a terminal corrupts/duplicates its output.
+            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: 8, collapseTo: nil)
+            let inFocus = workspace.viewMode == .focus && tileLayout.blocks.count > 1
+            let focusedID = tileLayout.focusedBlockID
+            let fullRect = CGRect(origin: .zero, size: proxy.size)
 
             ZStack(alignment: .topLeading) {
                 // One shared workspace backdrop behind every pane, so
@@ -57,12 +62,18 @@ struct TileLayoutView: View {
                 // One stable view per panel — identity is the Block id, so
                 // moves/splits/closes reposition instead of re-creating.
                 // `.position` (not `.offset`) so the layout/hit-test frame
-                // tracks where the pane is drawn — otherwise every pane's
-                // drop & tap region stays pinned at the top-leading corner
-                // and drag-to-rearrange targets the wrong pane.
+                // tracks where the pane is drawn.
+                //
+                // In Focus Mode: the focused pane fills the canvas; the others
+                // KEEP their split frame (so they don't resize — no corruption)
+                // and are simply hidden. Only the focused terminal resizes.
                 ForEach(tileLayout.blocks) { block in
-                    let frame = geometry.frames[block.id] ?? .zero
-                    let isVisible = frame.width >= 1 && frame.height >= 1
+                    let normalFrame = geometry.frames[block.id] ?? .zero
+                    let isFocusedPane = block.id == focusedID
+                    let frame = (inFocus && isFocusedPane) ? fullRect : normalFrame
+                    let isVisible = inFocus
+                        ? isFocusedPane
+                        : (normalFrame.width >= 1 && normalFrame.height >= 1)
                     BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace, paneSize: frame.size)
                         .frame(width: max(frame.width, 0), height: max(frame.height, 0))
                         .position(x: frame.midX, y: frame.midY)
@@ -70,17 +81,19 @@ struct TileLayoutView: View {
                         .allowsHitTesting(isVisible)
                 }
 
-                ForEach(geometry.seams) { seam in
-                    SeamView(placement: seam, tileLayout: tileLayout)
-                        .frame(width: seam.frame.width, height: seam.frame.height)
-                        .position(x: seam.frame.midX, y: seam.frame.midY)
+                if !inFocus {
+                    ForEach(geometry.seams) { seam in
+                        SeamView(placement: seam, tileLayout: tileLayout)
+                            .frame(width: seam.frame.width, height: seam.frame.height)
+                            .position(x: seam.frame.midX, y: seam.frame.midY)
+                    }
                 }
             }
             .coordinateSpace(name: "pane-canvas")
-            .animation(
-                .spring(response: 0.32, dampingFraction: 0.82),
-                value: structureSignature
-            )
+            // No pane-frame animation: an animated resize drives the terminal
+            // through many sizes faster than the shell can redraw, duplicating
+            // output. Layout changes (open/split/close/focus) snap in one step
+            // → one clean reflow per terminal.
         }
     }
 
@@ -107,16 +120,6 @@ struct TileLayoutView: View {
         }
     }
 
-    /// Frame changes animate only when the STRUCTURE changes (move, open,
-    /// close) — seam drags mutate fractions without touching this signature,
-    /// so resizing stays direct and un-animated. Focus Mode is deliberately
-    /// EXCLUDED: animating the collapse/expand would drive the terminal
-    /// through many intermediate sizes (and big height changes) in a fraction
-    /// of a second, re-triggering the resize output duplication. Focus Mode
-    /// therefore snaps in one step → one clean reflow.
-    private var structureSignature: String {
-        tileLayout.blocks.map { $0.id.uuidString }.joined(separator: ",")
-    }
 }
 
 /// Focus Mode's compact switcher: one chip per panel (not a tab bar), the
