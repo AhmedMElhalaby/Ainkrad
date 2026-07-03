@@ -31,16 +31,6 @@ struct AinkradApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
 
-                Button("New Tab") {
-                    let workspace = environment.workspaceManager.activeWorkspace
-                    if workspace.isMain {
-                        environment.workspaceManager.createWorkspace()
-                    } else {
-                        workspace.addTab()
-                    }
-                }
-                .keyboardShortcut("t", modifiers: .command)
-
                 Button("Workspaces…") {
                     environment.isLauncherPresented = false
                     environment.isWorkspaceOverviewPresented.toggle()

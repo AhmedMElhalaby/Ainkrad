@@ -67,9 +67,9 @@ final class LauncherStoreTests {
         store.selectApp(StubTerminalApp.self)
 
         #expect(workspaceManager.workspaces.count == 2)
-        #expect(main.activeTab.tileLayout.isEmpty)
+        #expect(main.tileLayout.isEmpty)
         #expect(!workspaceManager.activeWorkspace.isMain)
-        #expect(workspaceManager.activeWorkspace.activeTab.tileLayout.appIDs == ["terminal"])
+        #expect(workspaceManager.activeWorkspace.tileLayout.appIDs == ["terminal"])
     }
 
     @Test("selectApp on a non-main workspace splits into the current layout")
@@ -83,6 +83,6 @@ final class LauncherStoreTests {
 
         #expect(workspaceManager.workspaces.count == 2)
         #expect(workspaceManager.activeWorkspace.id == mission.id)
-        #expect(mission.activeTab.tileLayout.appIDs == ["terminal", "settings"])
+        #expect(mission.tileLayout.appIDs == ["terminal", "settings"])
     }
 }

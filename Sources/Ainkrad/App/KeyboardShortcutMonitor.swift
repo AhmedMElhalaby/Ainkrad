@@ -61,32 +61,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 return true
             }
 
-            guard event.modifierFlags.contains(.command) else { return false }
+            guard event.modifierFlags.contains(.command),
+                  let characters = event.charactersIgnoringModifiers else { return false }
             let isShifted = event.modifierFlags.contains(.shift)
-
-            // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
-            // only while no overlay owns the keyboard.
-            if !environment.isLauncherPresented && !environment.isWorkspaceOverviewPresented {
-                let direction: PaneDirection? = switch event.keyCode {
-                case 123: .left
-                case 124: .right
-                case 125: .down
-                case 126: .up
-                default: nil
-                }
-                if let direction {
-                    let layout = environment.workspaceManager.activeWorkspace.activeTab.tileLayout
-                    if isShifted {
-                        layout.resizeFocused(direction)
-                    } else {
-                        layout.focusNeighbor(direction)
-                        window?.makeFirstResponder(nil)
-                    }
-                    return true
-                }
-            }
-
-            guard let characters = event.charactersIgnoringModifiers else { return false }
 
             switch characters {
             case "k" where !isShifted:
@@ -104,40 +81,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 // keystrokes after the switch.
                 window?.makeFirstResponder(nil)
                 return true
-            case "t" where !isShifted:
-                // New tab (on the home island: a new workspace instead).
-                let workspace = environment.workspaceManager.activeWorkspace
-                if workspace.isMain {
-                    environment.workspaceManager.createWorkspace()
-                } else {
-                    workspace.addTab()
-                }
-                window?.makeFirstResponder(nil)
-                return true
             case "w" where !isShifted:
-                // Close the focused panel; with none, close the tab.
-                let workspace = environment.workspaceManager.activeWorkspace
-                let layout = workspace.activeTab.tileLayout
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
                 if let focusedBlockID = layout.focusedBlockID {
                     layout.close(focusedBlockID)
-                } else if workspace.tabs.count > 1 {
-                    workspace.closeTab(workspace.activeTab.id)
                 }
                 return true
-            case "d", "D":
-                // Split the focused panel: ⌘D right, ⌘⇧D down.
-                let layout = environment.workspaceManager.activeWorkspace.activeTab.tileLayout
-                layout.splitFocused(isShifted ? .bottom : .trailing)
-                return true
-            case "m" where !isShifted:
-                // Toggle Focus Mode / Split Mode for the active tab.
-                let tab = environment.workspaceManager.activeWorkspace.activeTab
-                tab.viewMode = tab.viewMode == .focus ? TabViewMode.split : TabViewMode.focus
-                environment.workspaceManager.persist()
+            case "f", "F":
+                guard isShifted else { return false }
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                if let focusedBlockID = layout.focusedBlockID {
+                    layout.toggleMagnify(focusedBlockID)
+                }
                 return true
             default:
                 if !isShifted, let number = Int(characters), (1...9).contains(number) {
-                    environment.workspaceManager.activeWorkspace.selectTab(at: number - 1)
+                    environment.workspaceManager.switchToWorkspace(at: number - 1)
                     window?.makeFirstResponder(nil)
                     return true
                 }

@@ -38,16 +38,6 @@ final class AppEnvironment {
             dockIconUpdater: AppKitDockIconUpdater()
         )
         let workspaceManager = WorkspaceManager()
-        // Restore the persisted workspace/tab/pane layout, then wire
-        // autosave: any structural change re-snapshots to the store.
-        if let saved = settingsStore.get(LayoutStateSnapshot.self, forKey: LayoutStateSnapshot.storeKey) {
-            workspaceManager.restore(from: saved)
-            Log.app.info("Restored workspace layout: \(saved.workspaces.count) workspace(s)")
-        }
-        workspaceManager.onStateChange = { [weak workspaceManager] in
-            guard let workspaceManager else { return }
-            settingsStore.set(workspaceManager.snapshot(), forKey: LayoutStateSnapshot.storeKey)
-        }
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered Built-in Apps")
         return AppEnvironment(
             settingsStore: settingsStore,

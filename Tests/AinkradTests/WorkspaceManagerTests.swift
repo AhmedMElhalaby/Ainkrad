@@ -101,12 +101,12 @@ struct WorkspaceManagerTests {
     func workspacesHaveIndependentLayouts() {
         let manager = WorkspaceManager()
         let first = manager.activeWorkspace
-        first.activeTab.tileLayout.openApp("terminal")
+        first.tileLayout.openApp("terminal")
 
         let second = manager.createWorkspace()
 
-        #expect(!first.activeTab.tileLayout.isEmpty)
-        #expect(second.activeTab.tileLayout.isEmpty)
+        #expect(!first.tileLayout.isEmpty)
+        #expect(second.tileLayout.isEmpty)
     }
 
     @Test("switchTo an existing workspace id makes it active")

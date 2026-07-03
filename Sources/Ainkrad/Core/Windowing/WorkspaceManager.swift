@@ -1,23 +1,17 @@
 import Foundation
 import Observation
 
-/// Multiple workspaces, each holding tabs of independent layout trees.
-/// The first workspace is the **main** one — the permanent home island.
-/// Switching: clickable HUD diamonds, the `⌥Tab` Workspace Overview, and
-/// `⌘⇧N` create; `⌘1`-`⌘9` switch TABS within the active workspace. The
-/// whole layout state persists through `SettingsStore` and restores at
-/// launch (running panel state is ephemeral by design).
+/// Multiple workspaces, each with its own independent tile layout. The
+/// first workspace is the **main** one — the permanent home island (see
+/// Workspace). Switching: `⌘1`-`⌘9` by position, `⌘⇧N` create, clickable
+/// HUD diamonds, and the `⌥Tab` Workspace Overview. Tile geometry is
+/// session-only and never persisted.
 @MainActor
 @Observable
 final class WorkspaceManager {
     private(set) var workspaces: [Workspace]
     private(set) var activeWorkspaceID: UUID
     private var createdCount = 1
-    /// Persistence hook, assigned at bootstrap. Bubbled into every
-    /// workspace/tab/layout so any structural change saves.
-    var onStateChange: (() -> Void)? {
-        didSet { workspaces.forEach { $0.onStructuralChange = onStateChange } }
-    }
 
     init() {
         let main = Workspace(name: "Main", isMain: true)
@@ -33,10 +27,8 @@ final class WorkspaceManager {
     func createWorkspace() -> Workspace {
         createdCount += 1
         let workspace = Workspace(name: "Workspace \(createdCount)")
-        workspace.onStructuralChange = onStateChange
         workspaces.append(workspace)
         activeWorkspaceID = workspace.id
-        onStateChange?()
         return workspace
     }
 
@@ -48,67 +40,20 @@ final class WorkspaceManager {
         if activeWorkspaceID == id {
             activeWorkspaceID = workspaces.first(where: { $0.isMain })!.id
         }
-        onStateChange?()
     }
 
     func moveWorkspace(fromOffsets source: IndexSet, toOffset destination: Int) {
         workspaces.move(fromOffsets: source, toOffset: destination)
-        onStateChange?()
     }
 
     func switchTo(_ id: UUID) {
         guard workspaces.contains(where: { $0.id == id }) else { return }
         activeWorkspaceID = id
-        onStateChange?()
     }
 
-    /// `index` is 0-based. (⌘1-⌘9 belong to TABS; workspaces switch via
-    /// the HUD diamonds and the ⌥Tab Overview.)
+    /// `index` is 0-based; `⌘1` maps to index 0, `⌘9` to index 8.
     func switchToWorkspace(at index: Int) {
         guard workspaces.indices.contains(index) else { return }
         activeWorkspaceID = workspaces[index].id
-        onStateChange?()
-    }
-
-    // MARK: - Persistence
-
-    /// Explicit save trigger for mutations that don't flow through the
-    /// structural-change hooks (e.g. renames).
-    func persist() {
-        onStateChange?()
-    }
-
-    func snapshot() -> LayoutStateSnapshot {
-        LayoutStateSnapshot(
-            workspaces: workspaces.map { $0.snapshot() },
-            activeWorkspaceIndex: workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) ?? 0
-        )
-    }
-
-    /// Rebuilds the whole state from a snapshot. The first main-flagged
-    /// workspace becomes the home island; a missing main is re-created.
-    func restore(from snapshot: LayoutStateSnapshot) {
-        guard !snapshot.workspaces.isEmpty else { return }
-
-        var restored: [Workspace] = []
-        for workspaceSnapshot in snapshot.workspaces {
-            let workspace = Workspace(
-                name: workspaceSnapshot.name,
-                isMain: workspaceSnapshot.isMain && !restored.contains(where: { $0.isMain })
-            )
-            workspace.onStructuralChange = onStateChange
-            workspace.restoreTabs(workspaceSnapshot.tabs, selectedIndex: workspaceSnapshot.selectedTabIndex)
-            restored.append(workspace)
-        }
-        if !restored.contains(where: { $0.isMain }) {
-            let main = Workspace(name: "Main", isMain: true)
-            main.onStructuralChange = onStateChange
-            restored.insert(main, at: 0)
-        }
-
-        workspaces = restored
-        createdCount = max(restored.count, 1)
-        let activeIndex = min(max(snapshot.activeWorkspaceIndex, 0), restored.count - 1)
-        activeWorkspaceID = restored[activeIndex].id
     }
 }

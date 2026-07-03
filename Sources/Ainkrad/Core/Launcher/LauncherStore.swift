@@ -23,12 +23,12 @@ final class LauncherStore {
 
     /// The main workspace is the home island and stays empty: summoning an
     /// app from it spawns a fresh workspace (and switches to it). On any
-    /// other workspace the app joins the active tab's layout.
+    /// other workspace the app splits into the current layout.
     func selectApp(_ app: BuiltInApp.Type) {
         if workspaceManager.activeWorkspace.isMain {
-            workspaceManager.createWorkspace().activeTab.tileLayout.openApp(app.id)
+            workspaceManager.createWorkspace().tileLayout.openApp(app.id)
         } else {
-            workspaceManager.activeWorkspace.activeTab.tileLayout.openApp(app.id)
+            workspaceManager.activeWorkspace.tileLayout.openApp(app.id)
         }
     }
 }
