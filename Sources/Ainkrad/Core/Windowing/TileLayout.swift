@@ -236,7 +236,7 @@ final class TileLayout {
     /// Grows the focused pane toward `direction` by `delta` (⌘⇧arrows):
     /// finds the nearest ancestor container along that axis where the
     /// focused subtree has a boundary on that side, and shifts it.
-    func resizeFocused(_ direction: PaneDirection, delta: Double = 0.04) {
+    func resizeFocused(_ direction: PaneDirection, delta: Double = 0.06) {
         guard let root, let focusedBlockID else { return }
         guard let path = Self.pathTo(focusedBlockID, in: root) else { return }
         let axis: PaneAxis = (direction == .left || direction == .right) ? .horizontal : .vertical

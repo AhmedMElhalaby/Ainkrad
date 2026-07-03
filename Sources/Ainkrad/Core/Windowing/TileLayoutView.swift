@@ -206,7 +206,9 @@ private struct SeamView: View {
             }
         }
         .shadow(color: isLit ? tokens.accentSecondary.opacity(0.7) : .clear, radius: 5)
-        .contentShape(Rectangle().inset(by: -2))
+        // Grab target is wider than the 1px seam so the boundary is easy to
+        // catch with the mouse without hunting for a hairline.
+        .contentShape(Rectangle().inset(by: -6))
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .named("pane-canvas"))
                 .onChanged { value in

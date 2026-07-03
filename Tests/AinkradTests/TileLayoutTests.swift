@@ -352,7 +352,8 @@ struct TileLayoutTests {
             Issue.record("expected a root split")
             return
         }
-        #expect(abs(fractions[0] - 0.54) < 0.0001)
+        // One keypress moves the boundary by the default step (6%).
+        #expect(abs(fractions[0] - 0.56) < 0.0001)
     }
 
     // MARK: - Pixel geometry (flat rendering)
