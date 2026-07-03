@@ -28,4 +28,27 @@ final class GlobalSettingsTests {
 
         #expect(loaded?.theme == .cyberPurple)
     }
+
+    @Test("appIcon defaults to Auto")
+    func appIconDefaultsToAuto() {
+        #expect(GlobalSettings().appIcon == .auto)
+    }
+
+    @Test("an explicit appIcon choice round-trips through SettingsStore")
+    func appIconRoundTrips() {
+        let store = UserDefaultsSettingsStore(defaults: defaults)
+        var settings = GlobalSettings()
+        settings.appIcon = .purple
+        store.set(settings, forKey: "global-settings")
+
+        #expect(store.get(GlobalSettings.self, forKey: "global-settings")?.appIcon == .purple)
+    }
+
+    @Test("a legacy payload without appIcon decodes to Auto")
+    func legacyPayloadDecodesToAuto() throws {
+        let legacy = Data(#"{"theme":"cyberPurple"}"#.utf8)
+        let decoded = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
+        #expect(decoded.theme == .cyberPurple)
+        #expect(decoded.appIcon == .auto)
+    }
 }

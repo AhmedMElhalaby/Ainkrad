@@ -12,6 +12,7 @@ final class AppEnvironment {
     let launcherStore: LauncherStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
+    var isSettingsPresented = false
 
     init(
         settingsStore: SettingsStore,
@@ -32,16 +33,23 @@ final class AppEnvironment {
     /// isolated suite.
     static func bootstrap(defaults: UserDefaults = .standard) -> AppEnvironment {
         let settingsStore = UserDefaultsSettingsStore(defaults: defaults)
-        let registry = BuiltInAppRegistry(apps: [TerminalApp.self, SettingsApp.self], settingsStore: settingsStore)
+        // Settings is a summonable overlay, not a tiled Block, so it is not a
+        // registered app — Terminal is the only Built-in App in the registry.
+        let registry = BuiltInAppRegistry(apps: [TerminalApp.self], settingsStore: settingsStore)
         let themeManager = ThemeManager(
             settingsStore: settingsStore,
             dockIconUpdater: AppKitDockIconUpdater()
         )
+        // Apply the persisted Dock-icon preference once at launch.
+        themeManager.applyResolvedIcon()
         let workspaceManager = WorkspaceManager()
         // Restore the persisted workspace/pane layout, then wire autosave:
         // any structural change re-snapshots to the store.
         if let saved = settingsStore.get(LayoutStateSnapshot.self, forKey: LayoutStateSnapshot.storeKey) {
             workspaceManager.restore(from: saved)
+            // Drop panes for apps that no longer exist as tiled Blocks (e.g. a
+            // Settings pane persisted before Settings became an overlay).
+            workspaceManager.pruneApps(keeping: Set(registry.allApps.map { $0.id }))
             Log.app.info("Restored workspace layout: \(saved.workspaces.count) workspace(s)")
         }
         workspaceManager.onStateChange = { [weak workspaceManager] in

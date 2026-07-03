@@ -88,6 +88,17 @@ final class WorkspaceManager {
         onStateChange?()
     }
 
+    /// Drops any open pane whose app id is not in `validIDs` — used at launch
+    /// to clean a restored layout of apps that no longer exist (e.g. Settings,
+    /// once it became an overlay instead of a tiled Block).
+    func pruneApps(keeping validIDs: Set<String>) {
+        for workspace in workspaces {
+            for block in workspace.tileLayout.blocks where !validIDs.contains(block.appID) {
+                workspace.tileLayout.close(block.id)
+            }
+        }
+    }
+
     // MARK: - Persistence
 
     /// Explicit save trigger for mutations that don't flow through the

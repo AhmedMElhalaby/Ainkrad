@@ -4,9 +4,9 @@ import Foundation
 
 @MainActor
 private final class SpyDockIconUpdater: DockIconUpdating {
-    private(set) var updatedThemes: [Theme] = []
-    func updateDockIcon(for theme: Theme) {
-        updatedThemes.append(theme)
+    private(set) var updatedIcons: [AppIcon] = []
+    func updateDockIcon(_ icon: AppIcon) {
+        updatedIcons.append(icon)
     }
 }
 
@@ -54,12 +54,45 @@ final class ThemeManagerTests {
         #expect(reloaded.currentTheme == .cyberPurple)
     }
 
-    @Test("setTheme triggers the Dock icon update side effect with the new theme")
+    @Test("with Auto icon, setTheme swaps the Dock icon to match the new theme")
     @MainActor
     func setThemeTriggersDockIconUpdate() {
         let spy = SpyDockIconUpdater()
         let manager = makeManager(dockIconUpdater: spy)
         manager.setTheme(.cyberPurple)
-        #expect(spy.updatedThemes == [.cyberPurple])
+        #expect(spy.updatedIcons == [.purple])
+    }
+
+    @Test("appIcon defaults to Auto with no prior saved settings")
+    @MainActor
+    func appIconDefaultsToAuto() {
+        #expect(makeManager().appIcon == .auto)
+    }
+
+    @Test("setAppIcon updates state, persists, and swaps the Dock icon")
+    @MainActor
+    func setAppIconAppliesAndPersists() {
+        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let spy = SpyDockIconUpdater()
+        let manager = ThemeManager(settingsStore: store, dockIconUpdater: spy)
+
+        manager.setAppIcon(.purple)
+
+        #expect(manager.appIcon == .purple)
+        #expect(spy.updatedIcons == [.purple])
+        let reloaded = ThemeManager(settingsStore: store, dockIconUpdater: SpyDockIconUpdater())
+        #expect(reloaded.appIcon == .purple)
+    }
+
+    @Test("an explicit app icon is NOT overridden by a later theme change")
+    @MainActor
+    func explicitIconSurvivesThemeChange() {
+        let spy = SpyDockIconUpdater()
+        let manager = makeManager(dockIconUpdater: spy)
+
+        manager.setAppIcon(.purple)   // -> [.purple]
+        manager.setTheme(.neonBlue)   // Auto would swap to .blue; explicit must not
+
+        #expect(spy.updatedIcons == [.purple])
     }
 }

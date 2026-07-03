@@ -78,6 +78,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                event.modifierFlags.contains(.option),
                !event.modifierFlags.contains(.command) {
                 environment.isLauncherPresented = false
+                environment.isSettingsPresented = false
                 environment.isWorkspaceOverviewPresented.toggle()
                 return true
             }
@@ -90,7 +91,8 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // the quick companion to the ⌘1-9 direct jumps.
             if isOption,
                !environment.isLauncherPresented,
-               !environment.isWorkspaceOverviewPresented {
+               !environment.isWorkspaceOverviewPresented,
+               !environment.isSettingsPresented {
                 switch event.keyCode {
                 case 123:
                     environment.workspaceManager.switchToPreviousWorkspace()
@@ -108,7 +110,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
             // only while no overlay owns the keyboard (and never when ⌥ is
             // held, which is the workspace-cycle chord above).
-            if !isOption, !environment.isLauncherPresented && !environment.isWorkspaceOverviewPresented {
+            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented {
                 let direction: PaneDirection? = switch event.keyCode {
                 case 123: .left
                 case 124: .right
@@ -133,12 +135,20 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             switch characters {
             case "k" where !isShifted:
                 environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
                 if environment.isLauncherPresented {
                     environment.launcherStore.query = ""
                     environment.isLauncherPresented = false
                 } else {
                     environment.isLauncherPresented = true
                 }
+                return true
+            case "," where !isShifted:
+                // ⌘, summons/dismisses the Settings overlay (macOS convention).
+                environment.isLauncherPresented = false
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented.toggle()
+                window?.makeFirstResponder(nil)
                 return true
             case "n" where isShifted:
                 environment.workspaceManager.createWorkspace()

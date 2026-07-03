@@ -7,7 +7,7 @@ struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
     private var isOverlayPresented: Bool {
-        environment.isLauncherPresented || environment.isWorkspaceOverviewPresented
+        environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
     }
 
     var body: some View {
@@ -48,6 +48,13 @@ struct RootView: View {
             if environment.isWorkspaceOverviewPresented {
                 WorkspaceOverviewView {
                     environment.isWorkspaceOverviewPresented = false
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
+
+            if environment.isSettingsPresented {
+                SettingsOverlayView {
+                    environment.isSettingsPresented = false
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }

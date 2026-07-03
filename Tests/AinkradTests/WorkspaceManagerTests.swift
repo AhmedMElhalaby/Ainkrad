@@ -196,6 +196,30 @@ struct WorkspaceManagerTests {
         #expect(manager.activeWorkspace.id == main.id)
     }
 
+    @Test("pruneApps drops panes whose app is no longer registered")
+    func pruneRemovesUnknownApps() {
+        let manager = WorkspaceManager()
+        let ws = manager.createWorkspace()
+        _ = ws.tileLayout.openApp("terminal")
+        _ = ws.tileLayout.openApp("settings")   // no longer a registered app
+        _ = ws.tileLayout.openApp("terminal")
+
+        manager.pruneApps(keeping: ["terminal"])
+
+        #expect(ws.tileLayout.appIDs == ["terminal", "terminal"])
+    }
+
+    @Test("pruneApps empties a workspace whose apps are all unregistered")
+    func pruneEmptiesFullyUnknownWorkspace() {
+        let manager = WorkspaceManager()
+        let ws = manager.createWorkspace()
+        _ = ws.tileLayout.openApp("settings")
+
+        manager.pruneApps(keeping: ["terminal"])
+
+        #expect(ws.tileLayout.isEmpty)
+    }
+
     @Test("cycling is a no-op with only one workspace")
     func cyclingWithSingleWorkspaceIsNoOp() {
         let manager = WorkspaceManager()

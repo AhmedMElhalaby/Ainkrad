@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 private final class SpyDockIconUpdater: DockIconUpdating {
-    func updateDockIcon(for theme: Theme) {}
+    func updateDockIcon(_ icon: AppIcon) {}
 }
 
 @Suite("AppEnvironment")
@@ -43,8 +43,11 @@ final class AppEnvironmentTests {
     func bootstrapAssemblesRealDependencies() {
         let environment = AppEnvironment.bootstrap(defaults: defaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        #expect(environment.registry.allApps.map { $0.id } == ["terminal", "settings"])
+        // Settings left the registry — it is now a summonable overlay, not a
+        // tiled Block, so Terminal is the only registered app.
+        #expect(environment.registry.allApps.map { $0.id } == ["terminal"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
+        #expect(environment.isSettingsPresented == false)
     }
 }

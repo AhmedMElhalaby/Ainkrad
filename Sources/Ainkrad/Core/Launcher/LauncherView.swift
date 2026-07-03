@@ -49,8 +49,16 @@ struct LauncherView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var selectedIndex = 0
 
+    /// Sentinel id for the Settings entry — Settings is a summonable overlay,
+    /// not a registered app, so it rides in the results as a system action.
+    private static let settingsRowID = "settings"
+
     private var appRows: [AppRow] {
-        store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
+        var rows = store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
+        if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Settings") {
+            rows.append(AppRow(id: Self.settingsRowID, displayName: "Settings", icon: "gearshape"))
+        }
+        return rows
     }
 
     var body: some View {
@@ -226,8 +234,16 @@ struct LauncherView: View {
     }
 
     private func select(_ results: [AppRow]) {
-        guard results.indices.contains(selectedIndex),
-              let app = store.appResults.first(where: { $0.id == results[selectedIndex].id }) else { return }
+        guard results.indices.contains(selectedIndex) else { return }
+        let row = results[selectedIndex]
+
+        if row.id == Self.settingsRowID {
+            environment.isSettingsPresented = true
+            dismiss()
+            return
+        }
+
+        guard let app = store.appResults.first(where: { $0.id == row.id }) else { return }
         store.selectApp(app)
         dismiss()
     }
