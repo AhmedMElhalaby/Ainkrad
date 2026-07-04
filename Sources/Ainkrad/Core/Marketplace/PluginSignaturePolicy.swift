@@ -6,6 +6,8 @@ struct PluginRejection: Error {
     let reason: String
 }
 
+extension PluginRejection: Equatable {}
+
 /// Validates a bundle's code signature before the host loads its code. The
 /// returned failure's reason is the text recorded for a skipped bundle.
 protocol PluginSignaturePolicy {
