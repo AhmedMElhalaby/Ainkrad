@@ -20,6 +20,7 @@ struct TerminalSettings: PersistableDocument {
     var cursorColor: String?
     var selectionColor: String?
     var backgroundOpacity: Double = 1.0
+    var sendMouseEventsToApps: Bool = true
 
     init(
         defaultShell: String? = nil,
@@ -33,7 +34,8 @@ struct TerminalSettings: PersistableDocument {
         scrollbackLines: Int = 1000,
         cursorColor: String? = nil,
         selectionColor: String? = nil,
-        backgroundOpacity: Double = 1.0
+        backgroundOpacity: Double = 1.0,
+        sendMouseEventsToApps: Bool = true
     ) {
         self.defaultShell = defaultShell
         self.defaultWorkingDirectory = defaultWorkingDirectory
@@ -47,6 +49,7 @@ struct TerminalSettings: PersistableDocument {
         self.cursorColor = cursorColor
         self.selectionColor = selectionColor
         self.backgroundOpacity = backgroundOpacity
+        self.sendMouseEventsToApps = sendMouseEventsToApps
     }
 
     init(from decoder: Decoder) throws {
@@ -63,5 +66,6 @@ struct TerminalSettings: PersistableDocument {
         cursorColor = try container.decodeIfPresent(String.self, forKey: .cursorColor)
         selectionColor = try container.decodeIfPresent(String.self, forKey: .selectionColor)
         backgroundOpacity = try container.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? 1.0
+        sendMouseEventsToApps = try container.decodeIfPresent(Bool.self, forKey: .sendMouseEventsToApps) ?? true
     }
 }
