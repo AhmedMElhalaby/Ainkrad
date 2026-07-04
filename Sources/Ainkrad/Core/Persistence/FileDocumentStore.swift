@@ -54,17 +54,28 @@ final class FileDocumentStore: PersistenceStore {
             quarantine(url)
             return nil
         }
-        // Task 4 replaces the version check below with the migrator chain.
-        guard raw.schemaVersion == T.currentSchemaVersion else {
+        var payload = raw.payload
+        var version = raw.schemaVersion
+        while version < T.currentSchemaVersion {
+            guard let migrator = T.migrators.first(where: { $0.fromVersion == version }) else {
+                Log.persistence.error("No migrator for \(T.documentID, privacy: .public) v\(version)")
+                quarantine(url)
+                return nil
+            }
+            payload = migrator.migrate(payload)
+            version += 1
+        }
+        guard version == T.currentSchemaVersion else {  // stored newer than this build
             quarantine(url)
             return nil
         }
-        guard let payloadData = try? PersistenceCoding.encoder.encode(raw.payload),
+        guard let payloadData = try? PersistenceCoding.encoder.encode(payload),
               let value = try? PersistenceCoding.decoder.decode(T.self, from: payloadData) else {
             quarantine(url)
             return nil
         }
         cache[T.documentID] = value
+        if version != raw.schemaVersion { save(value) }  // persist the upgrade
         return value
     }
 
