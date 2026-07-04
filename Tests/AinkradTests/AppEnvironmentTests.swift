@@ -40,10 +40,17 @@ final class AppEnvironmentTests {
         #expect(environment.terminalSettingsStore === terminalSettingsStore)
     }
 
-    @Test("bootstrap() assembles a working environment backed by real UserDefaults, Launcher dismissed")
+    @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")
     @MainActor
     func bootstrapAssemblesRealDependencies() {
-        let environment = AppEnvironment.bootstrap(rootURL: root)
+        // Isolate the legacy-import source too: bootstrap runs
+        // LegacyUserDefaultsMigration against `defaults`, so a shared
+        // `.standard` would import stray real `com.ainkrad.app` state and
+        // make these assertions non-hermetic on any machine/CI runner.
+        let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
+        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
+        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
+        let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
         // Settings left the registry — it is now a summonable overlay, not a
         // tiled Block, so Terminal is the only registered app.
