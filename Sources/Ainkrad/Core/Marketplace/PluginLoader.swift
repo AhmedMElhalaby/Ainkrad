@@ -14,6 +14,22 @@ final class PluginLoader {
     private let minSupportedAPIVersion: Int
     private let makeHostServices: (String) -> HostServices
 
+    /// Conservative charset for `AinkradAppID`: it is later interpolated into a
+    /// filesystem path segment (see `HostServicesImpl`), so it must not be able
+    /// to contain path separators or traversal sequences.
+    private static let appIDAllowed = CharacterSet(charactersIn:
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+
+    /// `AinkradAppID` comes straight from a plugin bundle's Info.plist — an
+    /// attacker-controlled input at the loader trust boundary — and is used to
+    /// build the app's on-disk document directory. A value like `"../../evil"`
+    /// would otherwise escape the sandboxed PluginData directory, so it must be
+    /// validated here, before any path is derived from it.
+    private func isValidAppID(_ id: String) -> Bool {
+        guard !id.isEmpty, id != ".", id != ".." else { return false }
+        return id.unicodeScalars.allSatisfy { Self.appIDAllowed.contains($0) }
+    }
+
     init(signaturePolicy: PluginSignaturePolicy,
          minSupportedAPIVersion: Int = 1,
          makeHostServices: @escaping (String) -> HostServices) {
@@ -49,6 +65,10 @@ final class PluginLoader {
         switch PluginBundleMetadata.parse(infoDictionary: info) {
         case .success(let m): metadata = m
         case .failure(let e): return .failure(PluginRejection(reason: "metadata: \(e)"))
+        }
+
+        guard isValidAppID(metadata.appID) else {
+            return .failure(PluginRejection(reason: "invalid app id"))
         }
 
         guard AinkradAppKit.isCompatible(bundleAPIVersion: metadata.apiVersion,

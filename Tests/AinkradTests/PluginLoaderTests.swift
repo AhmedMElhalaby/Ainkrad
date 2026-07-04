@@ -91,6 +91,20 @@ struct PluginLoaderTests {
         #expect(result.failures.isEmpty)
     }
 
+    @Test("a bundle with a path-traversal app id is skipped before load")
+    func rejectsPathTraversalAppID() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var info = validInfo
+        info[PluginInfoKey.appID] = "../../escape"
+        try writeBundle(in: dir, name: "Escape", info: info)
+
+        let result = loader().loadAll(from: [dir])
+        #expect(result.apps.isEmpty)
+        #expect(result.failures.count == 1)
+        #expect(result.failures[0].reason.contains("invalid app id"))
+    }
+
     @Test("a valid-metadata bundle is skipped before load when the signature policy rejects it")
     func rejectsOnSignaturePolicy() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
