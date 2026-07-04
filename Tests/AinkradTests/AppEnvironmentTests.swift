@@ -7,6 +7,10 @@ private final class SpyDockIconUpdater: DockIconUpdating {
     func updateDockIcon(_ icon: AppIcon) {}
 }
 
+private struct NoOpCatalogSource: CatalogSource {
+    func fetchCatalog() async throws -> [CatalogEntry] { [] }
+}
+
 @Suite("AppEnvironment")
 final class AppEnvironmentTests {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("ainkrad-tests-\(UUID().uuidString)")
@@ -23,6 +27,14 @@ final class AppEnvironmentTests {
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
         let terminalSettingsStore = TerminalSettingsStore(persistence: persistence)
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
+        let catalogService = CatalogService(
+            source: NoOpCatalogSource(), persistence: persistence)
+        let installer = PluginInstaller(
+            http: StubHTTPClient(responses: [:]), unzipper: DittoUnzipper(),
+            pluginsDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugins"),
+            pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
+            persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
+        let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -32,7 +44,8 @@ final class AppEnvironmentTests {
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
             terminalSettingsStore: terminalSettingsStore,
-            connectionStore: connectionStore
+            connectionStore: connectionStore,
+            marketplace: marketplace
         )
 
         #expect(environment.registry === registry)
@@ -41,6 +54,7 @@ final class AppEnvironmentTests {
         #expect(environment.launcherStore === launcherStore)
         #expect(environment.terminalSettingsStore === terminalSettingsStore)
         #expect(environment.connectionStore === connectionStore)
+        #expect(environment.marketplace === marketplace)
     }
 
     @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")

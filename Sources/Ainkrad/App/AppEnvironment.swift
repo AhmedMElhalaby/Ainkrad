@@ -13,6 +13,7 @@ final class AppEnvironment {
     let launcherStore: LauncherStore
     let terminalSettingsStore: TerminalSettingsStore
     let connectionStore: ConnectionStore
+    let marketplace: MarketplaceService
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -25,7 +26,8 @@ final class AppEnvironment {
         workspaceManager: WorkspaceManager,
         launcherStore: LauncherStore,
         terminalSettingsStore: TerminalSettingsStore,
-        connectionStore: ConnectionStore
+        connectionStore: ConnectionStore,
+        marketplace: MarketplaceService
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -35,6 +37,7 @@ final class AppEnvironment {
         self.launcherStore = launcherStore
         self.terminalSettingsStore = terminalSettingsStore
         self.connectionStore = connectionStore
+        self.marketplace = marketplace
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -56,18 +59,9 @@ final class AppEnvironment {
 
         let workspaceManager = WorkspaceManager()
 
-        let environment = AppEnvironment(
-            persistence: persistence,
-            secrets: secrets,
-            registry: registry,
-            themeManager: themeManager,
-            workspaceManager: workspaceManager,
-            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
-            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
-            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets)
-        )
-
-        // Built-in apps' chrome fill captures the environment, so install after it exists.
+        // Plugin loading/marketplace plumbing needs to exist before
+        // `AppEnvironment` is constructed, since `marketplace` is one of its
+        // stored dependencies.
         let documentsRoot = rootURL ?? FileDocumentStore.defaultDocumentsURL()
         let pluginDirs = [
             documentsRoot.appendingPathComponent("Plugins", isDirectory: true),
@@ -78,6 +72,32 @@ final class AppEnvironment {
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager)
         }
+
+        let firstPartyRepos = ["AhmedMElhalaby/AinkradTerminal"]   // bundled first-party repo list (grows as apps ship)
+        let catalogService = CatalogService(
+            source: GitHubReleasesCatalogSource(repositories: firstPartyRepos, http: URLSessionHTTPClient()),
+            persistence: persistence)
+        let installer = PluginInstaller(
+            http: URLSessionHTTPClient(), unzipper: DittoUnzipper(),
+            pluginsDir: documentsRoot.appendingPathComponent("Plugins", isDirectory: true),
+            pluginDataDir: pluginDataRoot,
+            persistence: persistence, registry: registry,
+            loadBundle: { loader.loadBundle(at: $0) })
+        let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
+
+        let environment = AppEnvironment(
+            persistence: persistence,
+            secrets: secrets,
+            registry: registry,
+            themeManager: themeManager,
+            workspaceManager: workspaceManager,
+            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
+            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
+            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
+            marketplace: marketplace
+        )
+
+        // Built-in apps' chrome fill captures the environment, so install after it exists.
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
             builtIn: [RegisteredApp.builtIn(TerminalApp.self, environment: environment)],
