@@ -8,6 +8,7 @@ xcuserdata/
 .claude/
 .mcp.json
 skill-observations/
+docs/superpowers/
 
 # Release build output
 dist/
