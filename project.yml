@@ -20,10 +20,13 @@ packages:
   #  - setFrameSize: off-live resizes are debounced (coalesce animated frame
   #    changes to one SIGWINCH); `applyResizeImmediately` opts a single clean
   #    snap (the Focus-Mode pane) out of the debounce; deferred resizes repaint.
-  #  - Package.swift trimmed to the library product for stable resolution.
+  #  - Mouse reporting: explicit release; SGR M/m correct; hover no-button
+  #    motion; wheel→app buttons 64/65; X10 press-only.
+  #  - Package.swift trimmed to the library product for stable resolution;
+  #    restored dependency-free SwiftTermTests target.
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: 8685618957cc9e565f4a561abb5a151bbe7aabc2
+    revision: 9de8538a8fcb832e896de03f1eaaea95234303e2
 
 targets:
   Ainkrad:

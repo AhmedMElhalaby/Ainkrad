@@ -72,6 +72,27 @@ final class TerminalSettingsTests {
         #expect(decoded.colorSchemeID == TerminalColorScheme.matchThemeID)
         #expect(decoded.fontFamily == nil)
     }
+
+    @Test("sendMouseEventsToApps defaults to true")
+    func mouseForwardingDefaultsTrue() {
+        #expect(TerminalSettings().sendMouseEventsToApps == true)
+    }
+
+    @Test("a legacy payload without sendMouseEventsToApps decodes to true")
+    func mouseForwardingLegacyDefaultsTrue() throws {
+        let legacy = Data(#"{"defaultShell":"/bin/zsh"}"#.utf8)
+        let decoded = try JSONDecoder().decode(TerminalSettings.self, from: legacy)
+        #expect(decoded.sendMouseEventsToApps == true)
+    }
+
+    @Test("sendMouseEventsToApps round-trips through the persistence store")
+    func mouseForwardingRoundTrips() {
+        let store = InMemoryPersistenceStore()
+        var settings = TerminalSettings()
+        settings.sendMouseEventsToApps = false
+        store.save(settings)
+        #expect(store.load(TerminalSettings.self)?.sendMouseEventsToApps == false)
+    }
 }
 
 @Suite("Terminal appearance resolution")
@@ -154,5 +175,13 @@ struct TerminalAppearanceResolverTests {
 
         settings.selectionColor = "00FF00"
         #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).selection == "00FF00")
+    }
+
+    @Test("sendMouseEventsToApps passes through to the resolved appearance")
+    func mouseForwardingResolves() {
+        var on = TerminalSettings(); on.sendMouseEventsToApps = true
+        #expect(TerminalAppearanceResolver.resolve(settings: on, theme: .neonBlue).sendMouseEventsToApps == true)
+        var off = TerminalSettings(); off.sendMouseEventsToApps = false
+        #expect(TerminalAppearanceResolver.resolve(settings: off, theme: .neonBlue).sendMouseEventsToApps == false)
     }
 }
