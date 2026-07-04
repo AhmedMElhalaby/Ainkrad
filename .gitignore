@@ -8,3 +8,6 @@ xcuserdata/
 .claude/
 .mcp.json
 skill-observations/
+
+# Release build output
+dist/

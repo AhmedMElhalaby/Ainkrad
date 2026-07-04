@@ -1,0 +1,73 @@
+name: Release
+
+# Builds, signs, notarizes, and publishes a release when a v* tag is pushed.
+#
+# DORMANT until: (1) Actions is enabled/billed for this repo, and (2) the
+# secrets below are set (Settings → Secrets and variables → Actions).
+#
+# TOOLCHAIN CAVEAT: this project currently needs the macOS 27 beta SDK. GitHub
+# hosted runners do NOT have Xcode 27 beta yet, so this will fail on hosted
+# runners until that Xcode ships (or the project's deployment SDK is lowered).
+# Until then, release locally with `scripts/release.sh --publish`, or point
+# `runs-on` at a self-hosted runner that has Xcode-beta installed.
+#
+# Required secrets:
+#   MACOS_CERT_P12_BASE64  base64 of your Developer ID Application .p12
+#                            (`base64 -i cert.p12 | pbcopy`)
+#   MACOS_CERT_PASSWORD    password you set when exporting the .p12
+#   KEYCHAIN_PASSWORD      any throwaway password for the temp CI keychain
+#   SIGN_IDENTITY          "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID               Apple ID email for notarization
+#   APPLE_TEAM_ID          10-char Team ID
+#   APPLE_APP_PASSWORD     app-specific password (appleid.apple.com)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # create releases + upload assets
+
+jobs:
+  release:
+    runs-on: macos-14   # switch to a self-hosted runner if Xcode-beta is required
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Build, sign, notarize, publish
+        env:
+          DEVELOPER_DIR: ""   # let xcode-select choice apply
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          unset DEVELOPER_DIR
+          scripts/release.sh --publish
