@@ -101,4 +101,41 @@ final class PluginInstaller {
         if case .success(let app) = loadBundle(dest) { registry.register(app) }
         else { Log.marketplace.error("Installed \(entry.appID, privacy: .public) but live-load failed; effective next launch") }
     }
+
+    /// Installs only if `entry.version` is newer than the installed version.
+    func update(_ entry: CatalogEntry) async throws {
+        let doc = persistence.load(InstalledPluginsDocument.self) ?? InstalledPluginsDocument()
+        if let current = doc.installed[entry.appID], !PluginVersion.isNewer(entry.version, than: current.version) {
+            throw MarketplaceError.notNewer
+        }
+        try await install(entry)
+    }
+
+    /// Removes the installed bundle, its scoped data, and its installed-state
+    /// entry, and deregisters it. The already-loaded dylib is not unloaded
+    /// (dyld limitation) — the app disappears from the list; its code lingers
+    /// until the next launch.
+    func uninstall(appID: String) throws {
+        var doc = persistence.load(InstalledPluginsDocument.self) ?? InstalledPluginsDocument()
+        guard doc.installed[appID] != nil else { throw MarketplaceError.notInstalled(appID) }
+        try? FileManager.default.removeItem(at: pluginsDir.appendingPathComponent("\(appID).bundle"))
+        try? FileManager.default.removeItem(at: pluginDataDir.appendingPathComponent(appID))
+        doc.installed[appID] = nil
+        persistence.save(doc)
+        registry.deregister(id: appID)
+    }
+}
+
+/// Total, numeric dot-segment version comparison ("1.2" == "1.2.0"; missing
+/// segments are 0). Non-numeric segments compare as 0.
+enum PluginVersion {
+    static func isNewer(_ lhs: String, than rhs: String) -> Bool {
+        let a = lhs.split(separator: ".").map { Int($0) ?? 0 }
+        let b = rhs.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(a.count, b.count) {
+            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
+            if x != y { return x > y }
+        }
+        return false
+    }
 }
