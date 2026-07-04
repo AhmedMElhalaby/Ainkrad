@@ -31,6 +31,24 @@ final class BuiltInAppRegistry {
         registeredApps = order.compactMap { byID[$0] }
     }
 
+    /// Adds a freshly-installed plugin to the live app list (or replaces the
+    /// existing plugin with the same id). Refuses to shadow a built-in id.
+    func register(_ app: RegisteredApp) {
+        if let existing = registeredApps.first(where: { $0.id == app.id }), existing.source == .builtIn {
+            Log.registry.error("register: \(app.id, privacy: .public) is a built-in — plugin ignored")
+            return
+        }
+        registeredApps.removeAll { $0.id == app.id }
+        registeredApps.append(app)
+    }
+
+    /// Removes a plugin from the live app list. Built-in ids are ignored.
+    /// (An already-loaded dylib cannot be unloaded; this only hides it.)
+    func deregister(id: String) {
+        guard let app = registeredApps.first(where: { $0.id == id }), app.source != .builtIn else { return }
+        registeredApps.removeAll { $0.id == id }
+    }
+
     var allApps: [RegisteredApp] { registeredApps }
 
     var enabledApps: [RegisteredApp] { registeredApps.filter { isEnabled($0.id) } }
