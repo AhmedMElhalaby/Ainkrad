@@ -1,20 +1,21 @@
 import Foundation
 
-/// Lets a plain `String` stand in as an `Error` so validation failures can be
-/// carried as `Result<_, String>` — the reason text is already the payload
-/// callers want (recorded verbatim in `PluginLoadFailure.reason`).
-extension String: @retroactive Error {}
+/// Dedicated error type for signature-policy failures — carries the reason
+/// text that gets recorded verbatim in `PluginLoadFailure.reason`.
+struct PluginRejection: Error {
+    let reason: String
+}
 
 /// Validates a bundle's code signature before the host loads its code. The
-/// returned failure string is the reason recorded for a skipped bundle.
+/// returned failure's reason is the text recorded for a skipped bundle.
 protocol PluginSignaturePolicy {
-    func validate(bundleURL: URL) -> Result<Void, String>
+    func validate(bundleURL: URL) -> Result<Void, PluginRejection>
 }
 
 /// The default for un-enrolled development: accept any (incl. ad-hoc) signature,
 /// logging what was accepted. NOT for production once Developer-ID lands.
 struct DevModeSignaturePolicy: PluginSignaturePolicy {
-    func validate(bundleURL: URL) -> Result<Void, String> {
+    func validate(bundleURL: URL) -> Result<Void, PluginRejection> {
         Log.registry.info("Dev-mode signature policy: accepting \(bundleURL.lastPathComponent, privacy: .public)")
         return .success(())
     }
@@ -24,7 +25,7 @@ struct DevModeSignaturePolicy: PluginSignaturePolicy {
 /// `SecStaticCodeCreateWithPath` + a Developer-ID requirement). Not wired as
 /// the default until Apple Developer-ID enrollment is complete.
 struct DeveloperIDSignaturePolicy: PluginSignaturePolicy {
-    func validate(bundleURL: URL) -> Result<Void, String> {
-        .failure("Developer-ID verification not yet implemented (AIN-135)")
+    func validate(bundleURL: URL) -> Result<Void, PluginRejection> {
+        .failure(PluginRejection(reason: "Developer-ID verification not yet implemented (AIN-135)"))
     }
 }

@@ -23,8 +23,8 @@ struct PluginLoaderTests {
         try plist.write(to: bundle.appendingPathComponent("Info.plist"))
     }
 
-    private func loader() -> PluginLoader {
-        PluginLoader(signaturePolicy: DevModeSignaturePolicy()) { appID in
+    private func loader(signaturePolicy: PluginSignaturePolicy = DevModeSignaturePolicy()) -> PluginLoader {
+        PluginLoader(signaturePolicy: signaturePolicy) { appID in
             HostServicesImpl(
                 appID: appID,
                 dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString),
@@ -89,5 +89,17 @@ struct PluginLoaderTests {
         let result = loader().loadAll(from: [missing])
         #expect(result.apps.isEmpty)
         #expect(result.failures.isEmpty)
+    }
+
+    @Test("a valid-metadata bundle is skipped before load when the signature policy rejects it")
+    func rejectsOnSignaturePolicy() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try writeBundle(in: dir, name: "Rejected", info: validInfo)
+
+        let result = loader(signaturePolicy: DeveloperIDSignaturePolicy()).loadAll(from: [dir])
+        #expect(result.apps.isEmpty)
+        #expect(result.failures.count == 1)
+        #expect(result.failures[0].reason.contains("signature:"))
     }
 }

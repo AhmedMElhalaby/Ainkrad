@@ -1,9 +1,8 @@
 import Foundation
 import AinkradAppKit
-// Scoped import: the host's own `@main` struct is also named `AinkradApp`
-// (`App/AinkradApp.swift`), so a wildcard `import AinkradAppKit` alone leaves
-// the bare name `AinkradApp` pointing at the host struct, not the SDK
-// protocol. This scoped import binds it to the SDK protocol instead.
+// Scoped import: the host's own `@main` struct is named `AinkradHostApp`
+// (`App/AinkradApp.swift`), so this scoped import binds the bare name
+// `AinkradApp` to the SDK protocol.
 import protocol AinkradAppKit.AinkradApp
 
 /// Discovers `.bundle`s in the given directories and turns the loadable ones
@@ -33,40 +32,44 @@ final class PluginLoader {
                 switch load(url: url) {
                 case .success(let app):
                     apps.append(app)
-                case .failure(let reason):
-                    failures.append(PluginLoadFailure(url: url, reason: reason))
-                    Log.registry.error("Skipped plugin \(url.lastPathComponent, privacy: .public): \(reason, privacy: .public)")
+                case .failure(let rejection):
+                    failures.append(PluginLoadFailure(url: url, reason: rejection.reason))
+                    Log.registry.error("Skipped plugin \(url.lastPathComponent, privacy: .public): \(rejection.reason, privacy: .public)")
                 }
             }
         }
         return (apps, failures)
     }
 
-    private func load(url: URL) -> Result<RegisteredApp, String> {
-        guard let bundle = Bundle(url: url) else { return .failure("not a bundle") }
-        guard let info = bundle.infoDictionary else { return .failure("missing Info.plist") }
+    private func load(url: URL) -> Result<RegisteredApp, PluginRejection> {
+        guard let bundle = Bundle(url: url) else { return .failure(PluginRejection(reason: "not a bundle")) }
+        guard let info = bundle.infoDictionary else { return .failure(PluginRejection(reason: "missing Info.plist")) }
 
         let metadata: PluginBundleMetadata
         switch PluginBundleMetadata.parse(infoDictionary: info) {
         case .success(let m): metadata = m
-        case .failure(let e): return .failure("metadata: \(e)")
+        case .failure(let e): return .failure(PluginRejection(reason: "metadata: \(e)"))
         }
 
         guard AinkradAppKit.isCompatible(bundleAPIVersion: metadata.apiVersion,
                                          minSupported: minSupportedAPIVersion,
                                          current: AinkradAppKit.apiVersion) else {
-            return .failure("API version \(metadata.apiVersion) unsupported")
+            return .failure(PluginRejection(reason: "API version \(metadata.apiVersion) unsupported"))
         }
 
-        if case .failure(let reason) = signaturePolicy.validate(bundleURL: url) {
-            return .failure("signature: \(reason)")
+        if case .failure(let rejection) = signaturePolicy.validate(bundleURL: url) {
+            return .failure(PluginRejection(reason: "signature: \(rejection.reason)"))
         }
 
-        guard bundle.load() else { return .failure("Bundle.load() failed") }
+        guard bundle.load() else { return .failure(PluginRejection(reason: "Bundle.load() failed")) }
         guard let principal = bundle.principalClass as? AinkradPluginEntryPoint.Type else {
-            return .failure("principal class missing or not AinkradPluginEntryPoint")
+            return .failure(PluginRejection(reason: "principal class missing or not AinkradPluginEntryPoint"))
         }
 
+        // This is the one line that runs third-party plugin code in-process:
+        // a `fatalError` (or other crash) inside plugin code here will crash
+        // loading. Inherent to in-process loading — isolating it would need a
+        // subprocess/XPC boundary, out of scope here.
         let appType = principal.app()
         let host = makeHostServices(metadata.appID)
         return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host))
