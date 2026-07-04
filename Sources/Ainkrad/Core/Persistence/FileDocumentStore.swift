@@ -51,7 +51,14 @@ final class FileDocumentStore: PersistenceStore {
     func load<T: PersistableDocument>(_ type: T.Type) -> T? {
         if let cached = cache[T.documentID] as? T { return cached }
         let url = fileURL(for: T.documentID)
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            Log.persistence.error("Failed to read \(T.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
 
         guard let raw = try? PersistenceCoding.decoder.decode(RawEnvelope.self, from: data) else {
             quarantine(url)
@@ -105,9 +112,12 @@ final class FileDocumentStore: PersistenceStore {
 
     /// Renames a bad file aside so it is out of the way but recoverable.
     private func quarantine(_ url: URL) {
-        let stamp = Int(Date().timeIntervalSince1970)
-        let destination = url.appendingPathExtension("corrupt-\(stamp)")
-        try? fileManager.moveItem(at: url, to: destination)
-        Log.persistence.error("Quarantined corrupt document \(url.lastPathComponent, privacy: .public)")
+        let destination = url.appendingPathExtension("corrupt-\(UUID().uuidString)")
+        do {
+            try fileManager.moveItem(at: url, to: destination)
+            Log.persistence.error("Quarantined corrupt document \(url.lastPathComponent, privacy: .public)")
+        } catch {
+            Log.persistence.error("Failed to quarantine corrupt document \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

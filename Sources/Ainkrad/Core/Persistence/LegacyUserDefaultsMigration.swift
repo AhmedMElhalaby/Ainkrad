@@ -32,6 +32,9 @@ enum LegacyUserDefaultsMigration {
             persistence.save(value)
         }
 
+        // Marker is set even on a partial import (a key that fails to decode is
+        // skipped and not retried); acceptable because the legacy UserDefaults
+        // values are left in place for manual recovery.
         persistence.save(LegacyImportMarker(didImport: true))
         Log.persistence.info("Imported legacy UserDefaults settings into file documents")
     }

@@ -49,6 +49,7 @@ final class KeychainSecretStore: SecretStore {
         if updateStatus == errSecItemNotFound {
             var insert = baseQuery(for: id)
             insert[kSecValueData as String] = data
+            insert[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             let addStatus = SecItemAdd(insert as CFDictionary, nil)
             if addStatus != errSecSuccess {
                 Log.persistence.error("Keychain add failed for \(id, privacy: .public): \(addStatus)")

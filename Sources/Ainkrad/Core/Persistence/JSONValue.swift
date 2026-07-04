@@ -6,6 +6,9 @@ import Foundation
 enum JSONValue: Codable, Equatable {
     case null
     case bool(Bool)
+    /// All JSON numbers are represented as `Double`, so an integer field routed
+    /// through `JSONValue` (migration/export) round-trips via `Double` — safe
+    /// for values under 2^53, but a future Int64-range field would lose precision.
     case number(Double)
     case string(String)
     case array([JSONValue])
