@@ -28,7 +28,7 @@ packages:
   #  - Cell grid centered for symmetric left/right padding.
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: cd626b33eba476c324722e30b62b3133b37761ed
+    revision: a814229565ed108d469dc6ebd4b4d82c1ee11937
 
 targets:
   Ainkrad:
