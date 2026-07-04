@@ -47,7 +47,7 @@ final class AppEnvironment {
         // One-time import of M1's UserDefaults settings before any store reads.
         LegacyUserDefaultsMigration.runIfNeeded(persistence: persistence, defaults: defaults)
 
-        let registry = BuiltInAppRegistry(apps: [TerminalApp.self], persistence: persistence)
+        let registry = BuiltInAppRegistry(persistence: persistence)
         let themeManager = ThemeManager(
             persistence: persistence,
             dockIconUpdater: AppKitDockIconUpdater()
@@ -55,6 +55,21 @@ final class AppEnvironment {
         themeManager.applyResolvedIcon()
 
         let workspaceManager = WorkspaceManager()
+
+        let environment = AppEnvironment(
+            persistence: persistence,
+            secrets: secrets,
+            registry: registry,
+            themeManager: themeManager,
+            workspaceManager: workspaceManager,
+            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
+            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
+            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets)
+        )
+
+        // Built-in apps' chrome fill captures the environment, so install after it exists.
+        registry.install(builtIn: [RegisteredApp.builtIn(TerminalApp.self, environment: environment)])
+
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
             workspaceManager.pruneApps(keeping: Set(registry.allApps.map { $0.id }))
@@ -65,16 +80,7 @@ final class AppEnvironment {
             persistence.save(workspaceManager.snapshot())
         }
 
-        Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered Built-in Apps")
-        return AppEnvironment(
-            persistence: persistence,
-            secrets: secrets,
-            registry: registry,
-            themeManager: themeManager,
-            workspaceManager: workspaceManager,
-            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
-            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
-            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets)
-        )
+        Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")
+        return environment
     }
 }

@@ -3,35 +3,32 @@ import Foundation
 import SwiftUI
 @testable import Ainkrad
 
-/// Stub conforming type — proves the protocol compiles against a real
-/// conformance, per AIN-25's acceptance criterion.
-private struct StubTerminalApp: BuiltInApp {
-    static let id = "terminal"
-    static let displayName = "Terminal"
-    static let icon = "terminal"
-    static let isEnabledByDefault = true
-    static func makeRootView() -> AnyView { AnyView(Text("Terminal")) }
-    static func makeSettingsView() -> AnyView { AnyView(Text("Terminal Settings")) }
-}
-
-private struct StubSettingsApp: BuiltInApp {
-    static let id = "settings"
-    static let displayName = "Settings"
-    static let icon = "gearshape"
-    static let isEnabledByDefault = false
-    static func makeRootView() -> AnyView { AnyView(Text("Settings")) }
-    static func makeSettingsView() -> AnyView { AnyView(Text("Settings Settings")) }
-}
-
 @Suite("BuiltInAppRegistry")
+@MainActor
 final class BuiltInAppRegistryTests {
     let store = InMemoryPersistenceStore()
 
-    private func makeRegistry() -> BuiltInAppRegistry {
-        BuiltInAppRegistry(
-            apps: [StubTerminalApp.self, StubSettingsApp.self],
-            persistence: store
+    private func app(_ id: String, displayName: String, isEnabledByDefault: Bool) -> RegisteredApp {
+        RegisteredApp(
+            id: id, displayName: displayName, icon: "app",
+            isEnabledByDefault: isEnabledByDefault, source: .builtIn,
+            makeRootView: { AnyView(EmptyView()) },
+            makeSettingsView: { AnyView(EmptyView()) },
+            chromeFill: { nil }
         )
+    }
+
+    private var stubApps: [RegisteredApp] {
+        [
+            app("terminal", displayName: "Terminal", isEnabledByDefault: true),
+            app("settings", displayName: "Settings", isEnabledByDefault: false)
+        ]
+    }
+
+    private func makeRegistry() -> BuiltInAppRegistry {
+        let registry = BuiltInAppRegistry(persistence: store)
+        registry.install(builtIn: stubApps)
+        return registry
     }
 
     @Test("exposes all registered apps in order")
@@ -62,10 +59,8 @@ final class BuiltInAppRegistryTests {
         firstLaunch.setEnabled(false, for: "terminal")
         firstLaunch.setEnabled(true, for: "settings")
 
-        let secondLaunch = BuiltInAppRegistry(
-            apps: [StubTerminalApp.self, StubSettingsApp.self],
-            persistence: store
-        )
+        let secondLaunch = BuiltInAppRegistry(persistence: store)
+        secondLaunch.install(builtIn: stubApps)
 
         #expect(secondLaunch.isEnabled("terminal") == false)
         #expect(secondLaunch.isEnabled("settings") == true)

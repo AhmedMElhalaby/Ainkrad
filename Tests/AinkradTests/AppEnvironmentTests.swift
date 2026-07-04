@@ -17,7 +17,7 @@ final class AppEnvironmentTests {
     func exposesInjectedDependencies() {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
-        let registry = BuiltInAppRegistry(apps: [], persistence: persistence)
+        let registry = BuiltInAppRegistry(persistence: persistence)
         let themeManager = ThemeManager(persistence: persistence, dockIconUpdater: SpyDockIconUpdater())
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
