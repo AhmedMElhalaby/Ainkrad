@@ -10,6 +10,9 @@ final class FileDocumentStore: PersistenceStore {
     private let fileManager: FileManager
     private var cache: [String: any PersistableDocument] = [:]
 
+    /// Optional sync seam; notified after each successful write. Not owned.
+    weak var syncEngine: SyncEngine?
+
     init(rootURL: URL, fileManager: FileManager = .default) {
         self.rootURL = rootURL
         self.fileManager = fileManager
@@ -89,6 +92,7 @@ final class FileDocumentStore: PersistenceStore {
         do {
             try data.write(to: fileURL(for: T.documentID), options: .atomic)
             cache[T.documentID] = document
+            syncEngine?.documentDidChange(id: T.documentID, data: data)
         } catch {
             Log.persistence.error("Failed to write \(T.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
