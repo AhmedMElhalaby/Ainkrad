@@ -2,7 +2,7 @@ import SwiftUI
 import CoreText
 
 /// Registers the bundled brand fonts (Exo 2, JetBrains Mono — variable
-/// TTFs) for this process. Called once from `AinkradApp.init`, before any
+/// TTFs) for this process. Called once from `AinkradHostApp.init`, before any
 /// view renders.
 enum FontRegistrar {
     static func registerBundledFonts() {

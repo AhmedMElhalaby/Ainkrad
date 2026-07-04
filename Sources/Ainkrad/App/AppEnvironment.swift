@@ -1,6 +1,6 @@
 import Foundation
 
-/// The composition root, assembled once in `AinkradApp.init` and injected
+/// The composition root, assembled once in `AinkradHostApp.init` and injected
 /// via `.environment(_:)`. See State, Persistence & Dependency Injection.md.
 @MainActor
 @Observable

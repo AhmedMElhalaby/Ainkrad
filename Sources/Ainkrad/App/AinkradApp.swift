@@ -1,7 +1,11 @@
 import SwiftUI
 
+// Named `AinkradHostApp` (not `AinkradApp`) so the identifier doesn't collide
+// with `AinkradAppKit.AinkradApp` — the SDK protocol plugin bundles conform
+// to (`PluginLoader.swift`). A same-module type always shadows an imported
+// one of the same name, so the SDK protocol would otherwise be unreachable.
 @main
-struct AinkradApp: App {
+struct AinkradHostApp: App {
     @State private var environment: AppEnvironment
 
     init() {

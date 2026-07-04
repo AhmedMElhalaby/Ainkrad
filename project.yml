@@ -67,8 +67,15 @@ targets:
       # products' .swiftmodule and links against the host at runtime.
       - package: SwiftTerm
         link: false
+      # AinkradAppKit IS linked here (unlike SwiftTerm above): it's a
+      # separate dynamic library two hops from the test bundle's
+      # -bundle_loader (Ainkrad launcher -> Ainkrad.debug.dylib ->
+      # AinkradAppKit.framework), so bundle_loader symbol resolution doesn't
+      # reach it — tests that reference its symbols directly (e.g.
+      # PluginLoaderTests) fail to link without this. It's pure Swift (no
+      # ObjC classes), so linking it again carries none of SwiftTerm's
+      # duplicate-class risk.
       - package: AinkradAppKit
-        link: false
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
