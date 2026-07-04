@@ -25,6 +25,9 @@ struct TerminalRenderAppearance: Equatable {
     /// Terminal background alpha (0.2…1.0); < 1 lets the ambient backdrop show
     /// through the pane.
     let backgroundOpacity: Double
+    /// When false, the terminal keeps mouse events for native selection/scroll
+    /// and forwards nothing to the child process.
+    let sendMouseEventsToApps: Bool
 }
 
 /// Pure resolution of `TerminalSettings` (+ the active theme) into a concrete
@@ -49,7 +52,8 @@ enum TerminalAppearanceResolver {
             cursorBlink: settings.cursorBlink,
             optionAsMeta: settings.optionAsMeta,
             scrollback: settings.scrollbackLines,
-            backgroundOpacity: min(1, max(0.2, settings.backgroundOpacity))
+            backgroundOpacity: min(1, max(0.2, settings.backgroundOpacity)),
+            sendMouseEventsToApps: settings.sendMouseEventsToApps
         )
     }
 }

@@ -176,4 +176,12 @@ struct TerminalAppearanceResolverTests {
         settings.selectionColor = "00FF00"
         #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).selection == "00FF00")
     }
+
+    @Test("sendMouseEventsToApps passes through to the resolved appearance")
+    func mouseForwardingResolves() {
+        var on = TerminalSettings(); on.sendMouseEventsToApps = true
+        #expect(TerminalAppearanceResolver.resolve(settings: on, theme: .neonBlue).sendMouseEventsToApps == true)
+        var off = TerminalSettings(); off.sendMouseEventsToApps = false
+        #expect(TerminalAppearanceResolver.resolve(settings: off, theme: .neonBlue).sendMouseEventsToApps == false)
+    }
 }
