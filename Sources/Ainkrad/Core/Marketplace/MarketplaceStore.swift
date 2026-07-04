@@ -71,4 +71,38 @@ final class MarketplaceStore {
         rows = installedRows.sorted { $0.displayName < $1.displayName }
              + availableRows.sorted { $0.displayName < $1.displayName }
     }
+
+    /// Fetch the catalog (offline → cache) then recompute rows.
+    func refresh() async {
+        isRefreshing = true
+        _ = await service.refreshCatalog()
+        isRefreshing = false
+        reloadRows()
+    }
+
+    func install(_ id: String) async { await run(id) { try await self.service.install(appID: id) } }
+    func update(_ id: String) async  { await run(id) { try await self.service.update(appID: id) } }
+
+    func uninstall(_ id: String) {
+        do { try service.uninstall(appID: id) }
+        catch let e as MarketplaceError { error = e }
+        catch { self.error = .notInstalled(id) }
+        reloadRows()
+    }
+
+    func setEnabled(_ enabled: Bool, for id: String) {
+        registry.setEnabled(enabled, for: id)
+        reloadRows()
+    }
+
+    /// Runs an async action for one app id, tracking busy + surfacing errors,
+    /// always clearing busy and recomputing rows afterwards.
+    private func run(_ id: String, _ op: @escaping () async throws -> Void) async {
+        busy.insert(id)
+        do { try await op() }
+        catch let e as MarketplaceError { error = e }
+        catch { self.error = .download(String(describing: error)) }
+        busy.remove(id)
+        reloadRows()
+    }
 }

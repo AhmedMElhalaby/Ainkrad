@@ -91,4 +91,51 @@ struct MarketplaceStoreTests {
         s.filter = .all;       #expect(s.visibleRows.map(\.id) == ["terminal"])
         s.filter = .updates;   #expect(s.visibleRows.isEmpty)
     }
+
+    @Test("install marks busy then clears, and the row becomes installed")
+    func installFlow() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]
+        let s = store(service: svc)
+        #expect(s.rows.first { $0.id == "notes" }?.status == .available)
+        await s.install("notes")
+        #expect(svc.installedCalls == ["notes"])
+        #expect(s.busy.isEmpty)
+        #expect(s.rows.first { $0.id == "notes" }?.status == .installed)
+        #expect(s.error == nil)
+    }
+
+    @Test("a failing install surfaces the error and leaves rows unchanged")
+    func installError() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]
+        svc.installError = .checksumMismatch
+        let s = store(service: svc)
+        await s.install("notes")
+        #expect(s.error == .checksumMismatch)
+        #expect(s.busy.isEmpty)
+        #expect(s.rows.first { $0.id == "notes" }?.status == .available)
+    }
+
+    @Test("uninstall removes the row")
+    func uninstallFlow() {
+        let svc = FakeMarketplaceService()
+        svc.cachedCatalog = [entry("notes")]
+        svc.installedResult = ["notes": .init(version: "1.0.0", sourceRepo: "o/notes")]
+        let s = store(service: svc)
+        #expect(s.rows.first { $0.id == "notes" }?.status == .installed)
+        s.uninstall("notes")
+        #expect(svc.uninstalledCalls == ["notes"])
+        #expect(s.rows.first { $0.id == "notes" }?.status == .available)   // back to catalog-only
+    }
+
+    @Test("setEnabled flips the registry-backed enabled flag")
+    func enableFlow() {
+        let svc = FakeMarketplaceService()
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
+        registry.install(builtIn: [builtIn("terminal")])
+        let s = MarketplaceStore(service: svc, registry: registry)
+        s.reloadRows()
+        #expect(s.rows.first { $0.id == "terminal" }?.isEnabled == true)
+        s.setEnabled(false, for: "terminal")
+        #expect(s.rows.first { $0.id == "terminal" }?.isEnabled == false)
+    }
 }
