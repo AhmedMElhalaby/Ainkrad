@@ -14,12 +14,16 @@ settings:
     CODE_SIGNING_ALLOWED: NO
 
 packages:
-  # SwiftTerm 1.13.0 fork, one commit patching Buffer.resize to disable
-  # line-reflow (upstream's re-wrap duplicates terminal output on resize).
-  # Fork: github.com/AhmedMElhalaby/SwiftTerm @ ainkrad-no-reflow.
+  # SwiftTerm 1.13.0 fork (github.com/AhmedMElhalaby/SwiftTerm @ ainkrad-no-reflow).
+  # Patches over upstream:
+  #  - Buffer.resize: line-reflow disabled (upstream re-wrap duplicates output).
+  #  - setFrameSize: off-live resizes are debounced (coalesce animated frame
+  #    changes to one SIGWINCH); `applyResizeImmediately` opts a single clean
+  #    snap (the Focus-Mode pane) out of the debounce; deferred resizes repaint.
+  #  - Package.swift trimmed to the library product for stable resolution.
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: 65b5cc0923f38ff63be50a2ee0e00bef3a0db9d2
+    revision: 8685618957cc9e565f4a561abb5a151bbe7aabc2
 
 targets:
   Ainkrad:
@@ -32,6 +36,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: ""

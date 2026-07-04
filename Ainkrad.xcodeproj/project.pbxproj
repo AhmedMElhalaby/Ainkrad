@@ -640,7 +640,7 @@
 		};
 		F8353D8A2A4B8D4E07C5941B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_9BD68A3A-CD34-458C-9D1A-DE91EA601F6A" /* SwiftTerm */;
+			productRef = "TEMP_A73C35C2-A525-46C0-A997-5A809264667F" /* SwiftTerm */;
 		};
 /* End PBXTargetDependency section */
 
@@ -716,6 +716,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -724,6 +725,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ainkrad.app;
 				SDKROOT = macosx;
 			};
@@ -734,6 +736,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -742,6 +745,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ainkrad.app;
 				SDKROOT = macosx;
 			};
@@ -878,7 +882,7 @@
 			repositoryURL = "https://github.com/AhmedMElhalaby/SwiftTerm";
 			requirement = {
 				kind = revision;
-				revision = 65b5cc0923f38ff63be50a2ee0e00bef3a0db9d2;
+				revision = 8685618957cc9e565f4a561abb5a151bbe7aabc2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -889,7 +893,7 @@
 			package = 10D7594E9AF93549EA214161 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
-		"TEMP_9BD68A3A-CD34-458C-9D1A-DE91EA601F6A" /* SwiftTerm */ = {
+		"TEMP_A73C35C2-A525-46C0-A997-5A809264667F" /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 10D7594E9AF93549EA214161 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
