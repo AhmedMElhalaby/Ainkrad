@@ -24,9 +24,11 @@ packages:
   #    motion; wheel→app buttons 64/65; X10 press-only.
   #  - Package.swift trimmed to the library product for stable resolution;
   #    restored dependency-free SwiftTermTests target.
+  #  - File drag-drop & paste: dropped/copied files insert shell-escaped paths.
+  #  - Cell grid centered for symmetric left/right padding.
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: 9de8538a8fcb832e896de03f1eaaea95234303e2
+    revision: e44352494333686a5de418f85f7927b81c6a9fbe
 
 targets:
   Ainkrad:
