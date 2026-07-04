@@ -35,7 +35,11 @@ final class SyncEngineTests {
     @Test("NoOpSyncEngine ignores notifications without crashing")
     func noOpDoesNothing() {
         let store = FileDocumentStore(rootURL: root)
-        store.syncEngine = NoOpSyncEngine()
+        // Hold a strong ref: syncEngine is weak, so a freshly-constructed
+        // engine assigned inline would deallocate before save fires and the
+        // no-op notification path would never actually run.
+        let engine = NoOpSyncEngine()
+        store.syncEngine = engine
         store.save(SampleDoc(name: "a"))
         #expect(store.load(SampleDoc.self) == SampleDoc(name: "a"))
     }
