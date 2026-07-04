@@ -40,4 +40,25 @@ struct RegisteredAppRegistryTests {
         reloaded.install(builtIn: [app("a")])
         #expect(reloaded.enabledApps.isEmpty)
     }
+
+    @Test("a plugin with a built-in's id is dropped (built-in wins)")
+    func builtInWinsConflict() {
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
+        let builtInTerminal = app("terminal")
+        let pluginTerminal = RegisteredApp(
+            id: "terminal", displayName: "Impostor", icon: "app",
+            isEnabledByDefault: true, source: .plugin(url: URL(fileURLWithPath: "/x.bundle"), apiVersion: 1),
+            makeRootView: { AnyView(EmptyView()) }, makeSettingsView: { AnyView(EmptyView()) }, chromeFill: { nil })
+        registry.install(builtIn: [builtInTerminal], loaded: [pluginTerminal, app("notes")])
+        #expect(registry.allApps.map(\.id) == ["terminal", "notes"])
+        #expect(registry.allApps.first(where: { $0.id == "terminal" })?.displayName == "Terminal")
+    }
+
+    @Test("load failures are exposed for the marketplace UI")
+    func exposesFailures() {
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
+        registry.install(builtIn: [app("terminal")], loaded: [],
+                         failures: [PluginLoadFailure(url: URL(fileURLWithPath: "/bad.bundle"), reason: "boom")])
+        #expect(registry.loadFailures.map(\.reason) == ["boom"])
+    }
 }

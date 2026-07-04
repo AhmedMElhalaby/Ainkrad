@@ -68,7 +68,22 @@ final class AppEnvironment {
         )
 
         // Built-in apps' chrome fill captures the environment, so install after it exists.
-        registry.install(builtIn: [RegisteredApp.builtIn(TerminalApp.self, environment: environment)])
+        let documentsRoot = rootURL ?? FileDocumentStore.defaultDocumentsURL()
+        let pluginDirs = [
+            documentsRoot.appendingPathComponent("Plugins", isDirectory: true),
+            documentsRoot.appendingPathComponent("DevPlugins", isDirectory: true),
+        ]
+        let pluginDataRoot = documentsRoot.appendingPathComponent("PluginData", isDirectory: true)
+        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy()) { appID in
+            HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
+                             secretStore: secrets, themeManager: themeManager)
+        }
+        let loaded = loader.loadAll(from: pluginDirs)
+        registry.install(
+            builtIn: [RegisteredApp.builtIn(TerminalApp.self, environment: environment)],
+            loaded: loaded.apps,
+            failures: loaded.failures
+        )
 
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
