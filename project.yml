@@ -80,12 +80,34 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
 
+  HelloPlugin:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Samples/HelloPlugin
+    dependencies:
+      # Link against the SDK's symbols (needed to resolve protocol descriptors
+      # at load time) but do NOT embed a second copy of the dylib — resolve
+      # the host's copy at runtime, so protocol type metadata is shared and
+      # the cast succeeds.
+      - package: AinkradAppKit
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.plugin.hello
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Samples/HelloPlugin/Info.plist
+        MACH_O_TYPE: mh_bundle
+        # Loaded into the host process: find AinkradAppKit via the host executable.
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+
 schemes:
   Ainkrad:
     build:
       targets:
         Ainkrad: all
         AinkradTests: [test]
+        HelloPlugin: [run]
     run:
       config: Debug
     test:

@@ -15,7 +15,9 @@ SCHEME := Ainkrad
 PROJECT := Ainkrad.xcodeproj
 
 .DEFAULT_GOAL := generate
-.PHONY: generate open build test release clean help
+.PHONY: generate open build test release clean help sample
+
+DEV_PLUGINS := $(HOME)/Library/Application Support/com.ainkrad.app/Documents/DevPlugins
 
 generate: ## Generate the Xcode project from project.yml
 	xcodegen generate
@@ -34,6 +36,14 @@ release: ## Build a distributable .dmg (see scripts/release.sh)
 
 clean: ## Remove the generated project and build output
 	rm -rf $(PROJECT) dist
+
+sample: generate ## Build the Hello sample plugin and sideload it into DevPlugins
+	xcodebuild -scheme $(SCHEME) -configuration Debug -derivedDataPath build \
+		-destination 'platform=macOS' build
+	mkdir -p "$(DEV_PLUGINS)"
+	rm -rf "$(DEV_PLUGINS)/HelloPlugin.bundle"
+	cp -R build/Build/Products/Debug/HelloPlugin.bundle "$(DEV_PLUGINS)/HelloPlugin.bundle"
+	@echo "Sideloaded HelloPlugin.bundle → $(DEV_PLUGINS)"
 
 help: ## List the available targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | sort | \
