@@ -419,6 +419,16 @@ struct TerminalSettingsView: View {
                 tokens: tokens
             )
 
+            toggleRow(
+                label: "Send mouse events to apps",
+                help: "Forward clicks, motion, and the wheel to terminal apps (Claude Code, vim, tmux). Off: mouse stays for native selection and scrollback.",
+                isOn: Binding(
+                    get: { settings.sendMouseEventsToApps },
+                    set: { v in environment.terminalSettingsStore.update { $0.sendMouseEventsToApps = v } }
+                ),
+                tokens: tokens
+            )
+
             field(label: "Scrollback Lines", tokens: tokens) {
                 HStack(spacing: 0) {
                     stepperButton("minus", tokens: tokens) {

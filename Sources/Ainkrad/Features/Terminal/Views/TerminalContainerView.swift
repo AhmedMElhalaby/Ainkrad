@@ -116,6 +116,7 @@ struct TerminalContainerView: NSViewRepresentable {
         view.selectedTextBackgroundColor = Self.nsColor(hex: appearance.selection)
         view.font = Self.font(family: appearance.fontFamily, size: appearance.fontSize)
         view.optionAsMetaKey = appearance.optionAsMeta
+        view.allowMouseReporting = appearance.sendMouseEventsToApps
         view.getTerminal().setCursorStyle(Self.cursorStyle(shape: appearance.cursorShape, blink: appearance.cursorBlink))
 
         // Rebuilding history is comparatively heavy — only when it changes.
