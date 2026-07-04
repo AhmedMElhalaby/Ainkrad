@@ -27,7 +27,7 @@ packages:
   #  - File drag-drop & paste: dropped/copied files insert shell-escaped paths.
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: e85f648c1ffaa8b6333f2e78c1ecc2293dea0ef6
+    revision: db644276502b715c35cc592d4c61d24d45fa50b5
 
 targets:
   Ainkrad:
