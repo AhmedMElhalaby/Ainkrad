@@ -51,13 +51,27 @@ final class DocumentMigrationTests {
         #expect(object?["schemaVersion"] as? Int == 2)
     }
 
-    @Test("a missing migrator quarantines the file and returns nil")
-    func missingMigratorQuarantines() throws {
+    @Test("a stored version newer than the current build is quarantined")
+    func newerThanBuildQuarantines() throws {
         // Stored at version 5 with no migrator path to 2.
         try writeEnvelope(version: 5, payloadJSON: #"{"name":"x"}"#)
         let store = FileDocumentStore(rootURL: root)
         #expect(store.load(MigratableDoc.self) == nil)
         #expect(FileManager.default.fileExists(
             atPath: root.appendingPathComponent("migratable.json").path) == false)
+    }
+
+    @Test("a payload with no migrator for its version is quarantined")
+    func missingMigratorForVersionQuarantines() throws {
+        // Stored at version 0: the loop is entered (0 < 2), but there is no
+        // migrator registered for fromVersion 0 (only from: 1 exists).
+        try writeEnvelope(version: 0, payloadJSON: #"{"name":"x"}"#)
+        let store = FileDocumentStore(rootURL: root)
+        #expect(store.load(MigratableDoc.self) == nil)
+        #expect(FileManager.default.fileExists(
+            atPath: root.appendingPathComponent("migratable.json").path) == false)
+        let quarantined = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            .contains { $0.hasPrefix("migratable.json.corrupt-") }
+        #expect(quarantined)
     }
 }
