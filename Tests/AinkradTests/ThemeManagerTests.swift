@@ -12,18 +12,11 @@ private final class SpyDockIconUpdater: DockIconUpdating {
 
 @Suite("ThemeManager")
 final class ThemeManagerTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
+    let store = InMemoryPersistenceStore()
 
     @MainActor
     private func makeManager(dockIconUpdater: SpyDockIconUpdater = SpyDockIconUpdater()) -> ThemeManager {
-        ThemeManager(
-            settingsStore: UserDefaultsSettingsStore(defaults: defaults),
-            dockIconUpdater: dockIconUpdater
-        )
+        ThemeManager(persistence: store, dockIconUpdater: dockIconUpdater)
     }
 
     @Test("defaults to Neon Blue with no prior saved settings")
@@ -46,11 +39,10 @@ final class ThemeManagerTests {
     @Test("setTheme persists the selection through SettingsStore")
     @MainActor
     func setThemePersists() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
-        let manager = ThemeManager(settingsStore: store, dockIconUpdater: SpyDockIconUpdater())
+        let manager = ThemeManager(persistence: store, dockIconUpdater: SpyDockIconUpdater())
         manager.setTheme(.cyberPurple)
 
-        let reloaded = ThemeManager(settingsStore: store, dockIconUpdater: SpyDockIconUpdater())
+        let reloaded = ThemeManager(persistence: store, dockIconUpdater: SpyDockIconUpdater())
         #expect(reloaded.currentTheme == .cyberPurple)
     }
 
@@ -72,15 +64,14 @@ final class ThemeManagerTests {
     @Test("setAppIcon updates state, persists, and swaps the Dock icon")
     @MainActor
     func setAppIconAppliesAndPersists() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
         let spy = SpyDockIconUpdater()
-        let manager = ThemeManager(settingsStore: store, dockIconUpdater: spy)
+        let manager = ThemeManager(persistence: store, dockIconUpdater: spy)
 
         manager.setAppIcon(.purple)
 
         #expect(manager.appIcon == .purple)
         #expect(spy.updatedIcons == [.purple])
-        let reloaded = ThemeManager(settingsStore: store, dockIconUpdater: SpyDockIconUpdater())
+        let reloaded = ThemeManager(persistence: store, dockIconUpdater: SpyDockIconUpdater())
         #expect(reloaded.appIcon == .purple)
     }
 

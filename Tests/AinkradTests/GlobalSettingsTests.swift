@@ -4,29 +4,20 @@ import Foundation
 
 @Suite("GlobalSettings")
 final class GlobalSettingsTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
-
     @Test("defaults to Neon Blue with no prior write")
     func defaultsToNeonBlue() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
-        let loaded = store.get(GlobalSettings.self, forKey: "global-settings") ?? GlobalSettings()
+        let store = InMemoryPersistenceStore()
+        let loaded = store.load(GlobalSettings.self) ?? GlobalSettings()
         #expect(loaded.theme == .neonBlue)
     }
 
-    @Test("a written Cyber Purple selection round-trips through SettingsStore")
+    @Test("a written Cyber Purple selection round-trips through the persistence store")
     func cyberPurpleRoundTrips() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let store = InMemoryPersistenceStore()
         var settings = GlobalSettings()
         settings.theme = .cyberPurple
-        store.set(settings, forKey: "global-settings")
-
-        let loaded = store.get(GlobalSettings.self, forKey: "global-settings")
-
-        #expect(loaded?.theme == .cyberPurple)
+        store.save(settings)
+        #expect(store.load(GlobalSettings.self)?.theme == .cyberPurple)
     }
 
     @Test("appIcon defaults to Auto")
@@ -34,14 +25,14 @@ final class GlobalSettingsTests {
         #expect(GlobalSettings().appIcon == .auto)
     }
 
-    @Test("an explicit appIcon choice round-trips through SettingsStore")
+    @Test("an explicit appIcon choice round-trips through the persistence store")
     func appIconRoundTrips() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let store = InMemoryPersistenceStore()
         var settings = GlobalSettings()
         settings.appIcon = .purple
-        store.set(settings, forKey: "global-settings")
+        store.save(settings)
 
-        #expect(store.get(GlobalSettings.self, forKey: "global-settings")?.appIcon == .purple)
+        #expect(store.load(GlobalSettings.self)?.appIcon == .purple)
     }
 
     @Test("a legacy payload without appIcon decodes to Auto")

@@ -9,4 +9,5 @@ enum Log {
     static let registry = Logger(subsystem: subsystem, category: "registry")
     static let settings = Logger(subsystem: subsystem, category: "settings")
     static let terminal = Logger(subsystem: subsystem, category: "terminal")
+    static let persistence = Logger(subsystem: subsystem, category: "persistence")
 }

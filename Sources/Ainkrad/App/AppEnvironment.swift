@@ -5,68 +5,76 @@ import Foundation
 @MainActor
 @Observable
 final class AppEnvironment {
-    let settingsStore: SettingsStore
+    let persistence: PersistenceStore
+    let secrets: SecretStore
     let registry: BuiltInAppRegistry
     let themeManager: ThemeManager
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
     let terminalSettingsStore: TerminalSettingsStore
+    let connectionStore: ConnectionStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
 
     init(
-        settingsStore: SettingsStore,
+        persistence: PersistenceStore,
+        secrets: SecretStore,
         registry: BuiltInAppRegistry,
         themeManager: ThemeManager,
         workspaceManager: WorkspaceManager,
         launcherStore: LauncherStore,
-        terminalSettingsStore: TerminalSettingsStore
+        terminalSettingsStore: TerminalSettingsStore,
+        connectionStore: ConnectionStore
     ) {
-        self.settingsStore = settingsStore
+        self.persistence = persistence
+        self.secrets = secrets
         self.registry = registry
         self.themeManager = themeManager
         self.workspaceManager = workspaceManager
         self.launcherStore = launcherStore
         self.terminalSettingsStore = terminalSettingsStore
+        self.connectionStore = connectionStore
     }
 
-    /// Assembles a real `AppEnvironment` backed by `UserDefaults` and
-    /// `NSApplication`. `defaults` defaults to `.standard`; tests pass an
-    /// isolated suite.
-    static func bootstrap(defaults: UserDefaults = .standard) -> AppEnvironment {
-        let settingsStore = UserDefaultsSettingsStore(defaults: defaults)
-        // Settings is a summonable overlay, not a tiled Block, so it is not a
-        // registered app — Terminal is the only Built-in App in the registry.
-        let registry = BuiltInAppRegistry(apps: [TerminalApp.self], settingsStore: settingsStore)
+    /// Assembles a real `AppEnvironment` backed by the file document store and
+    /// the Keychain. `rootURL` defaults to Application Support; tests pass a
+    /// temp directory. `defaults` is the legacy import source (`.standard`).
+    static func bootstrap(rootURL: URL? = nil, defaults: UserDefaults = .standard) -> AppEnvironment {
+        let persistence = FileDocumentStore(rootURL: rootURL ?? FileDocumentStore.defaultDocumentsURL())
+        let secrets = KeychainSecretStore()
+
+        // One-time import of M1's UserDefaults settings before any store reads.
+        LegacyUserDefaultsMigration.runIfNeeded(persistence: persistence, defaults: defaults)
+
+        let registry = BuiltInAppRegistry(apps: [TerminalApp.self], persistence: persistence)
         let themeManager = ThemeManager(
-            settingsStore: settingsStore,
+            persistence: persistence,
             dockIconUpdater: AppKitDockIconUpdater()
         )
-        // Apply the persisted Dock-icon preference once at launch.
         themeManager.applyResolvedIcon()
+
         let workspaceManager = WorkspaceManager()
-        // Restore the persisted workspace/pane layout, then wire autosave:
-        // any structural change re-snapshots to the store.
-        if let saved = settingsStore.get(LayoutStateSnapshot.self, forKey: LayoutStateSnapshot.storeKey) {
+        if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
-            // Drop panes for apps that no longer exist as tiled Blocks (e.g. a
-            // Settings pane persisted before Settings became an overlay).
             workspaceManager.pruneApps(keeping: Set(registry.allApps.map { $0.id }))
             Log.app.info("Restored workspace layout: \(saved.workspaces.count) workspace(s)")
         }
         workspaceManager.onStateChange = { [weak workspaceManager] in
             guard let workspaceManager else { return }
-            settingsStore.set(workspaceManager.snapshot(), forKey: LayoutStateSnapshot.storeKey)
+            persistence.save(workspaceManager.snapshot())
         }
+
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered Built-in Apps")
         return AppEnvironment(
-            settingsStore: settingsStore,
+            persistence: persistence,
+            secrets: secrets,
             registry: registry,
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
-            terminalSettingsStore: TerminalSettingsStore(store: settingsStore)
+            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
+            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets)
         )
     }
 }

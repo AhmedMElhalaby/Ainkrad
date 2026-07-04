@@ -18,12 +18,6 @@ private struct SpyWorkingDirectoryResolver: WorkingDirectoryResolving {
 
 @Suite("TerminalSessionFactory")
 final class TerminalSessionFactoryTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
-
     @Test("with no settings, resolves shell and working directory with no configured override")
     @MainActor
     func noSettingsUsesDefaultResolution() {
@@ -36,7 +30,7 @@ final class TerminalSessionFactoryTests {
             workingDirectoryResolver: SpyWorkingDirectoryResolver(onResolve: { _, _ in
                 WorkingDirectoryResolution(url: URL(fileURLWithPath: "/Users/someone"), rejectedSessionOverride: false, rejectedSettingsDefault: false)
             }),
-            settingsStore: UserDefaultsSettingsStore(defaults: defaults)
+            persistence: InMemoryPersistenceStore()
         )
 
         let session = factory.makeSession()
@@ -49,8 +43,8 @@ final class TerminalSessionFactoryTests {
     @Test("passes TerminalSettings' configured shell as the override")
     @MainActor
     func passesConfiguredShellAsOverride() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
-        store.set(TerminalSettings(defaultShell: "/bin/bash", defaultWorkingDirectory: nil), forKey: TerminalSettings.storeKey)
+        let store = InMemoryPersistenceStore()
+        store.save(TerminalSettings(defaultShell: "/bin/bash", defaultWorkingDirectory: nil))
 
         var capturedShellOverride: String??
         let factory = TerminalSessionFactory(
@@ -61,7 +55,7 @@ final class TerminalSessionFactoryTests {
             workingDirectoryResolver: SpyWorkingDirectoryResolver(onResolve: { _, _ in
                 WorkingDirectoryResolution(url: URL(fileURLWithPath: "/home"), rejectedSessionOverride: false, rejectedSettingsDefault: false)
             }),
-            settingsStore: store
+            persistence: store
         )
 
         let session = factory.makeSession()
@@ -73,8 +67,8 @@ final class TerminalSessionFactoryTests {
     @Test("falls back to no-override resolution when the configured shell is rejected")
     @MainActor
     func fallsBackWhenConfiguredShellIsInvalid() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
-        store.set(TerminalSettings(defaultShell: "/not/real", defaultWorkingDirectory: nil), forKey: TerminalSettings.storeKey)
+        let store = InMemoryPersistenceStore()
+        store.save(TerminalSettings(defaultShell: "/not/real", defaultWorkingDirectory: nil))
 
         var overridesSeen: [String?] = []
         let factory = TerminalSessionFactory(
@@ -86,7 +80,7 @@ final class TerminalSessionFactoryTests {
             workingDirectoryResolver: SpyWorkingDirectoryResolver(onResolve: { _, _ in
                 WorkingDirectoryResolution(url: URL(fileURLWithPath: "/home"), rejectedSessionOverride: false, rejectedSettingsDefault: false)
             }),
-            settingsStore: store
+            persistence: store
         )
 
         let session = factory.makeSession()
@@ -98,8 +92,8 @@ final class TerminalSessionFactoryTests {
     @Test("a rejected configured shell surfaces a calm startup notice on the session")
     @MainActor
     func rejectedShellSurfacesStartupNotice() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
-        store.set(TerminalSettings(defaultShell: "/not/real", defaultWorkingDirectory: nil), forKey: TerminalSettings.storeKey)
+        let store = InMemoryPersistenceStore()
+        store.save(TerminalSettings(defaultShell: "/not/real", defaultWorkingDirectory: nil))
 
         let factory = TerminalSessionFactory(
             shellResolver: SpyShellResolver(onResolve: { override in
@@ -109,7 +103,7 @@ final class TerminalSessionFactoryTests {
             workingDirectoryResolver: SpyWorkingDirectoryResolver(onResolve: { _, _ in
                 WorkingDirectoryResolution(url: URL(fileURLWithPath: "/home"), rejectedSessionOverride: false, rejectedSettingsDefault: false)
             }),
-            settingsStore: store
+            persistence: store
         )
 
         let session = factory.makeSession()
@@ -122,16 +116,16 @@ final class TerminalSessionFactoryTests {
     @Test("a rejected configured working directory surfaces a calm startup notice on the session")
     @MainActor
     func rejectedWorkingDirectorySurfacesStartupNotice() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let store = InMemoryPersistenceStore()
         let badDirectory = URL(fileURLWithPath: "/nonexistent")
-        store.set(TerminalSettings(defaultShell: nil, defaultWorkingDirectory: badDirectory), forKey: TerminalSettings.storeKey)
+        store.save(TerminalSettings(defaultShell: nil, defaultWorkingDirectory: badDirectory))
 
         let factory = TerminalSessionFactory(
             shellResolver: SpyShellResolver(onResolve: { _ in "/bin/zsh" }),
             workingDirectoryResolver: SpyWorkingDirectoryResolver(onResolve: { _, _ in
                 WorkingDirectoryResolution(url: URL(fileURLWithPath: "/home"), rejectedSessionOverride: false, rejectedSettingsDefault: true)
             }),
-            settingsStore: store
+            persistence: store
         )
 
         let session = factory.makeSession()
@@ -149,7 +143,7 @@ final class TerminalSessionFactoryTests {
             workingDirectoryResolver: SpyWorkingDirectoryResolver(onResolve: { _, _ in
                 WorkingDirectoryResolution(url: URL(fileURLWithPath: "/home"), rejectedSessionOverride: false, rejectedSettingsDefault: false)
             }),
-            settingsStore: UserDefaultsSettingsStore(defaults: defaults)
+            persistence: InMemoryPersistenceStore()
         )
 
         let session = factory.makeSession()
@@ -160,9 +154,9 @@ final class TerminalSessionFactoryTests {
     @Test("passes TerminalSettings' configured working directory as the settings default")
     @MainActor
     func passesConfiguredWorkingDirectoryAsSettingsDefault() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let store = InMemoryPersistenceStore()
         let configuredDirectory = URL(fileURLWithPath: "/projects")
-        store.set(TerminalSettings(defaultShell: nil, defaultWorkingDirectory: configuredDirectory), forKey: TerminalSettings.storeKey)
+        store.save(TerminalSettings(defaultShell: nil, defaultWorkingDirectory: configuredDirectory))
 
         var capturedSettingsDefault: URL??
         let factory = TerminalSessionFactory(
@@ -171,7 +165,7 @@ final class TerminalSessionFactoryTests {
                 capturedSettingsDefault = settingsDefault
                 return WorkingDirectoryResolution(url: configuredDirectory, rejectedSessionOverride: false, rejectedSettingsDefault: false)
             }),
-            settingsStore: store
+            persistence: store
         )
 
         let session = factory.makeSession()

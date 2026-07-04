@@ -9,29 +9,30 @@ private final class SpyDockIconUpdater: DockIconUpdating {
 
 @Suite("AppEnvironment")
 final class AppEnvironmentTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("ainkrad-tests-\(UUID().uuidString)")
+    deinit { try? FileManager.default.removeItem(at: root) }
 
     @Test("exposes the exact dependencies it was constructed with")
     @MainActor
     func exposesInjectedDependencies() {
-        let settingsStore = UserDefaultsSettingsStore(defaults: defaults)
-        let registry = BuiltInAppRegistry(apps: [], settingsStore: settingsStore)
-        let themeManager = ThemeManager(settingsStore: settingsStore, dockIconUpdater: SpyDockIconUpdater())
+        let persistence = InMemoryPersistenceStore()
+        let secrets = InMemorySecretStore()
+        let registry = BuiltInAppRegistry(apps: [], persistence: persistence)
+        let themeManager = ThemeManager(persistence: persistence, dockIconUpdater: SpyDockIconUpdater())
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
-        let terminalSettingsStore = TerminalSettingsStore(store: settingsStore)
+        let terminalSettingsStore = TerminalSettingsStore(persistence: persistence)
+        let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
 
         let environment = AppEnvironment(
-            settingsStore: settingsStore,
+            persistence: persistence,
+            secrets: secrets,
             registry: registry,
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
-            terminalSettingsStore: terminalSettingsStore
+            terminalSettingsStore: terminalSettingsStore,
+            connectionStore: connectionStore
         )
 
         #expect(environment.registry === registry)
@@ -39,12 +40,20 @@ final class AppEnvironmentTests {
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
         #expect(environment.terminalSettingsStore === terminalSettingsStore)
+        #expect(environment.connectionStore === connectionStore)
     }
 
-    @Test("bootstrap() assembles a working environment backed by real UserDefaults, Launcher dismissed")
+    @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")
     @MainActor
     func bootstrapAssemblesRealDependencies() {
-        let environment = AppEnvironment.bootstrap(defaults: defaults)
+        // Isolate the legacy-import source too: bootstrap runs
+        // LegacyUserDefaultsMigration against `defaults`, so a shared
+        // `.standard` would import stray real `com.ainkrad.app` state and
+        // make these assertions non-hermetic on any machine/CI runner.
+        let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
+        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
+        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
+        let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
         // Settings left the registry — it is now a summonable overlay, not a
         // tiled Block, so Terminal is the only registered app.

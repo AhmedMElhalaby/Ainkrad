@@ -35,7 +35,7 @@ struct TerminalBlockRootView: View {
         }
         .onAppear {
             guard session == nil else { return }
-            session = TerminalSessionFactory(settingsStore: environment.settingsStore).makeSession()
+            session = TerminalSessionFactory(persistence: environment.persistence).makeSession()
         }
     }
 
