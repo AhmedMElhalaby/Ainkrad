@@ -35,6 +35,7 @@ final class AppEnvironmentTests {
             pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
+        let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -45,7 +46,8 @@ final class AppEnvironmentTests {
             launcherStore: launcherStore,
             terminalSettingsStore: terminalSettingsStore,
             connectionStore: connectionStore,
-            marketplace: marketplace
+            marketplace: marketplace,
+            marketplaceStore: marketplaceStore
         )
 
         #expect(environment.registry === registry)
@@ -55,6 +57,7 @@ final class AppEnvironmentTests {
         #expect(environment.terminalSettingsStore === terminalSettingsStore)
         #expect(environment.connectionStore === connectionStore)
         #expect(environment.marketplace === marketplace)
+        #expect(environment.marketplaceStore === marketplaceStore)
     }
 
     @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")

@@ -32,6 +32,9 @@ struct MarketplaceOverlayView: View {
             RoundedRectangle(cornerRadius: 14).strokeBorder(
                 LinearGradient(colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
                                startPoint: .top, endPoint: .bottom), lineWidth: 1))
+        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
+        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .onKeyPress(.escape) { onDismiss(); return .handled }
     }
 
     private func header(tokens: DesignTokens) -> some View {
