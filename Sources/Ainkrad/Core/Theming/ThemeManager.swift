@@ -8,19 +8,17 @@ import Observation
 @MainActor
 @Observable
 final class ThemeManager {
-    private static let settingsKey = "global-settings"
-
     private(set) var currentTheme: Theme
     private(set) var appIcon: AppIconChoice
-    private let settingsStore: SettingsStore
+    private let persistence: PersistenceStore
     private let dockIconUpdater: DockIconUpdating
 
     var tokens: DesignTokens { currentTheme.tokens }
 
-    init(settingsStore: SettingsStore, dockIconUpdater: DockIconUpdating) {
-        self.settingsStore = settingsStore
+    init(persistence: PersistenceStore, dockIconUpdater: DockIconUpdating) {
+        self.persistence = persistence
         self.dockIconUpdater = dockIconUpdater
-        let settings = settingsStore.get(GlobalSettings.self, forKey: Self.settingsKey) ?? GlobalSettings()
+        let settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         self.currentTheme = settings.theme
         self.appIcon = settings.appIcon
     }
@@ -52,9 +50,9 @@ final class ThemeManager {
     }
 
     private func persist() {
-        var settings = settingsStore.get(GlobalSettings.self, forKey: Self.settingsKey) ?? GlobalSettings()
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         settings.theme = currentTheme
         settings.appIcon = appIcon
-        settingsStore.set(settings, forKey: Self.settingsKey)
+        persistence.save(settings)
     }
 }

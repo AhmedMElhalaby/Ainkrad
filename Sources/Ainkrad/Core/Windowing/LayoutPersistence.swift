@@ -44,8 +44,8 @@ struct WorkspaceSnapshot: Codable, Equatable {
 
 /// The whole persisted layout state, stored through SettingsStore and
 /// restored at launch.
-struct LayoutStateSnapshot: Codable, Equatable {
-    static let storeKey = "workspace-layout-v1"
+struct LayoutStateSnapshot: PersistableDocument {
+    static let documentID = "workspace-layout"
 
     var workspaces: [WorkspaceSnapshot]
     var activeWorkspaceIndex: Int

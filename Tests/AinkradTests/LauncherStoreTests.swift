@@ -23,17 +23,11 @@ private struct StubSettingsApp: BuiltInApp {
 
 @Suite("LauncherStore")
 final class LauncherStoreTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
-
     @MainActor
     private func makeStore() -> (LauncherStore, BuiltInAppRegistry, WorkspaceManager) {
         let registry = BuiltInAppRegistry(
             apps: [StubTerminalApp.self, StubSettingsApp.self],
-            settingsStore: UserDefaultsSettingsStore(defaults: defaults)
+            persistence: InMemoryPersistenceStore()
         )
         let workspaceManager = WorkspaceManager()
         let store = LauncherStore(registry: registry, workspaceManager: workspaceManager)

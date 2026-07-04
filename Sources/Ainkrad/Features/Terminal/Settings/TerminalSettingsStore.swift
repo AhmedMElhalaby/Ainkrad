@@ -9,11 +9,11 @@ import Observation
 @Observable
 final class TerminalSettingsStore {
     private(set) var settings: TerminalSettings
-    private let store: SettingsStore
+    private let persistence: PersistenceStore
 
-    init(store: SettingsStore) {
-        self.store = store
-        self.settings = store.get(TerminalSettings.self, forKey: TerminalSettings.storeKey) ?? TerminalSettings()
+    init(persistence: PersistenceStore) {
+        self.persistence = persistence
+        self.settings = persistence.load(TerminalSettings.self) ?? TerminalSettings()
     }
 
     /// Mutates the settings, publishes to observers, and persists immediately.
@@ -21,6 +21,6 @@ final class TerminalSettingsStore {
         var updated = settings
         mutate(&updated)
         settings = updated
-        store.set(updated, forKey: TerminalSettings.storeKey)
+        persistence.save(updated)
     }
 }

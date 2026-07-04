@@ -4,30 +4,23 @@ import Foundation
 
 @Suite("TerminalSettings")
 final class TerminalSettingsTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
-
     @Test("defaults to nil shell and working directory with no prior write")
     func defaultsToNilFields() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
-        let loaded = store.get(TerminalSettings.self, forKey: TerminalSettings.storeKey) ?? TerminalSettings()
+        let store = InMemoryPersistenceStore()
+        let loaded = store.load(TerminalSettings.self) ?? TerminalSettings()
         #expect(loaded.defaultShell == nil)
         #expect(loaded.defaultWorkingDirectory == nil)
     }
 
-    @Test("a written selection round-trips through SettingsStore")
+    @Test("a written selection round-trips through the persistence store")
     func writtenSelectionRoundTrips() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let store = InMemoryPersistenceStore()
         var settings = TerminalSettings()
         settings.defaultShell = "/bin/bash"
         settings.defaultWorkingDirectory = URL(fileURLWithPath: "/tmp")
-        store.set(settings, forKey: TerminalSettings.storeKey)
+        store.save(settings)
 
-        let loaded = store.get(TerminalSettings.self, forKey: TerminalSettings.storeKey)
-
+        let loaded = store.load(TerminalSettings.self)
         #expect(loaded?.defaultShell == "/bin/bash")
         #expect(loaded?.defaultWorkingDirectory == URL(fileURLWithPath: "/tmp"))
     }
@@ -56,16 +49,16 @@ final class TerminalSettingsTests {
         #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).backgroundOpacity == 0.7)
     }
 
-    @Test("appearance fields round-trip through SettingsStore")
+    @Test("appearance fields round-trip through the persistence store")
     func appearanceRoundTrips() {
-        let store = UserDefaultsSettingsStore(defaults: defaults)
+        let store = InMemoryPersistenceStore()
         var settings = TerminalSettings()
         settings.colorSchemeID = "dracula"
         settings.fontFamily = "Menlo"
         settings.fontSize = 15
-        store.set(settings, forKey: TerminalSettings.storeKey)
+        store.save(settings)
 
-        let loaded = store.get(TerminalSettings.self, forKey: TerminalSettings.storeKey)
+        let loaded = store.load(TerminalSettings.self)
         #expect(loaded?.colorSchemeID == "dracula")
         #expect(loaded?.fontFamily == "Menlo")
         #expect(loaded?.fontSize == 15)

@@ -2,7 +2,8 @@
 /// `.neonBlue` and `appIcon` to `.auto` on first launch (see ADR-0006 Theming
 /// Approach and `AppIconChoice`). Decoding tolerates payloads written before
 /// `appIcon` existed — a missing field falls back to `.auto`.
-struct GlobalSettings: Codable, Equatable {
+struct GlobalSettings: PersistableDocument {
+    static let documentID = "global-settings"
     var theme: Theme = .neonBlue
     var appIcon: AppIconChoice = .auto
 

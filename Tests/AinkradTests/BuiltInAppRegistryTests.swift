@@ -25,16 +25,12 @@ private struct StubSettingsApp: BuiltInApp {
 
 @Suite("BuiltInAppRegistry")
 final class BuiltInAppRegistryTests {
-    let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-    let defaults: UserDefaults
-
-    init() { self.defaults = UserDefaults(suiteName: suiteName)! }
-    deinit { defaults.removePersistentDomain(forName: suiteName) }
+    let store = InMemoryPersistenceStore()
 
     private func makeRegistry() -> BuiltInAppRegistry {
         BuiltInAppRegistry(
             apps: [StubTerminalApp.self, StubSettingsApp.self],
-            settingsStore: UserDefaultsSettingsStore(defaults: defaults)
+            persistence: store
         )
     }
 
@@ -68,7 +64,7 @@ final class BuiltInAppRegistryTests {
 
         let secondLaunch = BuiltInAppRegistry(
             apps: [StubTerminalApp.self, StubSettingsApp.self],
-            settingsStore: UserDefaultsSettingsStore(defaults: defaults)
+            persistence: store
         )
 
         #expect(secondLaunch.isEnabled("terminal") == false)

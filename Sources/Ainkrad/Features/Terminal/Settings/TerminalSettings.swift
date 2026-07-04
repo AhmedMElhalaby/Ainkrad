@@ -5,8 +5,8 @@ import Foundation
 /// order"; appearance fields default to Match Theme + the default font — see
 /// Terminal App Architecture.md. Decoding tolerates payloads written before
 /// the appearance fields existed.
-struct TerminalSettings: Codable, Equatable {
-    static let storeKey = "terminal-settings"
+struct TerminalSettings: PersistableDocument {
+    static let documentID = "terminal-settings"
 
     var defaultShell: String?
     var defaultWorkingDirectory: URL?

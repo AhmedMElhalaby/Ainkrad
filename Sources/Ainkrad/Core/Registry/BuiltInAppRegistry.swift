@@ -2,16 +2,14 @@
 /// Feeds the App Launcher's "Apps" section and determines which Block types
 /// can be instantiated — see Window & Tile Management Architecture.md.
 final class BuiltInAppRegistry {
-    private static let enabledStateKey = "registry-enabled-state"
-
     private let registeredApps: [BuiltInApp.Type]
-    private let settingsStore: SettingsStore
+    private let persistence: PersistenceStore
     private var enabledOverrides: [String: Bool]
 
-    init(apps: [BuiltInApp.Type], settingsStore: SettingsStore) {
+    init(apps: [BuiltInApp.Type], persistence: PersistenceStore) {
         self.registeredApps = apps
-        self.settingsStore = settingsStore
-        self.enabledOverrides = settingsStore.get([String: Bool].self, forKey: Self.enabledStateKey) ?? [:]
+        self.persistence = persistence
+        self.enabledOverrides = persistence.load(RegistryStateDocument.self)?.enabled ?? [:]
     }
 
     var allApps: [BuiltInApp.Type] { registeredApps }
@@ -29,7 +27,7 @@ final class BuiltInAppRegistry {
 
     func setEnabled(_ enabled: Bool, for id: String) {
         enabledOverrides[id] = enabled
-        settingsStore.set(enabledOverrides, forKey: Self.enabledStateKey)
+        persistence.save(RegistryStateDocument(enabled: enabledOverrides))
         Log.registry.info("Built-in App \(id, privacy: .public) \(enabled ? "enabled" : "disabled", privacy: .public)")
     }
 }
