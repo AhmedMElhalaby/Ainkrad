@@ -28,7 +28,7 @@ struct BlockView: View {
     @State private var isHoveringMagnify = false
     @State private var dropEdge: PaneEdge?
 
-    private var app: BuiltInApp.Type? {
+    private var app: RegisteredApp? {
         registry.allApps.first { $0.id == block.appID }
     }
 
@@ -260,7 +260,7 @@ struct BlockView: View {
     /// border/glow when unfocused.
     @ViewBuilder
     private func headerBackground(tokens: DesignTokens) -> some View {
-        if let fill = app?.chromeFill(environment: environment) {
+        if let fill = app?.chromeFill() {
             fill
         } else {
             isFocused ? tokens.surfaceElevated.opacity(0.92) : tokens.surface.opacity(0.9)

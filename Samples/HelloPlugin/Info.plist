@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>com.ainkrad.plugin.hello</string>
+    <key>CFBundleName</key><string>HelloPlugin</string>
+    <key>CFBundlePackageType</key><string>BNDL</string>
+    <key>NSPrincipalClass</key><string>HelloEntryPoint</string>
+    <key>AinkradAppID</key><string>hello</string>
+    <key>AinkradDisplayName</key><string>Hello</string>
+    <key>AinkradIconSymbol</key><string>hand.wave</string>
+    <key>AinkradAPIVersion</key><integer>1</integer>
+</dict>
+</plist>

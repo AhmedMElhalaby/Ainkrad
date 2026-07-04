@@ -30,6 +30,13 @@ packages:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
     revision: e44352494333686a5de418f85f7927b81c6a9fbe
 
+  # AinkradAppKit — the Built-in App SDK (github.com/AhmedMElhalaby/AinkradAppKit).
+  # DYNAMIC library: the host embeds one copy; plugin bundles resolve it at
+  # runtime (a static copy per binary would break dynamic protocol casts).
+  AinkradAppKit:
+    url: https://github.com/AhmedMElhalaby/AinkradAppKit
+    revision: 4b909b446c6efeed2722eb282075bca4f4c6ff7f
+
 targets:
   Ainkrad:
     type: application
@@ -38,6 +45,7 @@ targets:
       - path: Sources/Ainkrad
     dependencies:
       - package: SwiftTerm
+      - package: AinkradAppKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
@@ -64,9 +72,39 @@ targets:
       # products' .swiftmodule and links against the host at runtime.
       - package: SwiftTerm
         link: false
+      # AinkradAppKit IS linked here (unlike SwiftTerm above): it's a
+      # separate dynamic library two hops from the test bundle's
+      # -bundle_loader (Ainkrad launcher -> Ainkrad.debug.dylib ->
+      # AinkradAppKit.framework), so bundle_loader symbol resolution doesn't
+      # reach it — tests that reference its symbols directly (e.g.
+      # PluginLoaderTests) fail to link without this. It's pure Swift (no
+      # ObjC classes), so linking it again carries none of SwiftTerm's
+      # duplicate-class risk.
+      - package: AinkradAppKit
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+
+  HelloPlugin:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Samples/HelloPlugin
+    dependencies:
+      # Link against the SDK's symbols (needed to resolve protocol descriptors
+      # at load time) but do NOT embed a second copy of the dylib — resolve
+      # the host's copy at runtime, so protocol type metadata is shared and
+      # the cast succeeds.
+      - package: AinkradAppKit
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.plugin.hello
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Samples/HelloPlugin/Info.plist
+        MACH_O_TYPE: mh_bundle
+        # Loaded into the host process: find AinkradAppKit via the host executable.
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
 
 schemes:
   Ainkrad:
@@ -74,6 +112,7 @@ schemes:
       targets:
         Ainkrad: all
         AinkradTests: [test]
+        HelloPlugin: [run]
     run:
       config: Debug
     test:

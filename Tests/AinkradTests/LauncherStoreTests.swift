@@ -3,39 +3,33 @@ import Foundation
 import SwiftUI
 @testable import Ainkrad
 
-private struct StubTerminalApp: BuiltInApp {
-    static let id = "terminal"
-    static let displayName = "Terminal"
-    static let icon = "terminal"
-    static let isEnabledByDefault = true
-    static func makeRootView() -> AnyView { AnyView(Text("Terminal")) }
-    static func makeSettingsView() -> AnyView { AnyView(Text("Terminal Settings")) }
-}
-
-private struct StubSettingsApp: BuiltInApp {
-    static let id = "settings"
-    static let displayName = "Settings"
-    static let icon = "gearshape"
-    static let isEnabledByDefault = true
-    static func makeRootView() -> AnyView { AnyView(Text("Settings")) }
-    static func makeSettingsView() -> AnyView { AnyView(Text("Settings Settings")) }
-}
-
 @Suite("LauncherStore")
+@MainActor
 final class LauncherStoreTests {
-    @MainActor
+    private let terminalApp = RegisteredApp(
+        id: "terminal", displayName: "Terminal", icon: "terminal",
+        isEnabledByDefault: true, source: .builtIn,
+        makeRootView: { AnyView(Text("Terminal")) },
+        makeSettingsView: { AnyView(Text("Terminal Settings")) },
+        chromeFill: { nil }
+    )
+    private let settingsApp = RegisteredApp(
+        id: "settings", displayName: "Settings", icon: "gearshape",
+        isEnabledByDefault: true, source: .builtIn,
+        makeRootView: { AnyView(Text("Settings")) },
+        makeSettingsView: { AnyView(Text("Settings Settings")) },
+        chromeFill: { nil }
+    )
+
     private func makeStore() -> (LauncherStore, BuiltInAppRegistry, WorkspaceManager) {
-        let registry = BuiltInAppRegistry(
-            apps: [StubTerminalApp.self, StubSettingsApp.self],
-            persistence: InMemoryPersistenceStore()
-        )
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
+        registry.install(builtIn: [terminalApp, settingsApp])
         let workspaceManager = WorkspaceManager()
         let store = LauncherStore(registry: registry, workspaceManager: workspaceManager)
         return (store, registry, workspaceManager)
     }
 
     @Test("with no query, appResults lists every enabled app")
-    @MainActor
     func appResultsListsEnabledApps() {
         let (store, registry, _) = makeStore()
         registry.setEnabled(false, for: "settings")
@@ -44,7 +38,6 @@ final class LauncherStoreTests {
     }
 
     @Test("typing fuzzy-filters appResults")
-    @MainActor
     func appResultsFuzzyFilters() {
         let (store, _, _) = makeStore()
         store.query = "trm"
@@ -52,13 +45,12 @@ final class LauncherStoreTests {
     }
 
     @Test("selectApp from the main workspace creates a new workspace and opens the app there")
-    @MainActor
     func selectAppFromMainCreatesNewWorkspace() {
         let (store, _, workspaceManager) = makeStore()
         let main = workspaceManager.activeWorkspace
         #expect(main.isMain)
 
-        store.selectApp(StubTerminalApp.self)
+        store.selectApp(terminalApp)
 
         #expect(workspaceManager.workspaces.count == 2)
         #expect(main.tileLayout.isEmpty)
@@ -67,13 +59,12 @@ final class LauncherStoreTests {
     }
 
     @Test("selectApp on a non-main workspace splits into the current layout")
-    @MainActor
     func selectAppOnNonMainSplitsInPlace() {
         let (store, _, workspaceManager) = makeStore()
         let mission = workspaceManager.createWorkspace()
 
-        store.selectApp(StubTerminalApp.self)
-        store.selectApp(StubSettingsApp.self)
+        store.selectApp(terminalApp)
+        store.selectApp(settingsApp)
 
         #expect(workspaceManager.workspaces.count == 2)
         #expect(workspaceManager.activeWorkspace.id == mission.id)
