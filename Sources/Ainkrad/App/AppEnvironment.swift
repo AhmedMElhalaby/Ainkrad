@@ -12,6 +12,7 @@ final class AppEnvironment {
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
     let terminalSettingsStore: TerminalSettingsStore
+    let connectionStore: ConnectionStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -23,7 +24,8 @@ final class AppEnvironment {
         themeManager: ThemeManager,
         workspaceManager: WorkspaceManager,
         launcherStore: LauncherStore,
-        terminalSettingsStore: TerminalSettingsStore
+        terminalSettingsStore: TerminalSettingsStore,
+        connectionStore: ConnectionStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -32,6 +34,7 @@ final class AppEnvironment {
         self.workspaceManager = workspaceManager
         self.launcherStore = launcherStore
         self.terminalSettingsStore = terminalSettingsStore
+        self.connectionStore = connectionStore
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -70,7 +73,8 @@ final class AppEnvironment {
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
-            terminalSettingsStore: TerminalSettingsStore(persistence: persistence)
+            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
+            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets)
         )
     }
 }

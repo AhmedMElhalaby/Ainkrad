@@ -22,6 +22,7 @@ final class AppEnvironmentTests {
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
         let terminalSettingsStore = TerminalSettingsStore(persistence: persistence)
+        let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -30,7 +31,8 @@ final class AppEnvironmentTests {
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
-            terminalSettingsStore: terminalSettingsStore
+            terminalSettingsStore: terminalSettingsStore,
+            connectionStore: connectionStore
         )
 
         #expect(environment.registry === registry)
@@ -38,6 +40,7 @@ final class AppEnvironmentTests {
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
         #expect(environment.terminalSettingsStore === terminalSettingsStore)
+        #expect(environment.connectionStore === connectionStore)
     }
 
     @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")
