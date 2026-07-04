@@ -212,8 +212,7 @@ struct BlockView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
-        // Solid header (the pane body is now clear for terminal transparency).
-        .background(isFocused ? tokens.surfaceElevated.opacity(0.92) : tokens.surface.opacity(0.9))
+        .background(headerBackground(tokens: tokens))
         .contentShape(Rectangle())
         .onDrag {
             tileLayout.draggingBlockID = block.id
@@ -249,6 +248,22 @@ struct BlockView: View {
             Divider()
             Button("Close", role: .destructive) { tileLayout.close(block.id) }
                 .keyboardShortcut("w", modifiers: .command)
+        }
+    }
+
+    /// The header fill. When the app declares a window fill (e.g. Terminal's
+    /// scheme background at its transparency), the title bar adopts it so it's
+    /// the same color and opacity as the window below — one continuous surface,
+    /// revealing the same blurred island when translucent. Otherwise it falls
+    /// back to the HUD surface, brighter while focused. Focus is still legible
+    /// either way: the whole pane dims (`paneOpacity`) and wears the accent
+    /// border/glow when unfocused.
+    @ViewBuilder
+    private func headerBackground(tokens: DesignTokens) -> some View {
+        if let fill = app?.chromeFill(environment: environment) {
+            fill
+        } else {
+            isFocused ? tokens.surfaceElevated.opacity(0.92) : tokens.surface.opacity(0.9)
         }
     }
 

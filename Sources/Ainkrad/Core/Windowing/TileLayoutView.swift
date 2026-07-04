@@ -15,6 +15,12 @@ struct TileLayoutView: View {
     let workspace: Workspace
     let registry: BuiltInAppRegistry
 
+    /// A one-shot zoom for the focused pane on a Focus toggle: it pops from
+    /// this scale back to 1. A *scale* (not a frame morph) so the terminal's
+    /// cols/rows never change mid-animation — the size still snaps in one step
+    /// (one clean reflow), while the pane visually grows into place.
+    @State private var focusPop: CGFloat = 1
+
     private var tileLayout: TileLayout { workspace.tileLayout }
 
     var body: some View {
@@ -64,20 +70,33 @@ struct TileLayoutView: View {
                 // `.position` (not `.offset`) so the layout/hit-test frame
                 // tracks where the pane is drawn.
                 //
-                // In Focus Mode: the focused pane fills the canvas; the others
-                // KEEP their split frame (so they don't resize — no corruption)
-                // and are simply hidden. Only the focused terminal resizes.
+                // In Focus Mode EVERY pane sits at full-canvas size — only the
+                // focused one is shown. Holding them all full (rather than at
+                // their split frame) makes switching the active pane a pure
+                // visibility swap: no resize, so no reflow lag/flash on switch.
+                // Panes resize once on entering/leaving Focus, never on switch.
                 ForEach(tileLayout.blocks) { block in
                     let normalFrame = geometry.frames[block.id] ?? .zero
                     let isFocusedPane = block.id == focusedID
-                    let frame = (inFocus && isFocusedPane) ? fullRect : normalFrame
+                    let frame = inFocus ? fullRect : normalFrame
                     let isVisible = inFocus
                         ? isFocusedPane
                         : (normalFrame.width >= 1 && normalFrame.height >= 1)
                     BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace, paneSize: frame.size)
+                        // The focused Focus-Mode pane resizes immediately (no
+                        // debounce) so its tile→full grow fills without an empty
+                        // flash; all other panes keep the trailing debounce.
+                        .environment(\.paneResizesImmediately, inFocus && isFocusedPane)
+                        // Every VISIBLE pane zooms into place on a Focus toggle
+                        // (scale-pop, driven by `focusPop`): entering, that's the
+                        // one focused pane; exiting, it's the whole split grid
+                        // popping back. Scale is a render transform — it never
+                        // changes the terminal's cols/rows, so the size still
+                        // resizes exactly once (no empty-space-then-snap).
+                        .scaleEffect(isVisible ? focusPop : 1)
+                        .opacity(isVisible ? 1 : 0)
                         .frame(width: max(frame.width, 0), height: max(frame.height, 0))
                         .position(x: frame.midX, y: frame.midY)
-                        .opacity(isVisible ? 1 : 0)
                         .allowsHitTesting(isVisible)
                 }
 
@@ -90,10 +109,33 @@ struct TileLayoutView: View {
                 }
             }
             .coordinateSpace(name: "pane-canvas")
-            // No pane-frame animation: an animated resize drives the terminal
-            // through many sizes faster than the shell can redraw, duplicating
-            // output. Layout changes (open/split/close/focus) snap in one step
-            // → one clean reflow per terminal.
+            // Zoom the now-visible pane(s) in on EVERY Focus toggle — entering
+            // and exiting. The size has already snapped in this same update;
+            // we set the start scale, then spring it to 1 on the next tick (so
+            // the start frame actually renders first), animating only the scale.
+            .onChange(of: workspace.viewMode) { _, _ in
+                popFocusedPane()
+            }
+            // Switching the active pane WHILE in Focus Mode swaps which pane
+            // fills the canvas — zoom the newcomer in too. In Split Mode a focus
+            // change only moves the glow (no resize), so it gets no pop.
+            .onChange(of: tileLayout.focusedBlockID) { _, _ in
+                guard workspace.viewMode == .focus else { return }
+                popFocusedPane()
+            }
+        }
+    }
+
+    /// Zooms the now-visible pane(s) in: set the start scale, then spring it to
+    /// 1 on the next tick (so the start frame renders first), animating only the
+    /// scale — the pane size has already snapped, so the terminal never reflows
+    /// mid-animation.
+    private func popFocusedPane() {
+        focusPop = 0.92
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                focusPop = 1
+            }
         }
     }
 

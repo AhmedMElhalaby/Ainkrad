@@ -2,12 +2,50 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
+private struct PaneResizesImmediatelyKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Set by the layout on the pane that fills the Focus-Mode canvas; read by
+    /// `TerminalContainerView` to make that pane's resize immediate (no debounce).
+    var paneResizesImmediately: Bool {
+        get { self[PaneResizesImmediatelyKey.self] }
+        set { self[PaneResizesImmediatelyKey.self] = newValue }
+    }
+}
+
 /// The terminal view. Resize behaves normally (live, fills the pane); the
 /// output-duplication-on-resize fix lives in the SwiftTerm fork, which
 /// disables SwiftTerm's line-reflow (the re-wrap that duplicated output). No
 /// app-side resize hacks — those caused a residual artifact and, worse, an
 /// empty gap while dragging.
-final class AinkradTerminalView: LocalProcessTerminalView {}
+final class AinkradTerminalView: LocalProcessTerminalView {
+    /// Fired once, when the view is first laid out at a usable size. The shell
+    /// is spawned here rather than at creation so it starts already matching the
+    /// pane — avoiding a resize (SIGWINCH) mid-startup, which races the shell's
+    /// first prompt and can leave a stray zsh `%` end-of-line mark (seen when
+    /// opening several panes in quick succession).
+    var onReady: (() -> Void)?
+    private var didBecomeReady = false
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard !didBecomeReady, newSize.width > 8, newSize.height > 8 else { return }
+        didBecomeReady = true
+        onReady?()
+        onReady = nil
+    }
+
+    /// Spawns the shell if the first layout never arrived (defensive; panes are
+    /// always laid out, but never leave a session unstarted).
+    func startIfNeeded() {
+        guard !didBecomeReady else { return }
+        didBecomeReady = true
+        onReady?()
+        onReady = nil
+    }
+}
 
 /// Hosts the terminal (an AppKit `NSView`) inside SwiftUI. Spawns the session's
 /// PTY-backed login shell on creation and terminates it deterministically when
@@ -19,22 +57,38 @@ final class AinkradTerminalView: LocalProcessTerminalView {}
 struct TerminalContainerView: NSViewRepresentable {
     let session: TerminalSession
     let appearance: TerminalRenderAppearance
+    /// True for the single pane that fills the Focus-Mode canvas — its resize
+    /// applies immediately (no debounce) so the zoom-in fills without a flash.
+    @Environment(\.paneResizesImmediately) private var resizesImmediately
 
     func makeNSView(context: Context) -> AinkradTerminalView {
         let view = AinkradTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
+        view.applyResizeImmediately = resizesImmediately
         apply(appearance, to: view, coordinator: context.coordinator)
         context.coordinator.installScrollReveal(for: view)
-        view.startProcess(
-            executable: session.shellPath,
-            args: ["-l"],
-            environment: nil,
-            currentDirectory: session.workingDirectory.path
-        )
+        // Defer the spawn to the first real layout so the shell starts at the
+        // pane's size (no startup-time SIGWINCH → no stray `%`). See `onReady`.
+        view.onReady = { [weak view, session] in
+            view?.startProcess(
+                executable: session.shellPath,
+                args: ["-l"],
+                environment: nil,
+                currentDirectory: session.workingDirectory.path
+            )
+        }
+        // Safety net: if a valid layout never arrives, start anyway.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak view] in
+            view?.startIfNeeded()
+        }
         return view
     }
 
     func updateNSView(_ nsView: AinkradTerminalView, context: Context) {
+        // Set BEFORE applying appearance so a focus-driven resize in this same
+        // update takes the immediate path (the setter also flushes any pending
+        // debounced resize the instant this pane becomes the focused one).
+        nsView.applyResizeImmediately = resizesImmediately
         apply(appearance, to: nsView, coordinator: context.coordinator)
     }
 
