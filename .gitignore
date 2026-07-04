@@ -4,6 +4,10 @@ xcuserdata/
 *.xcuserstate
 .DS_Store
 
+# Generated from project.yml by XcodeGen — run `make generate`. project.yml is
+# the source of truth; the .xcodeproj is a build artifact and isn't committed.
+*.xcodeproj/
+
 # Claude Code / session tooling — not part of the product
 .claude/
 .mcp.json
