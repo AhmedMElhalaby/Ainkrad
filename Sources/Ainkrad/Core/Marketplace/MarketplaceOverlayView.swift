@@ -14,8 +14,48 @@ struct MarketplaceOverlayView: View {
         ZStack {
             Color.black.opacity(0.42).ignoresSafeArea().onTapGesture { onDismiss() }
             panel(tokens: tokens).frame(width: 820, height: 560).offset(y: -30)
+            if let id = store.pendingReinstall {
+                reinstallModal(appID: id, tokens: tokens)
+            }
         }
         .task { store.reloadRows() }
+    }
+
+    private func reinstallModal(appID: String, tokens: DesignTokens) -> some View {
+        let name = store.rows.first { $0.id == appID }?.displayName ?? appID
+        return ZStack {
+            Color.black.opacity(0.5).ignoresSafeArea()
+                .onTapGesture { store.cancelReinstall() }
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Reinstall \(name)")
+                    .font(AinkradFont.display(15, weight: .semibold))
+                    .foregroundStyle(tokens.foreground)
+                Text("Previous settings for \(name) were kept. Restore them, or reset to defaults?")
+                    .font(.system(size: 12))
+                    .foregroundStyle(tokens.foreground.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    Spacer()
+                    Button("Cancel") { store.cancelReinstall() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(tokens.foreground.opacity(0.6))
+                    Button("Reset to Defaults") { Task { await store.resetAndInstall(appID) } }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(tokens.accentTertiary)
+                    Button("Restore") { Task { await store.restoreAndInstall(appID) } }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(tokens.accentPrimary.opacity(0.9)))
+                        .foregroundStyle(tokens.background)
+                }
+            }
+            .padding(20)
+            .frame(width: 380)
+            .background(RoundedRectangle(cornerRadius: 12).fill(tokens.surface))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(tokens.accentPrimary.opacity(0.4), lineWidth: 1))
+            .shadow(color: .black.opacity(0.5), radius: 24, y: 8)
+        }
+        .onKeyPress(.escape) { store.cancelReinstall(); return .handled }
     }
 
     private func panel(tokens: DesignTokens) -> some View {
