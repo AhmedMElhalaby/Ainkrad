@@ -80,9 +80,6 @@ struct GlobalSettingsAppIconTests {
     }
 }
 
-// A type whose bundle is the host app module, so tests can find app resources.
-final class AinkradBundleToken {}
-
 @MainActor
 private final class FakeApplier: AppIconApplying {
     private(set) var calls: [(choice: AppIconChoice, appearance: AppIconAppearance, theme: Theme)] = []
