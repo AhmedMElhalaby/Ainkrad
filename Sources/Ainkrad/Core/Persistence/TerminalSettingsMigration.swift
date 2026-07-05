@@ -1,10 +1,11 @@
 import Foundation
 import AinkradAppKit
 
-/// One-time move of Terminal's settings from the host-global document store
-/// (pre-decouple) into Terminal's app-scoped `host.documents`. Runs once, gated
+/// Host-side, one-time move of Terminal's settings from the host-global document
+/// store (pre-decouple) into Terminal's app-scoped `host.documents`. Runs once, gated
 /// by a `UserDefaults` flag. Never touches secrets. Refuses to overwrite an
-/// existing scoped document.
+/// existing scoped document. Lives alongside `LegacyUserDefaultsMigration` and is
+/// invoked from `AppEnvironment.bootstrap`.
 enum TerminalSettingsMigration {
     static let flagKey = "terminal.settings.migratedToScopedStore"
 
