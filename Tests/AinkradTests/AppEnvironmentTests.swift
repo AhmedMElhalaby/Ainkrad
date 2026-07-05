@@ -32,6 +32,7 @@ final class AppEnvironmentTests {
             http: StubHTTPClient(responses: [:]), unzipper: DittoUnzipper(),
             pluginsDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugins"),
             pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
+            retainedDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("retained-plugin-data"),
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
         let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)

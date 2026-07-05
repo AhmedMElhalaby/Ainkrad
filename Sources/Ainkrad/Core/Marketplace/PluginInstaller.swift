@@ -24,6 +24,7 @@ final class PluginInstaller {
     private let unzipper: Unzipper
     private let pluginsDir: URL
     private let pluginDataDir: URL
+    private let retainedDataDir: URL
     private let persistence: PersistenceStore
     private let registry: BuiltInAppRegistry
     // `loadBundle` is a plain (non-Sendable) closure type; the only await in
@@ -32,10 +33,11 @@ final class PluginInstaller {
     private nonisolated(unsafe) let loadBundle: (URL) -> Result<RegisteredApp, PluginRejection>
 
     init(http: HTTPClient, unzipper: Unzipper, pluginsDir: URL, pluginDataDir: URL,
-         persistence: PersistenceStore, registry: BuiltInAppRegistry,
+         retainedDataDir: URL, persistence: PersistenceStore, registry: BuiltInAppRegistry,
          loadBundle: @escaping (URL) -> Result<RegisteredApp, PluginRejection>) {
         self.http = http; self.unzipper = unzipper
         self.pluginsDir = pluginsDir; self.pluginDataDir = pluginDataDir
+        self.retainedDataDir = retainedDataDir
         self.persistence = persistence; self.registry = registry; self.loadBundle = loadBundle
     }
 
@@ -111,18 +113,51 @@ final class PluginInstaller {
         try await install(entry)
     }
 
-    /// Removes the installed bundle, its scoped data, and its installed-state
-    /// entry, and deregisters it. The already-loaded dylib is not unloaded
-    /// (dyld limitation) — the app disappears from the list; its code lingers
-    /// until the next launch.
+    /// Removes the installed bundle and installed-state entry, deregisters the
+    /// app, and RETAINS its scoped data (moved to the retained area) so a
+    /// reinstall can restore it. Retained data is kept until a Reset on reinstall.
+    /// The already-loaded dylib is not unloaded (dyld limitation) — the app
+    /// disappears from the list; its code lingers until the next launch.
     func uninstall(appID: String) throws {
         var doc = persistence.load(InstalledPluginsDocument.self) ?? InstalledPluginsDocument()
         guard doc.installed[appID] != nil else { throw MarketplaceError.notInstalled(appID) }
         try? FileManager.default.removeItem(at: pluginsDir.appendingPathComponent("\(appID).bundle"))
-        try? FileManager.default.removeItem(at: pluginDataDir.appendingPathComponent(appID))
+        retainData(appID: appID)
         doc.installed[appID] = nil
         persistence.save(doc)
         registry.deregister(id: appID)
+    }
+
+    /// True when uninstalled data is being kept for `appID`.
+    func hasRetainedData(appID: String) -> Bool {
+        FileManager.default.fileExists(atPath: retainedDataDir.appendingPathComponent(appID).path)
+    }
+
+    /// Moves retained data back into the live scoped location (replacing any
+    /// live data). Best-effort; no-op if nothing is retained.
+    func restoreRetainedData(appID: String) {
+        let retained = retainedDataDir.appendingPathComponent(appID)
+        guard FileManager.default.fileExists(atPath: retained.path) else { return }
+        let live = pluginDataDir.appendingPathComponent(appID)
+        try? FileManager.default.createDirectory(at: pluginDataDir, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: live)
+        try? FileManager.default.moveItem(at: retained, to: live)
+    }
+
+    /// Permanently deletes retained data for `appID`. Best-effort.
+    func discardRetainedData(appID: String) {
+        try? FileManager.default.removeItem(at: retainedDataDir.appendingPathComponent(appID))
+    }
+
+    /// Moves live scoped data into the retained area, replacing any stale
+    /// retained copy. No-op if the plugin never wrote data.
+    private func retainData(appID: String) {
+        let live = pluginDataDir.appendingPathComponent(appID)
+        guard FileManager.default.fileExists(atPath: live.path) else { return }
+        let retained = retainedDataDir.appendingPathComponent(appID)
+        try? FileManager.default.createDirectory(at: retainedDataDir, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: retained)
+        try? FileManager.default.moveItem(at: live, to: retained)
     }
 }
 

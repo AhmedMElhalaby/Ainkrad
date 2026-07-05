@@ -69,6 +69,7 @@ final class AppEnvironment {
             documentsRoot.appendingPathComponent("DevPlugins", isDirectory: true),
         ]
         let pluginDataRoot = documentsRoot.appendingPathComponent("PluginData", isDirectory: true)
+        let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
         let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy()) { appID in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager)
@@ -82,6 +83,7 @@ final class AppEnvironment {
             http: URLSessionHTTPClient(), unzipper: DittoUnzipper(),
             pluginsDir: documentsRoot.appendingPathComponent("Plugins", isDirectory: true),
             pluginDataDir: pluginDataRoot,
+            retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
