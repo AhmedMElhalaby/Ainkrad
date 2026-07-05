@@ -69,7 +69,9 @@ final class ScopedPluginSecretStore: PluginSecretStore {
     private let backing: SecretStore
     init(appID: String, backing: SecretStore) { self.appID = appID; self.backing = backing }
 
-    private func scoped(_ key: String) -> String { "\(appID).\(key)" }
+    // Separator OUTSIDE the appID allowlist ([A-Za-z0-9._-]) so the appID prefix
+    // is unambiguous and no two distinct (appID, key) pairs collide.
+    private func scoped(_ key: String) -> String { "\(appID)/\(key)" }
     func secret(forKey key: String) -> String? { backing.secret(for: scoped(key)) }
     func setSecret(_ value: String?, forKey key: String) { backing.setSecret(value, for: scoped(key)) }
 }

@@ -117,4 +117,18 @@ struct PluginLoaderTests {
         #expect(result.failures.count == 1)
         #expect(result.failures[0].reason.contains("signature:"))
     }
+
+    @Test("one bad bundle does not suppress processing of its siblings")
+    func multiBundleIsolation() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var badAPI = validInfo; badAPI[PluginInfoKey.apiVersion] = 999
+        try writeBundle(in: dir, name: "Future", info: badAPI)          // rejected at validation
+        var noID = validInfo; noID.removeValue(forKey: PluginInfoKey.appID)
+        try writeBundle(in: dir, name: "NoID", info: noID)              // rejected at metadata parse
+
+        let result = loader().loadAll(from: [dir])
+        #expect(result.apps.isEmpty)
+        #expect(result.failures.count == 2)   // BOTH processed — the scan never aborts early
+    }
 }
