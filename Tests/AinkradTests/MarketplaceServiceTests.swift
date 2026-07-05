@@ -26,6 +26,7 @@ struct MarketplaceServiceTests {
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore()); registry.install(builtIn: [])
         let installer = PluginInstaller(http: StubHTTPClient(responses: [:]), unzipper: DittoUnzipper(),
             pluginsDir: URL(fileURLWithPath: "/tmp/p"), pluginDataDir: URL(fileURLWithPath: "/tmp/d"),
+            retainedDataDir: URL(fileURLWithPath: "/tmp/r"),
             persistence: store, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
         let svc = MarketplaceService(catalog: catalog, installer: installer, persistence: store)
         #expect(svc.availableUpdates().map(\.appID) == ["hello"])

@@ -13,6 +13,9 @@ final class MarketplaceStore {
     private(set) var busy: Set<String> = []
     private(set) var isRefreshing = false
     var error: MarketplaceError?
+    /// Non-nil while a reinstall of this appID awaits the user's Restore/Reset
+    /// choice (retained data exists). Drives the overlay's modal.
+    private(set) var pendingReinstall: String? = nil
 
     private let service: MarketplaceServing
     private let registry: BuiltInAppRegistry
@@ -82,7 +85,28 @@ final class MarketplaceStore {
         reloadRows()
     }
 
-    func install(_ id: String) async { await run(id) { try await self.service.install(appID: id) } }
+    func install(_ id: String) async {
+        if service.hasRetainedData(appID: id) { pendingReinstall = id; return }
+        await run(id) { try await self.service.install(appID: id) }
+    }
+
+    /// Reinstall keeping the retained settings.
+    func restoreAndInstall(_ id: String) async {
+        service.restoreRetainedData(appID: id)
+        pendingReinstall = nil
+        await run(id) { try await self.service.install(appID: id) }
+    }
+
+    /// Reinstall discarding the retained settings (fresh defaults).
+    func resetAndInstall(_ id: String) async {
+        service.discardRetainedData(appID: id)
+        pendingReinstall = nil
+        await run(id) { try await self.service.install(appID: id) }
+    }
+
+    /// Dismiss the reinstall prompt without installing.
+    func cancelReinstall() { pendingReinstall = nil }
+
     func update(_ id: String) async  { await run(id) { try await self.service.update(appID: id) } }
 
     func uninstall(_ id: String) {

@@ -11,4 +11,7 @@ protocol MarketplaceServing {
     func uninstall(appID: String) throws
     func installedApps() -> [String: InstalledPluginsDocument.Entry]
     func availableUpdates() -> [CatalogEntry]
+    func hasRetainedData(appID: String) -> Bool
+    func restoreRetainedData(appID: String)
+    func discardRetainedData(appID: String)
 }

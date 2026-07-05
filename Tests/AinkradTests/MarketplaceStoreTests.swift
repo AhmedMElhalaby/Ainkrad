@@ -11,6 +11,9 @@ final class FakeMarketplaceService: MarketplaceServing {
     var installError: MarketplaceError?
     private(set) var installedCalls: [String] = []
     private(set) var uninstalledCalls: [String] = []
+    var retained: Set<String> = []
+    private(set) var restoredCalls: [String] = []
+    private(set) var discardedCalls: [String] = []
 
     func refreshCatalog() async -> [CatalogEntry] { cachedCatalog }
     func install(appID: String) async throws {
@@ -23,6 +26,9 @@ final class FakeMarketplaceService: MarketplaceServing {
     func uninstall(appID: String) throws { uninstalledCalls.append(appID); installedResult[appID] = nil }
     func installedApps() -> [String: InstalledPluginsDocument.Entry] { installedResult }
     func availableUpdates() -> [CatalogEntry] { updatesResult }
+    func hasRetainedData(appID: String) -> Bool { retained.contains(appID) }
+    func restoreRetainedData(appID: String) { restoredCalls.append(appID); retained.remove(appID) }
+    func discardRetainedData(appID: String) { discardedCalls.append(appID); retained.remove(appID) }
 }
 
 @MainActor
@@ -178,5 +184,55 @@ struct MarketplaceStoreTests {
         #expect(s.rows.first { $0.id == "terminal" }?.isEnabled == true)
         s.setEnabled(false, for: "terminal")
         #expect(s.rows.first { $0.id == "terminal" }?.isEnabled == false)
+    }
+
+    @Test("install with retained data prompts instead of installing")
+    func installPrompts() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]; svc.retained = ["notes"]
+        let s = store(service: svc)
+        await s.install("notes")
+        #expect(s.pendingReinstall == "notes")
+        #expect(svc.installedCalls.isEmpty)                    // did NOT install yet
+    }
+
+    @Test("install without retained data installs directly (no prompt)")
+    func installNoPrompt() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]
+        let s = store(service: svc)
+        await s.install("notes")
+        #expect(s.pendingReinstall == nil)
+        #expect(svc.installedCalls == ["notes"])
+    }
+
+    @Test("restoreAndInstall restores then installs and clears the prompt")
+    func restorePath() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]; svc.retained = ["notes"]
+        let s = store(service: svc)
+        await s.install("notes")                              // sets pendingReinstall
+        await s.restoreAndInstall("notes")
+        #expect(svc.restoredCalls == ["notes"])
+        #expect(svc.installedCalls == ["notes"])
+        #expect(s.pendingReinstall == nil)
+    }
+
+    @Test("resetAndInstall discards then installs and clears the prompt")
+    func resetPath() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]; svc.retained = ["notes"]
+        let s = store(service: svc)
+        await s.install("notes")
+        await s.resetAndInstall("notes")
+        #expect(svc.discardedCalls == ["notes"])
+        #expect(svc.installedCalls == ["notes"])
+        #expect(s.pendingReinstall == nil)
+    }
+
+    @Test("cancelReinstall clears the prompt without installing")
+    func cancelPath() async {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]; svc.retained = ["notes"]
+        let s = store(service: svc)
+        await s.install("notes")
+        s.cancelReinstall()
+        #expect(s.pendingReinstall == nil)
+        #expect(svc.installedCalls.isEmpty)
     }
 }
