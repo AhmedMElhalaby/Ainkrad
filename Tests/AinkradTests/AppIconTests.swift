@@ -83,43 +83,80 @@ struct GlobalSettingsAppIconTests {
 // A type whose bundle is the host app module, so tests can find app resources.
 final class AinkradBundleToken {}
 
-// TODO(v2 Task 2): rewritten in Task 2
-// @MainActor
-// private final class FakeApplier: AppIconApplying {
-//     private(set) var applied: [AppIconChoice] = []
-//     func apply(_ choice: AppIconChoice) { applied.append(choice) }
-// }
+@MainActor
+private final class FakeApplier: AppIconApplying {
+    private(set) var calls: [(choice: AppIconChoice, appearance: AppIconAppearance, theme: Theme)] = []
+    func apply(choice: AppIconChoice, appearance: AppIconAppearance, theme: Theme) {
+        calls.append((choice, appearance, theme))
+    }
+}
 
-// TODO(v2 Task 2): rewritten in Task 2
-// @MainActor
-// struct AppIconStoreTests {
-//     @Test("loads the persisted choice")
-//     func loads() {
-//         let p = InMemoryPersistenceStore()
-//         p.save(GlobalSettings(theme: .neonBlue, appIconChoice: .purple))
-//         let store = AppIconStore(persistence: p, applier: FakeApplier())
-//         #expect(store.choice == .purple)
-//     }
-//
-//     @Test("select persists the choice (preserving theme) and applies it")
-//     func select() {
-//         let p = InMemoryPersistenceStore()
-//         p.save(GlobalSettings(theme: .dracula, appIconChoice: .blue))
-//         let applier = FakeApplier()
-//         let store = AppIconStore(persistence: p, applier: applier)
-//         store.select(.purple)
-//         #expect(store.choice == .purple)
-//         #expect(p.load(GlobalSettings.self)?.appIconChoice == .purple)
-//         #expect(p.load(GlobalSettings.self)?.theme == .dracula)   // theme preserved
-//         #expect(applier.applied.last == .purple)
-//     }
-//
-//     @Test("applyCurrent applies the loaded choice")
-//     func applyCurrent() {
-//         let p = InMemoryPersistenceStore()
-//         p.save(GlobalSettings(theme: .neonBlue, appIconChoice: .purple))
-//         let applier = FakeApplier()
-//         AppIconStore(persistence: p, applier: applier).applyCurrent()
-//         #expect(applier.applied == [.purple])
-//     }
-// }
+@MainActor
+struct AppIconStoreTests {
+    private func makeThemeManager(_ p: PersistenceStore) -> ThemeManager { ThemeManager(persistence: p) }
+
+    @Test("loads persisted color + appearance")
+    func loads() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .neonBlue, appIconChoice: .purple, appIconAppearance: .dark))
+        let store = AppIconStore(persistence: p, applier: FakeApplier(), themeManager: makeThemeManager(p))
+        #expect(store.choice == .purple)
+        #expect(store.appearance == .dark)
+    }
+
+    @Test("selectColor persists color (preserving theme + appearance) and applies")
+    func selectColor() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .dracula, appIconChoice: .auto, appIconAppearance: .light))
+        let applier = FakeApplier()
+        let tm = makeThemeManager(p)
+        let store = AppIconStore(persistence: p, applier: applier, themeManager: tm)
+        store.selectColor(.blue)
+        #expect(store.choice == .blue)
+        let saved = p.load(GlobalSettings.self)
+        #expect(saved?.appIconChoice == .blue)
+        #expect(saved?.appIconAppearance == .light)   // preserved
+        #expect(saved?.theme == .dracula)             // preserved
+        #expect(applier.calls.last?.choice == .blue)
+        #expect(applier.calls.last?.appearance == .light)
+        #expect(applier.calls.last?.theme == .dracula)
+    }
+
+    @Test("selectAppearance persists appearance (preserving theme + color) and applies")
+    func selectAppearance() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .nord, appIconChoice: .purple, appIconAppearance: .system))
+        let applier = FakeApplier()
+        let store = AppIconStore(persistence: p, applier: applier, themeManager: makeThemeManager(p))
+        store.selectAppearance(.dark)
+        #expect(store.appearance == .dark)
+        let saved = p.load(GlobalSettings.self)
+        #expect(saved?.appIconAppearance == .dark)
+        #expect(saved?.appIconChoice == .purple)      // preserved
+        #expect(saved?.theme == .nord)                // preserved
+        #expect(applier.calls.last?.appearance == .dark)
+    }
+
+    @Test("applyCurrent applies loaded values with the current theme")
+    func applyCurrent() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .cyberPurple, appIconChoice: .auto, appIconAppearance: .system))
+        let applier = FakeApplier()
+        let store = AppIconStore(persistence: p, applier: applier, themeManager: makeThemeManager(p))
+        store.applyCurrent()
+        #expect(applier.calls.last?.choice == .auto)
+        #expect(applier.calls.last?.theme == .cyberPurple)
+    }
+
+    @Test("theme change re-applies with the new theme")
+    func themeChangeReapplies() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .neonBlue, appIconChoice: .auto, appIconAppearance: .system))
+        let applier = FakeApplier()
+        let tm = makeThemeManager(p)
+        let store = AppIconStore(persistence: p, applier: applier, themeManager: tm)
+        tm.onThemeChange = { [weak store] in store?.applyCurrent() }   // wired as bootstrap does
+        tm.setTheme(.cyberPurple)
+        #expect(applier.calls.last?.theme == .cyberPurple)
+    }
+}

@@ -30,7 +30,7 @@ struct AppIconSettingsView: View {
         // TODO(v2 Task 3): rewritten to use the appearance setting + theme.
         let previewName = AppIconResolver.resourceName(for: choice, theme: .neonBlue, appearance: .system, systemDark: true)
         return Button {
-            store.select(choice)
+            store.selectColor(choice)
         } label: {
             VStack(spacing: 8) {
                 Group {

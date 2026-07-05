@@ -42,7 +42,7 @@ final class AppEnvironmentTests {
             connectionStore: connectionStore,
             marketplace: marketplace,
             marketplaceStore: marketplaceStore,
-            appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier())
+            appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager)
         )
 
         #expect(environment.registry === registry)

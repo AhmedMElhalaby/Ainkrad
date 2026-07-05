@@ -10,6 +10,11 @@ final class ThemeManager {
 
     var tokens: DesignTokens { currentTheme.tokens }
 
+    /// Fired after a theme change is applied + persisted. Used by the app-icon
+    /// store to re-apply the Dock icon when the color is Auto. Mirrors
+    /// `WorkspaceManager.onStateChange`.
+    var onThemeChange: (() -> Void)?
+
     init(persistence: PersistenceStore) {
         self.persistence = persistence
         let settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
@@ -19,6 +24,7 @@ final class ThemeManager {
     func setTheme(_ theme: Theme) {
         currentTheme = theme
         persist()
+        onThemeChange?()
         Log.settings.info("Theme changed to \(theme.rawValue, privacy: .public)")
     }
 

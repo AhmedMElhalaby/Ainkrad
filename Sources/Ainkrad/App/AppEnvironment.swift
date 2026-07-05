@@ -88,7 +88,10 @@ final class AppEnvironment {
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
         let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
 
-        let appIconStore = AppIconStore(persistence: persistence, applier: AppKitAppIconApplier())
+        let appIconStore = AppIconStore(persistence: persistence,
+                                        applier: AppKitAppIconApplier(),
+                                        themeManager: themeManager)
+        themeManager.onThemeChange = { [weak appIconStore] in appIconStore?.applyCurrent() }
         appIconStore.applyCurrent()
 
         let environment = AppEnvironment(

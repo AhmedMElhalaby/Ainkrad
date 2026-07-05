@@ -1,30 +1,35 @@
 import AppKit
 
 /// Real `AppIconApplying`: sets the running app's Dock icon to the composed
-/// `.icns` for the choice under the current appearance, and re-applies when the
-/// system Light/Dark appearance changes. Thin platform side-effect (verified
-/// visually), so the logic (`AppIconResolver`) is tested, not this.
+/// `.icns` resolved from the user's color + appearance settings and (for Auto)
+/// the current theme, under the current system appearance. Re-applies when the
+/// system Light/Dark appearance changes (relevant when Appearance = System).
 @MainActor
 final class AppKitAppIconApplier: NSObject, AppIconApplying {
-    private var current: AppIconChoice = .blue
+    private var choice: AppIconChoice = .auto
+    private var appearance: AppIconAppearance = .system
+    private var theme: Theme = .neonBlue
     private var observation: NSKeyValueObservation?
 
     override init() {
         super.init()
-        // Re-apply on Light/Dark change.
         observation = NSApplication.shared.observe(\.effectiveAppearance) { [weak self] _, _ in
             Task { @MainActor in self?.reapply() }
         }
     }
 
-    func apply(_ choice: AppIconChoice) { current = choice; reapply() }
+    func apply(choice: AppIconChoice, appearance: AppIconAppearance, theme: Theme) {
+        self.choice = choice
+        self.appearance = appearance
+        self.theme = theme
+        reapply()
+    }
 
     private func reapply() {
-        let dark = NSApplication.shared.effectiveAppearance
+        let systemDark = NSApplication.shared.effectiveAppearance
             .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        // TODO(v2 Task 2): pass the real theme + appearance setting; this
-        // pre-v2 call site preselects an explicit color so theme is unused.
-        let name = AppIconResolver.resourceName(for: current, theme: .neonBlue, appearance: .system, systemDark: dark)
+        let name = AppIconResolver.resourceName(for: choice, theme: theme,
+                                                appearance: appearance, systemDark: systemDark)
         guard let url = Bundle.main.url(forResource: name, withExtension: "icns"),
               let image = NSImage(contentsOf: url) else { return }
         NSApplication.shared.applicationIconImage = image
