@@ -14,6 +14,7 @@ final class AppEnvironment {
     let connectionStore: ConnectionStore
     let marketplace: MarketplaceService
     let marketplaceStore: MarketplaceStore
+    let appIconStore: AppIconStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -28,7 +29,8 @@ final class AppEnvironment {
         launcherStore: LauncherStore,
         connectionStore: ConnectionStore,
         marketplace: MarketplaceService,
-        marketplaceStore: MarketplaceStore
+        marketplaceStore: MarketplaceStore,
+        appIconStore: AppIconStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -39,6 +41,7 @@ final class AppEnvironment {
         self.connectionStore = connectionStore
         self.marketplace = marketplace
         self.marketplaceStore = marketplaceStore
+        self.appIconStore = appIconStore
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -85,6 +88,12 @@ final class AppEnvironment {
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
         let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
 
+        let appIconStore = AppIconStore(persistence: persistence,
+                                        applier: AppKitAppIconApplier(),
+                                        themeManager: themeManager)
+        themeManager.onThemeChange = { [weak appIconStore] in appIconStore?.applyCurrent() }
+        appIconStore.applyCurrent()
+
         let environment = AppEnvironment(
             persistence: persistence,
             secrets: secrets,
@@ -94,7 +103,8 @@ final class AppEnvironment {
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
             connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
             marketplace: marketplace,
-            marketplaceStore: marketplaceStore
+            marketplaceStore: marketplaceStore,
+            appIconStore: appIconStore
         )
 
         // Terminal ships as a Marketplace plugin (AinkradTerminal), not compiled in.

@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// The Ainkrad → Appearance section: a theme picker bound to `ThemeManager`.
-/// Selecting a theme applies tokens immediately (and swaps the Dock icon when
-/// the App Icon choice is Auto), with no Save button. See Theme System.md and
-/// ADR-0006. Theme cards preview each theme's accent ramp inside targeting
-/// brackets.
+/// Selecting a theme applies tokens immediately, with no Save button. The
+/// Dock icon is a separate, independent manual preference — see the App Icon
+/// section (`AppIconSettingsView`) — and is not affected by theme changes.
+/// See Theme System.md and ADR-0006. Theme cards preview each theme's accent
+/// ramp inside targeting brackets.
 struct AppearanceSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 

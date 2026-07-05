@@ -35,4 +35,13 @@ enum Theme: String, Codable, CaseIterable {
         case .solarizedDark: return "Solarized Dark"
         }
     }
+
+    /// Which app-icon color family this theme uses when the App Icon color is
+    /// set to Auto. See App Icon Picker v2 — Design.
+    var iconColorFamily: AppIconColor {
+        switch self {
+        case .cyberPurple, .dracula: return .purple
+        case .neonBlue, .nord, .tokyoNight, .gruvbox, .solarizedDark: return .blue
+        }
+    }
 }

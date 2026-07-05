@@ -5,13 +5,21 @@
 struct GlobalSettings: PersistableDocument {
     static let documentID = "global-settings"
     var theme: Theme = .neonBlue
+    var appIconChoice: AppIconChoice = .auto
+    var appIconAppearance: AppIconAppearance = .system
 
-    init(theme: Theme = .neonBlue) {
+    init(theme: Theme = .neonBlue,
+         appIconChoice: AppIconChoice = .auto,
+         appIconAppearance: AppIconAppearance = .system) {
         self.theme = theme
+        self.appIconChoice = appIconChoice
+        self.appIconAppearance = appIconAppearance
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         theme = try container.decodeIfPresent(Theme.self, forKey: .theme) ?? .neonBlue
+        appIconChoice = try container.decodeIfPresent(AppIconChoice.self, forKey: .appIconChoice) ?? .auto
+        appIconAppearance = try container.decodeIfPresent(AppIconAppearance.self, forKey: .appIconAppearance) ?? .system
     }
 }
