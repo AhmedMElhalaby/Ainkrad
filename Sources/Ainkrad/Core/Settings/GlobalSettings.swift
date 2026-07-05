@@ -1,20 +1,17 @@
 /// App-wide settings persisted through `SettingsStore`. `theme` defaults to
-/// `.neonBlue` and `appIcon` to `.auto` on first launch (see ADR-0006 Theming
-/// Approach and `AppIconChoice`). Decoding tolerates payloads written before
-/// `appIcon` existed — a missing field falls back to `.auto`.
+/// `.neonBlue` on first launch (see ADR-0006 Theming Approach). Decoding
+/// tolerates payloads written before/after fields changed — a missing `theme`
+/// falls back to the default.
 struct GlobalSettings: PersistableDocument {
     static let documentID = "global-settings"
     var theme: Theme = .neonBlue
-    var appIcon: AppIconChoice = .auto
 
-    init(theme: Theme = .neonBlue, appIcon: AppIconChoice = .auto) {
+    init(theme: Theme = .neonBlue) {
         self.theme = theme
-        self.appIcon = appIcon
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         theme = try container.decodeIfPresent(Theme.self, forKey: .theme) ?? .neonBlue
-        appIcon = try container.decodeIfPresent(AppIconChoice.self, forKey: .appIcon) ?? .auto
     }
 }

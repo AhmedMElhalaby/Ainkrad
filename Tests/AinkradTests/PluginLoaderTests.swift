@@ -3,14 +3,6 @@ import Foundation
 @testable import Ainkrad
 @testable import AinkradAppKit
 
-/// Test-only `DockIconUpdating` that does nothing, so `ThemeManager` can be
-/// constructed for the loader's `HostServicesImpl` without touching the real
-/// Dock icon.
-@MainActor
-private struct NoOpDockIconUpdater: DockIconUpdating {
-    func updateDockIcon(_ icon: AppIcon) {}
-}
-
 @MainActor
 struct PluginLoaderTests {
     /// Writes a `.bundle` directory with a hand-authored Info.plist (no binary,
@@ -29,7 +21,7 @@ struct PluginLoaderTests {
                 appID: appID,
                 dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString),
                 secretStore: InMemorySecretStore(),
-                themeManager: ThemeManager(persistence: InMemoryPersistenceStore(), dockIconUpdater: NoOpDockIconUpdater())
+                themeManager: ThemeManager(persistence: InMemoryPersistenceStore())
             )
         }
     }
