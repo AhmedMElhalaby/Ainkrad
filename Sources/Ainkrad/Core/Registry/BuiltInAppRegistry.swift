@@ -1,7 +1,10 @@
+import Observation
+
 /// Single source of truth for which apps exist and are enabled. Hybrid: apps
 /// are installed once after `AppEnvironment` exists, mixing compiled-in apps
 /// with dynamically-loaded plugin bundles.
 @MainActor
+@Observable
 final class BuiltInAppRegistry {
     private var registeredApps: [RegisteredApp] = []
     private let persistence: PersistenceStore

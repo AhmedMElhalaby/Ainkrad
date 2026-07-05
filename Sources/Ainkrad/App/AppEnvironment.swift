@@ -14,9 +14,11 @@ final class AppEnvironment {
     let terminalSettingsStore: TerminalSettingsStore
     let connectionStore: ConnectionStore
     let marketplace: MarketplaceService
+    let marketplaceStore: MarketplaceStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
+    var isMarketplacePresented = false
 
     init(
         persistence: PersistenceStore,
@@ -27,7 +29,8 @@ final class AppEnvironment {
         launcherStore: LauncherStore,
         terminalSettingsStore: TerminalSettingsStore,
         connectionStore: ConnectionStore,
-        marketplace: MarketplaceService
+        marketplace: MarketplaceService,
+        marketplaceStore: MarketplaceStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -38,6 +41,7 @@ final class AppEnvironment {
         self.terminalSettingsStore = terminalSettingsStore
         self.connectionStore = connectionStore
         self.marketplace = marketplace
+        self.marketplaceStore = marketplaceStore
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -84,6 +88,7 @@ final class AppEnvironment {
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
+        let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -94,7 +99,8 @@ final class AppEnvironment {
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
             terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
             connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
-            marketplace: marketplace
+            marketplace: marketplace,
+            marketplaceStore: marketplaceStore
         )
 
         // Built-in apps' chrome fill captures the environment, so install after it exists.
