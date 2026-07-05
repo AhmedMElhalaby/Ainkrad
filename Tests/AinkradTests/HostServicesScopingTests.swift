@@ -34,6 +34,18 @@ struct HostServicesScopingTests {
         a.setSecret("token", forKey: "api")
         #expect(a.secret(forKey: "api") == "token")
         #expect(b.secret(forKey: "api") == nil)
-        #expect(backing.secret(for: "appA.api") == "token")
+        #expect(backing.secret(for: "appA/api") == "token")
+    }
+
+    @Test("secret keys cannot collide across appIDs that differ only by a dot")
+    func secretKeyNoCollision() {
+        let backing = InMemorySecretStore()
+        let ab = ScopedPluginSecretStore(appID: "a.b", backing: backing)
+        let a  = ScopedPluginSecretStore(appID: "a", backing: backing)
+        ab.setSecret("from-ab", forKey: "c")     // appID "a.b", key "c"
+        a.setSecret("from-a",  forKey: "b.c")    // appID "a",   key "b.c"
+        // With a dot separator these both mapped to "a.b.c" and clobbered each other.
+        #expect(ab.secret(forKey: "c") == "from-ab")
+        #expect(a.secret(forKey: "b.c") == "from-a")
     }
 }
