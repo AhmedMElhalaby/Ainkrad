@@ -104,7 +104,9 @@ final class AppEnvironment {
         // then register it through the single built-in adapter.
         let terminalHost = HostServicesImpl(appID: TerminalApp.id, dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager)
-        TerminalSettingsMigration.runIfNeeded(legacy: persistence, scoped: terminalHost.documents, defaults: defaults)
+        TerminalSettingsMigration.runIfNeeded(
+            legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
+            scoped: terminalHost.documents, defaults: defaults)
 
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(

@@ -105,6 +105,19 @@ final class FileDocumentStore: PersistenceStore {
         }
     }
 
+    /// The stored payload JSON for a documentID, unwrapped from the versioned
+    /// envelope, without needing the document's Swift type. `nil` if absent or
+    /// unreadable. Used by one-time migrations that must move a document whose
+    /// type no longer lives in the host.
+    func rawPayloadData(forID id: String) -> Data? {
+        let url = fileURL(for: id)
+        guard fileManager.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url),
+              let raw = try? PersistenceCoding.decoder.decode(RawEnvelope.self, from: data),
+              let payload = try? PersistenceCoding.encoder.encode(raw.payload) else { return nil }
+        return payload
+    }
+
     func delete<T: PersistableDocument>(_ type: T.Type) {
         cache[T.documentID] = nil
         try? fileManager.removeItem(at: fileURL(for: T.documentID))
