@@ -180,7 +180,9 @@ struct PluginInstallerErrorPathTests {
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
         let persistence = InMemoryPersistenceStore()
         let inst = installer(root: root, http: http, registry: registry, persistence: persistence)
-        await #expect(throws: MarketplaceError.self) { try await inst.install(entry("hello", url: url, sha: "x")) }
+        do { try await inst.install(entry("hello", url: url, sha: "x")); Issue.record("expected throw") }
+        catch let e as MarketplaceError { if case .download = e {} else { Issue.record("expected .download, got \(e)") } }
+        catch { Issue.record("unexpected \(error)") }
         #expect(persistence.load(InstalledPluginsDocument.self)?.installed["hello"] == nil)
         #expect(registry.allApps.isEmpty)
     }
