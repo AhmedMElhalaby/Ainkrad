@@ -49,4 +49,8 @@ final class MarketplaceService: MarketplaceServing {
             return PluginVersion.isNewer(entry.version, than: cur.version)
         }
     }
+
+    func hasRetainedData(appID: String) -> Bool { installer.hasRetainedData(appID: appID) }
+    func restoreRetainedData(appID: String) { installer.restoreRetainedData(appID: appID) }
+    func discardRetainedData(appID: String) { installer.discardRetainedData(appID: appID) }
 }
