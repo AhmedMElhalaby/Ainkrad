@@ -150,6 +150,100 @@ struct PluginInstallerTests {
 }
 
 @MainActor
+struct PluginInstallerErrorPathTests {
+    private func sha(_ d: Data) -> String { SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined() }
+    private func entry(_ id: String, url: URL, sha: String) -> CatalogEntry {
+        CatalogEntry(appID: id, displayName: id, icon: "app", description: "", version: "1.0.0",
+                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/\(id)")
+    }
+    private func installer(root: URL, http: HTTPClient, registry: BuiltInAppRegistry,
+                           persistence: PersistenceStore, loadOK: Bool = true) -> PluginInstaller {
+        PluginInstaller(
+            http: http, unzipper: DittoUnzipper(),
+            pluginsDir: root.appendingPathComponent("Plugins"),
+            pluginDataDir: root.appendingPathComponent("PluginData"),
+            retainedDataDir: root.appendingPathComponent("RetainedPluginData"),
+            persistence: persistence, registry: registry,
+            loadBundle: { url in
+                loadOK ? .success(RegisteredApp(id: "hello", displayName: "Hello", icon: "app",
+                    isEnabledByDefault: true, source: .plugin(url: url, apiVersion: 1),
+                    makeRootView: { AnyView(EmptyView()) }, makeSettingsView: { AnyView(EmptyView()) }, chromeFill: { nil }))
+                : .failure(PluginRejection(reason: "load failed")) })
+    }
+
+    @Test("a download failure throws .download and writes nothing")
+    func downloadFails() async {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let url = URL(string: "https://e/hello.bundle.zip")!
+        struct Net: Error {}
+        let http = StubHTTPClient(responses: [url: .failure(Net())])
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
+        let persistence = InMemoryPersistenceStore()
+        let inst = installer(root: root, http: http, registry: registry, persistence: persistence)
+        await #expect(throws: MarketplaceError.self) { try await inst.install(entry("hello", url: url, sha: "x")) }
+        #expect(persistence.load(InstalledPluginsDocument.self)?.installed["hello"] == nil)
+        #expect(registry.allApps.isEmpty)
+    }
+
+    @Test("bytes that pass sha256 but aren't a zip throw .unpack")
+    func unpackFails() async {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let url = URL(string: "https://e/hello.bundle.zip")!
+        let bytes = Data("definitely not a zip".utf8)
+        let http = StubHTTPClient(responses: [url: .success(bytes)])
+        let inst = installer(root: root, http: http, registry: BuiltInAppRegistry(persistence: InMemoryPersistenceStore()), persistence: InMemoryPersistenceStore())
+        do { try await inst.install(entry("hello", url: url, sha: sha(bytes))); Issue.record("expected throw") }
+        catch let e as MarketplaceError { if case .unpack = e {} else { Issue.record("expected .unpack, got \(e)") } }
+        catch { Issue.record("unexpected \(error)") }
+    }
+
+    @Test("a valid zip that contains no readable .bundle throws .invalidBundle")
+    func invalidBundle() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        // Zip a plain directory (no Contents/Info.plist) with ditto.
+        let src = root.appendingPathComponent("src/notabundle", isDirectory: true)
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try Data("hi".utf8).write(to: src.appendingPathComponent("file.txt"))
+        let zip = root.appendingPathComponent("src/x.zip")
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        p.arguments = ["-c", "-k", src.path, zip.path]; try p.run(); p.waitUntilExit()
+        let bytes = try Data(contentsOf: zip)
+        let url = URL(string: "https://e/hello.bundle.zip")!
+        let http = StubHTTPClient(responses: [url: .success(bytes)])
+        let inst = installer(root: root, http: http, registry: BuiltInAppRegistry(persistence: InMemoryPersistenceStore()), persistence: InMemoryPersistenceStore())
+        do { try await inst.install(entry("hello", url: url, sha: sha(bytes))); Issue.record("expected throw") }
+        catch let e as MarketplaceError { if case .invalidBundle = e {} else { Issue.record("expected .invalidBundle, got \(e)") } }
+        catch { Issue.record("unexpected \(error)") }
+    }
+
+    @Test("install records state even when live-load fails (effective next launch)")
+    func liveLoadFailsButInstalled() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let src = root.appendingPathComponent("src"); try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        // Reuse the sibling suite's helper shape: build a valid hello.bundle zip.
+        let bundle = src.appendingPathComponent("hello.bundle/Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        let info: [String: Any] = ["AinkradAppID": "hello", "AinkradDisplayName": "Hello",
+            "AinkradIconSymbol": "app", "AinkradAPIVersion": 1, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: bundle.appendingPathComponent("Info.plist"))
+        let zip = src.appendingPathComponent("hello.bundle.zip")
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        p.arguments = ["-c", "-k", src.appendingPathComponent("hello.bundle").path, zip.path]; try p.run(); p.waitUntilExit()
+        let bytes = try Data(contentsOf: zip)
+        let url = URL(string: "https://e/hello.bundle.zip")!
+        let http = StubHTTPClient(responses: [url: .success(bytes)])
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
+        let persistence = InMemoryPersistenceStore()
+        let inst = installer(root: root, http: http, registry: registry, persistence: persistence, loadOK: false)
+
+        try await inst.install(entry("hello", url: url, sha: sha(bytes)))   // succeeds despite load failure
+
+        #expect(persistence.load(InstalledPluginsDocument.self)?.installed["hello"] != nil)   // state recorded
+        #expect(registry.allApps.isEmpty)                                                     // not registered
+    }
+}
+
+@MainActor
 struct PluginInstallerRetentionTests {
     private func installer(root: URL) -> PluginInstaller {
         PluginInstaller(
