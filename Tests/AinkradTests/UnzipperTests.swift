@@ -49,6 +49,7 @@ struct UnzipperTests {
         try c.run(); c.waitUntilExit()
         let dest = root.appendingPathComponent("out")
         #expect(throws: UnzipError.self) { try DittoUnzipper().unzip(zip, to: dest) }
+        #expect(!FileManager.default.fileExists(atPath: dest.path))
     }
 
     @Test("a normal bundle zip still extracts")
