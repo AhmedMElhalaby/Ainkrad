@@ -28,7 +28,15 @@ targets:
     sources:
       - path: Sources/Ainkrad
     dependencies:
+      # The host EMBEDS the one dynamic copy of AinkradAppKit into
+      # Contents/Frameworks. Without embedding, a standalone .app crashes at
+      # launch (dyld: "@rpath/AinkradAppKit.framework … no such file") — it only
+      # resolved in dev via SwiftPM's build-tree PackageFrameworks rpath. Plugin
+      # bundles link the same install name with embed:false and reuse this
+      # already-loaded image at runtime.
       - package: AinkradAppKit
+        embed: true
+        link: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
