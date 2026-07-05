@@ -41,7 +41,8 @@ final class AppEnvironmentTests {
             launcherStore: launcherStore,
             connectionStore: connectionStore,
             marketplace: marketplace,
-            marketplaceStore: marketplaceStore
+            marketplaceStore: marketplaceStore,
+            appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier())
         )
 
         #expect(environment.registry === registry)

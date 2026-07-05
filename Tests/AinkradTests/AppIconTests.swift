@@ -45,3 +45,42 @@ struct GlobalSettingsAppIconTests {
         #expect(s.appIconChoice == .blue)
     }
 }
+
+@MainActor
+private final class FakeApplier: AppIconApplying {
+    private(set) var applied: [AppIconChoice] = []
+    func apply(_ choice: AppIconChoice) { applied.append(choice) }
+}
+
+@MainActor
+struct AppIconStoreTests {
+    @Test("loads the persisted choice")
+    func loads() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .neonBlue, appIconChoice: .purple))
+        let store = AppIconStore(persistence: p, applier: FakeApplier())
+        #expect(store.choice == .purple)
+    }
+
+    @Test("select persists the choice (preserving theme) and applies it")
+    func select() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .dracula, appIconChoice: .blue))
+        let applier = FakeApplier()
+        let store = AppIconStore(persistence: p, applier: applier)
+        store.select(.purple)
+        #expect(store.choice == .purple)
+        #expect(p.load(GlobalSettings.self)?.appIconChoice == .purple)
+        #expect(p.load(GlobalSettings.self)?.theme == .dracula)   // theme preserved
+        #expect(applier.applied.last == .purple)
+    }
+
+    @Test("applyCurrent applies the loaded choice")
+    func applyCurrent() {
+        let p = InMemoryPersistenceStore()
+        p.save(GlobalSettings(theme: .neonBlue, appIconChoice: .purple))
+        let applier = FakeApplier()
+        AppIconStore(persistence: p, applier: applier).applyCurrent()
+        #expect(applier.applied == [.purple])
+    }
+}
