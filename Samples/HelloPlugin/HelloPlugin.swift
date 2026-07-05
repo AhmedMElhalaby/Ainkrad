@@ -25,7 +25,7 @@ private struct HelloRootView: View {
         VStack(spacing: 16) {
             Text("Hello, Ainkrad 👋")
                 .font(.largeTitle)
-                .foregroundStyle(host.theme.accentPrimary)
+                .foregroundStyle(host.theme.tokens.accentPrimary)
             Toggle("Remembered switch", isOn: $on)
                 .onChange(of: on) { _, value in
                     host.documents.setData(Data([value ? 1 : 0]), forKey: "on")
@@ -34,7 +34,7 @@ private struct HelloRootView: View {
                 .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(host.theme.background)
+        .background(host.theme.tokens.background)
     }
 }
 
