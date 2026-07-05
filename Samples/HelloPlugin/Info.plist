@@ -4,6 +4,10 @@
 <dict>
     <key>CFBundleIdentifier</key><string>com.ainkrad.plugin.hello</string>
     <key>CFBundleName</key><string>HelloPlugin</string>
+    <!-- Required: the host installer renames an installed bundle to
+         <appID>.bundle, so CFBundle's filename-based executable fallback would
+         miss the real executable. Every plugin must declare this explicitly. -->
+    <key>CFBundleExecutable</key><string>HelloPlugin</string>
     <key>CFBundlePackageType</key><string>BNDL</string>
     <key>NSPrincipalClass</key><string>HelloEntryPoint</string>
     <key>AinkradAppID</key><string>hello</string>
