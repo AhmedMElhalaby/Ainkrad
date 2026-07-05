@@ -67,23 +67,24 @@ final class PluginInstaller {
         //    directly under it). Fall back to a `.bundle`-suffixed child for
         //    archives that do wrap the bundle in a top-level folder.
         let unpacked = work.appendingPathComponent("x")
-        func readMetadata(at url: URL) -> PluginBundleMetadata? {
+        func readMetadata(at url: URL) -> (PluginBundleMetadata, [String: Any])? {
             guard let info = Bundle(url: url)?.infoDictionary,
                   case .success(let m) = PluginBundleMetadata.parse(infoDictionary: info) else { return nil }
-            return m
+            return (m, info)
         }
         let bundleURL: URL
         let metadata: PluginBundleMetadata
-        if let m = readMetadata(at: unpacked) {
-            bundleURL = unpacked; metadata = m
+        let infoDict: [String: Any]
+        if let (m, info) = readMetadata(at: unpacked) {
+            bundleURL = unpacked; metadata = m; infoDict = info
         } else if let child = (try? FileManager.default.contentsOfDirectory(at: unpacked, includingPropertiesForKeys: nil))?
-            .first(where: { $0.pathExtension == "bundle" }), let m = readMetadata(at: child) {
-            bundleURL = child; metadata = m
+            .first(where: { $0.pathExtension == "bundle" }), let (m, info) = readMetadata(at: child) {
+            bundleURL = child; metadata = m; infoDict = info
         } else {
             throw MarketplaceError.invalidBundle("no readable .bundle in archive")
         }
         guard metadata.appID == entry.appID else { throw MarketplaceError.invalidBundle("appID mismatch") }
-        if case .failure(let rej) = PluginValidator.validate(metadata, minSupportedAPIVersion: 1) {
+        if case .failure(let rej) = PluginValidator.validate(metadata, infoDictionary: infoDict, minSupportedAPIVersion: 1) {
             throw MarketplaceError.invalidBundle(rej.reason)
         }
 

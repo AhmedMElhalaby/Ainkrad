@@ -14,7 +14,7 @@ struct PluginInstallerTests {
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
             "AinkradAppID": appID, "AinkradDisplayName": appID, "AinkradIconSymbol": "app",
-            "AinkradAPIVersion": api, "NSPrincipalClass": "X"]
+            "AinkradAPIVersion": api, "NSPrincipalClass": "X", "CFBundleExecutable": appID]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
             .write(to: bundle.appendingPathComponent("Info.plist"))
         let zip = dir.appendingPathComponent("\(appID).bundle.zip")

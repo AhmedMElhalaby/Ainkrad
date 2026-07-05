@@ -14,12 +14,19 @@ enum PluginValidator {
         return id.unicodeScalars.allSatisfy { appIDAllowed.contains($0) }
     }
 
-    /// Validates app-id safety and API-version compatibility (NOT signature —
-    /// that is a separate policy — and NOT `Bundle.load()`).
+    /// Validates app-id safety, executable presence, and API-version
+    /// compatibility (NOT signature — separate policy — and NOT `Bundle.load()`).
     static func validate(_ metadata: PluginBundleMetadata,
+                         infoDictionary: [String: Any],
                          minSupportedAPIVersion: Int) -> Result<Void, PluginRejection> {
         guard isValidAppID(metadata.appID) else {
             return .failure(PluginRejection(reason: "invalid app id"))
+        }
+        // The host renames an installed bundle to `<appID>.bundle`; without an
+        // explicit CFBundleExecutable, CFBundle's filename-based fallback then
+        // can't find the executable and `Bundle.load()` fails cryptically.
+        guard let exe = infoDictionary["CFBundleExecutable"] as? String, !exe.isEmpty else {
+            return .failure(PluginRejection(reason: "missing CFBundleExecutable"))
         }
         guard AinkradAppKit.isCompatible(bundleAPIVersion: metadata.apiVersion,
                                          minSupported: minSupportedAPIVersion,

@@ -8,6 +8,12 @@ struct PluginValidatorTests {
                              apiVersion: api, principalClassName: "HelloEntryPoint")
     }
 
+    private func info(_ exe: String? = "MyPlugin") -> [String: Any] {
+        var d: [String: Any] = [:]
+        if let exe { d["CFBundleExecutable"] = exe }
+        return d
+    }
+
     @Test("valid app ids pass, unsafe ones fail")
     func appID() {
         #expect(PluginValidator.isValidAppID("hello.world_1-2"))
@@ -20,21 +26,35 @@ struct PluginValidatorTests {
 
     @Test("valid metadata within API range passes")
     func metadataOK() {
-        if case .success = PluginValidator.validate(meta(), minSupportedAPIVersion: 1) {}
+        if case .success = PluginValidator.validate(meta(), infoDictionary: info(), minSupportedAPIVersion: 1) {}
         else { Issue.record("expected success") }
     }
 
     @Test("unsupported API version is rejected")
     func metadataBadAPI() {
-        let r = PluginValidator.validate(meta(api: 999), minSupportedAPIVersion: 1)
+        let r = PluginValidator.validate(meta(api: 999), infoDictionary: info(), minSupportedAPIVersion: 1)
         if case .failure(let rej) = r { #expect(rej.reason.contains("API version 999")) }
         else { Issue.record("expected failure") }
     }
 
     @Test("invalid app id is rejected")
     func metadataBadID() {
-        let r = PluginValidator.validate(meta(id: "../x"), minSupportedAPIVersion: 1)
+        let r = PluginValidator.validate(meta(id: "../x"), infoDictionary: info(), minSupportedAPIVersion: 1)
         if case .failure(let rej) = r { #expect(rej.reason == "invalid app id") }
+        else { Issue.record("expected failure") }
+    }
+
+    @Test("a bundle missing CFBundleExecutable is rejected")
+    func missingExecutable() {
+        let r = PluginValidator.validate(meta(), infoDictionary: info(nil), minSupportedAPIVersion: 1)
+        if case .failure(let rej) = r { #expect(rej.reason == "missing CFBundleExecutable") }
+        else { Issue.record("expected failure") }
+    }
+
+    @Test("an empty CFBundleExecutable is rejected")
+    func emptyExecutable() {
+        let r = PluginValidator.validate(meta(), infoDictionary: info(""), minSupportedAPIVersion: 1)
+        if case .failure(let rej) = r { #expect(rej.reason == "missing CFBundleExecutable") }
         else { Issue.record("expected failure") }
     }
 }
