@@ -53,7 +53,7 @@ final class PluginLoader {
         case .failure(let e): return .failure(PluginRejection(reason: "metadata: \(e)"))
         }
 
-        if case .failure(let rejection) = PluginValidator.validate(metadata, minSupportedAPIVersion: minSupportedAPIVersion) {
+        if case .failure(let rejection) = PluginValidator.validate(metadata, infoDictionary: info, minSupportedAPIVersion: minSupportedAPIVersion) {
             return .failure(rejection)
         }
 

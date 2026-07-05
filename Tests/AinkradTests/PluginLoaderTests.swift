@@ -41,6 +41,7 @@ struct PluginLoaderTests {
             PluginInfoKey.iconSymbol: "hand.wave",
             PluginInfoKey.apiVersion: 1,
             PluginInfoKey.principalClass: "DoesNotExist",
+            "CFBundleExecutable": "hello",
         ]
     }
 
