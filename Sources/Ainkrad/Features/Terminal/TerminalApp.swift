@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Terminal's `BuiltInApp` conformance — see
 /// Built-in App System & Registry.md.
@@ -23,7 +24,7 @@ struct TerminalApp: BuiltInApp {
     static func chromeFill(environment: AppEnvironment) -> Color? {
         let appearance = TerminalAppearanceResolver.resolve(
             settings: environment.terminalSettingsStore.settings,
-            theme: environment.themeManager.currentTheme
+            tokens: HostThemeTokens(from: environment.themeManager.currentTheme)
         )
         return Color(hex: appearance.background).opacity(appearance.backgroundOpacity)
     }

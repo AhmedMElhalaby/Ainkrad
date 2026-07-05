@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AinkradAppKit
 @testable import Ainkrad
 
 @Suite("TerminalSettings")
@@ -44,9 +45,9 @@ final class TerminalSettingsTests {
     func backgroundOpacityClamps() {
         var settings = TerminalSettings()
         settings.backgroundOpacity = 0.05
-        #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).backgroundOpacity == 0.2)
+        #expect(TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .neonBlue)).backgroundOpacity == 0.2)
         settings.backgroundOpacity = 0.7
-        #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).backgroundOpacity == 0.7)
+        #expect(TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .neonBlue)).backgroundOpacity == 0.7)
     }
 
     @Test("appearance fields round-trip through the persistence store")
@@ -101,16 +102,12 @@ struct TerminalAppearanceResolverTests {
     @Test("Match Theme derives the terminal colors from the active app theme")
     func matchThemeFollowsTheme() {
         let blue = TerminalAppearanceResolver.resolve(
-            settings: TerminalSettings(),
-            theme: .neonBlue
-        )
+            settings: TerminalSettings(), tokens: HostThemeTokens(from: .neonBlue))
         #expect(blue.background == "0A0E17")
         #expect(blue.foreground == "E2E8F0")
 
         let purple = TerminalAppearanceResolver.resolve(
-            settings: TerminalSettings(),
-            theme: .cyberPurple
-        )
+            settings: TerminalSettings(), tokens: HostThemeTokens(from: .cyberPurple))
         #expect(purple.background == "080814")
     }
 
@@ -118,30 +115,30 @@ struct TerminalAppearanceResolverTests {
     func namedSchemeIgnoresTheme() {
         var settings = TerminalSettings()
         settings.colorSchemeID = "dracula"
-        let a = TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue)
-        let b = TerminalAppearanceResolver.resolve(settings: settings, theme: .cyberPurple)
+        let a = TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .neonBlue))
+        let b = TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .cyberPurple))
         #expect(a.background == b.background)
         #expect(a.background == "282A36")   // Dracula background
     }
 
     @Test("Every resolved appearance carries a full 16-color ANSI palette")
     func ansiPaletteHasSixteen() {
-        #expect(TerminalAppearanceResolver.resolve(settings: TerminalSettings(), theme: .neonBlue).ansi.count == 16)
+        #expect(TerminalAppearanceResolver.resolve(settings: TerminalSettings(), tokens: HostThemeTokens(from: .neonBlue)).ansi.count == 16)
         var dracula = TerminalSettings()
         dracula.colorSchemeID = "dracula"
-        #expect(TerminalAppearanceResolver.resolve(settings: dracula, theme: .neonBlue).ansi.count == 16)
+        #expect(TerminalAppearanceResolver.resolve(settings: dracula, tokens: HostThemeTokens(from: .neonBlue)).ansi.count == 16)
     }
 
     @Test("Font falls back to defaults when unset, and passes explicit values through")
     func fontResolution() {
-        let dflt = TerminalAppearanceResolver.resolve(settings: TerminalSettings(), theme: .neonBlue)
+        let dflt = TerminalAppearanceResolver.resolve(settings: TerminalSettings(), tokens: HostThemeTokens(from: .neonBlue))
         #expect(dflt.fontFamily == "MesloLGS NF")
         #expect(dflt.fontSize == 15)
 
         var custom = TerminalSettings()
         custom.fontFamily = "Menlo"
         custom.fontSize = 16
-        let resolved = TerminalAppearanceResolver.resolve(settings: custom, theme: .neonBlue)
+        let resolved = TerminalAppearanceResolver.resolve(settings: custom, tokens: HostThemeTokens(from: .neonBlue))
         #expect(resolved.fontFamily == "Menlo")
         #expect(resolved.fontSize == 16)
     }
@@ -158,7 +155,7 @@ struct TerminalAppearanceResolverTests {
         settings.cursorBlink = false
         settings.optionAsMeta = false
         settings.scrollbackLines = 5000
-        let r = TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue)
+        let r = TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .neonBlue))
         #expect(r.cursorShape == .bar)
         #expect(r.cursorBlink == false)
         #expect(r.optionAsMeta == false)
@@ -169,19 +166,19 @@ struct TerminalAppearanceResolverTests {
     func colorOverridesResolve() {
         var settings = TerminalSettings()
         settings.cursorColor = "FF0000"
-        let r = TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue)
+        let r = TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .neonBlue))
         #expect(r.cursor == "FF0000")
         #expect(!r.selection.isEmpty)
 
         settings.selectionColor = "00FF00"
-        #expect(TerminalAppearanceResolver.resolve(settings: settings, theme: .neonBlue).selection == "00FF00")
+        #expect(TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: .neonBlue)).selection == "00FF00")
     }
 
     @Test("sendMouseEventsToApps passes through to the resolved appearance")
     func mouseForwardingResolves() {
         var on = TerminalSettings(); on.sendMouseEventsToApps = true
-        #expect(TerminalAppearanceResolver.resolve(settings: on, theme: .neonBlue).sendMouseEventsToApps == true)
+        #expect(TerminalAppearanceResolver.resolve(settings: on, tokens: HostThemeTokens(from: .neonBlue)).sendMouseEventsToApps == true)
         var off = TerminalSettings(); off.sendMouseEventsToApps = false
-        #expect(TerminalAppearanceResolver.resolve(settings: off, theme: .neonBlue).sendMouseEventsToApps == false)
+        #expect(TerminalAppearanceResolver.resolve(settings: off, tokens: HostThemeTokens(from: .neonBlue)).sendMouseEventsToApps == false)
     }
 }

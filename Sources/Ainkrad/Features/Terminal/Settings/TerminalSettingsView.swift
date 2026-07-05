@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AinkradAppKit
 
 /// Terminal's per-app settings, hosted in the Settings overlay's Terminal
 /// section: Appearance (color scheme + font) and Behavior (default shell +
@@ -20,7 +21,7 @@ struct TerminalSettingsView: View {
     private var settings: TerminalSettings { environment.terminalSettingsStore.settings }
 
     private var resolved: TerminalRenderAppearance {
-        TerminalAppearanceResolver.resolve(settings: settings, theme: environment.themeManager.currentTheme)
+        TerminalAppearanceResolver.resolve(settings: settings, tokens: HostThemeTokens(from: environment.themeManager.currentTheme))
     }
 
     var body: some View {
@@ -204,7 +205,7 @@ struct TerminalSettingsView: View {
         let isSelected = settings.colorSchemeID == scheme.id
         let preview = TerminalAppearanceResolver.resolve(
             settings: TerminalSettings(colorSchemeID: scheme.id),
-            theme: environment.themeManager.currentTheme
+            tokens: HostThemeTokens(from: environment.themeManager.currentTheme)
         )
 
         return Button {

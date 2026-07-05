@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Terminal's root view for a Block: creates its `TerminalSession` on
 /// first appearance and hosts it via `TerminalContainerView`. See
@@ -14,7 +15,7 @@ struct TerminalBlockRootView: View {
         // a fresh appearance, restyling the running terminal live.
         let appearance = TerminalAppearanceResolver.resolve(
             settings: environment.terminalSettingsStore.settings,
-            theme: environment.themeManager.currentTheme
+            tokens: HostThemeTokens(from: environment.themeManager.currentTheme)
         )
 
         return Group {
