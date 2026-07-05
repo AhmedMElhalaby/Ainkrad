@@ -14,4 +14,9 @@ struct MarketplaceRow: Identifiable, Equatable {
     let status: MarketplaceRowStatus
     let isEnabled: Bool
     let kind: MarketplaceRowKind
+    /// True only for plugins the marketplace installed (present in the installed
+    /// doc) — the ones it can uninstall. Built-ins and dev-sideloaded plugins
+    /// (registered but never marketplace-installed) are `false`: visible and
+    /// toggleable, but not uninstallable via the marketplace.
+    let isManaged: Bool
 }

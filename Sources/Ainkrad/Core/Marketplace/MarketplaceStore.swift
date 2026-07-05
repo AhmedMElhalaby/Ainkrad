@@ -57,7 +57,8 @@ final class MarketplaceStore {
                 installedVersion: installedDoc[id]?.version,
                 status: updates.contains(id) ? .updateAvailable : .installed,
                 isEnabled: registry.isEnabled(id),
-                kind: isBuiltIn ? .builtIn : .plugin))
+                kind: isBuiltIn ? .builtIn : .plugin,
+                isManaged: installedDoc[id] != nil))
         }
 
         var availableRows: [MarketplaceRow] = []
@@ -65,7 +66,8 @@ final class MarketplaceStore {
             availableRows.append(MarketplaceRow(
                 id: entry.appID, displayName: entry.displayName, icon: entry.icon,
                 description: entry.description, catalogVersion: entry.version,
-                installedVersion: nil, status: .available, isEnabled: false, kind: .plugin))
+                installedVersion: nil, status: .available, isEnabled: false, kind: .plugin,
+                isManaged: false))
         }
 
         rows = installedRows.sorted { $0.displayName < $1.displayName }
