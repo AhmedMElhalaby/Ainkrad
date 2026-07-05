@@ -17,15 +17,10 @@ struct ThemeTests {
         }
     }
 
-    @Test("every theme has a 16-color Match-Theme terminal palette with a distinct background")
+    @Test("every theme resolves to a distinct background token")
     func everyThemeResolves() {
-        var backgrounds = Set<String>()
-        for theme in Theme.allCases {
-            let palette = TerminalMatchThemePalette.forThemeID(theme.rawValue)
-            #expect(palette.ansi.count == 16)
-            backgrounds.insert(palette.background)
-            _ = theme.tokens // must not trap
-        }
+        var backgrounds = Set<Color>()
+        for theme in Theme.allCases { backgrounds.insert(theme.tokens.background) }
         #expect(backgrounds.count == Theme.allCases.count)
     }
 }

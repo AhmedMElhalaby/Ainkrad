@@ -1,6 +1,21 @@
 import SwiftUI
 import AppKit
 
+private struct PaneResizesImmediatelyKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Set by the layout on the pane that fills the Focus-Mode canvas, so
+    /// that pane's content can resize immediately (no debounce) instead of
+    /// waiting for the trailing-debounce every other pane uses. App-agnostic:
+    /// any pane's content may read this, not just Terminal's.
+    var paneResizesImmediately: Bool {
+        get { self[PaneResizesImmediatelyKey.self] }
+        set { self[PaneResizesImmediatelyKey.self] = newValue }
+    }
+}
+
 /// One workspace's content: its pane tree in Split Mode, or Focus Mode —
 /// the focused panel filling the canvas with the other panels reachable
 /// from a compact switcher rail. Empty workspaces show the island empty
@@ -86,7 +101,7 @@ struct TileLayoutView: View {
                 // their split frame) makes switching the active pane a pure
                 // visibility swap: no resize, so no reflow lag/flash on switch.
                 // Panes resize once on entering/leaving Focus, never on switch.
-                ForEach(tileLayout.blocks) { block in
+                ForEach(tileLayout.blocks) { (block: Block) in
                     let normalFrame = geometry.frames[block.id] ?? .zero
                     let isFocusedPane = block.id == focusedID
                     let frame = inFocus ? fullRect : normalFrame

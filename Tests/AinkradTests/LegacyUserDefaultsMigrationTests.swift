@@ -13,8 +13,9 @@ final class LegacyUserDefaultsMigrationTests {
         defaults.set(try! JSONEncoder().encode(GlobalSettings(theme: .cyberPurple, appIcon: .purple)),
                      forKey: "global-settings")
         defaults.set(try! JSONEncoder().encode(["terminal": false]), forKey: "registry-enabled-state")
-        defaults.set(try! JSONEncoder().encode(TerminalSettings(defaultShell: "/bin/bash")),
-                     forKey: "terminal-settings")
+        // Terminal's settings type no longer lives in the host, so the
+        // legacy blob is an arbitrary JSON object rather than a concrete type.
+        defaults.set(try! JSONEncoder().encode(["defaultShell": "/bin/bash"]), forKey: "terminal-settings")
     }
 
     @Test("imports legacy values into the persistence store")
@@ -25,7 +26,19 @@ final class LegacyUserDefaultsMigrationTests {
 
         #expect(store.load(GlobalSettings.self)?.theme == .cyberPurple)
         #expect(store.load(RegistryStateDocument.self)?.enabled == ["terminal": false])
-        #expect(store.load(TerminalSettings.self)?.defaultShell == "/bin/bash")
+    }
+
+    @Test("imports the legacy terminal-settings blob into the file store, type-free")
+    func importsTerminalSettingsRawIntoFileStore() throws {
+        seedLegacy()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = FileDocumentStore(rootURL: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        LegacyUserDefaultsMigration.runIfNeeded(persistence: store, defaults: defaults)
+
+        let raw = try #require(store.rawPayloadData(forID: "terminal-settings"))
+        let decoded = try JSONDecoder().decode([String: String].self, from: raw)
+        #expect(decoded["defaultShell"] == "/bin/bash")
     }
 
     @Test("does not run a second time once the marker is set")

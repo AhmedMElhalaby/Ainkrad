@@ -105,6 +105,39 @@ final class FileDocumentStore: PersistenceStore {
         }
     }
 
+    /// The stored payload JSON for a documentID, unwrapped from the versioned
+    /// envelope, without needing the document's Swift type. `nil` if absent or
+    /// unreadable. Used by one-time migrations that must move a document whose
+    /// type no longer lives in the host.
+    func rawPayloadData(forID id: String) -> Data? {
+        let url = fileURL(for: id)
+        guard fileManager.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url),
+              let raw = try? PersistenceCoding.decoder.decode(RawEnvelope.self, from: data),
+              let payload = try? PersistenceCoding.encoder.encode(raw.payload) else { return nil }
+        return payload
+    }
+
+    /// Writes a document's payload as a versioned envelope without needing the
+    /// document's Swift type. The mirror image of `rawPayloadData`; used by
+    /// one-time migrations moving a document whose type no longer lives in
+    /// the host (e.g. settings that have since moved to a Marketplace
+    /// plugin).
+    func saveRawPayload(_ payload: JSONValue, forID id: String, schemaVersion: Int) {
+        let envelope = RawEnvelope(schemaVersion: schemaVersion, updatedAt: Date(), payload: payload)
+        guard let data = try? PersistenceCoding.encoder.encode(envelope) else {
+            Log.persistence.error("Failed to encode raw payload for \(id, privacy: .public)")
+            return
+        }
+        do {
+            try data.write(to: fileURL(for: id), options: .atomic)
+            cache[id] = nil  // no concrete type to cache under; drop any stale entry
+            syncEngine?.documentDidChange(id: id, data: data)
+        } catch {
+            Log.persistence.error("Failed to write \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     func delete<T: PersistableDocument>(_ type: T.Type) {
         cache[T.documentID] = nil
         try? fileManager.removeItem(at: fileURL(for: T.documentID))

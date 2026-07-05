@@ -1,20 +1,21 @@
 import Foundation
 import AinkradAppKit
 
-/// Host-side, one-time move of Terminal's settings from the host-global document
-/// store (pre-decouple) into Terminal's app-scoped `host.documents`. Runs once, gated
-/// by a `UserDefaults` flag. Never touches secrets. Refuses to overwrite an
-/// existing scoped document. Lives alongside `LegacyUserDefaultsMigration` and is
-/// invoked from `AppEnvironment.bootstrap`.
+/// One-time move of Terminal's settings from the host-global document store
+/// (pre-4a) into Terminal's app-scoped store. Type-free: the `TerminalSettings`
+/// type now lives in the Terminal plugin, so this copies the raw payload bytes
+/// keyed by the well-known documentID. Runs once (UserDefaults-gated); never
+/// touches secrets; never overwrites an existing scoped doc.
 enum TerminalSettingsMigration {
     static let flagKey = "terminal.settings.migratedToScopedStore"
+    static let documentID = "terminal-settings"
 
-    static func runIfNeeded(legacy: PersistenceStore, scoped: PluginDocumentStore, defaults: UserDefaults) {
+    static func runIfNeeded(legacyRawPayload: (String) -> Data?,
+                            scoped: PluginDocumentStore, defaults: UserDefaults) {
         guard !defaults.bool(forKey: flagKey) else { return }
         defer { defaults.set(true, forKey: flagKey) }
-        guard scoped.data(forKey: TerminalSettings.documentID) == nil,
-              let existing = legacy.load(TerminalSettings.self),
-              let data = try? JSONEncoder().encode(existing) else { return }
-        scoped.setData(data, forKey: TerminalSettings.documentID)
+        guard scoped.data(forKey: documentID) == nil,
+              let bytes = legacyRawPayload(documentID) else { return }
+        scoped.setData(bytes, forKey: documentID)
     }
 }
