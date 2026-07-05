@@ -132,7 +132,11 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 }
             }
 
-            guard let characters = event.charactersIgnoringModifiers else { return false }
+            // `charactersIgnoringModifiers` still applies Shift, so a shifted
+            // letter arrives uppercase (⌘⇧A → "A"). Lowercase it so the
+            // shifted cases below (matched on `isShifted` + a lowercase letter)
+            // fire regardless of case.
+            guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
 
             switch characters {
             case "k" where !isShifted:
