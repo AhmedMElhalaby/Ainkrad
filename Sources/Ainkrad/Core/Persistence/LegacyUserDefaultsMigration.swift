@@ -27,9 +27,13 @@ enum LegacyUserDefaultsMigration {
            let value = try? decoder.decode(LayoutStateSnapshot.self, from: data) {
             persistence.save(value)
         }
+        // Terminal's settings type no longer lives in the host (it moved to
+        // the AinkradTerminal plugin), so this copies the raw JSON payload
+        // rather than decoding into a concrete type. `TerminalSettingsMigration`
+        // later moves this host-global copy into the plugin's scoped store.
         if let data = defaults.data(forKey: "terminal-settings"),
-           let value = try? decoder.decode(TerminalSettings.self, from: data) {
-            persistence.save(value)
+           let value = try? decoder.decode(JSONValue.self, from: data) {
+            (persistence as? FileDocumentStore)?.saveRawPayload(value, forID: "terminal-settings", schemaVersion: 1)
         }
 
         // Marker is set even on a partial import (a key that fails to decode is

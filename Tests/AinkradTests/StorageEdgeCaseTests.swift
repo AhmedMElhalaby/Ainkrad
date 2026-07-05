@@ -70,4 +70,14 @@ final class StorageEdgeCaseTests {
         store.delete(EdgeDoc.self)  // never saved
         #expect(store.load(EdgeDoc.self) == nil)
     }
+
+    @Test("rawPayloadData returns the stored payload bytes without the document type")
+    func rawPayloadRoundTrips() throws {
+        let store = FileDocumentStore(rootURL: root)
+        store.save(GlobalSettings())   // any existing PersistableDocument with a known documentID
+        let raw = try #require(store.rawPayloadData(forID: GlobalSettings.documentID))
+        // The payload decodes as the document's Codable payload (not the envelope).
+        #expect((try? JSONDecoder().decode(GlobalSettings.self, from: raw)) != nil)
+        #expect(store.rawPayloadData(forID: "does-not-exist") == nil)
+    }
 }

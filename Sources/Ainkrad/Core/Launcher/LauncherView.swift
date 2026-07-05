@@ -52,11 +52,15 @@ struct LauncherView: View {
     /// Sentinel id for the Settings entry — Settings is a summonable overlay,
     /// not a registered app, so it rides in the results as a system action.
     private static let settingsRowID = "settings"
+    private static let marketplaceRowID = "marketplace"
 
     private var appRows: [AppRow] {
         var rows = store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
         if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Settings") {
             rows.append(AppRow(id: Self.settingsRowID, displayName: "Settings", icon: "gearshape"))
+        }
+        if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Marketplace") {
+            rows.append(AppRow(id: Self.marketplaceRowID, displayName: "Marketplace", icon: "bag"))
         }
         return rows
     }
@@ -239,6 +243,12 @@ struct LauncherView: View {
 
         if row.id == Self.settingsRowID {
             environment.isSettingsPresented = true
+            dismiss()
+            return
+        }
+
+        if row.id == Self.marketplaceRowID {
+            environment.isMarketplacePresented = true
             dismiss()
             return
         }

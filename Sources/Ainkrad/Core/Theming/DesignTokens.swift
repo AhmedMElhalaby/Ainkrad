@@ -33,7 +33,7 @@ struct DesignTokens: Equatable {
     )
 
     // Well-known palettes ported to full app themes (each also drives the
-    // terminal's Match-Theme colors — see Theme.terminalPalette).
+    // terminal's Match-Theme colors — see TerminalMatchThemePalette).
 
     static let dracula = DesignTokens(
         background: Color(hex: "282A36"),

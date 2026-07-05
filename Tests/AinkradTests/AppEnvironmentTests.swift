@@ -2,9 +2,8 @@ import Testing
 import Foundation
 @testable import Ainkrad
 
-@MainActor
-private final class SpyDockIconUpdater: DockIconUpdating {
-    func updateDockIcon(_ icon: AppIcon) {}
+private struct NoOpCatalogSource: CatalogSource {
+    func fetchCatalog() async throws -> [CatalogEntry] { [] }
 }
 
 @Suite("AppEnvironment")
@@ -17,12 +16,21 @@ final class AppEnvironmentTests {
     func exposesInjectedDependencies() {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
-        let registry = BuiltInAppRegistry(apps: [], persistence: persistence)
-        let themeManager = ThemeManager(persistence: persistence, dockIconUpdater: SpyDockIconUpdater())
+        let registry = BuiltInAppRegistry(persistence: persistence)
+        let themeManager = ThemeManager(persistence: persistence)
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
-        let terminalSettingsStore = TerminalSettingsStore(persistence: persistence)
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
+        let catalogService = CatalogService(
+            source: NoOpCatalogSource(), persistence: persistence)
+        let installer = PluginInstaller(
+            http: StubHTTPClient(responses: [:]), unzipper: DittoUnzipper(),
+            pluginsDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugins"),
+            pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
+            retainedDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("retained-plugin-data"),
+            persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
+        let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
+        let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -31,16 +39,18 @@ final class AppEnvironmentTests {
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
-            terminalSettingsStore: terminalSettingsStore,
-            connectionStore: connectionStore
+            connectionStore: connectionStore,
+            marketplace: marketplace,
+            marketplaceStore: marketplaceStore
         )
 
         #expect(environment.registry === registry)
         #expect(environment.themeManager === themeManager)
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
-        #expect(environment.terminalSettingsStore === terminalSettingsStore)
         #expect(environment.connectionStore === connectionStore)
+        #expect(environment.marketplace === marketplace)
+        #expect(environment.marketplaceStore === marketplaceStore)
     }
 
     @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")
@@ -55,9 +65,7 @@ final class AppEnvironmentTests {
         defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
         let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        // Settings left the registry — it is now a summonable overlay, not a
-        // tiled Block, so Terminal is the only registered app.
-        #expect(environment.registry.allApps.map { $0.id } == ["terminal"])
+        #expect(environment.registry.allApps.isEmpty)   // Terminal is now a Marketplace plugin, not built-in
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)

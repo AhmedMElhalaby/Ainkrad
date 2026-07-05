@@ -14,21 +14,12 @@ settings:
     CODE_SIGNING_ALLOWED: NO
 
 packages:
-  # SwiftTerm 1.13.0 fork (github.com/AhmedMElhalaby/SwiftTerm @ ainkrad-no-reflow).
-  # Patches over upstream:
-  #  - Buffer.resize: line-reflow disabled (upstream re-wrap duplicates output).
-  #  - setFrameSize: off-live resizes are debounced (coalesce animated frame
-  #    changes to one SIGWINCH); `applyResizeImmediately` opts a single clean
-  #    snap (the Focus-Mode pane) out of the debounce; deferred resizes repaint.
-  #  - Mouse reporting: explicit release; SGR M/m correct; hover no-button
-  #    motion; wheel→app buttons 64/65; X10 press-only.
-  #  - Package.swift trimmed to the library product for stable resolution;
-  #    restored dependency-free SwiftTermTests target.
-  #  - File drag-drop & paste: dropped/copied files insert shell-escaped paths.
-  #  - Cell grid centered for symmetric left/right padding.
-  SwiftTerm:
-    url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: e44352494333686a5de418f85f7927b81c6a9fbe
+  # AinkradAppKit — the Built-in App SDK (github.com/AhmedMElhalaby/AinkradAppKit).
+  # DYNAMIC library: the host embeds one copy; plugin bundles resolve it at
+  # runtime (a static copy per binary would break dynamic protocol casts).
+  AinkradAppKit:
+    url: https://github.com/AhmedMElhalaby/AinkradAppKit
+    revision: 982fb593c6388cd51a178952375e02dd9c161877
 
 targets:
   Ainkrad:
@@ -37,7 +28,7 @@ targets:
     sources:
       - path: Sources/Ainkrad
     dependencies:
-      - package: SwiftTerm
+      - package: AinkradAppKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
@@ -57,16 +48,39 @@ targets:
     dependencies:
       - target: Ainkrad
         embed: false
-      # SwiftTerm is deliberately NOT linked here: the test bundle loads the
-      # host app, which already contains SwiftTerm. Linking it again
-      # duplicates every ObjC class (runtime warning + crashes). Tests can
-      # still `import SwiftTerm` — the module compiles against the build
-      # products' .swiftmodule and links against the host at runtime.
-      - package: SwiftTerm
-        link: false
+      # AinkradAppKit is linked here: it's a
+      # separate dynamic library two hops from the test bundle's
+      # -bundle_loader (Ainkrad launcher -> Ainkrad.debug.dylib ->
+      # AinkradAppKit.framework), so bundle_loader symbol resolution doesn't
+      # reach it — tests that reference its symbols directly (e.g.
+      # PluginLoaderTests) fail to link without this. It's pure Swift (no
+      # ObjC classes), so linking it again carries none of SwiftTerm's
+      # duplicate-class risk.
+      - package: AinkradAppKit
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+
+  HelloPlugin:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Samples/HelloPlugin
+    dependencies:
+      # Link against the SDK's symbols (needed to resolve protocol descriptors
+      # at load time) but do NOT embed a second copy of the dylib — resolve
+      # the host's copy at runtime, so protocol type metadata is shared and
+      # the cast succeeds.
+      - package: AinkradAppKit
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.plugin.hello
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Samples/HelloPlugin/Info.plist
+        MACH_O_TYPE: mh_bundle
+        # Loaded into the host process: find AinkradAppKit via the host executable.
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
 
 schemes:
   Ainkrad:
@@ -74,6 +88,7 @@ schemes:
       targets:
         Ainkrad: all
         AinkradTests: [test]
+        HelloPlugin: [run]
     run:
       config: Debug
     test:

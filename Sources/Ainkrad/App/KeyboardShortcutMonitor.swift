@@ -79,6 +79,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                !event.modifierFlags.contains(.command) {
                 environment.isLauncherPresented = false
                 environment.isSettingsPresented = false
+                environment.isMarketplacePresented = false
                 environment.isWorkspaceOverviewPresented.toggle()
                 return true
             }
@@ -92,7 +93,8 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             if isOption,
                !environment.isLauncherPresented,
                !environment.isWorkspaceOverviewPresented,
-               !environment.isSettingsPresented {
+               !environment.isSettingsPresented,
+               !environment.isMarketplacePresented {
                 switch event.keyCode {
                 case 123:
                     environment.workspaceManager.switchToPreviousWorkspace()
@@ -110,7 +112,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
             // only while no overlay owns the keyboard (and never when ⌥ is
             // held, which is the workspace-cycle chord above).
-            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented {
+            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isMarketplacePresented {
                 let direction: PaneDirection? = switch event.keyCode {
                 case 123: .left
                 case 124: .right
@@ -130,12 +132,17 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 }
             }
 
-            guard let characters = event.charactersIgnoringModifiers else { return false }
+            // `charactersIgnoringModifiers` still applies Shift, so a shifted
+            // letter arrives uppercase (⌘⇧A → "A"). Lowercase it so the
+            // shifted cases below (matched on `isShifted` + a lowercase letter)
+            // fire regardless of case.
+            guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
 
             switch characters {
             case "k" where !isShifted:
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
+                environment.isMarketplacePresented = false
                 if environment.isLauncherPresented {
                     environment.launcherStore.query = ""
                     environment.isLauncherPresented = false
@@ -147,7 +154,16 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 // ⌘, summons/dismisses the Settings overlay (macOS convention).
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
+                environment.isMarketplacePresented = false
                 environment.isSettingsPresented.toggle()
+                window?.makeFirstResponder(nil)
+                return true
+            case "a" where isShifted:
+                // ⌘⇧A summons/dismisses the Marketplace overlay.
+                environment.isLauncherPresented = false
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
+                environment.isMarketplacePresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
             case "n" where isShifted:

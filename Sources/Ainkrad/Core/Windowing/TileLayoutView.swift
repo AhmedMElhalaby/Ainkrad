@@ -1,6 +1,21 @@
 import SwiftUI
 import AppKit
 
+private struct PaneResizesImmediatelyKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Set by the layout on the pane that fills the Focus-Mode canvas, so
+    /// that pane's content can resize immediately (no debounce) instead of
+    /// waiting for the trailing-debounce every other pane uses. App-agnostic:
+    /// any pane's content may read this, not just Terminal's.
+    var paneResizesImmediately: Bool {
+        get { self[PaneResizesImmediatelyKey.self] }
+        set { self[PaneResizesImmediatelyKey.self] = newValue }
+    }
+}
+
 /// One workspace's content: its pane tree in Split Mode, or Focus Mode —
 /// the focused panel filling the canvas with the other panels reachable
 /// from a compact switcher rail. Empty workspaces show the island empty
@@ -22,6 +37,17 @@ struct TileLayoutView: View {
     @State private var focusPop: CGFloat = 1
 
     private var tileLayout: TileLayout { workspace.tileLayout }
+
+    /// True when any pane declares a translucent window fill (via its
+    /// `RegisteredApp.chromeFill` alpha) — then the shared blurred backdrop is
+    /// rendered behind the panes. App-agnostic: no per-app settings read.
+    private var hasTranslucentPane: Bool {
+        tileLayout.blocks.contains { block in
+            guard let app = registry.allApps.first(where: { $0.id == block.appID }),
+                  let fill = app.chromeFill() else { return false }
+            return NSColor(fill).alphaComponent < 1
+        }
+    }
 
     var body: some View {
         if tileLayout.isEmpty {
@@ -60,7 +86,7 @@ struct TileLayoutView: View {
                 // translucent terminals reveal slices of a SINGLE blurred
                 // island rather than each carrying its own. Only present when
                 // transparency is enabled (otherwise opaque panes cover it).
-                if environment.terminalSettingsStore.settings.backgroundOpacity < 1 {
+                if hasTranslucentPane {
                     workspaceBackdrop
                         .frame(width: proxy.size.width, height: proxy.size.height)
                 }
@@ -75,7 +101,7 @@ struct TileLayoutView: View {
                 // their split frame) makes switching the active pane a pure
                 // visibility swap: no resize, so no reflow lag/flash on switch.
                 // Panes resize once on entering/leaving Focus, never on switch.
-                ForEach(tileLayout.blocks) { block in
+                ForEach(tileLayout.blocks) { (block: Block) in
                     let normalFrame = geometry.frames[block.id] ?? .zero
                     let isFocusedPane = block.id == focusedID
                     let frame = inFocus ? fullRect : normalFrame

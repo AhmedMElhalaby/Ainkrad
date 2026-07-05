@@ -1,33 +1,69 @@
-/// Single source of truth for which Built-in Apps exist and are enabled.
-/// Feeds the App Launcher's "Apps" section and determines which Block types
-/// can be instantiated — see Window & Tile Management Architecture.md.
+import Observation
+
+/// Single source of truth for which apps exist and are enabled. Hybrid: apps
+/// are installed once after `AppEnvironment` exists, mixing compiled-in apps
+/// with dynamically-loaded plugin bundles.
+@MainActor
+@Observable
 final class BuiltInAppRegistry {
-    private let registeredApps: [BuiltInApp.Type]
+    private var registeredApps: [RegisteredApp] = []
     private let persistence: PersistenceStore
     private var enabledOverrides: [String: Bool]
+    private(set) var loadFailures: [PluginLoadFailure] = []
 
-    init(apps: [BuiltInApp.Type], persistence: PersistenceStore) {
-        self.registeredApps = apps
+    init(persistence: PersistenceStore) {
         self.persistence = persistence
         self.enabledOverrides = persistence.load(RegistryStateDocument.self)?.enabled ?? [:]
     }
 
-    var allApps: [BuiltInApp.Type] { registeredApps }
-
-    var enabledApps: [BuiltInApp.Type] {
-        registeredApps.filter { isEnabled($0.id) }
+    /// Installs the resolved app set. Built-in apps win id conflicts with
+    /// plugins. Called once during bootstrap after the environment exists.
+    func install(builtIn: [RegisteredApp], loaded: [RegisteredApp] = [], failures: [PluginLoadFailure] = []) {
+        loadFailures = failures
+        var byID: [String: RegisteredApp] = [:]
+        var order: [String] = []
+        for app in builtIn where byID[app.id] == nil { byID[app.id] = app; order.append(app.id) }
+        for app in loaded {
+            if byID[app.id] != nil {
+                Log.registry.error("Plugin id conflict \(app.id, privacy: .public) — built-in wins, plugin skipped")
+                continue
+            }
+            byID[app.id] = app
+            order.append(app.id)
+        }
+        registeredApps = order.compactMap { byID[$0] }
     }
 
-    func isEnabled(_ id: String) -> Bool {
-        if let override = enabledOverrides[id] {
-            return override
+    /// Adds a freshly-installed plugin to the live app list (or replaces the
+    /// existing plugin with the same id). Refuses to shadow a built-in id.
+    func register(_ app: RegisteredApp) {
+        if let existing = registeredApps.first(where: { $0.id == app.id }), existing.source == .builtIn {
+            Log.registry.error("register: \(app.id, privacy: .public) is a built-in — plugin ignored")
+            return
         }
+        registeredApps.removeAll { $0.id == app.id }
+        registeredApps.append(app)
+    }
+
+    /// Removes a plugin from the live app list. Built-in ids are ignored.
+    /// (An already-loaded dylib cannot be unloaded; this only hides it.)
+    func deregister(id: String) {
+        guard let app = registeredApps.first(where: { $0.id == id }), app.source != .builtIn else { return }
+        registeredApps.removeAll { $0.id == id }
+    }
+
+    var allApps: [RegisteredApp] { registeredApps }
+
+    var enabledApps: [RegisteredApp] { registeredApps.filter { isEnabled($0.id) } }
+
+    func isEnabled(_ id: String) -> Bool {
+        if let override = enabledOverrides[id] { return override }
         return registeredApps.first(where: { $0.id == id })?.isEnabledByDefault ?? false
     }
 
     func setEnabled(_ enabled: Bool, for id: String) {
         enabledOverrides[id] = enabled
         persistence.save(RegistryStateDocument(enabled: enabledOverrides))
-        Log.registry.info("Built-in App \(id, privacy: .public) \(enabled ? "enabled" : "disabled", privacy: .public)")
+        Log.registry.info("App \(id, privacy: .public) \(enabled ? "enabled" : "disabled", privacy: .public)")
     }
 }
