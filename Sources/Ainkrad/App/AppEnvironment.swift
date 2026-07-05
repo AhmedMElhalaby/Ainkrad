@@ -52,11 +52,7 @@ final class AppEnvironment {
         LegacyUserDefaultsMigration.runIfNeeded(persistence: persistence, defaults: defaults)
 
         let registry = BuiltInAppRegistry(persistence: persistence)
-        let themeManager = ThemeManager(
-            persistence: persistence,
-            dockIconUpdater: AppKitDockIconUpdater()
-        )
-        themeManager.applyResolvedIcon()
+        let themeManager = ThemeManager(persistence: persistence)
 
         let workspaceManager = WorkspaceManager()
 

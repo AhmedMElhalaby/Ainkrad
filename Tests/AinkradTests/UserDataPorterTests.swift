@@ -20,7 +20,7 @@ final class UserDataPorterTests {
     func exportImportRoundTrips() throws {
         let source = FileDocumentStore(rootURL: root)
         source.save(SampleDoc(name: "hello"))
-        source.save(GlobalSettings(theme: .cyberPurple, appIcon: .purple))
+        source.save(GlobalSettings(theme: .cyberPurple))
 
         let bundle = try UserDataPorter(rootURL: root).export()
 

@@ -10,7 +10,7 @@ final class LegacyUserDefaultsMigrationTests {
     deinit { defaults.removePersistentDomain(forName: suiteName) }
 
     private func seedLegacy() {
-        defaults.set(try! JSONEncoder().encode(GlobalSettings(theme: .cyberPurple, appIcon: .purple)),
+        defaults.set(try! JSONEncoder().encode(GlobalSettings(theme: .cyberPurple)),
                      forKey: "global-settings")
         defaults.set(try! JSONEncoder().encode(["terminal": false]), forKey: "registry-enabled-state")
         // Terminal's settings type no longer lives in the host, so the
@@ -48,7 +48,7 @@ final class LegacyUserDefaultsMigrationTests {
         LegacyUserDefaultsMigration.runIfNeeded(persistence: store, defaults: defaults)
 
         // Mutate the imported doc, then re-run: a second import would overwrite it.
-        store.save(GlobalSettings(theme: .neonBlue, appIcon: .auto))
+        store.save(GlobalSettings(theme: .neonBlue))
         LegacyUserDefaultsMigration.runIfNeeded(persistence: store, defaults: defaults)
 
         #expect(store.load(GlobalSettings.self)?.theme == .neonBlue)

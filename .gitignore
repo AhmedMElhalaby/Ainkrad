@@ -16,3 +16,6 @@ docs/superpowers/
 
 # Release build output
 dist/
+
+# Local xcodebuild output directory (see Makefile)
+build/

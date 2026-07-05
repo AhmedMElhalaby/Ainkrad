@@ -2,11 +2,6 @@ import Testing
 import Foundation
 @testable import Ainkrad
 
-@MainActor
-private final class SpyDockIconUpdater: DockIconUpdating {
-    func updateDockIcon(_ icon: AppIcon) {}
-}
-
 private struct NoOpCatalogSource: CatalogSource {
     func fetchCatalog() async throws -> [CatalogEntry] { [] }
 }
@@ -22,7 +17,7 @@ final class AppEnvironmentTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let registry = BuiltInAppRegistry(persistence: persistence)
-        let themeManager = ThemeManager(persistence: persistence, dockIconUpdater: SpyDockIconUpdater())
+        let themeManager = ThemeManager(persistence: persistence)
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)

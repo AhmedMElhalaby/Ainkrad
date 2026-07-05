@@ -20,26 +20,17 @@ final class GlobalSettingsTests {
         #expect(store.load(GlobalSettings.self)?.theme == .cyberPurple)
     }
 
-    @Test("appIcon defaults to Auto")
-    func appIconDefaultsToAuto() {
-        #expect(GlobalSettings().appIcon == .auto)
-    }
-
-    @Test("an explicit appIcon choice round-trips through the persistence store")
-    func appIconRoundTrips() {
-        let store = InMemoryPersistenceStore()
-        var settings = GlobalSettings()
-        settings.appIcon = .purple
-        store.save(settings)
-
-        #expect(store.load(GlobalSettings.self)?.appIcon == .purple)
-    }
-
-    @Test("a legacy payload without appIcon decodes to Auto")
-    func legacyPayloadDecodesToAuto() throws {
-        let legacy = Data(#"{"theme":"cyberPurple"}"#.utf8)
+    @Test("a legacy payload with an extra unknown field still decodes the theme")
+    func legacyPayloadWithExtraFieldDecodes() throws {
+        let legacy = Data(#"{"theme":"cyberPurple","appIcon":"purple"}"#.utf8)
         let decoded = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
         #expect(decoded.theme == .cyberPurple)
-        #expect(decoded.appIcon == .auto)
+    }
+
+    @Test("a payload without theme decodes to the Neon Blue default")
+    func missingThemeDecodesToDefault() throws {
+        let legacy = Data("{}".utf8)
+        let decoded = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
+        #expect(decoded.theme == .neonBlue)
     }
 }

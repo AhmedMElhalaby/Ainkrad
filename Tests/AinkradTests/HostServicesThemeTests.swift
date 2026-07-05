@@ -4,15 +4,12 @@ import SwiftUI
 @testable import Ainkrad
 import AinkradAppKit
 
-@MainActor
-private final class NoOpDock: DockIconUpdating { func updateDockIcon(_ icon: AppIcon) {} }
-
 @Suite("HostServices theme")
 @MainActor
 struct HostServicesThemeTests {
     private func makeHost() -> (HostServicesImpl, ThemeManager) {
         let persistence = InMemoryPersistenceStore()
-        let tm = ThemeManager(persistence: persistence, dockIconUpdater: NoOpDock())
+        let tm = ThemeManager(persistence: persistence)
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let host = HostServicesImpl(appID: "t", dataRootURL: root,
                                     secretStore: InMemorySecretStore(), themeManager: tm)
