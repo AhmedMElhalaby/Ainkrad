@@ -1,19 +1,25 @@
 import Observation
+import Foundation
+import AinkradAppKit
 
-/// Observable owner of `TerminalSettings`, injected via `AppEnvironment`.
-/// Editing here persists immediately AND publishes to observers, so the
-/// Settings UI and every running Terminal restyle live (see
-/// `TerminalContainerView`). Session-resolution reads (shell / working
-/// directory) still come from `SettingsStore` at session creation.
+/// Observable owner of `TerminalSettings`, backed by the app-scoped
+/// `HostServices.documents`. Editing persists immediately AND publishes to
+/// observers, so the Settings UI and every running Terminal restyle live.
 @MainActor
 @Observable
 final class TerminalSettingsStore {
     private(set) var settings: TerminalSettings
-    private let persistence: PersistenceStore
+    private let documents: PluginDocumentStore
+    private static let key = TerminalSettings.documentID
 
-    init(persistence: PersistenceStore) {
-        self.persistence = persistence
-        self.settings = persistence.load(TerminalSettings.self) ?? TerminalSettings()
+    init(documents: PluginDocumentStore) {
+        self.documents = documents
+        if let data = documents.data(forKey: Self.key),
+           let decoded = try? JSONDecoder().decode(TerminalSettings.self, from: data) {
+            self.settings = decoded
+        } else {
+            self.settings = TerminalSettings()
+        }
     }
 
     /// Mutates the settings, publishes to observers, and persists immediately.
@@ -21,6 +27,8 @@ final class TerminalSettingsStore {
         var updated = settings
         mutate(&updated)
         settings = updated
-        persistence.save(updated)
+        if let data = try? JSONEncoder().encode(updated) {
+            documents.setData(data, forKey: Self.key)
+        }
     }
 }

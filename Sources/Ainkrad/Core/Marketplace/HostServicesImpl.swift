@@ -1,14 +1,17 @@
 import Foundation
+import Observation
 import OSLog
 import AinkradAppKit
 
-/// The host's `HostServices`, scoped to one app id. `theme` is live (recomputed
-/// from the theme manager) so a loaded app follows theme changes.
+/// The host's `HostServices`, scoped to one app id. `theme` is an observable
+/// wrapper kept in sync with the theme manager, so a loaded app follows theme
+/// changes live.
 @MainActor
 final class HostServicesImpl: HostServices {
     let documents: PluginDocumentStore
     let secrets: PluginSecretStore
     let log: PluginLogger
+    let theme: HostTheme
     private let themeManager: ThemeManager
 
     init(appID: String, dataRootURL: URL, secretStore: SecretStore, themeManager: ThemeManager) {
@@ -16,9 +19,23 @@ final class HostServicesImpl: HostServices {
         self.secrets = ScopedPluginSecretStore(appID: appID, backing: secretStore)
         self.log = PluginLoggerImpl(appID: appID)
         self.themeManager = themeManager
+        self.theme = HostTheme(HostThemeTokens(from: themeManager.currentTheme))
+        armThemeSync()
     }
 
-    var theme: HostThemeTokens { HostThemeTokens(from: themeManager.tokens) }
+    /// Observation fires `onChange` once, just before `currentTheme` changes, so
+    /// read the new value on the next main-actor hop and re-arm for the next one.
+    private func armThemeSync() {
+        withObservationTracking {
+            _ = themeManager.currentTheme
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.theme.update(HostThemeTokens(from: self.themeManager.currentTheme))
+                self.armThemeSync()
+            }
+        }
+    }
 }
 
 /// Key→data storage confined to a single directory. Keys are sanitized so a
@@ -65,12 +82,14 @@ final class PluginLoggerImpl: PluginLogger {
 }
 
 extension HostThemeTokens {
-    init(from tokens: DesignTokens) {
+    init(from theme: Theme) {
+        let t = theme.tokens
         self.init(
-            background: tokens.background, surface: tokens.surface,
-            surfaceElevated: tokens.surfaceElevated, accentPrimary: tokens.accentPrimary,
-            accentSecondary: tokens.accentSecondary, accentTertiary: tokens.accentTertiary,
-            foreground: tokens.foreground
+            themeID: theme.rawValue,
+            background: t.background, surface: t.surface,
+            surfaceElevated: t.surfaceElevated, accentPrimary: t.accentPrimary,
+            accentSecondary: t.accentSecondary, accentTertiary: t.accentTertiary,
+            foreground: t.foreground
         )
     }
 }

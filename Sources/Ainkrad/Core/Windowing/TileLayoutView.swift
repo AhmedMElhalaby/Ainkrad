@@ -23,6 +23,17 @@ struct TileLayoutView: View {
 
     private var tileLayout: TileLayout { workspace.tileLayout }
 
+    /// True when any pane declares a translucent window fill (via its
+    /// `RegisteredApp.chromeFill` alpha) — then the shared blurred backdrop is
+    /// rendered behind the panes. App-agnostic: no per-app settings read.
+    private var hasTranslucentPane: Bool {
+        tileLayout.blocks.contains { block in
+            guard let app = registry.allApps.first(where: { $0.id == block.appID }),
+                  let fill = app.chromeFill() else { return false }
+            return NSColor(fill).alphaComponent < 1
+        }
+    }
+
     var body: some View {
         if tileLayout.isEmpty {
             EmptyWorkspaceView()
@@ -60,7 +71,7 @@ struct TileLayoutView: View {
                 // translucent terminals reveal slices of a SINGLE blurred
                 // island rather than each carrying its own. Only present when
                 // transparency is enabled (otherwise opaque panes cover it).
-                if environment.terminalSettingsStore.settings.backgroundOpacity < 1 {
+                if hasTranslucentPane {
                     workspaceBackdrop
                         .frame(width: proxy.size.width, height: proxy.size.height)
                 }

@@ -7,28 +7,24 @@ struct TerminalPalette {
     let ansi: [String]
 }
 
-extension Theme {
-    /// The terminal palette for this theme's Match-Theme scheme — the terminal
-    /// counterpart of the app `DesignTokens`, so "Match App Theme" makes the
-    /// terminal look like the active theme.
-    var terminalPalette: TerminalPalette {
-        switch self {
-        case .neonBlue:
-            return TerminalPalette(background: "0A0E17", foreground: "E2E8F0", cursor: "22D3EE", ansi: TerminalColorScheme.matchTheme.ansi)
-        case .cyberPurple:
-            return TerminalPalette(background: "080814", foreground: "EDE9FE", cursor: "C084FC", ansi: TerminalColorScheme.matchTheme.ansi)
-        case .dracula:
-            return TerminalPalette(background: "282A36", foreground: "F8F8F2", cursor: "BD93F9", ansi: TerminalColorScheme.dracula.ansi)
-        case .solarizedDark:
-            return TerminalPalette(background: "002B36", foreground: "839496", cursor: "93A1A1", ansi: TerminalColorScheme.solarizedDark.ansi)
-        case .nord:
-            return TerminalPalette(background: "2E3440", foreground: "D8DEE9", cursor: "88C0D0", ansi: TerminalColorScheme.nord.ansi)
-        case .tokyoNight:
-            return TerminalPalette(background: "1A1B26", foreground: "C0CAF5", cursor: "7AA2F7", ansi: TerminalColorScheme.tokyoNight.ansi)
-        case .gruvbox:
-            return TerminalPalette(background: "282828", foreground: "EBDBB2", cursor: "FE8019", ansi: TerminalColorScheme.gruvbox.ansi)
-        }
+/// The curated Match-Theme terminal palette for each app theme, keyed by the
+/// theme's stable id (`HostThemeTokens.themeID`, which is the host `Theme`
+/// rawValue). Terminal owns this table so it depends only on the SDK theme id,
+/// not the host `Theme` enum. Unknown ids fall back to the default theme.
+enum TerminalMatchThemePalette {
+    static func forThemeID(_ id: String) -> TerminalPalette {
+        table[id] ?? table["neonBlue"]!
     }
+
+    private static let table: [String: TerminalPalette] = [
+        "neonBlue":      TerminalPalette(background: "0A0E17", foreground: "E2E8F0", cursor: "22D3EE", ansi: TerminalColorScheme.matchTheme.ansi),
+        "cyberPurple":   TerminalPalette(background: "080814", foreground: "EDE9FE", cursor: "C084FC", ansi: TerminalColorScheme.matchTheme.ansi),
+        "dracula":       TerminalPalette(background: "282A36", foreground: "F8F8F2", cursor: "BD93F9", ansi: TerminalColorScheme.dracula.ansi),
+        "nord":          TerminalPalette(background: "2E3440", foreground: "D8DEE9", cursor: "88C0D0", ansi: TerminalColorScheme.nord.ansi),
+        "tokyoNight":    TerminalPalette(background: "1A1B26", foreground: "C0CAF5", cursor: "7AA2F7", ansi: TerminalColorScheme.tokyoNight.ansi),
+        "gruvbox":       TerminalPalette(background: "282828", foreground: "EBDBB2", cursor: "FE8019", ansi: TerminalColorScheme.gruvbox.ansi),
+        "solarizedDark": TerminalPalette(background: "002B36", foreground: "839496", cursor: "93A1A1", ansi: TerminalColorScheme.solarizedDark.ansi),
+    ]
 }
 
 /// A selectable terminal color scheme. `background`/`foreground`/`cursor` are

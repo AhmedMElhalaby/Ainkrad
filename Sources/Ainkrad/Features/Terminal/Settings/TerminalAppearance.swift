@@ -1,3 +1,5 @@
+import AinkradAppKit
+
 /// The caret shape, independent of blink (which is a separate toggle). Maps
 /// to SwiftTerm's combined `CursorStyle` in the view layer.
 enum TerminalCursorShape: String, Codable, CaseIterable {
@@ -30,16 +32,16 @@ struct TerminalRenderAppearance: Equatable {
     let sendMouseEventsToApps: Bool
 }
 
-/// Pure resolution of `TerminalSettings` (+ the active theme) into a concrete
-/// `TerminalRenderAppearance`. No AppKit here — kept unit-testable.
+/// Pure resolution of `TerminalSettings` (+ the active theme's tokens) into a
+/// concrete `TerminalRenderAppearance`. No AppKit here — kept unit-testable.
 enum TerminalAppearanceResolver {
     static let defaultFontFamily = "MesloLGS NF"
     static let defaultFontSize: Double = 15
     static let defaultSelection = "3B4252"
 
-    static func resolve(settings: TerminalSettings, theme: Theme) -> TerminalRenderAppearance {
+    static func resolve(settings: TerminalSettings, tokens: HostThemeTokens) -> TerminalRenderAppearance {
         let scheme = TerminalColorScheme.scheme(id: settings.colorSchemeID)
-        let themed = theme.terminalPalette
+        let themed = TerminalMatchThemePalette.forThemeID(tokens.themeID)
         return TerminalRenderAppearance(
             background: scheme.background ?? themed.background,
             foreground: scheme.foreground ?? themed.foreground,

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AinkradAppKit
 
 /// Terminal's per-app settings, hosted in the Settings overlay's Terminal
 /// section: Appearance (color scheme + font) and Behavior (default shell +
@@ -8,7 +9,8 @@ import UniformTypeIdentifiers
 /// persist immediately and restyle running terminals live — see Terminal App
 /// Architecture.md and Navigation & Settings Architecture.md.
 struct TerminalSettingsView: View {
-    @Environment(AppEnvironment.self) private var environment
+    let settingsStore: TerminalSettingsStore
+    let theme: HostTheme
 
     @State private var shellPathText = ""
     @State private var shellValidationMessage: String?
@@ -17,14 +19,14 @@ struct TerminalSettingsView: View {
 
     private var availableFonts: [String] { MonospacedFonts.available() }
 
-    private var settings: TerminalSettings { environment.terminalSettingsStore.settings }
+    private var settings: TerminalSettings { settingsStore.settings }
 
     private var resolved: TerminalRenderAppearance {
-        TerminalAppearanceResolver.resolve(settings: settings, theme: environment.themeManager.currentTheme)
+        TerminalAppearanceResolver.resolve(settings: settings, tokens: theme.tokens)
     }
 
     var body: some View {
-        let tokens = environment.themeManager.tokens
+        let tokens = theme.tokens
 
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -37,15 +39,15 @@ struct TerminalSettingsView: View {
         .onAppear(perform: loadIfNeeded)
         .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
             guard case .success(let url) = result else { return }
-            environment.terminalSettingsStore.update { $0.defaultWorkingDirectory = url }
+            settingsStore.update { $0.defaultWorkingDirectory = url }
         }
     }
 
     // MARK: - Appearance
 
-    private func appearanceSection(tokens: DesignTokens) -> some View {
+    private func appearanceSection(tokens: HostThemeTokens) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+            SettingsSectionHeader(title: "APPEARANCE", tokens: DesignTokens(from: tokens))
 
             Text("Color Scheme")
                 .font(AinkradFont.display(12, weight: .medium))
@@ -71,21 +73,21 @@ struct TerminalSettingsView: View {
                     override: settings.cursorColor,
                     resolvedHex: resolved.cursor,
                     tokens: tokens
-                ) { newHex in environment.terminalSettingsStore.update { $0.cursorColor = newHex } }
+                ) { newHex in settingsStore.update { $0.cursorColor = newHex } }
 
                 colorControl(
                     label: "Selection Color",
                     override: settings.selectionColor,
                     resolvedHex: resolved.selection,
                     tokens: tokens
-                ) { newHex in environment.terminalSettingsStore.update { $0.selectionColor = newHex } }
+                ) { newHex in settingsStore.update { $0.selectionColor = newHex } }
             }
 
             transparencyControl(tokens: tokens)
         }
     }
 
-    private func transparencyControl(tokens: DesignTokens) -> some View {
+    private func transparencyControl(tokens: HostThemeTokens) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("Background Transparency")
@@ -99,7 +101,7 @@ struct TerminalSettingsView: View {
             Slider(
                 value: Binding(
                     get: { settings.backgroundOpacity },
-                    set: { v in environment.terminalSettingsStore.update { $0.backgroundOpacity = v } }
+                    set: { v in settingsStore.update { $0.backgroundOpacity = v } }
                 ),
                 in: 0.2...1.0
             )
@@ -111,7 +113,7 @@ struct TerminalSettingsView: View {
         .padding(.top, 2)
     }
 
-    private func cursorControls(tokens: DesignTokens) -> some View {
+    private func cursorControls(tokens: HostThemeTokens) -> some View {
         HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Cursor")
@@ -131,16 +133,16 @@ struct TerminalSettingsView: View {
                 NeonToggle(
                     isOn: Binding(
                         get: { settings.cursorBlink },
-                        set: { v in environment.terminalSettingsStore.update { $0.cursorBlink = v } }
+                        set: { v in settingsStore.update { $0.cursorBlink = v } }
                     ),
-                    tokens: tokens
+                    tokens: DesignTokens(from: tokens)
                 )
             }
             .padding(.bottom, 5)
         }
     }
 
-    private func cursorShapeButton(_ shape: TerminalCursorShape, tokens: DesignTokens) -> some View {
+    private func cursorShapeButton(_ shape: TerminalCursorShape, tokens: HostThemeTokens) -> some View {
         let isSelected = settings.cursorShape == shape
         let icon: String = switch shape {
         case .block: "rectangle.fill"
@@ -148,7 +150,7 @@ struct TerminalSettingsView: View {
         case .bar: "cursorarrow.click"
         }
         return Button {
-            environment.terminalSettingsStore.update { $0.cursorShape = shape }
+            settingsStore.update { $0.cursorShape = shape }
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 11))
@@ -172,7 +174,7 @@ struct TerminalSettingsView: View {
         label: String,
         override: String?,
         resolvedHex: String,
-        tokens: DesignTokens,
+        tokens: HostThemeTokens,
         set: @escaping (String?) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -200,15 +202,15 @@ struct TerminalSettingsView: View {
         }
     }
 
-    private func schemeCard(_ scheme: TerminalColorScheme, tokens: DesignTokens) -> some View {
+    private func schemeCard(_ scheme: TerminalColorScheme, tokens: HostThemeTokens) -> some View {
         let isSelected = settings.colorSchemeID == scheme.id
         let preview = TerminalAppearanceResolver.resolve(
             settings: TerminalSettings(colorSchemeID: scheme.id),
-            theme: environment.themeManager.currentTheme
+            tokens: theme.tokens
         )
 
         return Button {
-            environment.terminalSettingsStore.update { $0.colorSchemeID = scheme.id }
+            settingsStore.update { $0.colorSchemeID = scheme.id }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 // Miniature terminal preview.
@@ -255,7 +257,7 @@ struct TerminalSettingsView: View {
         .animation(.easeOut(duration: 0.14), value: isSelected)
     }
 
-    private func fontFamilyControl(tokens: DesignTokens) -> some View {
+    private func fontFamilyControl(tokens: HostThemeTokens) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Font")
                 .font(AinkradFont.display(12, weight: .medium))
@@ -264,7 +266,7 @@ struct TerminalSettingsView: View {
             Menu {
                 ForEach(availableFonts, id: \.self) { family in
                     Button(family) {
-                        environment.terminalSettingsStore.update { $0.fontFamily = family }
+                        settingsStore.update { $0.fontFamily = family }
                     }
                 }
             } label: {
@@ -294,7 +296,7 @@ struct TerminalSettingsView: View {
         }
     }
 
-    private func fontSizeControl(tokens: DesignTokens) -> some View {
+    private func fontSizeControl(tokens: HostThemeTokens) -> some View {
         let size = settings.fontSize ?? TerminalAppearanceResolver.defaultFontSize
 
         return VStack(alignment: .leading, spacing: 6) {
@@ -304,14 +306,14 @@ struct TerminalSettingsView: View {
 
             HStack(spacing: 0) {
                 stepperButton("minus", tokens: tokens) {
-                    environment.terminalSettingsStore.update { $0.fontSize = max(9, size - 1) }
+                    settingsStore.update { $0.fontSize = max(9, size - 1) }
                 }
                 Text("\(Int(size))")
                     .font(AinkradFont.mono(12))
                     .foregroundStyle(tokens.foreground)
                     .frame(width: 34)
                 stepperButton("plus", tokens: tokens) {
-                    environment.terminalSettingsStore.update { $0.fontSize = min(28, size + 1) }
+                    settingsStore.update { $0.fontSize = min(28, size + 1) }
                 }
             }
             .frame(height: 32)
@@ -326,7 +328,7 @@ struct TerminalSettingsView: View {
         }
     }
 
-    private func stepperButton(_ icon: String, tokens: DesignTokens, action: @escaping () -> Void) -> some View {
+    private func stepperButton(_ icon: String, tokens: HostThemeTokens, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
@@ -339,9 +341,9 @@ struct TerminalSettingsView: View {
 
     // MARK: - Behavior
 
-    private func behaviorSection(tokens: DesignTokens) -> some View {
+    private func behaviorSection(tokens: HostThemeTokens) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "BEHAVIOR", tokens: tokens)
+            SettingsSectionHeader(title: "BEHAVIOR", tokens: DesignTokens(from: tokens))
 
             field(label: "Default Shell", tokens: tokens) {
                 TextField("/bin/zsh", text: $shellPathText)
@@ -383,7 +385,7 @@ struct TerminalSettingsView: View {
 
                     if settings.defaultWorkingDirectory != nil {
                         Button {
-                            environment.terminalSettingsStore.update { $0.defaultWorkingDirectory = nil }
+                            settingsStore.update { $0.defaultWorkingDirectory = nil }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(tokens.foreground.opacity(0.4))
@@ -414,7 +416,7 @@ struct TerminalSettingsView: View {
                 help: "Send ⌥ as Meta/Esc+ (for tmux, emacs, and shell editing).",
                 isOn: Binding(
                     get: { settings.optionAsMeta },
-                    set: { v in environment.terminalSettingsStore.update { $0.optionAsMeta = v } }
+                    set: { v in settingsStore.update { $0.optionAsMeta = v } }
                 ),
                 tokens: tokens
             )
@@ -424,7 +426,7 @@ struct TerminalSettingsView: View {
                 help: "Forward clicks, motion, and the wheel to terminal apps (Claude Code, vim, tmux). Off: mouse stays for native selection and scrollback.",
                 isOn: Binding(
                     get: { settings.sendMouseEventsToApps },
-                    set: { v in environment.terminalSettingsStore.update { $0.sendMouseEventsToApps = v } }
+                    set: { v in settingsStore.update { $0.sendMouseEventsToApps = v } }
                 ),
                 tokens: tokens
             )
@@ -432,14 +434,14 @@ struct TerminalSettingsView: View {
             field(label: "Scrollback Lines", tokens: tokens) {
                 HStack(spacing: 0) {
                     stepperButton("minus", tokens: tokens) {
-                        environment.terminalSettingsStore.update { $0.scrollbackLines = max(0, $0.scrollbackLines - 500) }
+                        settingsStore.update { $0.scrollbackLines = max(0, $0.scrollbackLines - 500) }
                     }
                     Text("\(settings.scrollbackLines)")
                         .font(AinkradFont.mono(12))
                         .foregroundStyle(tokens.foreground)
                         .frame(width: 64)
                     stepperButton("plus", tokens: tokens) {
-                        environment.terminalSettingsStore.update { $0.scrollbackLines = min(100_000, $0.scrollbackLines + 500) }
+                        settingsStore.update { $0.scrollbackLines = min(100_000, $0.scrollbackLines + 500) }
                     }
                 }
                 .frame(width: 124, height: 32)
@@ -455,7 +457,7 @@ struct TerminalSettingsView: View {
         }
     }
 
-    private func toggleRow(label: String, help: String, isOn: Binding<Bool>, tokens: DesignTokens) -> some View {
+    private func toggleRow(label: String, help: String, isOn: Binding<Bool>, tokens: HostThemeTokens) -> some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
@@ -467,13 +469,13 @@ struct TerminalSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            NeonToggle(isOn: isOn, tokens: tokens)
+            NeonToggle(isOn: isOn, tokens: DesignTokens(from: tokens))
         }
     }
 
     private func field<Content: View>(
         label: String,
-        tokens: DesignTokens,
+        tokens: HostThemeTokens,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -493,14 +495,14 @@ struct TerminalSettingsView: View {
     private func updateShell() {
         let trimmed = shellPathText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
-            environment.terminalSettingsStore.update { $0.defaultShell = nil }
+            settingsStore.update { $0.defaultShell = nil }
             shellValidationMessage = nil
             return
         }
 
         do {
             _ = try ShellResolver().resolveDefaultShell(override: trimmed)
-            environment.terminalSettingsStore.update { $0.defaultShell = trimmed }
+            settingsStore.update { $0.defaultShell = trimmed }
             shellValidationMessage = nil
         } catch {
             shellValidationMessage = "Not a shell listed in /etc/shells."

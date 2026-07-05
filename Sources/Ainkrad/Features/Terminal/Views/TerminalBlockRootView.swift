@@ -1,20 +1,20 @@
 import SwiftUI
+import AinkradAppKit
 
-/// Terminal's root view for a Block: creates its `TerminalSession` on
-/// first appearance and hosts it via `TerminalContainerView`. See
-/// Terminal App Architecture.md.
+/// Terminal's root view for a Block: creates its `TerminalSession` on first
+/// appearance and hosts it via `TerminalContainerView`. Reads the injected
+/// settings store and `host.theme` in `body` so a scheme/font/theme change
+/// re-evaluates and restyles the running terminal live.
 struct TerminalBlockRootView: View {
-    @Environment(AppEnvironment.self) private var environment
+    let settingsStore: TerminalSettingsStore
+    let theme: HostTheme
     @State private var session: TerminalSession?
     @State private var isNoticeDismissed = false
 
     var body: some View {
-        // Reading the settings store and theme here means a color-scheme,
-        // font, or theme change re-evaluates this body and hands the container
-        // a fresh appearance, restyling the running terminal live.
         let appearance = TerminalAppearanceResolver.resolve(
-            settings: environment.terminalSettingsStore.settings,
-            theme: environment.themeManager.currentTheme
+            settings: settingsStore.settings,
+            tokens: theme.tokens
         )
 
         return Group {
@@ -23,10 +23,6 @@ struct TerminalBlockRootView: View {
                     if !session.startupNotices.isEmpty && !isNoticeDismissed {
                         noticeBanner(session.startupNotices)
                     }
-                    // A translucent terminal reveals the shared workspace
-                    // backdrop (one blurred island behind all panes — see
-                    // TileLayoutView), so all windows float over one
-                    // background rather than each carrying its own.
                     TerminalContainerView(session: session, appearance: appearance)
                 }
             } else {
@@ -35,15 +31,12 @@ struct TerminalBlockRootView: View {
         }
         .onAppear {
             guard session == nil else { return }
-            session = TerminalSessionFactory(persistence: environment.persistence).makeSession()
+            session = TerminalSessionFactory(settings: settingsStore.settings).makeSession()
         }
     }
 
-    /// Calm, non-blocking inline surfacing of resolution fallbacks — never
-    /// a modal, and dismissible. See Terminal App Architecture.md.
     private func noticeBanner(_ notices: [String]) -> some View {
-        let tokens = environment.themeManager.tokens
-
+        let tokens = theme.tokens
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: "info.circle")
                 .foregroundStyle(tokens.accentSecondary)
@@ -55,9 +48,7 @@ struct TerminalBlockRootView: View {
                 }
             }
             Spacer()
-            Button {
-                isNoticeDismissed = true
-            } label: {
+            Button { isNoticeDismissed = true } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(tokens.foreground.opacity(0.5))
