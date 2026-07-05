@@ -30,6 +30,7 @@ struct SettingsOverlayView: View {
 
     private enum SettingsSection: Hashable {
         case appearance
+        case appIcon
         case app(String)
     }
 
@@ -121,6 +122,7 @@ struct SettingsOverlayView: View {
         VStack(alignment: .leading, spacing: 4) {
             groupLabel("AINKRAD", tokens: tokens)
             sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
+            sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
 
             groupLabel("BUILT-IN APPS", tokens: tokens)
                 .padding(.top, 12)
@@ -205,6 +207,8 @@ struct SettingsOverlayView: View {
         switch selection {
         case .appearance:
             AppearanceSettingsView()
+        case .appIcon:
+            AppIconSettingsView()
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is
