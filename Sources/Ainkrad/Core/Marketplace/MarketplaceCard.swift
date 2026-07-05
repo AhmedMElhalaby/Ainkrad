@@ -28,6 +28,7 @@ struct MarketplaceCard: View {
                 }
                 Spacer()
                 if row.status == .updateAvailable { badge("UPDATE") }
+                else if isDevPlugin { badge("DEV") }
             }
 
             Text(row.description.isEmpty ? " " : row.description)
@@ -41,6 +42,12 @@ struct MarketplaceCard: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surface.opacity(0.9)))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+    }
+
+    /// A registered plugin that the marketplace didn't install (loaded from
+    /// DevPlugins) — present and toggleable, but not uninstallable here.
+    private var isDevPlugin: Bool {
+        row.kind == .plugin && row.status != .available && !row.isManaged
     }
 
     private var versionLine: String {
@@ -59,12 +66,12 @@ struct MarketplaceCard: View {
             case .updateAvailable:
                 actionButton("Update", filled: true, action: onUpdate)
                 enableToggle
-                if row.kind == .plugin { actionButton("Uninstall", filled: false, action: onUninstall) }
+                if row.isManaged { actionButton("Uninstall", filled: false, action: onUninstall) }
             case .installed:
                 Text("Installed").font(.system(size: 11, weight: .medium))
                     .foregroundStyle(tokens.accentTertiary)
                 enableToggle
-                if row.kind == .plugin { actionButton("Uninstall", filled: false, action: onUninstall) }
+                if row.isManaged { actionButton("Uninstall", filled: false, action: onUninstall) }
             }
             Spacer()
             if isBusy { ProgressView().controlSize(.small) }

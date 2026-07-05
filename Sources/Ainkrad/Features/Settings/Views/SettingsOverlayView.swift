@@ -34,8 +34,10 @@ struct SettingsOverlayView: View {
         case app(String)
     }
 
+    /// Only enabled apps get a settings section — a disabled app is hidden here
+    /// just as it is in the Launcher (`LauncherStore` filters `enabledApps`).
     private var appEntries: [AppEntry] {
-        environment.registry.allApps.map { AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
+        environment.registry.enabledApps.map { AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
     }
 
     var body: some View {
@@ -208,7 +210,10 @@ struct SettingsOverlayView: View {
         case .appIcon:
             AppIconSettingsView()
         case .app(let id):
-            if let app = environment.registry.allApps.first(where: { $0.id == id }) {
+            // Look up among enabled apps only: a disabled app has no settings
+            // section, and if the selected app is disabled while the overlay is
+            // open its detail falls back to blank rather than lingering.
+            if let app = environment.registry.enabledApps.first(where: { $0.id == id }) {
                 app.makeSettingsView()
             } else {
                 Color.clear

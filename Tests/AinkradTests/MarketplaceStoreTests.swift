@@ -37,9 +37,16 @@ struct MarketplaceStoreTests {
             source: .builtIn, makeRootView: { AnyView(EmptyView()) },
             makeSettingsView: { AnyView(EmptyView()) }, chromeFill: { nil })
     }
-    private func store(service: FakeMarketplaceService, builtIns: [RegisteredApp] = []) -> MarketplaceStore {
+    private func plugin(_ id: String) -> RegisteredApp {
+        RegisteredApp(id: id, displayName: id.capitalized, icon: "app", isEnabledByDefault: true,
+            source: .plugin(url: URL(fileURLWithPath: "/tmp/\(id).bundle"), apiVersion: 1),
+            makeRootView: { AnyView(EmptyView()) },
+            makeSettingsView: { AnyView(EmptyView()) }, chromeFill: { nil })
+    }
+    private func store(service: FakeMarketplaceService, builtIns: [RegisteredApp] = [],
+                      loaded: [RegisteredApp] = []) -> MarketplaceStore {
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
-        registry.install(builtIn: builtIns)
+        registry.install(builtIn: builtIns, loaded: loaded)
         let s = MarketplaceStore(service: service, registry: registry)
         s.reloadRows()
         return s
@@ -125,6 +132,40 @@ struct MarketplaceStoreTests {
         s.uninstall("notes")
         #expect(svc.uninstalledCalls == ["notes"])
         #expect(s.rows.first { $0.id == "notes" }?.status == .available)   // back to catalog-only
+    }
+
+    @Test("a marketplace-installed plugin is managed (uninstallable)")
+    func managedPluginRow() {
+        let svc = FakeMarketplaceService()
+        svc.cachedCatalog = [entry("notes")]
+        svc.installedResult = ["notes": .init(version: "1.0.0", sourceRepo: "o/notes")]
+        let row = store(service: svc, loaded: [plugin("notes")]).rows.first { $0.id == "notes" }
+        #expect(row?.status == .installed)
+        #expect(row?.kind == .plugin)
+        #expect(row?.isManaged == true)
+    }
+
+    @Test("a dev-sideloaded plugin (registered, no installed-doc entry) is NOT managed")
+    func devSideloadedPluginRow() {
+        // Registered as a plugin, but never marketplace-installed → not in the
+        // installed doc. Must be visible + installed, but not uninstallable.
+        let svc = FakeMarketplaceService()   // installedApps() == empty
+        let row = store(service: svc, loaded: [plugin("hello")]).rows.first { $0.id == "hello" }
+        #expect(row?.status == .installed)
+        #expect(row?.kind == .plugin)
+        #expect(row?.isManaged == false)
+    }
+
+    @Test("a built-in is never managed (not uninstallable via marketplace)")
+    func builtInNotManaged() {
+        let row = store(service: FakeMarketplaceService(), builtIns: [builtIn("terminal")]).rows.first { $0.id == "terminal" }
+        #expect(row?.isManaged == false)
+    }
+
+    @Test("a catalog-only app is not managed")
+    func availableNotManaged() {
+        let svc = FakeMarketplaceService(); svc.cachedCatalog = [entry("notes")]
+        #expect(store(service: svc).rows.first { $0.id == "notes" }?.isManaged == false)
     }
 
     @Test("setEnabled flips the registry-backed enabled flag")
