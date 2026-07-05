@@ -27,7 +27,8 @@ struct AppIconSettingsView: View {
     private func tile(_ choice: AppIconChoice, label: String, store: AppIconStore, tokens: DesignTokens) -> some View {
         let selected = store.choice == choice
         // Preview: the dark composed variant reads well on the HUD surface.
-        let previewName = AppIconResolver.resourceName(for: choice, dark: true)
+        // TODO(v2 Task 3): rewritten to use the appearance setting + theme.
+        let previewName = AppIconResolver.resourceName(for: choice, theme: .neonBlue, appearance: .system, systemDark: true)
         return Button {
             store.select(choice)
         } label: {

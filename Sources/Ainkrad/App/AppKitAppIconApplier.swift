@@ -22,7 +22,9 @@ final class AppKitAppIconApplier: NSObject, AppIconApplying {
     private func reapply() {
         let dark = NSApplication.shared.effectiveAppearance
             .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let name = AppIconResolver.resourceName(for: current, dark: dark)
+        // TODO(v2 Task 2): pass the real theme + appearance setting; this
+        // pre-v2 call site preselects an explicit color so theme is unused.
+        let name = AppIconResolver.resourceName(for: current, theme: .neonBlue, appearance: .system, systemDark: dark)
         guard let url = Bundle.main.url(forResource: name, withExtension: "icns"),
               let image = NSImage(contentsOf: url) else { return }
         NSApplication.shared.applicationIconImage = image

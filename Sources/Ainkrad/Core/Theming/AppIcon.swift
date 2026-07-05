@@ -1,19 +1,37 @@
-/// The user's chosen app/Dock icon — a manual preference (NOT theme-driven).
-/// Persisted in `GlobalSettings`; applied to the running app's Dock icon.
-enum AppIconChoice: String, Codable, CaseIterable {
-    case blue
-    case purple
-}
+/// The user's app-icon COLOR setting. `.auto` follows the current theme.
+/// Persisted as `GlobalSettings.appIconChoice` (v1 `blue`/`purple` still decode).
+enum AppIconChoice: String, Codable, CaseIterable { case auto, blue, purple }
 
-/// Pure mapping from a choice + current appearance to the bundled composed
-/// `.icns` resource base-name. Kept AppKit-free so it is unit-testable.
+/// The user's app-icon APPEARANCE setting. `.system` follows the Dock's
+/// light/dark; `.light`/`.dark` pin one variant.
+enum AppIconAppearance: String, Codable, CaseIterable { case system, light, dark }
+
+/// A concrete resolved icon color family (never `.auto`). Its rawValue is the
+/// resource-name prefix (`blue`/`purple`).
+enum AppIconColor: String, CaseIterable { case blue, purple }
+
+/// Pure mapping from the user's settings + theme + current system appearance to
+/// the bundled composed `.icns` resource base-name. AppKit-free and unit-tested.
 enum AppIconResolver {
-    static func resourceName(for choice: AppIconChoice, dark: Bool) -> String {
-        switch (choice, dark) {
-        case (.blue, false):   return "blue-light"
-        case (.blue, true):    return "blue-dark"
-        case (.purple, false): return "purple-light"
-        case (.purple, true):  return "purple-dark"
+    static func color(for choice: AppIconChoice, theme: Theme) -> AppIconColor {
+        switch choice {
+        case .auto:   return theme.iconColorFamily
+        case .blue:   return .blue
+        case .purple: return .purple
         }
+    }
+
+    static func isDark(_ appearance: AppIconAppearance, systemDark: Bool) -> Bool {
+        switch appearance {
+        case .system: return systemDark
+        case .light:  return false
+        case .dark:   return true
+        }
+    }
+
+    static func resourceName(for choice: AppIconChoice, theme: Theme,
+                             appearance: AppIconAppearance, systemDark: Bool) -> String {
+        let family = color(for: choice, theme: theme).rawValue
+        return "\(family)-\(isDark(appearance, systemDark: systemDark) ? "dark" : "light")"
     }
 }
