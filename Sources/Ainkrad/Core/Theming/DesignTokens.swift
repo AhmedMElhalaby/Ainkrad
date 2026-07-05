@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Semantic color tokens for one theme. Views read these — never a raw hex
 /// literal — so a view is automatically correct in both themes. See
@@ -33,7 +34,7 @@ struct DesignTokens: Equatable {
     )
 
     // Well-known palettes ported to full app themes (each also drives the
-    // terminal's Match-Theme colors — see Theme.terminalPalette).
+    // terminal's Match-Theme colors — see TerminalMatchThemePalette).
 
     static let dracula = DesignTokens(
         background: Color(hex: "282A36"),
@@ -84,4 +85,22 @@ struct DesignTokens: Equatable {
         accentTertiary: Color(hex: "859900"),
         foreground: Color(hex: "93A1A1")
     )
+}
+
+extension DesignTokens {
+    /// Bridges the SDK's `HostThemeTokens` snapshot back into host `DesignTokens`
+    /// so shared Settings components (`SettingsSectionHeader`, `NeonToggle`) that
+    /// take `DesignTokens` can be driven from a decoupled app's `host.theme`.
+    /// The 7 color fields map one-to-one; `themeID` is not a color and is dropped.
+    init(from t: HostThemeTokens) {
+        self.init(
+            background: t.background,
+            surface: t.surface,
+            surfaceElevated: t.surfaceElevated,
+            accentPrimary: t.accentPrimary,
+            accentSecondary: t.accentSecondary,
+            accentTertiary: t.accentTertiary,
+            foreground: t.foreground
+        )
+    }
 }

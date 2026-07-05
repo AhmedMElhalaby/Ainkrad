@@ -9,20 +9,20 @@ import Foundation
 struct TerminalSessionFactory {
     private let shellResolver: ShellResolving
     private let workingDirectoryResolver: WorkingDirectoryResolving
-    private let persistence: PersistenceStore
+    private let settings: TerminalSettings
 
     init(
         shellResolver: ShellResolving = ShellResolver(),
         workingDirectoryResolver: WorkingDirectoryResolving = WorkingDirectoryResolver(),
-        persistence: PersistenceStore
+        settings: TerminalSettings
     ) {
         self.shellResolver = shellResolver
         self.workingDirectoryResolver = workingDirectoryResolver
-        self.persistence = persistence
+        self.settings = settings
     }
 
     func makeSession() -> TerminalSession {
-        let settings = persistence.load(TerminalSettings.self) ?? TerminalSettings()
+        let settings = self.settings
         var notices: [String] = []
 
         let shellPath: String

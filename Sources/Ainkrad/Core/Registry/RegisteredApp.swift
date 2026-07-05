@@ -1,4 +1,6 @@
 import SwiftUI
+import AinkradAppKit
+import protocol AinkradAppKit.AinkradApp
 
 /// Where a registered app comes from.
 enum AppSource: Equatable {
@@ -27,19 +29,20 @@ struct PluginLoadFailure: Equatable {
 }
 
 extension RegisteredApp {
-    /// Adapts a compiled-in `BuiltInApp` type. `chromeFill` captures the live
-    /// `AppEnvironment` so Terminal's header fill resolves exactly as before.
+    /// Adapts a compiled-in app that conforms to the SDK `AinkradApp` contract,
+    /// binding it to its scoped host services. `source == .builtIn`, so the
+    /// registry gives it priority over any same-id plugin.
     @MainActor
-    static func builtIn(_ app: BuiltInApp.Type, environment: AppEnvironment) -> RegisteredApp {
+    static func builtIn(_ app: any AinkradApp.Type, isEnabledByDefault: Bool = true, host: HostServices) -> RegisteredApp {
         RegisteredApp(
             id: app.id,
             displayName: app.displayName,
             icon: app.icon,
-            isEnabledByDefault: app.isEnabledByDefault,
+            isEnabledByDefault: isEnabledByDefault,
             source: .builtIn,
-            makeRootView: { app.makeRootView() },
-            makeSettingsView: { app.makeSettingsView() },
-            chromeFill: { app.chromeFill(environment: environment) }
+            makeRootView: { app.makeRootView(host: host) },
+            makeSettingsView: { app.makeSettingsView(host: host) },
+            chromeFill: { app.chromeFill(host: host) }
         )
     }
 }

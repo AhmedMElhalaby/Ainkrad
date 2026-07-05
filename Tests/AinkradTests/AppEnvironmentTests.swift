@@ -25,7 +25,6 @@ final class AppEnvironmentTests {
         let themeManager = ThemeManager(persistence: persistence, dockIconUpdater: SpyDockIconUpdater())
         let workspaceManager = WorkspaceManager()
         let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
-        let terminalSettingsStore = TerminalSettingsStore(persistence: persistence)
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
         let catalogService = CatalogService(
             source: NoOpCatalogSource(), persistence: persistence)
@@ -43,7 +42,6 @@ final class AppEnvironmentTests {
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
-            terminalSettingsStore: terminalSettingsStore,
             connectionStore: connectionStore,
             marketplace: marketplace
         )
@@ -52,7 +50,6 @@ final class AppEnvironmentTests {
         #expect(environment.themeManager === themeManager)
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
-        #expect(environment.terminalSettingsStore === terminalSettingsStore)
         #expect(environment.connectionStore === connectionStore)
         #expect(environment.marketplace === marketplace)
     }

@@ -11,7 +11,6 @@ final class AppEnvironment {
     let themeManager: ThemeManager
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
-    let terminalSettingsStore: TerminalSettingsStore
     let connectionStore: ConnectionStore
     let marketplace: MarketplaceService
     var isLauncherPresented = false
@@ -25,7 +24,6 @@ final class AppEnvironment {
         themeManager: ThemeManager,
         workspaceManager: WorkspaceManager,
         launcherStore: LauncherStore,
-        terminalSettingsStore: TerminalSettingsStore,
         connectionStore: ConnectionStore,
         marketplace: MarketplaceService
     ) {
@@ -35,7 +33,6 @@ final class AppEnvironment {
         self.themeManager = themeManager
         self.workspaceManager = workspaceManager
         self.launcherStore = launcherStore
-        self.terminalSettingsStore = terminalSettingsStore
         self.connectionStore = connectionStore
         self.marketplace = marketplace
     }
@@ -92,15 +89,20 @@ final class AppEnvironment {
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
-            terminalSettingsStore: TerminalSettingsStore(persistence: persistence),
             connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
             marketplace: marketplace
         )
 
-        // Built-in apps' chrome fill captures the environment, so install after it exists.
+        // Terminal is compiled-in but runs on the SDK surface: give it its own
+        // scoped HostServices, migrate any pre-decouple host-global settings once,
+        // then register it through the single built-in adapter.
+        let terminalHost = HostServicesImpl(appID: TerminalApp.id, dataRootURL: pluginDataRoot,
+                                            secretStore: secrets, themeManager: themeManager)
+        TerminalSettingsMigration.runIfNeeded(legacy: persistence, scoped: terminalHost.documents, defaults: defaults)
+
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
-            builtIn: [RegisteredApp.builtIn(TerminalApp.self, environment: environment)],
+            builtIn: [RegisteredApp.builtIn(TerminalApp.self, host: terminalHost)],
             loaded: loaded.apps,
             failures: loaded.failures
         )
