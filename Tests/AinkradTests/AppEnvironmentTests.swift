@@ -69,9 +69,7 @@ final class AppEnvironmentTests {
         defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
         let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        // Settings left the registry — it is now a summonable overlay, not a
-        // tiled Block, so Terminal is the only registered app.
-        #expect(environment.registry.allApps.map { $0.id } == ["terminal"])
+        #expect(environment.registry.allApps.isEmpty)   // Terminal is now a Marketplace plugin, not built-in
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)

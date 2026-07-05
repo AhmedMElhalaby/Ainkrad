@@ -7,7 +7,6 @@ struct DocumentConformanceTests {
     @Test("document ids are stable and distinct")
     func stableDocumentIDs() {
         #expect(GlobalSettings.documentID == "global-settings")
-        #expect(TerminalSettings.documentID == "terminal-settings")
         #expect(LayoutStateSnapshot.documentID == "workspace-layout")
         #expect(RegistryStateDocument.documentID == "registry-enabled-state")
     }

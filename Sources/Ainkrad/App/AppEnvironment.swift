@@ -99,21 +99,17 @@ final class AppEnvironment {
             marketplaceStore: marketplaceStore
         )
 
-        // Terminal is compiled-in but runs on the SDK surface: give it its own
-        // scoped HostServices, migrate any pre-decouple host-global settings once,
-        // then register it through the single built-in adapter.
-        let terminalHost = HostServicesImpl(appID: TerminalApp.id, dataRootURL: pluginDataRoot,
+        // Terminal ships as a Marketplace plugin (AinkradTerminal), not compiled in.
+        // Still migrate any pre-4a host-global settings into its scoped store so the
+        // installed plugin sees the user's existing configuration.
+        let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
 
         let loaded = loader.loadAll(from: pluginDirs)
-        registry.install(
-            builtIn: [RegisteredApp.builtIn(TerminalApp.self, host: terminalHost)],
-            loaded: loaded.apps,
-            failures: loaded.failures
-        )
+        registry.install(builtIn: [], loaded: loaded.apps, failures: loaded.failures)
 
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
