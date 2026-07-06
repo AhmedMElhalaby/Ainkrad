@@ -108,21 +108,82 @@ SOFT = [(1.0, 1.0), (2.0, 0.18)]
 def build() -> dict[str, list[float]]:
     sounds: dict[str, list[float]] = {}
 
-    # open: upward glide, bright — summoning an overlay.
-    sounds["open"] = _tone(
-        duration=0.20, freq_start=523.25, freq_end=1046.50,
-        partials=GLASSY, decay_tau=0.09, attack_ms=5,
+    # appLaunch: the Ainkrad app itself starting up — a fuller rising chord
+    # (two back-to-back rising tones, a fourth apart) so it reads as a
+    # bigger, "whole app" event than the lighter overlayOpen blip.
+    sounds["appLaunch"] = _concat(
+        _tone(duration=0.16, freq_start=392.00, freq_end=783.99,
+              partials=GLASSY, decay_tau=0.10, attack_ms=6),
+        _tone(duration=0.22, freq_start=523.25, freq_end=1046.50,
+              partials=GLASSY, decay_tau=0.12, attack_ms=5),
+        gap=0.0,
     )
 
-    # close: the mirror of open — downward glide, slightly shorter/softer
-    # decay since dismissing should feel quicker/lighter than summoning.
-    sounds["close"] = _tone(
-        duration=0.18, freq_start=1046.50, freq_end=523.25,
+    # appQuit: the mirror of appLaunch — a fuller descending chord, longer
+    # and more resolved than overlayClose's quick tick.
+    sounds["appQuit"] = _concat(
+        _tone(duration=0.18, freq_start=1046.50, freq_end=523.25,
+              partials=GLASSY, decay_tau=0.10, attack_ms=5),
+        _tone(duration=0.20, freq_start=783.99, freq_end=392.00,
+              partials=GLASSY, decay_tau=0.12, attack_ms=4),
+        gap=0.0,
+    )
+
+    # overlayOpen: a light, quick upward blip — summoning an in-app overlay
+    # (Launcher/Settings/App Store/Workspace Overview). Shorter and simpler
+    # than appLaunch since this happens far more often.
+    sounds["overlayOpen"] = _tone(
+        duration=0.12, freq_start=659.25, freq_end=1108.73,
+        partials=GLASSY, decay_tau=0.055, attack_ms=3,
+    )
+
+    # overlayClose: a short, soft downward tick — the mirror of overlayOpen,
+    # quieter/quicker than appQuit since dismissing an overlay is a small,
+    # frequent action.
+    sounds["overlayClose"] = _tone(
+        duration=0.10, freq_start=1108.73, freq_end=659.25,
+        partials=SOFT, decay_tau=0.04, attack_ms=2,
+    )
+
+    # appOpen: a mid, single blip — an app (Block) launching into a
+    # workspace's tile layout. Between overlayOpen (lighter) and appLaunch
+    # (fuller) in weight.
+    sounds["appOpen"] = _tone(
+        duration=0.14, freq_start=493.88, freq_end=739.99,
         partials=GLASSY, decay_tau=0.07, attack_ms=4,
     )
 
+    # appClose: the mirror of appOpen — a mid downward blip for a Block
+    # closing.
+    sounds["appClose"] = _tone(
+        duration=0.13, freq_start=739.99, freq_end=493.88,
+        partials=GLASSY, decay_tau=0.06, attack_ms=3,
+    )
+
+    # workspaceSwitch: a quick two-step "swipe" (a fast up-then-settle pair
+    # of short tones) — reads as lateral motion, matching the carousel slide
+    # between workspaces.
+    sounds["workspaceSwitch"] = _concat(
+        _tone(duration=0.06, freq_start=440.00, freq_end=587.33,
+              partials=GLASSY, decay_tau=0.04, attack_ms=2),
+        _tone(duration=0.08, freq_start=587.33, freq_end=698.46,
+              partials=GLASSY, decay_tau=0.05, attack_ms=2),
+        gap=0.0,
+    )
+
+    # focusMode: a focused two-note motif (a held low note then a higher
+    # "locked in" note) — distinct from the family's glides, reads as
+    # narrowing attention onto one pane.
+    sounds["focusMode"] = _concat(
+        _tone(duration=0.09, freq_start=440.00, freq_end=440.00,
+              partials=GLASSY, decay_tau=0.05, attack_ms=3),
+        _tone(duration=0.13, freq_start=698.46, freq_end=698.46,
+              partials=GLASSY, decay_tau=0.08, attack_ms=3),
+        gap=0.015,
+    )
+
     # confirm: a crisp upward fifth (E5 -> B5), shorter and brighter than
-    # open — a distinct affirmative "ping" rather than a summon.
+    # appOpen — a distinct affirmative "ping" rather than a launch.
     sounds["confirm"] = _tone(
         duration=0.15, freq_start=659.25, freq_end=987.77,
         partials=GLASSY, decay_tau=0.06, attack_ms=3,

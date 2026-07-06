@@ -88,7 +88,10 @@ struct QuitConfirmationView: View {
     }
 
     private func quitButton(tokens: DesignTokens, coordinator: QuitCoordinator) -> some View {
-        Button { coordinator.confirm(dontAskAgain: dontAskAgain) } label: {
+        Button {
+            environment.sounds.play(.appQuit)
+            coordinator.confirm(dontAskAgain: dontAskAgain)
+        } label: {
             Text("Quit")
                 .font(AinkradFont.display(12, weight: .semibold))
                 .foregroundStyle(tokens.background)

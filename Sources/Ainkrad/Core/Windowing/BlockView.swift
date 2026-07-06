@@ -179,6 +179,7 @@ struct BlockView: View {
                 Button {
                     tileLayout.focus(block.id)
                     workspace.viewMode = isInFocusMode ? .split : .focus
+                    environment.sounds.play(.focusMode)
                 } label: {
                     Image(systemName: isInFocusMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 9, weight: .semibold))
@@ -195,6 +196,7 @@ struct BlockView: View {
             }
 
             Button {
+                environment.sounds.play(.appClose)
                 tileLayout.close(block.id)
             } label: {
                 Image(systemName: "xmark")
@@ -241,13 +243,17 @@ struct BlockView: View {
                 Button(isInFocusMode ? "Back to Split Mode" : "Focus Mode") {
                     tileLayout.focus(block.id)
                     workspace.viewMode = isInFocusMode ? .split : .focus
+                    environment.sounds.play(.focusMode)
                 }
                 .keyboardShortcut("m", modifiers: .command)
             }
             Button("Reset Layout") { tileLayout.resetLayout() }
             Divider()
-            Button("Close", role: .destructive) { tileLayout.close(block.id) }
-                .keyboardShortcut("w", modifiers: .command)
+            Button("Close", role: .destructive) {
+                environment.sounds.play(.appClose)
+                tileLayout.close(block.id)
+            }
+            .keyboardShortcut("w", modifiers: .command)
         }
     }
 

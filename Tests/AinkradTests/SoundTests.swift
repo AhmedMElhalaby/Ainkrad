@@ -5,8 +5,14 @@ import Foundation
 struct UISoundTests {
     @Test("resourceName is a stable, centralized mapping to the bundled wav base-name")
     func resourceName() {
-        #expect(UISound.open.resourceName == "open")
-        #expect(UISound.close.resourceName == "close")
+        #expect(UISound.appLaunch.resourceName == "appLaunch")
+        #expect(UISound.appQuit.resourceName == "appQuit")
+        #expect(UISound.overlayOpen.resourceName == "overlayOpen")
+        #expect(UISound.overlayClose.resourceName == "overlayClose")
+        #expect(UISound.appOpen.resourceName == "appOpen")
+        #expect(UISound.appClose.resourceName == "appClose")
+        #expect(UISound.workspaceSwitch.resourceName == "workspaceSwitch")
+        #expect(UISound.focusMode.resourceName == "focusMode")
         #expect(UISound.install.resourceName == "install")
         #expect(UISound.uninstall.resourceName == "uninstall")
         #expect(UISound.toggle.resourceName == "toggle")
@@ -14,11 +20,21 @@ struct UISoundTests {
         #expect(UISound.error.resourceName == "error")
     }
 
+    @Test("allCases covers exactly the expected set of events, no more no less")
+    func allCasesIsExpectedSet() {
+        let expected: Set<UISound> = [
+            .appLaunch, .appQuit, .overlayOpen, .overlayClose,
+            .appOpen, .appClose, .workspaceSwitch, .focusMode,
+            .install, .uninstall, .toggle, .confirm, .error,
+        ]
+        #expect(Set(UISound.allCases) == expected)
+    }
+
     @Test("every UISound's wav exists in the main bundle, tolerant if the test bundle can't see app resources")
     func bundledAssetsExist() {
         for sound in UISound.allCases {
             let url = Bundle.main.url(forResource: sound.resourceName, withExtension: "wav")
-            if Bundle.main.url(forResource: UISound.open.resourceName, withExtension: "wav") == nil {
+            if Bundle.main.url(forResource: UISound.appLaunch.resourceName, withExtension: "wav") == nil {
                 // The test bundle isn't the app bundle — resources aren't visible here; skip.
                 continue
             }
@@ -119,6 +135,6 @@ struct SoundEngineEnabledGateTests {
     func missingPlayerIsNoOp() {
         let settings = FakeSoundSettings(soundEnabled: true)
         let engine = SoundEngine(settings: settings, players: [:])
-        engine.play(.open)   // should not crash
+        engine.play(.appLaunch)   // should not crash
     }
 }
