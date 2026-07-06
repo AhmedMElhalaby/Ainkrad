@@ -22,7 +22,7 @@ struct RegisteredApp: Identifiable {
     let chromeFill: @MainActor () -> Color?
 }
 
-/// A bundle the loader skipped, surfaced for the later Marketplace UI.
+/// A bundle the loader skipped, surfaced for the later App Store UI.
 struct PluginLoadFailure: Equatable {
     let url: URL
     let reason: String

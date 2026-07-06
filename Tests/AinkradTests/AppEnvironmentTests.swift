@@ -29,8 +29,8 @@ final class AppEnvironmentTests {
             pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
             retainedDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("retained-plugin-data"),
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
-        let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
-        let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        let appStoreStore = AppStoreStore(service: appStore, registry: registry)
         let shortcutStore = ShortcutStore(persistence: persistence)
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
@@ -43,8 +43,8 @@ final class AppEnvironmentTests {
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
             connectionStore: connectionStore,
-            marketplace: marketplace,
-            marketplaceStore: marketplaceStore,
+            appStore: appStore,
+            appStoreStore: appStoreStore,
             appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager),
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
@@ -56,8 +56,8 @@ final class AppEnvironmentTests {
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
         #expect(environment.connectionStore === connectionStore)
-        #expect(environment.marketplace === marketplace)
-        #expect(environment.marketplaceStore === marketplaceStore)
+        #expect(environment.appStore === appStore)
+        #expect(environment.appStoreStore === appStoreStore)
         #expect(environment.shortcutStore === shortcutStore)
         #expect(environment.quitCoordinator === quitCoordinator)
         #expect(environment.generalSettingsStore === generalSettingsStore)
@@ -76,7 +76,7 @@ final class AppEnvironmentTests {
         defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
         let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        #expect(environment.registry.allApps.isEmpty)   // Terminal is now a Marketplace plugin, not built-in
+        #expect(environment.registry.allApps.isEmpty)   // Terminal is now an App Store plugin, not built-in
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)

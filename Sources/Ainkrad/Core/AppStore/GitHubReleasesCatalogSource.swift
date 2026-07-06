@@ -16,7 +16,7 @@ struct GitHubReleasesCatalogSource: CatalogSource {
         var entries: [CatalogEntry] = []
         for repo in repositories {
             do { entries.append(try await entry(for: repo)) }
-            catch { Log.marketplace.error("Catalog: skipped \(repo, privacy: .public): \(String(describing: error), privacy: .public)") }
+            catch { Log.appStore.error("Catalog: skipped \(repo, privacy: .public): \(String(describing: error), privacy: .public)") }
         }
         return entries
     }

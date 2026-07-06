@@ -29,7 +29,7 @@ final class CatalogService {
             persistence.save(CatalogCacheDocument(entries: entries))
             return entries
         } catch {
-            Log.marketplace.error("Catalog refresh failed, using cache: \(String(describing: error), privacy: .public)")
+            Log.appStore.error("Catalog refresh failed, using cache: \(String(describing: error), privacy: .public)")
             return cached
         }
     }

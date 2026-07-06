@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Shared visual language for the four summonable HUD overlays — Launcher,
-/// Settings, Marketplace, Workspace Overview. Centralizing the backdrop
+/// Settings, App Store, Workspace Overview. Centralizing the backdrop
 /// opacity and panel treatment here keeps them reading as one system even
 /// though each panel's content differs.
 enum OverlayChrome {
@@ -41,7 +41,7 @@ private struct HUDPanelChrome: ViewModifier {
 
 extension View {
     /// Applies the shared HUD panel finish (background, clip, border glow,
-    /// shadow stack) used by the Launcher, Settings, Marketplace, and
+    /// shadow stack) used by the Launcher, Settings, App Store, and
     /// Workspace Overview panels.
     func hudPanelChrome(tokens: DesignTokens) -> some View {
         modifier(HUDPanelChrome(tokens: tokens))

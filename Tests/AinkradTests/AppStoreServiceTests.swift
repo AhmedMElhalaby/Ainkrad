@@ -3,7 +3,7 @@ import Foundation
 @testable import Ainkrad
 
 @MainActor
-struct MarketplaceServiceTests {
+struct AppStoreServiceTests {
     private func entry(_ id: String, _ v: String) -> CatalogEntry {
         CatalogEntry(appID: id, displayName: id, icon: "app", description: "", version: v, apiVersion: 1,
                      downloadURL: URL(string: "https://e/\(id).zip")!, sha256: "x", sourceRepo: "o/\(id)")
@@ -28,7 +28,7 @@ struct MarketplaceServiceTests {
             pluginsDir: URL(fileURLWithPath: "/tmp/p"), pluginDataDir: URL(fileURLWithPath: "/tmp/d"),
             retainedDataDir: URL(fileURLWithPath: "/tmp/r"),
             persistence: store, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
-        let svc = MarketplaceService(catalog: catalog, installer: installer, persistence: store)
+        let svc = AppStoreService(catalog: catalog, installer: installer, persistence: store)
         #expect(svc.availableUpdates().map(\.appID) == ["hello"])
         #expect(svc.installedApps().keys.sorted() == ["fresh", "hello"])
     }

@@ -136,7 +136,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                !environment.isLauncherPresented,
                !environment.isWorkspaceOverviewPresented,
                !environment.isSettingsPresented,
-               !environment.isMarketplacePresented {
+               !environment.isAppStorePresented {
                 switch event.keyCode {
                 case 123:
                     environment.workspaceManager.switchToPreviousWorkspace()
@@ -154,7 +154,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
             // only while no overlay owns the keyboard (and never when ⌥ is
             // held, which is the workspace-cycle chord above).
-            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isMarketplacePresented {
+            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isAppStorePresented {
                 let direction: PaneDirection? = switch event.keyCode {
                 case 123: .left
                 case 124: .right
@@ -210,7 +210,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             case .openLauncher:
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
-                environment.isMarketplacePresented = false
+                environment.isAppStorePresented = false
                 if environment.isLauncherPresented {
                     environment.launcherStore.query = ""
                     environment.isLauncherPresented = false
@@ -222,16 +222,16 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 // ⌘, summons/dismisses the Settings overlay (macOS convention).
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
-                environment.isMarketplacePresented = false
+                environment.isAppStorePresented = false
                 environment.isSettingsPresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
             case .toggleAppStore:
-                // Summons/dismisses the Marketplace overlay.
+                // Summons/dismisses the App Store overlay.
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
-                environment.isMarketplacePresented.toggle()
+                environment.isAppStorePresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
             case .newWorkspace:
@@ -243,7 +243,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             case .toggleWorkspaceOverview:
                 environment.isLauncherPresented = false
                 environment.isSettingsPresented = false
-                environment.isMarketplacePresented = false
+                environment.isAppStorePresented = false
                 environment.isWorkspaceOverviewPresented.toggle()
                 return true
             case .closeBlock:
