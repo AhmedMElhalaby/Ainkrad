@@ -6,9 +6,12 @@ import AppKit
 /// `SCNView` with a transparent background, so `AmbientSkyView` shows
 /// through it exactly as it did behind the old 2D artwork. Adds a slow
 /// continuous orbit on the island and a few degrees of pointer-driven camera
-/// parallax; both are skipped under Reduce Motion, which renders a single
-/// static frame instead (AIN-153). Re-lights the scene in place — without
-/// rebuilding it — whenever `colors` changes (AIN-152).
+/// parallax; under Reduce Motion the orbit and pointer parallax stop, the
+/// ember/cloud particle systems stop emitting, and the render loop itself
+/// is halted (`isPlaying = false`) so the island renders one fully static
+/// frame (AIN-107/AIN-153). Re-lights the scene in place — without
+/// rebuilding it, and only when `colors` actually changed — whenever
+/// `updateNSView` runs (AIN-152).
 ///
 /// `pointerFraction` is normalized to roughly -1...1 on each axis (0,0 =
 /// center); the caller drives it from `.onContinuousHover`.
@@ -30,13 +33,12 @@ struct IslandSceneView: View {
             let view = IslandSCNView()
             view.backgroundColor = .clear
             view.antialiasingMode = .multisampling4X
-            view.rendersContinuously = !reduceMotion
 
             // Never let a SceneKit setup problem take the app down — the
             // island is ambience, not a requirement. If building the scene
             // somehow throws/traps in a future edit, callers still get an
             // empty, harmless transparent view rather than a crash.
-            let scene = IslandScene.build(colors: colors)
+            let scene = IslandScene.build(colors: colors, reduceMotion: reduceMotion)
             view.scene = scene
             view.pointOfView = scene.rootNode.childNode(withName: IslandScene.NodeName.camera, recursively: true)
 
@@ -44,35 +46,66 @@ struct IslandSceneView: View {
             coordinator.cameraNode = view.pointOfView
             coordinator.orbitContainer = scene.rootNode.childNode(
                 withName: IslandScene.NodeName.orbitContainer, recursively: true)
-            coordinator.applyOrbit(running: !reduceMotion)
+            coordinator.appliedColors = colors
+            coordinator.applyReduceMotion(reduceMotion, to: view)
             coordinator.applyPointerNudge(pointerFraction, animated: false)
             return view
         }
 
         func updateNSView(_ nsView: IslandSCNView, context: Context) {
-            if let scene = nsView.scene {
-                IslandScene.relight(scene, colors: colors)
-            }
-            nsView.rendersContinuously = !reduceMotion
-            context.coordinator.applyOrbit(running: !reduceMotion)
+            context.coordinator.applyRelight(colors, to: nsView.scene)
+            context.coordinator.applyReduceMotion(reduceMotion, to: nsView)
             context.coordinator.applyPointerNudge(reduceMotion ? .zero : pointerFraction, animated: true)
         }
 
         func makeCoordinator() -> Coordinator { Coordinator() }
 
-        /// Owns the two time-based behaviors (orbit action, pointer nudge)
-        /// so `updateNSView` can toggle/adjust them without re-walking the
-        /// scene graph on every SwiftUI update.
+        /// Owns the time-based behaviors (orbit action, particle emission,
+        /// pointer nudge) plus the last-applied palette, so `updateNSView`
+        /// can toggle/adjust them without re-walking the scene graph or
+        /// re-lighting on every SwiftUI update (e.g. every hover-driven
+        /// call) unless something actually changed.
         final class Coordinator {
             private static let orbitActionKey = "islandOrbit"
             private static let maxNudgeRadians: Float = 0.09 // ~5°
 
             weak var cameraNode: SCNNode?
             weak var orbitContainer: SCNNode?
+            var appliedColors: IslandPalette.LightColors?
             private var baseCameraEulerAngles: SCNVector3?
             private var isOrbiting = false
+            private var appliedReduceMotion: Bool?
 
-            func applyOrbit(running: Bool) {
+            /// Re-lights the scene only when `colors` actually differ from
+            /// the last-applied palette — `updateNSView` runs on every
+            /// SwiftUI update, including every `.onContinuousHover` pointer
+            /// move, and re-walking + re-coloring the scene graph on each of
+            /// those is needless work (AIN-107 minor).
+            func applyRelight(_ colors: IslandPalette.LightColors, to scene: SCNScene?) {
+                guard let scene, appliedColors != colors else { return }
+                appliedColors = colors
+                IslandScene.relight(scene, colors: colors)
+            }
+
+            /// Makes the scene genuinely motionless under Reduce Motion:
+            /// stops the orbit action, zeroes the ember/cloud particle
+            /// birth rates, and halts the view's render loop outright
+            /// (`isPlaying`, on top of `rendersContinuously`) — the render
+            /// loop alone does not stop live particle emission. Restores
+            /// all three when Reduce Motion turns back off, as long as the
+            /// window is actually visible (occlusion gating still wins).
+            func applyReduceMotion(_ reduceMotion: Bool, to view: IslandSCNView) {
+                guard appliedReduceMotion != reduceMotion else { return }
+                appliedReduceMotion = reduceMotion
+                view.rendersContinuously = !reduceMotion
+                view.reduceMotion = reduceMotion
+                applyOrbit(running: !reduceMotion)
+                if let scene = view.scene {
+                    IslandScene.setParticlesActive(scene, active: !reduceMotion)
+                }
+            }
+
+            private func applyOrbit(running: Bool) {
                 guard let orbitContainer else { return }
                 if running {
                     guard !isOrbiting else { return }
@@ -118,6 +151,20 @@ final class IslandSCNView: SCNView {
     // is what actually makes it non-opaque for compositing).
     override var isOpaque: Bool { false }
 
+    /// Mirrors `\.accessibilityReduceMotion`. Combined with window-occlusion
+    /// state (below) to decide whether the render loop should actually run:
+    /// either condition alone is enough to stop it, and resuming requires
+    /// both Reduce Motion to be off *and* the window to be visible — so
+    /// flipping Reduce Motion off while the window is occluded correctly
+    /// stays paused, and the occlusion path is unaffected when Reduce
+    /// Motion is off (AIN-107).
+    var reduceMotion = false {
+        didSet {
+            guard reduceMotion != oldValue, let window else { return }
+            updatePlaying(for: window)
+        }
+    }
+
     // `deinit` is nonisolated even on a @MainActor-inferred NSView subclass,
     // and `NSObjectProtocol` isn't `Sendable` — the token itself is just an
     // opaque handle that's safe to pass to `removeObserver` from anywhere.
@@ -146,7 +193,7 @@ final class IslandSCNView: SCNView {
     }
 
     private func updatePlaying(for window: NSWindow) {
-        isPlaying = window.occlusionState.contains(.visible) && !window.isMiniaturized
+        isPlaying = !reduceMotion && window.occlusionState.contains(.visible) && !window.isMiniaturized
     }
 
     deinit {

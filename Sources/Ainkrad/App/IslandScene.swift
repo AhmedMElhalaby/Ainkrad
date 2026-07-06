@@ -23,13 +23,25 @@ enum IslandScene {
         static let ringLight = "island.ringLight"
         static let ring = "island.ring"
         static let emberParticles = "island.emberParticles"
+        static let cloudParticles = "island.cloudParticles"
     }
+
+    /// Resting (non-reduced-motion) birth rates for the two particle
+    /// systems — the single source of truth `setParticlesActive(_:active:)`
+    /// restores when re-enabling particles at runtime.
+    private static let emberBirthRate: CGFloat = 8
+    private static let cloudBirthRate: CGFloat = 1.2
 
     /// Builds a fresh scene, already lit for `colors`. The root's background
     /// is left transparent (`contents = nil`) — `IslandSceneView` also clears
     /// the hosting `SCNView`'s background so the ambient sky behind it shows
     /// through both layers.
-    static func build(colors: IslandPalette.LightColors) -> SCNScene {
+    ///
+    /// `reduceMotion` is honored at build time too (not just by the caller
+    /// skipping the orbit action): the ember + cloud particle systems are
+    /// built with `birthRate = 0` so no motion is emitted even before
+    /// `IslandSceneView` gets a chance to stop the render loop (AIN-107).
+    static func build(colors: IslandPalette.LightColors, reduceMotion: Bool) -> SCNScene {
         let scene = SCNScene()
         scene.background.contents = nil
 
@@ -41,13 +53,32 @@ enum IslandScene {
         orbit.addChildNode(makeSpire(colors: colors))
         orbit.addChildNode(makeRing(colors: colors))
         makeSatelliteIslets().forEach { orbit.addChildNode($0) }
-        orbit.addChildNode(makeEmberParticles(colors: colors))
-        orbit.addChildNode(makeCloudDrift())
+        orbit.addChildNode(makeEmberParticles(colors: colors, active: !reduceMotion))
+        orbit.addChildNode(makeCloudDrift(active: !reduceMotion))
 
         scene.rootNode.addChildNode(makeAmbientLight())
         scene.rootNode.addChildNode(makeCamera())
 
         return scene
+    }
+
+    /// Toggles the ember + cloud particle systems of an already-built scene
+    /// on/off in place, by zeroing (or restoring) their birth rates — used to
+    /// react to Reduce Motion changing at runtime without rebuilding the
+    /// scene. Zero birth rate stops new particles from spawning; combined
+    /// with `IslandSceneView` also stopping the render loop, this makes the
+    /// island fully motionless under Reduce Motion (AIN-107).
+    static func setParticlesActive(_ scene: SCNScene, active: Bool) {
+        scene.rootNode.enumerateHierarchy { node, _ in
+            switch node.name {
+            case NodeName.emberParticles:
+                node.particleSystems?.forEach { $0.birthRate = active ? emberBirthRate : 0 }
+            case NodeName.cloudParticles:
+                node.particleSystems?.forEach { $0.birthRate = active ? cloudBirthRate : 0 }
+            default:
+                break
+            }
+        }
     }
 
     /// Re-lights an already-built scene in place for a new theme — walks the
@@ -213,10 +244,12 @@ enum IslandScene {
     // MARK: - Atmosphere
 
     /// Rising ember sparks — modest budget (a few dozen live particles),
-    /// additive blending, tinted by the theme's secondary color.
-    private static func makeEmberParticles(colors: IslandPalette.LightColors) -> SCNNode {
+    /// additive blending, tinted by the theme's secondary color. `active`
+    /// false (Reduce Motion) builds the system with a zero birth rate so no
+    /// particles are ever emitted.
+    private static func makeEmberParticles(colors: IslandPalette.LightColors, active: Bool) -> SCNNode {
         let system = SCNParticleSystem()
-        system.birthRate = 8
+        system.birthRate = active ? emberBirthRate : 0
         system.particleLifeSpan = 3.2
         system.particleLifeSpanVariation = 1.0
         system.particleSize = 0.045
@@ -242,9 +275,11 @@ enum IslandScene {
 
     /// A few slow, soft cloud puffs drifting beneath the island — very low
     /// birth rate and long life, so it reads as ambient haze, not "snow".
-    private static func makeCloudDrift() -> SCNNode {
+    /// `active` false (Reduce Motion) builds the system with a zero birth
+    /// rate so no particles are ever emitted.
+    private static func makeCloudDrift(active: Bool) -> SCNNode {
         let system = SCNParticleSystem()
-        system.birthRate = 1.2
+        system.birthRate = active ? cloudBirthRate : 0
         system.particleLifeSpan = 14
         system.particleLifeSpanVariation = 4
         system.particleSize = 1.1
@@ -260,6 +295,7 @@ enum IslandScene {
         system.loops = true
 
         let node = SCNNode()
+        node.name = NodeName.cloudParticles
         node.position = SCNVector3(0, -1.4, 0)
         node.addParticleSystem(system)
         return node
