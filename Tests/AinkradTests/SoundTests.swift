@@ -138,3 +138,148 @@ struct SoundEngineEnabledGateTests {
         engine.play(.appLaunch)   // should not crash
     }
 }
+
+@MainActor
+private final class FakePerEventSoundSettings: SoundSettingsProviding {
+    var soundEnabled: Bool = true
+    var soundVolume: Double = 0.7
+    var disabledEvents: Set<UISound> = []
+    var effectOverrides: [UISound: UISound] = [:]
+
+    func isEventEnabled(_ event: UISound) -> Bool { !disabledEvents.contains(event) }
+    func effect(for event: UISound) -> UISound { effectOverrides[event] ?? event }
+}
+
+@MainActor
+struct SoundEnginePerEventTests {
+    @Test("a disabled event does not play even while the master switch is on")
+    func disabledEventIsSilent() {
+        let settings = FakePerEventSoundSettings()
+        settings.disabledEvents = [.focusMode]
+        let token = FakeAudioPlayback()
+        let engine = SoundEngine(settings: settings, players: [.focusMode: token])
+        engine.play(.focusMode)
+        #expect(token.playCallCount == 0)
+    }
+
+    @Test("an effect override plays the chosen asset, not the event's own")
+    func effectOverrideRemaps() {
+        let settings = FakePerEventSoundSettings()
+        settings.effectOverrides = [.focusMode: .confirm]
+        let own = FakeAudioPlayback()
+        let chosen = FakeAudioPlayback()
+        let engine = SoundEngine(settings: settings, players: [.focusMode: own, .confirm: chosen])
+        engine.play(.focusMode)
+        #expect(own.playCallCount == 0)
+        #expect(chosen.playCallCount == 1)
+    }
+
+    @Test("preview bypasses the per-event enable gate but honors the master switch")
+    func previewBypassesEventGateOnly() {
+        let settings = FakePerEventSoundSettings()
+        settings.disabledEvents = [.focusMode]
+        let token = FakeAudioPlayback()
+        let engine = SoundEngine(settings: settings, players: [.focusMode: token])
+
+        engine.preview(.focusMode)
+        #expect(token.playCallCount == 1)   // disabled event still auditions
+
+        settings.soundEnabled = false
+        engine.preview(.focusMode)
+        #expect(token.playCallCount == 1)   // master mute silences previews too
+    }
+
+    @Test("conformers without per-event state default to enabled + own sound")
+    func protocolDefaults() {
+        let settings = FakeSoundSettings()
+        #expect(settings.isEventEnabled(.focusMode) == true)
+        #expect(settings.effect(for: .focusMode) == .focusMode)
+    }
+}
+
+struct GlobalSettingsPerEventSoundTests {
+    @Test("fresh defaults: no per-event opt-outs, no effect overrides")
+    func defaults() {
+        let s = GlobalSettings()
+        #expect(s.soundEventEnabled.isEmpty)
+        #expect(s.soundEventEffects.isEmpty)
+    }
+
+    @Test("round-trips per-event maps")
+    func roundTrip() throws {
+        var s = GlobalSettings()
+        s.soundEventEnabled = ["focusMode": false]
+        s.soundEventEffects = ["appOpen": "confirm"]
+        let back = try JSONDecoder().decode(GlobalSettings.self, from: try JSONEncoder().encode(s))
+        #expect(back.soundEventEnabled == ["focusMode": false])
+        #expect(back.soundEventEffects == ["appOpen": "confirm"])
+    }
+
+    @Test("a legacy doc without the per-event keys decodes with empty maps")
+    func legacyDecodes() throws {
+        let legacy = Data(#"{"theme":"neonBlue","soundEnabled":true}"#.utf8)
+        let s = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
+        #expect(s.soundEventEnabled.isEmpty)
+        #expect(s.soundEventEffects.isEmpty)
+    }
+}
+
+@MainActor
+struct GeneralSettingsStorePerEventTests {
+    private func makeStore() -> (GeneralSettingsStore, PersistenceStore) {
+        let persistence = InMemoryPersistenceStore()
+        return (GeneralSettingsStore(persistence: persistence), persistence)
+    }
+
+    @Test("events default to enabled with their own sound")
+    func defaults() {
+        let (store, _) = makeStore()
+        #expect(store.isEventEnabled(.focusMode) == true)
+        #expect(store.effect(for: .focusMode) == .focusMode)
+    }
+
+    @Test("disabling an event persists; re-enabling removes the stored opt-out")
+    func enableDisablePersists() {
+        let (store, persistence) = makeStore()
+
+        store.setEventEnabled(false, for: .focusMode)
+        #expect(store.isEventEnabled(.focusMode) == false)
+        #expect(persistence.load(GlobalSettings.self)?.soundEventEnabled["focusMode"] == false)
+
+        // A fresh store over the same persistence sees the opt-out.
+        let reloaded = GeneralSettingsStore(persistence: persistence)
+        #expect(reloaded.isEventEnabled(.focusMode) == false)
+
+        store.setEventEnabled(true, for: .focusMode)
+        #expect(store.isEventEnabled(.focusMode) == true)
+        #expect(persistence.load(GlobalSettings.self)?.soundEventEnabled["focusMode"] == nil)
+    }
+
+    @Test("choosing an effect persists; choosing the event's own removes the override")
+    func effectChoicePersists() {
+        let (store, persistence) = makeStore()
+
+        store.setEffect(.confirm, for: .focusMode)
+        #expect(store.effect(for: .focusMode) == .confirm)
+        #expect(persistence.load(GlobalSettings.self)?.soundEventEffects["focusMode"] == "confirm")
+
+        let reloaded = GeneralSettingsStore(persistence: persistence)
+        #expect(reloaded.effect(for: .focusMode) == .confirm)
+
+        store.setEffect(.focusMode, for: .focusMode)
+        #expect(store.effect(for: .focusMode) == .focusMode)
+        #expect(persistence.load(GlobalSettings.self)?.soundEventEffects["focusMode"] == nil)
+    }
+
+    @Test("an unknown persisted effect value falls back to the event's own sound")
+    func unknownEffectFallsBack() {
+        let (store, persistence) = makeStore()
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.soundEventEffects = ["focusMode": "not-a-real-sound"]
+        persistence.save(settings)
+
+        let reloaded = GeneralSettingsStore(persistence: persistence)
+        #expect(reloaded.effect(for: .focusMode) == .focusMode)
+        _ = store
+    }
+}
