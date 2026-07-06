@@ -50,7 +50,8 @@ final class AppEnvironmentTests {
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
-            sounds: sounds
+            sounds: sounds,
+            islandState: IslandState()
         )
 
         #expect(environment.registry === registry)
