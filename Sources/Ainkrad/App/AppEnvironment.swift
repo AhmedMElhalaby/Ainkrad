@@ -117,6 +117,10 @@ final class AppEnvironment {
         // back to the bundled synth wavs when a given override is absent.
         let soundOverrideDirectory = documentsRoot.appendingPathComponent("Sounds", isDirectory: true)
         let sounds = SoundEngine(settings: generalSettingsStore, overrideDirectory: soundOverrideDirectory)
+        // Plays exactly once per process, here rather than in a view's
+        // `.onAppear` (which SwiftUI can re-fire) — `bootstrap()` itself only
+        // ever runs once, from `AinkradHostApp.init`.
+        sounds.play(.appLaunch)
 
         let environment = AppEnvironment(
             persistence: persistence,

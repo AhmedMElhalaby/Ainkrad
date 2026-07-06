@@ -81,20 +81,29 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.16), value: isOverlayPresented)
         .background(KeyboardShortcutMonitor(environment: environment))
-        // Each HUD overlay plays `.open`/`.close` as it's summoned/dismissed
-        // (AIN-108) — centralized here rather than in each overlay view, since
-        // presentation is already driven by these four flags on `environment`.
+        // Each HUD overlay plays `.overlayOpen`/`.overlayClose` as it's
+        // summoned/dismissed (AIN-108) — centralized here rather than in each
+        // overlay view, since presentation is already driven by these four
+        // flags on `environment`. Distinct from `.appLaunch`/`.appQuit`,
+        // which are reserved for the Ainkrad app itself starting/quitting.
         .onChange(of: environment.isLauncherPresented) { _, isPresented in
-            environment.sounds.play(isPresented ? .open : .close)
+            environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
         }
         .onChange(of: environment.isSettingsPresented) { _, isPresented in
-            environment.sounds.play(isPresented ? .open : .close)
+            environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
         }
         .onChange(of: environment.isAppStorePresented) { _, isPresented in
-            environment.sounds.play(isPresented ? .open : .close)
+            environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
         }
         .onChange(of: environment.isWorkspaceOverviewPresented) { _, isPresented in
-            environment.sounds.play(isPresented ? .open : .close)
+            environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
+        }
+        // Switching the active workspace (⌘1-9, ⌥Tab, cycle, HUD dots all
+        // funnel through this one property) plays `.workspaceSwitch`.
+        // `onChange` without `initial: true` never fires for the value the
+        // view first appears with, so this doesn't fire on launch.
+        .onChange(of: environment.workspaceManager.activeWorkspaceID) { _, _ in
+            environment.sounds.play(.workspaceSwitch)
         }
     }
 

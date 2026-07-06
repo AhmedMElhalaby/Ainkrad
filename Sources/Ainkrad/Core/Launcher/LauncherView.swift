@@ -243,6 +243,7 @@ struct LauncherView: View {
 
         guard let app = store.appResults.first(where: { $0.id == row.id }) else { return }
         store.selectApp(app)
+        environment.sounds.play(.appOpen)
         dismiss()
     }
 
