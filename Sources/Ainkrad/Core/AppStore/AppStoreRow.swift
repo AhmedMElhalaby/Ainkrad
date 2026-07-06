@@ -19,4 +19,6 @@ struct AppStoreRow: Identifiable, Equatable {
     /// (registered but never App Store-installed) are `false`: visible and
     /// toggleable, but not uninstallable via the App Store.
     let isManaged: Bool
+    /// From the catalog entry, if any (AIN-148). Used by search.
+    let author: String?
 }
