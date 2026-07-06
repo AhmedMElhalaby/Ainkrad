@@ -81,6 +81,21 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.16), value: isOverlayPresented)
         .background(KeyboardShortcutMonitor(environment: environment))
+        // Each HUD overlay plays `.open`/`.close` as it's summoned/dismissed
+        // (AIN-108) — centralized here rather than in each overlay view, since
+        // presentation is already driven by these four flags on `environment`.
+        .onChange(of: environment.isLauncherPresented) { _, isPresented in
+            environment.sounds.play(isPresented ? .open : .close)
+        }
+        .onChange(of: environment.isSettingsPresented) { _, isPresented in
+            environment.sounds.play(isPresented ? .open : .close)
+        }
+        .onChange(of: environment.isAppStorePresented) { _, isPresented in
+            environment.sounds.play(isPresented ? .open : .close)
+        }
+        .onChange(of: environment.isWorkspaceOverviewPresented) { _, isPresented in
+            environment.sounds.play(isPresented ? .open : .close)
+        }
     }
 
     private var workspaceCarousel: some View {

@@ -78,10 +78,10 @@ struct AppStoreOverlayView: View {
                 AppStoreDetailView(
                     entry: store.entry(for: row.id), row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
                     onBack: { store.closeDetail() },
-                    onInstall: { Task { await store.install(row.id) } },
+                    onInstall: { environment.sounds.play(.install); Task { await store.install(row.id) } },
                     onUpdate: { Task { await store.update(row.id) } },
-                    onUninstall: { store.uninstall(row.id) },
-                    onToggleEnabled: { store.setEnabled($0, for: row.id) })
+                    onUninstall: { environment.sounds.play(.uninstall); store.uninstall(row.id) },
+                    onToggleEnabled: { environment.sounds.play(.toggle); store.setEnabled($0, for: row.id) })
             } else {
                 header(tokens: tokens)
                 LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
@@ -181,10 +181,10 @@ struct AppStoreOverlayView: View {
                         AppStoreCard(
                             row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
                             onOpen: { store.openDetail(row.id) },
-                            onInstall: { Task { await store.install(row.id) } },
+                            onInstall: { environment.sounds.play(.install); Task { await store.install(row.id) } },
                             onUpdate: { Task { await store.update(row.id) } },
-                            onUninstall: { store.uninstall(row.id) },
-                            onToggleEnabled: { store.setEnabled($0, for: row.id) })
+                            onUninstall: { environment.sounds.play(.uninstall); store.uninstall(row.id) },
+                            onToggleEnabled: { environment.sounds.play(.toggle); store.setEnabled($0, for: row.id) })
                     }
                 }
                 .padding(18)

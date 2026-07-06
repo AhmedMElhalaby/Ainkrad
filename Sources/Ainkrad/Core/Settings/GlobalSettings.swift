@@ -17,6 +17,11 @@ struct GlobalSettings: PersistableDocument {
     /// title strip while in full-screen — see AIN-109. Has no effect in
     /// windowed mode.
     var showFullScreenStatusBar: Bool = true
+    /// Whether UI sound effects (open/close/install/etc — see AIN-108) play
+    /// at all. Muting takes effect immediately, on the very next sound.
+    var soundEnabled: Bool = true
+    /// Playback volume (0...1) for UI sound effects — see AIN-108.
+    var soundVolume: Double = 0.7
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
@@ -25,7 +30,9 @@ struct GlobalSettings: PersistableDocument {
          uiFontScale: UIFontScale = .medium,
          uiFontFamily: UIFontFamily = .exo2,
          accentColorHex: String? = nil,
-         showFullScreenStatusBar: Bool = true) {
+         showFullScreenStatusBar: Bool = true,
+         soundEnabled: Bool = true,
+         soundVolume: Double = 0.7) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
@@ -34,6 +41,8 @@ struct GlobalSettings: PersistableDocument {
         self.uiFontFamily = uiFontFamily
         self.accentColorHex = accentColorHex
         self.showFullScreenStatusBar = showFullScreenStatusBar
+        self.soundEnabled = soundEnabled
+        self.soundVolume = soundVolume
     }
 
     init(from decoder: Decoder) throws {
@@ -46,5 +55,7 @@ struct GlobalSettings: PersistableDocument {
         uiFontFamily = try container.decodeIfPresent(UIFontFamily.self, forKey: .uiFontFamily) ?? .exo2
         accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex)
         showFullScreenStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showFullScreenStatusBar) ?? true
+        soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
+        soundVolume = try container.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.7
     }
 }
