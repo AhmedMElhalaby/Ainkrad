@@ -25,6 +25,8 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         var environment: AppEnvironment?
         private var monitor: Any?
         private var mouseUpMonitor: Any?
+        private var fullScreenEnterObserver: NSObjectProtocol?
+        private var fullScreenExitObserver: NSObjectProtocol?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -37,6 +39,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 window.titlebarAppearsTransparent = true
                 window.titlebarSeparatorStyle = .none
                 window.isMovableByWindowBackground = false
+                // Initial value on attach — the notifications below only
+                // fire on a subsequent transition (AIN-109).
+                environment?.isFullScreen = window.styleMask.contains(.fullScreen)
             }
             if window != nil {
                 guard monitor == nil else { return }
@@ -60,6 +65,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     }
                     return event
                 }
+                observeFullScreen(of: window)
             } else {
                 if let monitor {
                     NSEvent.removeMonitor(monitor)
@@ -69,6 +75,35 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     NSEvent.removeMonitor(mouseUpMonitor)
                     self.mouseUpMonitor = nil
                 }
+                removeFullScreenObservers()
+            }
+        }
+
+        /// Drives `environment.isFullScreen` from the window's full-screen
+        /// transitions (AIN-109) — the source `HUDBar` reads to show/hide the
+        /// full-screen status bar.
+        private func observeFullScreen(of window: NSWindow?) {
+            guard fullScreenEnterObserver == nil else { return }
+            fullScreenEnterObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didEnterFullScreenNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.environment?.isFullScreen = true }
+            }
+            fullScreenExitObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.environment?.isFullScreen = false }
+            }
+        }
+
+        private func removeFullScreenObservers() {
+            if let fullScreenEnterObserver {
+                NotificationCenter.default.removeObserver(fullScreenEnterObserver)
+                self.fullScreenEnterObserver = nil
+            }
+            if let fullScreenExitObserver {
+                NotificationCenter.default.removeObserver(fullScreenExitObserver)
+                self.fullScreenExitObserver = nil
             }
         }
 

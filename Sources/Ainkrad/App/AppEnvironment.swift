@@ -17,10 +17,16 @@ final class AppEnvironment {
     let appIconStore: AppIconStore
     let shortcutStore: ShortcutStore
     let quitCoordinator: QuitCoordinator
+    let generalSettingsStore: GeneralSettingsStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
     var isMarketplacePresented = false
+    /// Tracks the host window's full-screen state — set by
+    /// `KeyboardShortcutMonitor.MonitoringView` from `NSWindow`'s full-screen
+    /// notifications (AIN-109). Drives `HUDBar`'s full-screen status bar;
+    /// unused in windowed mode.
+    var isFullScreen = false
 
     init(
         persistence: PersistenceStore,
@@ -34,7 +40,8 @@ final class AppEnvironment {
         marketplaceStore: MarketplaceStore,
         appIconStore: AppIconStore,
         shortcutStore: ShortcutStore,
-        quitCoordinator: QuitCoordinator
+        quitCoordinator: QuitCoordinator,
+        generalSettingsStore: GeneralSettingsStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -48,6 +55,7 @@ final class AppEnvironment {
         self.appIconStore = appIconStore
         self.shortcutStore = shortcutStore
         self.quitCoordinator = quitCoordinator
+        self.generalSettingsStore = generalSettingsStore
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -112,7 +120,8 @@ final class AppEnvironment {
             marketplaceStore: marketplaceStore,
             appIconStore: appIconStore,
             shortcutStore: ShortcutStore(persistence: persistence),
-            quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier())
+            quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
+            generalSettingsStore: GeneralSettingsStore(persistence: persistence)
         )
 
         // Terminal ships as a Marketplace plugin (AinkradTerminal), not compiled in.
