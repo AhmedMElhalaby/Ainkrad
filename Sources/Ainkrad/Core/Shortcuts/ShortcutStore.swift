@@ -10,6 +10,13 @@ final class ShortcutStore {
     private(set) var bindings: ShortcutBindings
     private let persistence: PersistenceStore
 
+    /// Set by `ShortcutRecorder` while it is capturing a chord. The
+    /// always-on `KeyboardShortcutMonitor` checks this first and passes
+    /// every key event through untouched while it's `true`, so recording a
+    /// chord that happens to match another action's binding can't also
+    /// trigger that action's side effect (AIN-144).
+    var isRecordingShortcut: Bool = false
+
     init(persistence: PersistenceStore) {
         self.persistence = persistence
         self.bindings = persistence.load(ShortcutBindings.self) ?? ShortcutBindings()

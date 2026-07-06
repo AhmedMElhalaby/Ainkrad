@@ -218,4 +218,17 @@ final class ShortcutStoreTests {
         #expect(store.chord(for: .openLauncher) == ShortcutAction.openLauncher.defaultChord)
         #expect(store.chord(for: .newWorkspace).keyCode == 98)
     }
+
+    @Test("isRecordingShortcut defaults to false and toggles freely (AIN-144)")
+    func isRecordingShortcutToggles() {
+        let store = ShortcutStore(persistence: InMemoryPersistenceStore())
+
+        #expect(!store.isRecordingShortcut)
+
+        store.isRecordingShortcut = true
+        #expect(store.isRecordingShortcut)
+
+        store.isRecordingShortcut = false
+        #expect(!store.isRecordingShortcut)
+    }
 }

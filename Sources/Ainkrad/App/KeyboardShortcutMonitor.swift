@@ -73,6 +73,16 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
+            // While the Settings recorder is capturing a chord, this monitor
+            // must not act on anything — including a chord that happens to
+            // match an existing binding — so it can't fire that action's
+            // side effect behind the recorder's back (AIN-144). Local-monitor
+            // firing order between the two monitors isn't guaranteed, so this
+            // gate has to be the first thing checked, before any dispatch.
+            if environment.shortcutStore.isRecordingShortcut {
+                return false
+            }
+
             // The six named, rebindable shortcuts (AIN-144) are resolved by
             // the user's current bindings, not a hardcoded key check — this
             // also covers the ⌥Tab Workspace Overview toggle, which used to

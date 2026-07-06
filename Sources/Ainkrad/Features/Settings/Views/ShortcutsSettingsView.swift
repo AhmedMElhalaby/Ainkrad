@@ -144,11 +144,16 @@ final class ShortcutRecorder {
     private(set) var action: ShortcutAction?
     private(set) var conflictMessage: String?
     private var monitor: Any?
+    private var store: ShortcutStore?
 
     func start(_ action: ShortcutAction, store: ShortcutStore) {
         stop()
         conflictMessage = nil
         self.action = action
+        self.store = store
+        // Suppress the always-on KeyboardShortcutMonitor for the duration of
+        // the recording so it can't act on the chord being captured (AIN-144).
+        store.isRecordingShortcut = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             if event.keyCode == 53 {   // Esc cancels the recording without rebinding.
@@ -179,5 +184,10 @@ final class ShortcutRecorder {
         }
         monitor = nil
         action = nil
+        // Always clear the suppression gate on the way out — captured,
+        // cancelled (Esc), or the view disappearing all route through here —
+        // so a stuck flag can never disable the always-on monitor (AIN-144).
+        store?.isRecordingShortcut = false
+        store = nil
     }
 }
