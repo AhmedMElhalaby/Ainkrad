@@ -51,7 +51,7 @@ struct TileLayoutView: View {
 
     var body: some View {
         if tileLayout.isEmpty {
-            EmptyWorkspaceView()
+            EmptyWorkspaceView(isActiveWorkspace: workspace.id == environment.workspaceManager.activeWorkspaceID)
         } else {
             HStack(spacing: 0) {
                 paneCanvas

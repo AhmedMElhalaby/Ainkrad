@@ -5,19 +5,32 @@ import SwiftUI
 /// artwork — a procedural SceneKit scene was tried and rejected as looking
 /// worse than the flat image — and layers tasteful, ambient SwiftUI motion
 /// on top: a pronounced vertical hover, a slow drifting sway, a breathing
-/// scale, a pulsing glow tinted with the current theme's accent color, and
-/// a snappy pointer-driven 3D parallax/tilt. The artwork itself is never
-/// cropped, recolored, or replaced — only its presentation moves.
+/// scale, a pulsing glow tinted with the current theme's accent color, a
+/// depth-displacement parallax driven by pointer position + slow idle
+/// drift + workspace-switch banking, drifting particles, and a reactive
+/// energy ring/flare sourced from `IslandState`. The artwork itself is
+/// never cropped, recolored, or replaced — only its presentation moves.
 ///
 /// Reduce Motion collapses all of this back to the plain static image with
-/// no hover, sway, tilt, breathing, or glow — exactly the original look.
+/// no hover, sway, breathing, glow, parallax, particles, or ring/flare —
+/// exactly the original look.
 ///
-/// NOTE: Reduce Motion disables *all* island motion by design (ambient hover,
-/// sway, breathing, glow pulse, and pointer parallax) — it renders the plain
-/// static image only, per Apple's accessibility guidance.
+/// `isVisible` gates all motion off (parallax, particles, ring/flare, and
+/// the ambient loops keep animating but cost nothing extra to render) when
+/// this island isn't the active workspace or an overlay covers it — see
+/// `EmptyWorkspaceView.islandVisible`.
+///
+/// NOTE: Reduce Motion disables *all* island motion by design — it renders
+/// the plain static image only, per Apple's accessibility guidance.
 struct FloatingIslandView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Whether the island is the one currently on screen — the active
+    /// workspace with no overlay covering it. When false, the 60fps clock
+    /// still receives ticks but bails immediately, so no @State changes and
+    /// no shader/particle cost for a background or covered workspace.
+    var isVisible: Bool = true
 
     /// Vertical hover, amplified so it reads clearly without hovering.
     @State private var isHovering = false
@@ -32,11 +45,24 @@ struct FloatingIslandView: View {
     /// Pointer position, normalized to -1...1 from center, used for the
     /// parallax tilt. Zero when the pointer isn't over the island.
     @State private var pointerFraction: CGPoint = .zero
+    /// Slow Lissajous phase driving the idle drift term of the parallax
+    /// offset, advanced by the 60fps clock.
+    @State private var idlePhase: Double = 0
+    /// Rotation (degrees) of the energy ring, advanced by the 60fps clock.
+    @State private var ringRotation: Double = 0
 
-    private let maxTiltDegrees: Double = 11
-    private let maxParallaxOffset: CGFloat = 12
     private let maxHoverOffset: CGFloat = 18
     private let maxSwayDegrees: Double = 1.75
+    private let maxDepthOffset: CGFloat = 18
+    /// The artwork's native pixel aspect (1536×1024) — the container must
+    /// match this so the depth shader's per-axis normalization lines up
+    /// with the drawn content instead of any letterboxed margin.
+    private let artworkAspect: CGFloat = 1536.0 / 1024.0
+
+    /// 60fps clock driving idle drift, ring rotation, and `IslandState`
+    /// decay — the only place any of this view's `@State` changes. `@State`
+    /// so a single stable instance survives view re-creation.
+    @State private var tickTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
     private var imageName: String {
         switch environment.themeManager.currentTheme {
@@ -45,8 +71,47 @@ struct FloatingIslandView: View {
         }
     }
 
+    /// Per-theme depth map for the 2.5D parallax shader (white = near,
+    /// black = far), matching `imageName`'s theme grouping.
+    private var depthImageName: String {
+        switch environment.themeManager.currentTheme {
+        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple-Depth"
+        default: return "Island-NeonBlue-Depth"
+        }
+    }
+
     private var glowColor: Color {
         environment.themeManager.tokens.accentPrimary
+    }
+
+    /// Builds the depth-displacement shader for the artwork layer. `offset`
+    /// is the max per-axis displacement (in layer points); `size` must be
+    /// the artwork's own layout size so the shader can normalize sample
+    /// coordinates against the depth texture. `offset` is composed each
+    /// frame from pointer position, idle drift, and workspace-switch
+    /// banking — see `IslandParallaxMath.offset`.
+    private func parallaxShader(offset: CGSize, size: CGSize, depthName: String) -> Shader {
+        ShaderLibrary.default.islandParallax(
+            .float2(Float(size.width), Float(size.height)),
+            .image(Image(depthName)),
+            .float2(Float(offset.width), Float(offset.height)),
+            .float(0.5)
+        )
+    }
+
+    /// The 1.5-aspect rectangle the artwork actually occupies inside `available`
+    /// (matching `.aspectRatio(_:contentMode:.fit)`), so the depth shader's
+    /// normalization and the ring/flare positions register to the drawn art
+    /// rather than the letterboxed frame.
+    private func fittedSize(in available: CGSize, aspect: CGFloat) -> CGSize {
+        guard available.width > 0, available.height > 0 else { return available }
+        if available.width / available.height > aspect {
+            // Height-constrained: full height, narrower width.
+            return CGSize(width: available.height * aspect, height: available.height)
+        } else {
+            // Width-constrained: full width, shorter height.
+            return CGSize(width: available.width, height: available.width / aspect)
+        }
     }
 
     var body: some View {
@@ -65,26 +130,34 @@ struct FloatingIslandView: View {
 
     private var interactiveIsland: some View {
         GeometryReader { proxy in
+            let content = fittedSize(in: proxy.size, aspect: artworkAspect)
+            let idle = CGPoint(x: sin(idlePhase * 0.62), y: sin(idlePhase * 0.41 + 1.3))
+            let offset = IslandParallaxMath.offset(
+                pointerFraction: pointerFraction,
+                idle: idle,
+                banking: environment.islandState.banking,
+                maxOffset: maxDepthOffset
+            )
+
             ZStack {
                 glow
                 artwork
+                    .layerEffect(
+                        parallaxShader(offset: offset, size: content, depthName: depthImageName),
+                        maxSampleOffset: CGSize(width: 24, height: 24),
+                        isEnabled: !reduceMotion && isVisible
+                    )
+                IslandParticleField(tint: glowColor, parallax: offset, isActive: !reduceMotion && isVisible)
+                    .allowsHitTesting(false)
+                energyRing(in: content)
+                if let flarePhase = environment.islandState.flarePhase {
+                    flare(phase: flarePhase, in: content)
+                }
             }
-            .offset(
-                x: pointerFraction.x * -maxParallaxOffset,
-                y: (pointerFraction.y * -maxParallaxOffset) + (isHovering ? -maxHoverOffset : maxHoverOffset)
-            )
+            .aspectRatio(artworkAspect, contentMode: .fit)
+            .offset(y: isHovering ? -maxHoverOffset : maxHoverOffset)
             .scaleEffect(isBreathing ? 1.03 : 1.0)
             .rotationEffect(.degrees(isSwaying ? maxSwayDegrees : -maxSwayDegrees))
-            .rotation3DEffect(
-                .degrees(pointerFraction.y * -maxTiltDegrees),
-                axis: (x: 1, y: 0, z: 0),
-                perspective: 0.5
-            )
-            .rotation3DEffect(
-                .degrees(pointerFraction.x * maxTiltDegrees),
-                axis: (x: 0, y: 1, z: 0),
-                perspective: 0.5
-            )
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: pointerFraction)
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
@@ -103,7 +176,56 @@ struct FloatingIslandView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .onAppear(perform: startAmbientMotion)
+            .onReceive(tickTimer) { _ in
+                guard isVisible && !reduceMotion else { return }
+                let dt = 1.0 / 60.0
+                idlePhase += dt
+                ringRotation += dt * 6
+                environment.islandState.tick(dt: dt)
+            }
+            .onChange(of: environment.isLauncherPresented) { _, open in
+                environment.islandState.launcherActive(open)
+            }
+            .onChange(of: environment.workspaceManager.activeWorkspaceID) { old, new in
+                let ids = environment.workspaceManager.workspaces.map(\.id)
+                guard let oldIndex = ids.firstIndex(of: old), let newIndex = ids.firstIndex(of: new) else { return }
+                let direction = (newIndex > oldIndex) ? 1.0 : (newIndex < oldIndex ? -1.0 : 0.0)
+                environment.islandState.bank(direction)
+            }
         }
+    }
+
+    /// A faint, rotating ring of ambient energy over the citadel's painted
+    /// ring motif — a screen-blended accent stroke whose opacity tracks
+    /// `IslandState.ringIntensity` (idle glow, busy work, or the Launcher
+    /// being open). Deliberately subtle: this reads as atmosphere, not a
+    /// HUD dial.
+    private func energyRing(in size: CGSize) -> some View {
+        let diameter = size.width * 0.42
+        return Circle()
+            .strokeBorder(glowColor, lineWidth: 1.4)
+            .frame(width: diameter, height: diameter)
+            .position(x: size.width / 2, y: size.height * 0.42)
+            .rotationEffect(.degrees(ringRotation))
+            .opacity(0.10 + environment.islandState.ringIntensity * 0.22)
+            .blendMode(.screen)
+            .allowsHitTesting(false)
+    }
+
+    /// A soft, screen-blended beam near the spire tip that brightens and
+    /// fades across a `flarePhase` progression (0...1) — the one-shot
+    /// notification "beacon" beat.
+    private func flare(phase: Double, in size: CGSize) -> some View {
+        let intensity = sin(min(max(phase, 0), 1) * .pi)
+        return LinearGradient(
+            colors: [glowColor.opacity(intensity * 0.55), .clear],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(width: size.width * 0.12, height: size.height * 0.5)
+        .position(x: size.width / 2, y: size.height * 0.12)
+        .blendMode(.screen)
+        .allowsHitTesting(false)
     }
 
     /// A blurred, accent-tinted copy of the artwork sitting behind the real
