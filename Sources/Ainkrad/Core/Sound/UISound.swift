@@ -25,4 +25,46 @@ enum UISound: String, CaseIterable {
     /// The bundled wav's base-name (without extension), under
     /// `Resources/Sounds/`.
     var resourceName: String { rawValue }
+
+    /// Human-readable event name for the Settings → General per-sound list.
+    var displayName: String {
+        switch self {
+        case .appLaunch: return "App Launch"
+        case .appQuit: return "App Quit"
+        case .overlayOpen: return "Overlay Open"
+        case .overlayClose: return "Overlay Close"
+        case .appOpen: return "Pane Open"
+        case .appClose: return "Pane Close"
+        case .workspaceSwitch: return "Workspace Switch"
+        case .focusMode: return "Focus Mode Toggle"
+        case .install: return "Install"
+        case .uninstall: return "Uninstall"
+        case .toggle: return "Toggle"
+        case .confirm: return "Confirm"
+        case .error: return "Error"
+        }
+    }
+
+    /// One-line description of when the event fires, for the settings row.
+    var eventDescription: String {
+        switch self {
+        case .appLaunch: return "Ainkrad starts up."
+        case .appQuit: return "Ainkrad quits."
+        case .overlayOpen: return "A HUD overlay (Launcher, Settings, …) opens."
+        case .overlayClose: return "A HUD overlay closes."
+        case .appOpen: return "An app opens in the tile layout."
+        case .appClose: return "An app pane closes."
+        case .workspaceSwitch: return "Switching between workspaces."
+        case .focusMode: return "Entering or leaving Focus Mode (⌘M)."
+        case .install: return "An app installs from the App Store."
+        case .uninstall: return "An app is uninstalled."
+        case .toggle: return "An app is enabled or disabled."
+        case .confirm: return "A confirmation action."
+        case .error: return "Something goes wrong."
+        }
+    }
+}
+
+extension UISound: Identifiable {
+    var id: String { rawValue }
 }

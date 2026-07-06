@@ -13,6 +13,10 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     private(set) var showFullScreenStatusBar: Bool
     private(set) var soundEnabled: Bool
     private(set) var soundVolume: Double
+    /// Per-event enable switches (missing key = enabled) and effect overrides
+    /// (missing key = the event's own sound) — see `GlobalSettings`.
+    private(set) var soundEventEnabled: [String: Bool]
+    private(set) var soundEventEffects: [String: String]
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
@@ -21,6 +25,8 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         self.showFullScreenStatusBar = settings.showFullScreenStatusBar
         self.soundEnabled = settings.soundEnabled
         self.soundVolume = settings.soundVolume
+        self.soundEventEnabled = settings.soundEventEnabled
+        self.soundEventEffects = settings.soundEventEffects
     }
 
     func setShowFullScreenStatusBar(_ isOn: Bool) {
@@ -41,6 +47,35 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         soundVolume = volume
         var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         settings.soundVolume = volume
+        persistence.save(settings)
+    }
+
+    // MARK: Per-event control (Settings → General → Sound Effects)
+
+    func isEventEnabled(_ event: UISound) -> Bool {
+        soundEventEnabled[event.rawValue] ?? true
+    }
+
+    func effect(for event: UISound) -> UISound {
+        guard let raw = soundEventEffects[event.rawValue],
+              let chosen = UISound(rawValue: raw) else { return event }
+        return chosen
+    }
+
+    func setEventEnabled(_ isOn: Bool, for event: UISound) {
+        // Only explicit opt-outs are stored; enabling removes the key so the
+        // persisted doc stays minimal and future events default to enabled.
+        soundEventEnabled[event.rawValue] = isOn ? nil : false
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.soundEventEnabled = soundEventEnabled
+        persistence.save(settings)
+    }
+
+    func setEffect(_ effect: UISound, for event: UISound) {
+        // The event's own sound is the default; picking it removes the key.
+        soundEventEffects[event.rawValue] = effect == event ? nil : effect.rawValue
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.soundEventEffects = soundEventEffects
         persistence.save(settings)
     }
 }

@@ -22,6 +22,15 @@ struct GlobalSettings: PersistableDocument {
     var soundEnabled: Bool = true
     /// Playback volume (0...1) for UI sound effects — see AIN-108.
     var soundVolume: Double = 0.7
+    /// Per-event enable switches, keyed by `UISound.rawValue`. A missing key
+    /// means "enabled" — only explicit opt-outs are stored, so legacy docs and
+    /// future events need no migration.
+    var soundEventEnabled: [String: Bool] = [:]
+    /// Per-event effect overrides, keyed by `UISound.rawValue`, valued by the
+    /// chosen effect's `UISound.rawValue`. A missing key means "play the
+    /// event's own sound". An unknown value (e.g. an effect removed in a later
+    /// build) is ignored at read time and falls back to the event's own sound.
+    var soundEventEffects: [String: String] = [:]
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
@@ -32,7 +41,9 @@ struct GlobalSettings: PersistableDocument {
          accentColorHex: String? = nil,
          showFullScreenStatusBar: Bool = true,
          soundEnabled: Bool = true,
-         soundVolume: Double = 0.7) {
+         soundVolume: Double = 0.7,
+         soundEventEnabled: [String: Bool] = [:],
+         soundEventEffects: [String: String] = [:]) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
@@ -43,6 +54,8 @@ struct GlobalSettings: PersistableDocument {
         self.showFullScreenStatusBar = showFullScreenStatusBar
         self.soundEnabled = soundEnabled
         self.soundVolume = soundVolume
+        self.soundEventEnabled = soundEventEnabled
+        self.soundEventEffects = soundEventEffects
     }
 
     init(from decoder: Decoder) throws {
@@ -57,5 +70,7 @@ struct GlobalSettings: PersistableDocument {
         showFullScreenStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showFullScreenStatusBar) ?? true
         soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
         soundVolume = try container.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.7
+        soundEventEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .soundEventEnabled) ?? [:]
+        soundEventEffects = try container.decodeIfPresent([String: String].self, forKey: .soundEventEffects) ?? [:]
     }
 }
