@@ -252,6 +252,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             case .closeBlock:
                 let layout = environment.workspaceManager.activeWorkspace.tileLayout
                 if let focusedBlockID = layout.focusedBlockID {
+                    // Same cue the pane header's ✕ plays — ⌘W was the one
+                    // close path without it (mirror of the ⌘M focus-mode fix).
+                    environment.sounds.play(.appClose)
                     layout.close(focusedBlockID)
                 }
                 return true
