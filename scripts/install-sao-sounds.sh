@@ -24,12 +24,18 @@
 #
 # <source-folder> is expected to contain (at least some of) these files,
 # named as in a typical SAO-style UI sound pack:
-#   EnterMenu.wav       -> open.wav
-#   ExitMenu.wav        -> close.wav
-#   ConfirmSound.wav    -> confirm.wav
+#   EnterMenu.wav        -> appLaunch.wav
+#   ExitMenu.wav         -> appQuit.wav
+#   MenuTick.wav         -> overlayOpen.wav
+#   BackSound.wav        -> overlayClose.wav
+#   ConfirmSound.wav     -> appOpen.wav
+#   ExitMenu.wav         -> appClose.wav
+#   MenuTick.wav         -> workspaceSwitch.wav
+#   ConfirmSound.wav     -> focusMode.wav
 #   AchievementSound.wav -> install.wav
-#   BackSound.wav       -> uninstall.wav
+#   BackSound.wav        -> uninstall.wav
 #   MenuTick.wav         -> toggle.wav
+#   ConfirmSound.wav     -> confirm.wav
 #   BackSound.wav        -> error.wav
 #
 # Any mapping whose source file is missing is skipped with a warning — the
@@ -55,12 +61,18 @@ sound packs must stay local (respect the pack's license; do not redistribute
 it, and never add it to this repo).
 
 Filename mapping (source -> Ainkrad event):
-  EnterMenu.wav        -> open.wav
-  ExitMenu.wav         -> close.wav
-  ConfirmSound.wav     -> confirm.wav
+  EnterMenu.wav        -> appLaunch.wav
+  ExitMenu.wav         -> appQuit.wav
+  MenuTick.wav         -> overlayOpen.wav
+  BackSound.wav        -> overlayClose.wav
+  ConfirmSound.wav     -> appOpen.wav
+  ExitMenu.wav         -> appClose.wav
+  MenuTick.wav         -> workspaceSwitch.wav
+  ConfirmSound.wav     -> focusMode.wav
   AchievementSound.wav -> install.wav
   BackSound.wav        -> uninstall.wav
   MenuTick.wav         -> toggle.wav
+  ConfirmSound.wav     -> confirm.wav
   BackSound.wav        -> error.wav
 EOF
 }
@@ -68,12 +80,18 @@ EOF
 # Ordered as "<source-filename>:<ainkrad-name>" so both bash 3 (macOS's
 # default /bin/bash) and bash 4+ can iterate it without associative arrays.
 MAPPINGS=(
-  "EnterMenu.wav:open.wav"
-  "ExitMenu.wav:close.wav"
-  "ConfirmSound.wav:confirm.wav"
+  "EnterMenu.wav:appLaunch.wav"
+  "ExitMenu.wav:appQuit.wav"
+  "MenuTick.wav:overlayOpen.wav"
+  "BackSound.wav:overlayClose.wav"
+  "ConfirmSound.wav:appOpen.wav"
+  "ExitMenu.wav:appClose.wav"
+  "MenuTick.wav:workspaceSwitch.wav"
+  "ConfirmSound.wav:focusMode.wav"
   "AchievementSound.wav:install.wav"
   "BackSound.wav:uninstall.wav"
   "MenuTick.wav:toggle.wav"
+  "ConfirmSound.wav:confirm.wav"
   "BackSound.wav:error.wav"
 )
 

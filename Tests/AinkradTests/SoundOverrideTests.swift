@@ -54,7 +54,7 @@ final class SoundOverrideResolutionTests {
     @Test("returns nil when neither the override nor the bundled asset exists")
     func neitherExistsReturnsNil() {
         let resolved = SoundEngine.resolvedURL(
-            for: .open,   // not present in `bundleDir`
+            for: .error,   // not present in `bundleDir`
             overrideDirectory: overrideDir,
             bundle: bundle,
             fileExists: { _ in false }
