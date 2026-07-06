@@ -112,7 +112,11 @@ final class AppEnvironment {
         appIconStore.applyCurrent()
 
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
-        let sounds = SoundEngine(settings: generalSettingsStore)
+        // User-data override dir for AIN-108's sound-pack overrides (e.g. via
+        // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
+        // back to the bundled synth wavs when a given override is absent.
+        let soundOverrideDirectory = documentsRoot.appendingPathComponent("Sounds", isDirectory: true)
+        let sounds = SoundEngine(settings: generalSettingsStore, overrideDirectory: soundOverrideDirectory)
 
         let environment = AppEnvironment(
             persistence: persistence,
