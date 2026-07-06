@@ -34,6 +34,7 @@ final class AppEnvironmentTests {
         let shortcutStore = ShortcutStore(persistence: persistence)
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
+        let sounds = SoundEngine(settings: generalSettingsStore)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -48,7 +49,8 @@ final class AppEnvironmentTests {
             appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager),
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
-            generalSettingsStore: generalSettingsStore
+            generalSettingsStore: generalSettingsStore,
+            sounds: sounds
         )
 
         #expect(environment.registry === registry)
