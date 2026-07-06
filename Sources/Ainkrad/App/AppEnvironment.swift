@@ -15,6 +15,7 @@ final class AppEnvironment {
     let marketplace: MarketplaceService
     let marketplaceStore: MarketplaceStore
     let appIconStore: AppIconStore
+    let shortcutStore: ShortcutStore
     let quitCoordinator: QuitCoordinator
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
@@ -32,6 +33,7 @@ final class AppEnvironment {
         marketplace: MarketplaceService,
         marketplaceStore: MarketplaceStore,
         appIconStore: AppIconStore,
+        shortcutStore: ShortcutStore,
         quitCoordinator: QuitCoordinator
     ) {
         self.persistence = persistence
@@ -44,6 +46,7 @@ final class AppEnvironment {
         self.marketplace = marketplace
         self.marketplaceStore = marketplaceStore
         self.appIconStore = appIconStore
+        self.shortcutStore = shortcutStore
         self.quitCoordinator = quitCoordinator
     }
 
@@ -108,6 +111,7 @@ final class AppEnvironment {
             marketplace: marketplace,
             marketplaceStore: marketplaceStore,
             appIconStore: appIconStore,
+            shortcutStore: ShortcutStore(persistence: persistence),
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier())
         )
 

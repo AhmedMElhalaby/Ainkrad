@@ -31,6 +31,7 @@ final class AppEnvironmentTests {
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
         let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
+        let shortcutStore = ShortcutStore(persistence: persistence)
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
 
         let environment = AppEnvironment(
@@ -44,6 +45,7 @@ final class AppEnvironmentTests {
             marketplace: marketplace,
             marketplaceStore: marketplaceStore,
             appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager),
+            shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator
         )
 
@@ -54,6 +56,7 @@ final class AppEnvironmentTests {
         #expect(environment.connectionStore === connectionStore)
         #expect(environment.marketplace === marketplace)
         #expect(environment.marketplaceStore === marketplaceStore)
+        #expect(environment.shortcutStore === shortcutStore)
         #expect(environment.quitCoordinator === quitCoordinator)
     }
 

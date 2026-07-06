@@ -73,15 +73,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
-            // ⌥Tab toggles the Workspace Overview (keyCode 48 = Tab).
-            if event.keyCode == 48,
-               event.modifierFlags.contains(.option),
-               !event.modifierFlags.contains(.command) {
-                environment.isLauncherPresented = false
-                environment.isSettingsPresented = false
-                environment.isMarketplacePresented = false
-                environment.isWorkspaceOverviewPresented.toggle()
-                return true
+            // While the Settings recorder is capturing a chord, this monitor
+            // must not act on anything — including a chord that happens to
+            // match an existing binding — so it can't fire that action's
+            // side effect behind the recorder's back (AIN-144). Local-monitor
+            // firing order between the two monitors isn't guaranteed, so this
+            // gate has to be the first thing checked, before any dispatch.
+            if environment.shortcutStore.isRecordingShortcut {
+                return false
+            }
+
+            // The six named, rebindable shortcuts (AIN-144) are resolved by
+            // the user's current bindings, not a hardcoded key check — this
+            // also covers the ⌥Tab Workspace Overview toggle, which used to
+            // be special-cased here.
+            if let action = environment.shortcutStore.bindings.action(matching: event) {
+                return perform(action, in: environment)
             }
 
             guard event.modifierFlags.contains(.command) else { return false }
@@ -139,45 +146,6 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
 
             switch characters {
-            case "k" where !isShifted:
-                environment.isWorkspaceOverviewPresented = false
-                environment.isSettingsPresented = false
-                environment.isMarketplacePresented = false
-                if environment.isLauncherPresented {
-                    environment.launcherStore.query = ""
-                    environment.isLauncherPresented = false
-                } else {
-                    environment.isLauncherPresented = true
-                }
-                return true
-            case "," where !isShifted:
-                // ⌘, summons/dismisses the Settings overlay (macOS convention).
-                environment.isLauncherPresented = false
-                environment.isWorkspaceOverviewPresented = false
-                environment.isMarketplacePresented = false
-                environment.isSettingsPresented.toggle()
-                window?.makeFirstResponder(nil)
-                return true
-            case "a" where isShifted:
-                // ⌘⇧A summons/dismisses the Marketplace overlay.
-                environment.isLauncherPresented = false
-                environment.isWorkspaceOverviewPresented = false
-                environment.isSettingsPresented = false
-                environment.isMarketplacePresented.toggle()
-                window?.makeFirstResponder(nil)
-                return true
-            case "n" where isShifted:
-                environment.workspaceManager.createWorkspace()
-                // A hidden workspace's terminal must not keep receiving
-                // keystrokes after the switch.
-                window?.makeFirstResponder(nil)
-                return true
-            case "w" where !isShifted:
-                let layout = environment.workspaceManager.activeWorkspace.tileLayout
-                if let focusedBlockID = layout.focusedBlockID {
-                    layout.close(focusedBlockID)
-                }
-                return true
             case "m" where !isShifted:
                 // Toggle Focus Mode / Split Mode for the active workspace.
                 let workspace = environment.workspaceManager.activeWorkspace
@@ -196,6 +164,59 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     return true
                 }
                 return false
+            }
+        }
+
+        /// Runs the side effect for a resolved named shortcut action — the
+        /// exact behavior each one had when it was a hardcoded key check,
+        /// now triggered via `ShortcutBindings.action(matching:)` instead.
+        private func perform(_ action: ShortcutAction, in environment: AppEnvironment) -> Bool {
+            switch action {
+            case .openLauncher:
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
+                environment.isMarketplacePresented = false
+                if environment.isLauncherPresented {
+                    environment.launcherStore.query = ""
+                    environment.isLauncherPresented = false
+                } else {
+                    environment.isLauncherPresented = true
+                }
+                return true
+            case .toggleSettings:
+                // ⌘, summons/dismisses the Settings overlay (macOS convention).
+                environment.isLauncherPresented = false
+                environment.isWorkspaceOverviewPresented = false
+                environment.isMarketplacePresented = false
+                environment.isSettingsPresented.toggle()
+                window?.makeFirstResponder(nil)
+                return true
+            case .toggleAppStore:
+                // Summons/dismisses the Marketplace overlay.
+                environment.isLauncherPresented = false
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
+                environment.isMarketplacePresented.toggle()
+                window?.makeFirstResponder(nil)
+                return true
+            case .newWorkspace:
+                environment.workspaceManager.createWorkspace()
+                // A hidden workspace's terminal must not keep receiving
+                // keystrokes after the switch.
+                window?.makeFirstResponder(nil)
+                return true
+            case .toggleWorkspaceOverview:
+                environment.isLauncherPresented = false
+                environment.isSettingsPresented = false
+                environment.isMarketplacePresented = false
+                environment.isWorkspaceOverviewPresented.toggle()
+                return true
+            case .closeBlock:
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                if let focusedBlockID = layout.focusedBlockID {
+                    layout.close(focusedBlockID)
+                }
+                return true
             }
         }
     }
