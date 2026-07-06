@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// The Marketplace HUD overlay — browse the catalog and install / update /
+/// The App Store HUD overlay — browse the catalog and install / update /
 /// uninstall / enable apps. Same HUD language as the Launcher / Settings.
-struct MarketplaceOverlayView: View {
+struct AppStoreOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Bindable var store: MarketplaceStore
+    @Bindable var store: AppStoreStore
     let onDismiss: () -> Void
 
     private let columns = [GridItem(.adaptive(minimum: 220), spacing: 12)]
@@ -79,7 +79,7 @@ struct MarketplaceOverlayView: View {
 
     private func header(tokens: DesignTokens) -> some View {
         HStack {
-            Text("MARKETPLACE").font(AinkradFont.display(14, weight: .semibold)).kerning(1)
+            Text("APP STORE").font(AinkradFont.display(14, weight: .semibold)).kerning(1)
                 .foregroundStyle(tokens.foreground)
             Spacer()
             Button { Task { await store.refresh() } } label: {
@@ -111,7 +111,7 @@ struct MarketplaceOverlayView: View {
         .padding(.horizontal, 18).padding(.vertical, 10)
     }
 
-    private func chip(_ title: String, _ value: MarketplaceStore.Filter, tokens: DesignTokens) -> some View {
+    private func chip(_ title: String, _ value: AppStoreStore.Filter, tokens: DesignTokens) -> some View {
         let selected = store.filter == value
         return Button { store.filter = value } label: {
             Text(title).font(.system(size: 11, weight: .medium))
@@ -131,7 +131,7 @@ struct MarketplaceOverlayView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(rows) { row in
-                        MarketplaceCard(
+                        AppStoreCard(
                             row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
                             onInstall: { Task { await store.install(row.id) } },
                             onUpdate: { Task { await store.update(row.id) } },
@@ -152,7 +152,7 @@ struct MarketplaceOverlayView: View {
         }
     }
 
-    private func errorText(_ e: MarketplaceError) -> String {
+    private func errorText(_ e: AppStoreError) -> String {
         switch e {
         case .download: return "Download failed."
         case .checksumMismatch: return "Integrity check failed."

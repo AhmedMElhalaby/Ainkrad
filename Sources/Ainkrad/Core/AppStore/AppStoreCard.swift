@@ -2,8 +2,8 @@ import SwiftUI
 
 /// One catalog/app card: icon, name, version line, description, and a trailing
 /// action area driven by `row.status` + whether it is busy.
-struct MarketplaceCard: View {
-    let row: MarketplaceRow
+struct AppStoreCard: View {
+    let row: AppStoreRow
     let tokens: DesignTokens
     let isBusy: Bool
     let onInstall: () -> Void
@@ -44,7 +44,7 @@ struct MarketplaceCard: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
     }
 
-    /// A registered plugin that the marketplace didn't install (loaded from
+    /// A registered plugin that the App Store didn't install (loaded from
     /// DevPlugins) — present and toggleable, but not uninstallable here.
     private var isDevPlugin: Bool {
         row.kind == .plugin && row.status != .available && !row.isManaged

@@ -121,7 +121,7 @@ final class FileDocumentStore: PersistenceStore {
     /// Writes a document's payload as a versioned envelope without needing the
     /// document's Swift type. The mirror image of `rawPayloadData`; used by
     /// one-time migrations moving a document whose type no longer lives in
-    /// the host (e.g. settings that have since moved to a Marketplace
+    /// the host (e.g. settings that have since moved to an App Store
     /// plugin).
     func saveRawPayload(_ payload: JSONValue, forID id: String, schemaVersion: Int) {
         let envelope = RawEnvelope(schemaVersion: schemaVersion, updatedAt: Date(), payload: payload)

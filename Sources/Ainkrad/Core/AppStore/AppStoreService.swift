@@ -3,7 +3,7 @@ import Foundation
 /// The single entry point the UI (AIN-136) will call: refresh the catalog,
 /// install/uninstall, list what's installed, and detect updates.
 @MainActor
-final class MarketplaceService: MarketplaceServing {
+final class AppStoreService: AppStoreServing {
     let catalog: CatalogService
     private let installer: PluginInstaller
     private let persistence: PersistenceStore
@@ -20,7 +20,7 @@ final class MarketplaceService: MarketplaceServing {
 
     func install(appID: String) async throws {
         guard let entry = catalog.cached.first(where: { $0.appID == appID }) else {
-            throw MarketplaceError.notInstalled(appID)   // not in catalog
+            throw AppStoreError.notInstalled(appID)   // not in catalog
         }
         try await installer.install(entry)
     }
@@ -30,7 +30,7 @@ final class MarketplaceService: MarketplaceServing {
     /// version guard.
     func update(appID: String) async throws {
         guard let entry = catalog.cached.first(where: { $0.appID == appID }) else {
-            throw MarketplaceError.notInstalled(appID)
+            throw AppStoreError.notInstalled(appID)
         }
         try await installer.update(entry)
     }

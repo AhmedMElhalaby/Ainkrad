@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import AinkradAppKit
 
-enum MarketplaceError: Error, Equatable {
+enum AppStoreError: Error, Equatable {
     case download(String)
     case checksumMismatch
     case unpack(String)
@@ -45,11 +45,11 @@ final class PluginInstaller {
         // 1. Download.
         let data: Data
         do { data = try await http.get(entry.downloadURL) }
-        catch { throw MarketplaceError.download(String(describing: error)) }
+        catch { throw AppStoreError.download(String(describing: error)) }
 
         // 2. Verify integrity BEFORE unpacking.
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        guard digest == entry.sha256.lowercased() else { throw MarketplaceError.checksumMismatch }
+        guard digest == entry.sha256.lowercased() else { throw AppStoreError.checksumMismatch }
 
         // 3. Unpack into a temp dir.
         let work = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -57,7 +57,7 @@ final class PluginInstaller {
         let zip = work.appendingPathComponent("dl.zip")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         do { try data.write(to: zip); try unzipper.unzip(zip, to: work.appendingPathComponent("x")) }
-        catch { throw MarketplaceError.unpack(String(describing: error)) }
+        catch { throw AppStoreError.unpack(String(describing: error)) }
 
         // 4. Locate the bundle root and validate it (metadata + appID matches
         //    entry). `DittoUnzipper` (used both here and by the tooling that
@@ -81,11 +81,11 @@ final class PluginInstaller {
             .first(where: { $0.pathExtension == "bundle" }), let (m, info) = readMetadata(at: child) {
             bundleURL = child; metadata = m; infoDict = info
         } else {
-            throw MarketplaceError.invalidBundle("no readable .bundle in archive")
+            throw AppStoreError.invalidBundle("no readable .bundle in archive")
         }
-        guard metadata.appID == entry.appID else { throw MarketplaceError.invalidBundle("appID mismatch") }
+        guard metadata.appID == entry.appID else { throw AppStoreError.invalidBundle("appID mismatch") }
         if case .failure(let rej) = PluginValidator.validate(metadata, infoDictionary: infoDict, minSupportedAPIVersion: 1) {
-            throw MarketplaceError.invalidBundle(rej.reason)
+            throw AppStoreError.invalidBundle(rej.reason)
         }
 
         // 5. Atomic move into place (replace any prior install).
@@ -102,14 +102,14 @@ final class PluginInstaller {
         // 7. Register live (best-effort — install succeeds even if a relaunch is
         //    needed to load; the files + state are already committed).
         if case .success(let app) = loadBundle(dest) { registry.register(app) }
-        else { Log.marketplace.error("Installed \(entry.appID, privacy: .public) but live-load failed; effective next launch") }
+        else { Log.appStore.error("Installed \(entry.appID, privacy: .public) but live-load failed; effective next launch") }
     }
 
     /// Installs only if `entry.version` is newer than the installed version.
     func update(_ entry: CatalogEntry) async throws {
         let doc = persistence.load(InstalledPluginsDocument.self) ?? InstalledPluginsDocument()
         if let current = doc.installed[entry.appID], !PluginVersion.isNewer(entry.version, than: current.version) {
-            throw MarketplaceError.notNewer
+            throw AppStoreError.notNewer
         }
         try await install(entry)
     }
@@ -121,7 +121,7 @@ final class PluginInstaller {
     /// disappears from the list; its code lingers until the next launch.
     func uninstall(appID: String) throws {
         var doc = persistence.load(InstalledPluginsDocument.self) ?? InstalledPluginsDocument()
-        guard doc.installed[appID] != nil else { throw MarketplaceError.notInstalled(appID) }
+        guard doc.installed[appID] != nil else { throw AppStoreError.notInstalled(appID) }
         try? FileManager.default.removeItem(at: pluginsDir.appendingPathComponent("\(appID).bundle"))
         retainData(appID: appID)
         doc.installed[appID] = nil

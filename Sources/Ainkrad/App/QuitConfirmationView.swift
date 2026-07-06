@@ -3,7 +3,7 @@ import SwiftUI
 /// The in-app HUD shown before Ainkrad actually quits — summoned by
 /// `QuitCoordinator.isConfirming` from ⌘Q, the app menu's Quit, or the
 /// Dock's Quit (all funnel through `AinkradAppDelegate.applicationShouldTerminate`).
-/// Same visual language as the Launcher/Settings/Marketplace/Workspace
+/// Same visual language as the Launcher/Settings/App Store/Workspace
 /// Overview overlays. Cancel keeps the app running; Quit (optionally with
 /// "Don't ask again") delivers the coordinator's deferred termination reply.
 struct QuitConfirmationView: View {

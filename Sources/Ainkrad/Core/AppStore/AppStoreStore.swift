@@ -1,31 +1,31 @@
 import Foundation
 import Observation
 
-/// View-model for the Marketplace overlay. Owns all UI state and derives a flat
-/// `[MarketplaceRow]` from the cached catalog + installed-state + the registry.
+/// View-model for the App Store overlay. Owns all UI state and derives a flat
+/// `[AppStoreRow]` from the cached catalog + installed-state + the registry.
 @MainActor
 @Observable
-final class MarketplaceStore {
+final class AppStoreStore {
     enum Filter: Equatable { case all, installed, updates }
 
     var filter: Filter = .all
-    private(set) var rows: [MarketplaceRow] = []
+    private(set) var rows: [AppStoreRow] = []
     private(set) var busy: Set<String> = []
     private(set) var isRefreshing = false
-    var error: MarketplaceError?
+    var error: AppStoreError?
     /// Non-nil while a reinstall of this appID awaits the user's Restore/Reset
     /// choice (retained data exists). Drives the overlay's modal.
     private(set) var pendingReinstall: String? = nil
 
-    private let service: MarketplaceServing
+    private let service: AppStoreServing
     private let registry: BuiltInAppRegistry
 
-    init(service: MarketplaceServing, registry: BuiltInAppRegistry) {
+    init(service: AppStoreServing, registry: BuiltInAppRegistry) {
         self.service = service
         self.registry = registry
     }
 
-    var visibleRows: [MarketplaceRow] {
+    var visibleRows: [AppStoreRow] {
         switch filter {
         case .all: return rows
         case .installed: return rows.filter { $0.status != .available }
@@ -46,12 +46,12 @@ final class MarketplaceStore {
         var installedIDs = Set(registry.allApps.map(\.id))
         installedIDs.formUnion(installedDoc.keys)
 
-        var installedRows: [MarketplaceRow] = []
+        var installedRows: [AppStoreRow] = []
         for id in installedIDs {
             let reg = registeredByID[id]
             let entry = catalogByID[id]
             let isBuiltIn = reg?.source == .builtIn
-            installedRows.append(MarketplaceRow(
+            installedRows.append(AppStoreRow(
                 id: id,
                 displayName: reg?.displayName ?? entry?.displayName ?? id,
                 icon: reg?.icon ?? entry?.icon ?? "app",
@@ -64,9 +64,9 @@ final class MarketplaceStore {
                 isManaged: installedDoc[id] != nil))
         }
 
-        var availableRows: [MarketplaceRow] = []
+        var availableRows: [AppStoreRow] = []
         for entry in catalog where !installedIDs.contains(entry.appID) {
-            availableRows.append(MarketplaceRow(
+            availableRows.append(AppStoreRow(
                 id: entry.appID, displayName: entry.displayName, icon: entry.icon,
                 description: entry.description, catalogVersion: entry.version,
                 installedVersion: nil, status: .available, isEnabled: false, kind: .plugin,
@@ -111,7 +111,7 @@ final class MarketplaceStore {
 
     func uninstall(_ id: String) {
         do { try service.uninstall(appID: id) }
-        catch let e as MarketplaceError { error = e }
+        catch let e as AppStoreError { error = e }
         catch { self.error = .notInstalled(id) }
         reloadRows()
     }
@@ -126,7 +126,7 @@ final class MarketplaceStore {
     private func run(_ id: String, _ op: @escaping () async throws -> Void) async {
         busy.insert(id)
         do { try await op() }
-        catch let e as MarketplaceError { error = e }
+        catch let e as AppStoreError { error = e }
         catch { self.error = .download(String(describing: error)) }
         busy.remove(id)
         reloadRows()

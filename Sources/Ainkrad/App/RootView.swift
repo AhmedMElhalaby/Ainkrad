@@ -8,7 +8,7 @@ struct RootView: View {
 
     private var isOverlayPresented: Bool {
         environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
-            || environment.isMarketplacePresented || environment.quitCoordinator.isConfirming
+            || environment.isAppStorePresented || environment.quitCoordinator.isConfirming
     }
 
     /// The app of the focused pane in the active workspace, so Settings can
@@ -67,9 +67,9 @@ struct RootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
 
-            if environment.isMarketplacePresented {
-                MarketplaceOverlayView(store: environment.marketplaceStore) {
-                    environment.isMarketplacePresented = false
+            if environment.isAppStorePresented {
+                AppStoreOverlayView(store: environment.appStoreStore) {
+                    environment.isAppStorePresented = false
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }

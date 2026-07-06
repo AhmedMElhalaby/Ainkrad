@@ -1,9 +1,9 @@
 import Foundation
 
-/// The catalog+install surface the Marketplace UI depends on. `MarketplaceService`
+/// The catalog+install surface the App Store UI depends on. `AppStoreService`
 /// conforms; tests use a fake so the store is unit-testable without network/fs.
 @MainActor
-protocol MarketplaceServing {
+protocol AppStoreServing {
     var cachedCatalog: [CatalogEntry] { get }
     func refreshCatalog() async -> [CatalogEntry]
     func install(appID: String) async throws
