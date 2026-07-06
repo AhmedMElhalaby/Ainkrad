@@ -33,6 +33,8 @@ struct GitHubReleasesCatalogSource: CatalogSource {
         return CatalogEntry(
             appID: manifest.id, displayName: manifest.name, icon: manifest.icon,
             description: manifest.description, version: release.tagName, apiVersion: manifest.apiVersion,
-            downloadURL: zipAsset.browserDownloadURL, sha256: manifest.sha256, sourceRepo: repo)
+            downloadURL: zipAsset.browserDownloadURL, sha256: manifest.sha256, sourceRepo: repo,
+            author: manifest.author, longDescription: manifest.longDescription,
+            screenshots: manifest.screenshots ?? [], links: manifest.links ?? [])
     }
 }
