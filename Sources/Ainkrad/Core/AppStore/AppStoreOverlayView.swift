@@ -28,7 +28,14 @@ struct AppStoreOverlayView: View {
             }
             .animation(reduceMotion ? nil : .snappy(duration: 0.26), value: store.pendingReinstall)
         }
-        .task { store.reloadRows() }
+        .task {
+            // Paint instantly from the persisted catalog cache, then fetch the
+            // live catalog so detail-page metadata (version, screenshots,
+            // links) is current without requiring the manual refresh button —
+            // a stale cache was hiding newly-published screenshots entirely.
+            store.reloadRows()
+            await store.refresh()
+        }
     }
 
     /// The retained-data Restore/Reset prompt shown when reinstalling an app
