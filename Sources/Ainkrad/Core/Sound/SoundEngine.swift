@@ -5,6 +5,10 @@ import AVFoundation
 @MainActor
 protocol SoundPlaying {
     func play(_ sound: UISound)
+    /// Plays an effect asset directly for the Settings per-sound preview —
+    /// honors the master switch + volume but bypasses the per-event enable
+    /// gate, so a disabled event's candidate effect is still auditionable.
+    func preview(_ effect: UISound)
 }
 
 /// The subset of `GeneralSettingsStore` `SoundEngine` needs to decide
@@ -15,6 +19,18 @@ protocol SoundPlaying {
 protocol SoundSettingsProviding {
     var soundEnabled: Bool { get }
     var soundVolume: Double { get }
+    /// Whether this specific event's cue plays (on top of the master
+    /// `soundEnabled` switch). Defaults to `true` for conformers that don't
+    /// track per-event state.
+    func isEventEnabled(_ event: UISound) -> Bool
+    /// The effect asset to play for this event — lets the user re-map, e.g.,
+    /// Focus Mode to the `confirm` chime. Defaults to the event's own sound.
+    func effect(for event: UISound) -> UISound
+}
+
+extension SoundSettingsProviding {
+    func isEventEnabled(_ event: UISound) -> Bool { true }
+    func effect(for event: UISound) -> UISound { event }
 }
 
 /// A thin seam over `AVAudioPlayer` so the enabled/volume gate in
@@ -96,7 +112,22 @@ final class SoundEngine: SoundPlaying {
 
     func play(_ sound: UISound) {
         guard settings.soundEnabled else { return }
-        guard let player = players[sound] else { return }
+        guard settings.isEventEnabled(sound) else { return }
+        // Per-event remap: the user may point this event at a different
+        // effect asset (Settings → General → Sound Effects).
+        guard let player = players[settings.effect(for: sound)] else { return }
+        player.volume = Float(settings.soundVolume)
+        player.currentTime = 0
+        player.play()
+    }
+
+    /// Plays an effect asset directly, bypassing the per-event enable gate
+    /// (but honoring the master switch + volume) — used by the Settings
+    /// per-sound rows to preview a candidate effect even while its event is
+    /// disabled.
+    func preview(_ effect: UISound) {
+        guard settings.soundEnabled else { return }
+        guard let player = players[effect] else { return }
         player.volume = Float(settings.soundVolume)
         player.currentTime = 0
         player.play()

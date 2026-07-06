@@ -186,6 +186,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 let workspace = environment.workspaceManager.activeWorkspace
                 workspace.viewMode = workspace.viewMode == .focus ? WorkspaceViewMode.split : WorkspaceViewMode.focus
                 environment.workspaceManager.persist()
+                // Same cue the pane header button and context menu play —
+                // ⌘M was the one focus-mode entry point without it.
+                environment.sounds.play(.focusMode)
                 return true
             case "d", "D":
                 // Split the focused pane: ⌘D right, ⌘⇧D down.
