@@ -13,6 +13,10 @@ struct GlobalSettings: PersistableDocument {
     /// A user-picked accent override, as a 6-digit RRGGBB hex string (no
     /// `#`). `nil` means "use the current theme's accent" — see AIN-143.
     var accentColorHex: String? = nil
+    /// Shows the full-screen status bar (clock/network/battery) in the top
+    /// title strip while in full-screen — see AIN-109. Has no effect in
+    /// windowed mode.
+    var showFullScreenStatusBar: Bool = true
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
@@ -20,7 +24,8 @@ struct GlobalSettings: PersistableDocument {
          confirmBeforeQuit: Bool = true,
          uiFontScale: UIFontScale = .medium,
          uiFontFamily: UIFontFamily = .exo2,
-         accentColorHex: String? = nil) {
+         accentColorHex: String? = nil,
+         showFullScreenStatusBar: Bool = true) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
@@ -28,6 +33,7 @@ struct GlobalSettings: PersistableDocument {
         self.uiFontScale = uiFontScale
         self.uiFontFamily = uiFontFamily
         self.accentColorHex = accentColorHex
+        self.showFullScreenStatusBar = showFullScreenStatusBar
     }
 
     init(from decoder: Decoder) throws {
@@ -39,5 +45,6 @@ struct GlobalSettings: PersistableDocument {
         uiFontScale = try container.decodeIfPresent(UIFontScale.self, forKey: .uiFontScale) ?? .medium
         uiFontFamily = try container.decodeIfPresent(UIFontFamily.self, forKey: .uiFontFamily) ?? .exo2
         accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex)
+        showFullScreenStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showFullScreenStatusBar) ?? true
     }
 }

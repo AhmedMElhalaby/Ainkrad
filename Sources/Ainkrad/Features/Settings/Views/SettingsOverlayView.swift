@@ -29,6 +29,7 @@ struct SettingsOverlayView: View {
     }
 
     private enum SettingsSection: Hashable {
+        case general
         case appearance
         case appIcon
         case shortcuts
@@ -113,6 +114,7 @@ struct SettingsOverlayView: View {
     private func sidebar(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             groupLabel("AINKRAD", tokens: tokens)
+            sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
             sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
             sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
             sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
@@ -198,6 +200,8 @@ struct SettingsOverlayView: View {
     @ViewBuilder
     private func detail(tokens: DesignTokens) -> some View {
         switch selection {
+        case .general:
+            GeneralSettingsView()
         case .appearance:
             AppearanceSettingsView()
         case .appIcon:

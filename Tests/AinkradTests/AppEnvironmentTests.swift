@@ -33,6 +33,7 @@ final class AppEnvironmentTests {
         let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
         let shortcutStore = ShortcutStore(persistence: persistence)
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
+        let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -46,7 +47,8 @@ final class AppEnvironmentTests {
             marketplaceStore: marketplaceStore,
             appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager),
             shortcutStore: shortcutStore,
-            quitCoordinator: quitCoordinator
+            quitCoordinator: quitCoordinator,
+            generalSettingsStore: generalSettingsStore
         )
 
         #expect(environment.registry === registry)
@@ -58,6 +60,8 @@ final class AppEnvironmentTests {
         #expect(environment.marketplaceStore === marketplaceStore)
         #expect(environment.shortcutStore === shortcutStore)
         #expect(environment.quitCoordinator === quitCoordinator)
+        #expect(environment.generalSettingsStore === generalSettingsStore)
+        #expect(environment.isFullScreen == false)
     }
 
     @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")
@@ -77,5 +81,7 @@ final class AppEnvironmentTests {
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)
         #expect(environment.quitCoordinator.isConfirming == false)
+        #expect(environment.isFullScreen == false)
+        #expect(environment.generalSettingsStore.showFullScreenStatusBar == true)
     }
 }
