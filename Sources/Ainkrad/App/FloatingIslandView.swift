@@ -45,8 +45,33 @@ struct FloatingIslandView: View {
         }
     }
 
+    /// Per-theme depth map for the 2.5D parallax shader (white = near,
+    /// black = far), matching `imageName`'s theme grouping.
+    private var depthImageName: String {
+        switch environment.themeManager.currentTheme {
+        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple-Depth"
+        default: return "Island-NeonBlue-Depth"
+        }
+    }
+
     private var glowColor: Color {
         environment.themeManager.tokens.accentPrimary
+    }
+
+    /// Builds the depth-displacement shader for the artwork layer. `offset`
+    /// is the max per-axis displacement (in layer points); `size` must be
+    /// the artwork's own layout size so the shader can normalize sample
+    /// coordinates against the depth texture.
+    ///
+    /// NOTE: `offset` is a fixed placeholder for now — a later task drives
+    /// it from ambient motion and pointer position.
+    private func parallaxShader(offset: CGSize, size: CGSize, depthName: String) -> Shader {
+        ShaderLibrary.default.islandParallax(
+            .float2(Float(size.width), Float(size.height)),
+            .image(Image(depthName)),
+            .float2(Float(offset.width), Float(offset.height)),
+            .float(0.5)
+        )
     }
 
     var body: some View {
@@ -68,6 +93,15 @@ struct FloatingIslandView: View {
             ZStack {
                 glow
                 artwork
+                    .layerEffect(
+                        parallaxShader(
+                            offset: CGSize(width: 10, height: 6),
+                            size: proxy.size,
+                            depthName: depthImageName
+                        ),
+                        maxSampleOffset: CGSize(width: 24, height: 24),
+                        isEnabled: !reduceMotion
+                    )
             }
             .offset(
                 x: pointerFraction.x * -maxParallaxOffset,
