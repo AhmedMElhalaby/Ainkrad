@@ -25,8 +25,13 @@ struct AppStoreOverlayView: View {
                     reinstallModal(appID: id, tokens: tokens)
                         .transition(reduceMotion ? .identity : .scale(scale: 0.94).combined(with: .opacity))
                 }
+                if let box = store.lightbox {
+                    screenshotLightbox(box, tokens: tokens)
+                        .transition(reduceMotion ? .identity : .scale(scale: 0.96).combined(with: .opacity))
+                }
             }
             .animation(reduceMotion ? nil : .snappy(duration: 0.26), value: store.pendingReinstall)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: store.lightbox)
         }
         .task {
             // Paint instantly from the persisted catalog cache, then fetch the
@@ -88,7 +93,11 @@ struct AppStoreOverlayView: View {
                     onInstall: { environment.sounds.play(.install); Task { await store.install(row.id) } },
                     onUpdate: { Task { await store.update(row.id) } },
                     onUninstall: { environment.sounds.play(.uninstall); store.uninstall(row.id) },
-                    onToggleEnabled: { environment.sounds.play(.toggle); store.setEnabled($0, for: row.id) })
+                    onToggleEnabled: { environment.sounds.play(.toggle); store.setEnabled($0, for: row.id) },
+                    onOpenScreenshot: { urls, index in
+                        environment.sounds.play(.overlayOpen)
+                        store.openLightbox(urls, at: index)
+                    })
             } else {
                 header(tokens: tokens)
                 LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
@@ -99,9 +108,114 @@ struct AppStoreOverlayView: View {
         }
         .hudPanelChrome(tokens: tokens)
         .onKeyPress(.escape) {
-            if store.selectedAppID != nil { store.closeDetail() } else { onDismiss() }
+            if store.lightbox != nil {
+                environment.sounds.play(.overlayClose)
+                store.closeLightbox()
+            } else if store.selectedAppID != nil {
+                store.closeDetail()
+            } else {
+                onDismiss()
+            }
             return .handled
         }
+        .onKeyPress(.leftArrow) {
+            guard store.lightbox != nil else { return .ignored }
+            store.lightboxPrevious()
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            guard store.lightbox != nil else { return .ignored }
+            store.lightboxNext()
+            return .handled
+        }
+    }
+
+    // MARK: - Screenshot lightbox (AIN-147)
+
+    /// Full-screen screenshot viewer: dark backdrop (click to close), the
+    /// current image fit-scaled large, ⟨/⟩ wrap-around navigation + a "n / N"
+    /// counter when the gallery has more than one image, and a close ✕.
+    /// ESC/←/→ are handled by the panel's key handlers above (the panel keeps
+    /// keyboard focus while this overlay is up, same as the reinstall modal).
+    private func screenshotLightbox(_ box: AppStoreStore.Lightbox, tokens: DesignTokens) -> some View {
+        ZStack {
+            Color.black.opacity(0.82).ignoresSafeArea()
+                .onTapGesture {
+                    environment.sounds.play(.overlayClose)
+                    store.closeLightbox()
+                }
+
+            AsyncImage(url: box.urls[box.index]) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                case .failure:
+                    VStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 28))
+                            .foregroundStyle(tokens.accentTertiary)
+                        Text("Couldn't load image")
+                            .font(AinkradFont.display(12))
+                            .foregroundStyle(tokens.foreground.opacity(0.6))
+                    }
+                default:
+                    ProgressView().controlSize(.large)
+                }
+            }
+            .padding(48)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
+            .allowsHitTesting(false)   // clicks on the image fall through to nothing (backdrop closes)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        environment.sounds.play(.overlayClose)
+                        store.closeLightbox()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(tokens.foreground.opacity(0.75))
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(tokens.surfaceElevated.opacity(0.85)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close (esc)")
+                }
+                Spacer()
+                if box.urls.count > 1 {
+                    Text("\(box.index + 1) / \(box.urls.count)")
+                        .font(AinkradFont.display(12, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.75))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Capsule().fill(tokens.surfaceElevated.opacity(0.85)))
+                }
+            }
+            .padding(20)
+
+            if box.urls.count > 1 {
+                HStack {
+                    lightboxArrow("chevron.left", tokens: tokens, help: "Previous (←)") { store.lightboxPrevious() }
+                    Spacer()
+                    lightboxArrow("chevron.right", tokens: tokens, help: "Next (→)") { store.lightboxNext() }
+                }
+                .padding(.horizontal, 18)
+            }
+        }
+    }
+
+    private func lightboxArrow(_ systemImage: String, tokens: DesignTokens, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+                .frame(width: 42, height: 42)
+                .background(Circle().fill(tokens.surfaceElevated.opacity(0.85)))
+                .overlay(Circle().strokeBorder(tokens.accentPrimary.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private func header(tokens: DesignTokens) -> some View {

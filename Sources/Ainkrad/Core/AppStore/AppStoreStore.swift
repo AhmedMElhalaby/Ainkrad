@@ -22,6 +22,15 @@ final class AppStoreStore {
     /// Non-nil while the detail page for this appID is open (AIN-147). The
     /// overlay swaps its grid for `AppStoreDetailView` while this is set.
     private(set) var selectedAppID: String? = nil
+    /// Non-nil while the full-screen screenshot lightbox is open (AIN-147):
+    /// the gallery being viewed + the index of the shown image. Opened by
+    /// clicking a detail-page screenshot; ⟨/⟩ navigation wraps around.
+    private(set) var lightbox: Lightbox? = nil
+
+    struct Lightbox: Equatable {
+        var urls: [URL]
+        var index: Int
+    }
 
     private let service: AppStoreServing
     private let registry: BuiltInAppRegistry
@@ -155,6 +164,30 @@ final class AppStoreStore {
 
     /// Closes the detail page, returning the overlay to the grid.
     func closeDetail() { selectedAppID = nil }
+
+    // MARK: Screenshot lightbox (AIN-147)
+
+    /// Opens the lightbox on `urls[index]`. No-op for an empty gallery or an
+    /// out-of-range index, so a stale tap can never open a broken viewer.
+    func openLightbox(_ urls: [URL], at index: Int) {
+        guard urls.indices.contains(index) else { return }
+        lightbox = Lightbox(urls: urls, index: index)
+    }
+
+    func closeLightbox() { lightbox = nil }
+
+    /// Advance to the next screenshot, wrapping from the last back to the first.
+    func lightboxNext() { stepLightbox(1) }
+
+    /// Step back to the previous screenshot, wrapping from the first to the last.
+    func lightboxPrevious() { stepLightbox(-1) }
+
+    private func stepLightbox(_ delta: Int) {
+        guard var box = lightbox, !box.urls.isEmpty else { return }
+        let count = box.urls.count
+        box.index = ((box.index + delta) % count + count) % count
+        lightbox = box
+    }
 
     /// The full catalog record for `appID`, if it's in the cached catalog —
     /// used by the detail page for the long description/screenshots/links
