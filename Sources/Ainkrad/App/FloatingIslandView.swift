@@ -4,30 +4,39 @@ import SwiftUI
 /// (AIN-107, "Living Island"). This restores the original static 2D
 /// artwork — a procedural SceneKit scene was tried and rejected as looking
 /// worse than the flat image — and layers tasteful, ambient SwiftUI motion
-/// on top: a slow vertical hover, a gentle breathing scale, a soft pulsing
-/// glow tinted with the current theme's accent color, and subtle
-/// pointer-driven 3D parallax/tilt. The artwork itself is never cropped,
-/// recolored, or replaced — only its presentation moves.
+/// on top: a pronounced vertical hover, a slow drifting sway, a breathing
+/// scale, a pulsing glow tinted with the current theme's accent color, and
+/// a snappy pointer-driven 3D parallax/tilt. The artwork itself is never
+/// cropped, recolored, or replaced — only its presentation moves.
 ///
 /// Reduce Motion collapses all of this back to the plain static image with
-/// no hover, tilt, breathing, or glow — exactly the original look.
+/// no hover, sway, tilt, breathing, or glow — exactly the original look.
+///
+/// NOTE: Reduce Motion disables *all* island motion by design (ambient hover,
+/// sway, breathing, glow pulse, and pointer parallax) — it renders the plain
+/// static image only, per Apple's accessibility guidance.
 struct FloatingIslandView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Slow vertical hover, matching the original artwork's motion.
+    /// Vertical hover, amplified so it reads clearly without hovering.
     @State private var isHovering = false
-    /// Very gentle "breathing" scale, phase-offset from the hover so the
-    /// two loops don't feel mechanically locked together.
+    /// Slow ±~1.75° drift rotation, phase-offset from the hover loop so the
+    /// island feels like it's adrift rather than mechanically bobbing.
+    @State private var isSwaying = false
+    /// Gentle "breathing" scale, phase-offset from the hover so the loops
+    /// don't feel mechanically locked together.
     @State private var isBreathing = false
-    /// Slow opacity pulse on the glow layer behind the artwork.
+    /// Opacity pulse on the glow layer behind the artwork.
     @State private var isGlowing = false
     /// Pointer position, normalized to -1...1 from center, used for the
     /// parallax tilt. Zero when the pointer isn't over the island.
     @State private var pointerFraction: CGPoint = .zero
 
-    private let maxTiltDegrees: Double = 6
-    private let maxParallaxOffset: CGFloat = 5
+    private let maxTiltDegrees: Double = 11
+    private let maxParallaxOffset: CGFloat = 12
+    private let maxHoverOffset: CGFloat = 18
+    private let maxSwayDegrees: Double = 1.75
 
     private var imageName: String {
         switch environment.themeManager.currentTheme {
@@ -62,9 +71,10 @@ struct FloatingIslandView: View {
             }
             .offset(
                 x: pointerFraction.x * -maxParallaxOffset,
-                y: (pointerFraction.y * -maxParallaxOffset) + (isHovering ? -9 : 9)
+                y: (pointerFraction.y * -maxParallaxOffset) + (isHovering ? -maxHoverOffset : maxHoverOffset)
             )
-            .scaleEffect(isBreathing ? 1.015 : 1.0)
+            .scaleEffect(isBreathing ? 1.03 : 1.0)
+            .rotationEffect(.degrees(isSwaying ? maxSwayDegrees : -maxSwayDegrees))
             .rotation3DEffect(
                 .degrees(pointerFraction.y * -maxTiltDegrees),
                 axis: (x: 1, y: 0, z: 0),
@@ -75,7 +85,7 @@ struct FloatingIslandView: View {
                 axis: (x: 0, y: 1, z: 0),
                 perspective: 0.5
             )
-            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: pointerFraction)
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: pointerFraction)
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
                 case .active(let location):
@@ -86,7 +96,7 @@ struct FloatingIslandView: View {
                         y: min(max((location.y / height) * 2 - 1, -1), 1)
                     )
                 case .ended:
-                    withAnimation(.easeOut(duration: 0.4)) {
+                    withAnimation(.easeOut(duration: 0.35)) {
                         pointerFraction = .zero
                     }
                 }
@@ -97,21 +107,24 @@ struct FloatingIslandView: View {
     }
 
     /// A blurred, accent-tinted copy of the artwork sitting behind the real
-    /// image, pulsing slowly at low opacity — a soft glow, not a light
-    /// source. Kept understated: the artwork stays the star.
+    /// image, pulsing at a clearly visible opacity — a soft aura, not a
+    /// light source. Kept accent-tinted so it reads as ambient, not gaudy.
     private var glow: some View {
         Image(imageName)
             .resizable()
             .scaledToFit()
-            .blur(radius: 36)
+            .blur(radius: 42)
             .colorMultiply(glowColor)
-            .opacity(isGlowing ? 0.35 : 0.15)
+            .opacity(isGlowing ? 0.5 : 0.2)
             .allowsHitTesting(false)
     }
 
     private func startAmbientMotion() {
-        withAnimation(.easeInOut(duration: 5.5).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
             isHovering = true
+        }
+        withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true).delay(2)) {
+            isSwaying = true
         }
         withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true).delay(1.5)) {
             isBreathing = true
