@@ -4,7 +4,11 @@ import SwiftUI
 /// action area driven by `row.status` + whether it is busy. Tapping the
 /// icon/name/description area opens the app's detail page (AIN-147); the
 /// actions row below is excluded so Install/Update/Uninstall/enable taps
-/// don't also trigger navigation.
+/// don't also trigger navigation. The actions themselves live in the shared
+/// `AppStoreActionControls` (AIN-149) so the grid card and the detail page
+/// never diverge. On hover the card lifts slightly and its border brightens
+/// — skipped under Reduce Motion, though the hover state itself still
+/// tracks instantly.
 struct AppStoreCard: View {
     let row: AppStoreRow
     let tokens: DesignTokens
@@ -14,6 +18,9 @@ struct AppStoreCard: View {
     let onUpdate: () -> Void
     let onUninstall: () -> Void
     let onToggleEnabled: (Bool) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -45,11 +52,22 @@ struct AppStoreCard: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
 
-            actions
+            AppStoreActionControls(
+                row: row, tokens: tokens, isBusy: isBusy,
+                onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surface.opacity(0.9)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(tokens.foreground.opacity(isHovering ? 0.22 : 0.1), lineWidth: 1)
+        )
+        .shadow(color: tokens.accentPrimary.opacity(isHovering ? 0.22 : 0), radius: 14)
+        .scaleEffect(isHovering && !reduceMotion ? 1.01 : 1.0)
+        .onHover { hovering in
+            guard !reduceMotion else { isHovering = hovering; return }
+            withAnimation(.easeOut(duration: 0.18)) { isHovering = hovering }
+        }
     }
 
     /// A registered plugin that the App Store didn't install (loaded from
@@ -64,48 +82,6 @@ struct AppStoreCard: View {
         case .installed: return row.installedVersion.map { "v\($0) · installed" } ?? "installed"
         case .updateAvailable: return "v\(row.installedVersion ?? "—") → v\(row.catalogVersion ?? "—")"
         }
-    }
-
-    @ViewBuilder private var actions: some View {
-        HStack(spacing: 8) {
-            switch row.status {
-            case .available:
-                actionButton("Install", filled: true, action: onInstall)
-            case .updateAvailable:
-                actionButton("Update", filled: true, action: onUpdate)
-                enableToggle
-                if row.isManaged { actionButton("Uninstall", filled: false, action: onUninstall) }
-            case .installed:
-                Text("Installed").font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(tokens.accentTertiary)
-                enableToggle
-                if row.isManaged { actionButton("Uninstall", filled: false, action: onUninstall) }
-            }
-            Spacer()
-            if isBusy { ProgressView().controlSize(.small) }
-        }
-    }
-
-    private var enableToggle: some View {
-        Toggle("", isOn: Binding(get: { row.isEnabled }, set: { onToggleEnabled($0) }))
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .help(row.isEnabled ? "Enabled" : "Disabled")
-    }
-
-    private func actionButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(filled ? tokens.accentPrimary.opacity(0.9) : .clear)
-                .foregroundStyle(filled ? tokens.background : tokens.foreground.opacity(0.8))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(tokens.foreground.opacity(filled ? 0 : 0.2), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .disabled(isBusy)
     }
 
     private func badge(_ text: String) -> some View {

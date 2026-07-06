@@ -4,6 +4,7 @@ import SwiftUI
 /// uninstall / enable apps. Same HUD language as the Launcher / Settings.
 struct AppStoreOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var store: AppStoreStore
     let onDismiss: () -> Void
 
@@ -22,12 +23,18 @@ struct AppStoreOverlayView: View {
                     .offset(y: -30)
                 if let id = store.pendingReinstall {
                     reinstallModal(appID: id, tokens: tokens)
+                        .transition(reduceMotion ? .identity : .scale(scale: 0.94).combined(with: .opacity))
                 }
             }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.26), value: store.pendingReinstall)
         }
         .task { store.reloadRows() }
     }
 
+    /// The retained-data Restore/Reset prompt shown when reinstalling an app
+    /// that left settings behind — same HUD chrome as the rest of the
+    /// overlay, with a scale/opacity entrance and pressable buttons (AIN-149).
+    /// Skipped under Reduce Motion.
     private func reinstallModal(appID: String, tokens: DesignTokens) -> some View {
         let name = store.rows.first { $0.id == appID }?.displayName ?? appID
         return ZStack {
@@ -44,13 +51,13 @@ struct AppStoreOverlayView: View {
                 HStack(spacing: 10) {
                     Spacer()
                     Button("Cancel") { store.cancelReinstall() }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .foregroundStyle(tokens.foreground.opacity(0.6))
                     Button("Reset to Defaults") { Task { await store.resetAndInstall(appID) } }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .foregroundStyle(tokens.accentTertiary)
                     Button("Restore") { Task { await store.restoreAndInstall(appID) } }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .padding(.horizontal, 12).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(tokens.accentPrimary.opacity(0.9)))
                         .foregroundStyle(tokens.background)
