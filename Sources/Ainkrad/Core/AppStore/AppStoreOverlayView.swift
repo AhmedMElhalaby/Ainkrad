@@ -113,6 +113,7 @@ struct AppStoreOverlayView: View {
             chip("All", .all, tokens: tokens)
             chip("Installed", .installed, tokens: tokens)
             chip(updateCount > 0 ? "Updates (\(updateCount))" : "Updates", .updates, tokens: tokens)
+            searchField(tokens: tokens)
             Spacer()
             if let error = store.error {
                 Text(errorText(error)).font(.system(size: 10)).foregroundStyle(tokens.accentTertiary)
@@ -122,6 +123,32 @@ struct AppStoreOverlayView: View {
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 10)
+    }
+
+    /// Live search over the visible rows (AIN-148) — name/description/author,
+    /// case-insensitive, client-side. Composes with the filter chips above.
+    private func searchField(tokens: DesignTokens) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+            TextField("Search apps…", text: $store.searchQuery)
+                .textFieldStyle(.plain)
+                .font(AinkradFont.display(12))
+                .foregroundStyle(tokens.foreground)
+                .tint(tokens.accentPrimary)
+            if !store.searchQuery.isEmpty {
+                Button { store.searchQuery = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.4))
+                }.buttonStyle(.plain).help("Clear search")
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .frame(width: 200)
+        .background(RoundedRectangle(cornerRadius: 7).fill(tokens.surface.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
     }
 
     private func chip(_ title: String, _ value: AppStoreStore.Filter, tokens: DesignTokens) -> some View {
@@ -159,6 +186,8 @@ struct AppStoreOverlayView: View {
     }
 
     private var emptyText: String {
+        let trimmedQuery = store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedQuery.isEmpty { return "No apps match \"\(trimmedQuery)\"." }
         switch store.filter {
         case .all: return "No apps available — check back later."
         case .installed: return "Nothing installed yet."
