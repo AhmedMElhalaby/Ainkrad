@@ -18,6 +18,8 @@ struct AppStoreDetailView: View {
     let onUpdate: () -> Void
     let onUninstall: () -> Void
     let onToggleEnabled: (Bool) -> Void
+    /// Opens the full-screen lightbox on the tapped screenshot (gallery, index).
+    let onOpenScreenshot: ([URL], Int) -> Void
 
     var body: some View {
         ScrollView {
@@ -105,27 +107,33 @@ struct AppStoreDetailView: View {
     private func screenshotGallery(_ urls: [URL]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(urls, id: \.self) { url in
-                    screenshot(url)
+                ForEach(Array(urls.enumerated()), id: \.element) { index, url in
+                    screenshot(url, in: urls, at: index)
                 }
             }
         }
     }
 
-    private func screenshot(_ url: URL) -> some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().aspectRatio(contentMode: .fill)
-            case .failure:
-                screenshotBox(systemImage: "exclamationmark.triangle", tint: tokens.accentTertiary)
-            default:
-                screenshotBox(systemImage: nil, tint: tokens.foreground)
+    private func screenshot(_ url: URL, in urls: [URL], at index: Int) -> some View {
+        Button {
+            onOpenScreenshot(urls, index)
+        } label: {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                case .failure:
+                    screenshotBox(systemImage: "exclamationmark.triangle", tint: tokens.accentTertiary)
+                default:
+                    screenshotBox(systemImage: nil, tint: tokens.foreground)
+                }
             }
+            .frame(width: 220, height: 140)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
         }
-        .frame(width: 220, height: 140)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+        .buttonStyle(.plain)
+        .help("View full size")
     }
 
     private func screenshotBox(systemImage: String?, tint: Color) -> some View {

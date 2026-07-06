@@ -236,3 +236,54 @@ struct AppStoreStoreTests {
         #expect(svc.installedCalls.isEmpty)
     }
 }
+
+@MainActor
+struct AppStoreLightboxTests {
+    private func makeStore() -> AppStoreStore {
+        AppStoreStore(service: FakeAppStoreService(),
+                      registry: BuiltInAppRegistry(persistence: InMemoryPersistenceStore()))
+    }
+
+    private var urls: [URL] {
+        [URL(string: "https://e/1.png")!, URL(string: "https://e/2.png")!, URL(string: "https://e/3.png")!]
+    }
+
+    @Test("openLightbox shows the tapped image; out-of-range or empty is a no-op")
+    func openValidation() {
+        let store = makeStore()
+
+        store.openLightbox(urls, at: 1)
+        #expect(store.lightbox == .init(urls: urls, index: 1))
+
+        store.closeLightbox()
+        #expect(store.lightbox == nil)
+
+        store.openLightbox(urls, at: 3)   // out of range
+        #expect(store.lightbox == nil)
+        store.openLightbox([], at: 0)     // empty gallery
+        #expect(store.lightbox == nil)
+    }
+
+    @Test("next/previous wrap around the gallery in both directions")
+    func navigationWraps() {
+        let store = makeStore()
+        store.openLightbox(urls, at: 2)
+
+        store.lightboxNext()
+        #expect(store.lightbox?.index == 0)   // last → first
+
+        store.lightboxPrevious()
+        #expect(store.lightbox?.index == 2)   // first → last
+
+        store.lightboxPrevious()
+        #expect(store.lightbox?.index == 1)
+    }
+
+    @Test("navigation with no open lightbox is a no-op")
+    func navigationRequiresOpenBox() {
+        let store = makeStore()
+        store.lightboxNext()
+        store.lightboxPrevious()
+        #expect(store.lightbox == nil)
+    }
+}
