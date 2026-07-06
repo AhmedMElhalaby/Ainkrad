@@ -11,11 +11,18 @@ struct MarketplaceOverlayView: View {
 
     var body: some View {
         let tokens = environment.themeManager.tokens
-        ZStack {
-            Color.black.opacity(0.42).ignoresSafeArea().onTapGesture { onDismiss() }
-            panel(tokens: tokens).frame(width: 820, height: 560).offset(y: -30)
-            if let id = store.pendingReinstall {
-                reinstallModal(appID: id, tokens: tokens)
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity).ignoresSafeArea().onTapGesture { onDismiss() }
+                panel(tokens: tokens)
+                    .frame(
+                        width: min(max(900, geo.size.width * 0.82), 1120),
+                        height: min(max(600, geo.size.height * 0.82), 760)
+                    )
+                    .offset(y: -30)
+                if let id = store.pendingReinstall {
+                    reinstallModal(appID: id, tokens: tokens)
+                }
             }
         }
         .task { store.reloadRows() }
@@ -66,14 +73,7 @@ struct MarketplaceOverlayView: View {
             filterBar(tokens: tokens)
             content(tokens: tokens)
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).strokeBorder(
-                LinearGradient(colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                               startPoint: .top, endPoint: .bottom), lineWidth: 1))
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .hudPanelChrome(tokens: tokens)
         .onKeyPress(.escape) { onDismiss(); return .handled }
     }
 

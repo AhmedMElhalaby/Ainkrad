@@ -29,35 +29,37 @@ struct WorkspaceOverviewView: View {
         let tokens = environment.themeManager.tokens
         let workspaces = environment.workspaceManager.workspaces
 
-        ZStack {
-            Color.black.opacity(0.42)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity)
+                    .ignoresSafeArea()
+                    .onTapGesture { onDismiss() }
 
-            panel(workspaces: workspaces, tokens: tokens)
-                .frame(width: 700)
-                .offset(y: -40)
-                .overlay {
-                    if let pendingDeletion {
-                        ZStack {
-                            // Dim the cards behind so the choice is the only
-                            // lit thing on screen.
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(.black.opacity(0.45))
-                                .transition(.opacity)
+                panel(workspaces: workspaces, tokens: tokens)
+                    .frame(width: min(max(760, geo.size.width * 0.6), 960))
+                    .offset(y: -40)
+                    .overlay {
+                        if let pendingDeletion {
+                            ZStack {
+                                // Dim the cards behind so the choice is the only
+                                // lit thing on screen.
+                                RoundedRectangle(cornerRadius: OverlayChrome.cornerRadius)
+                                    .fill(.black.opacity(0.45))
+                                    .transition(.opacity)
 
-                            DeleteWorkspaceConfirmation(
-                                workspaceName: pendingDeletion.name,
-                                appCount: pendingDeletion.tileLayout.appIDs.count,
-                                tokens: tokens,
-                                onCancel: { self.pendingDeletion = nil },
-                                onConfirm: { confirmDeletion(pendingDeletion) }
-                            )
-                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                                DeleteWorkspaceConfirmation(
+                                    workspaceName: pendingDeletion.name,
+                                    appCount: pendingDeletion.tileLayout.appIDs.count,
+                                    tokens: tokens,
+                                    onCancel: { self.pendingDeletion = nil },
+                                    onConfirm: { confirmDeletion(pendingDeletion) }
+                                )
+                                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                            }
+                            .offset(y: -40)
                         }
-                        .offset(y: -40)
                     }
-                }
+            }
         }
         .animation(.easeOut(duration: 0.16), value: pendingDeletion?.id)
         .onAppear {
@@ -121,21 +123,7 @@ struct WorkspaceOverviewView: View {
 
             footer(tokens: tokens)
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .hudPanelChrome(tokens: tokens)
         .focusable()
         .focused($focus, equals: .panel)
         .focusEffectDisabled()

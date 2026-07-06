@@ -43,14 +43,19 @@ struct SettingsOverlayView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ZStack {
-            Color.black.opacity(0.42)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity)
+                    .ignoresSafeArea()
+                    .onTapGesture { onDismiss() }
 
-            panel(tokens: tokens)
-                .frame(width: 780, height: 520)
-                .offset(y: -30)
+                panel(tokens: tokens)
+                    .frame(
+                        width: min(max(820, geo.size.width * 0.78), 1040),
+                        height: min(max(560, geo.size.height * 0.82), 720)
+                    )
+                    .offset(y: -30)
+            }
         }
     }
 
@@ -79,21 +84,7 @@ struct SettingsOverlayView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .hudPanelChrome(tokens: tokens)
         .onKeyPress(.escape) { onDismiss(); return .handled }
     }
 
