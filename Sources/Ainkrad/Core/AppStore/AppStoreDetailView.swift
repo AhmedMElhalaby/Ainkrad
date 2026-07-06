@@ -91,45 +91,13 @@ struct AppStoreDetailView: View {
         }
     }
 
-    @ViewBuilder private var actions: some View {
-        HStack(spacing: 10) {
-            switch row.status {
-            case .available:
-                actionButton("Install", filled: true, action: onInstall)
-            case .updateAvailable:
-                actionButton("Update", filled: true, action: onUpdate)
-                enableToggle
-                if row.isManaged { actionButton("Uninstall", filled: false, action: onUninstall) }
-            case .installed:
-                Text("Installed").font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tokens.accentTertiary)
-                enableToggle
-                if row.isManaged { actionButton("Uninstall", filled: false, action: onUninstall) }
-            }
-            if isBusy { ProgressView().controlSize(.small) }
-        }
-    }
-
-    private var enableToggle: some View {
-        Toggle("", isOn: Binding(get: { row.isEnabled }, set: { onToggleEnabled($0) }))
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .help(row.isEnabled ? "Enabled" : "Disabled")
-    }
-
-    private func actionButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(filled ? tokens.accentPrimary.opacity(0.9) : .clear)
-                .foregroundStyle(filled ? tokens.background : tokens.foreground.opacity(0.8))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(tokens.foreground.opacity(filled ? 0 : 0.2), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .disabled(isBusy)
+    /// The shared Install/Update/Enable/Disable/Uninstall controls (AIN-149)
+    /// — identical to `AppStoreCard`'s, just rendered at the `.prominent`
+    /// size that fits the detail header.
+    private var actions: some View {
+        AppStoreActionControls(
+            row: row, tokens: tokens, isBusy: isBusy, style: .prominent,
+            onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
     }
 
     // MARK: - Screenshot gallery
