@@ -69,14 +69,16 @@ struct LauncherView: View {
         let tokens = environment.themeManager.tokens
         let results = appRows
 
-        ZStack {
-            Color.black.opacity(0.42)
-                .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismiss() }
 
-            panel(results: results, tokens: tokens)
-                .frame(width: 620)
-                .offset(y: -60)
+                panel(results: results, tokens: tokens)
+                    .frame(width: min(max(680, geo.size.width * 0.55), 820))
+                    .offset(y: -60)
+            }
         }
         .onAppear { isSearchFocused = true }
     }
@@ -122,21 +124,7 @@ struct LauncherView: View {
 
             footer(tokens: tokens)
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .hudPanelChrome(tokens: tokens)
         .onChange(of: store.query) { _, _ in selectedIndex = 0 }
     }
 
