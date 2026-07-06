@@ -15,6 +15,7 @@ final class AppEnvironment {
     let marketplace: MarketplaceService
     let marketplaceStore: MarketplaceStore
     let appIconStore: AppIconStore
+    let quitCoordinator: QuitCoordinator
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -30,7 +31,8 @@ final class AppEnvironment {
         connectionStore: ConnectionStore,
         marketplace: MarketplaceService,
         marketplaceStore: MarketplaceStore,
-        appIconStore: AppIconStore
+        appIconStore: AppIconStore,
+        quitCoordinator: QuitCoordinator
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -42,6 +44,7 @@ final class AppEnvironment {
         self.marketplace = marketplace
         self.marketplaceStore = marketplaceStore
         self.appIconStore = appIconStore
+        self.quitCoordinator = quitCoordinator
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -104,7 +107,8 @@ final class AppEnvironment {
             connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
             marketplace: marketplace,
             marketplaceStore: marketplaceStore,
-            appIconStore: appIconStore
+            appIconStore: appIconStore,
+            quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier())
         )
 
         // Terminal ships as a Marketplace plugin (AinkradTerminal), not compiled in.

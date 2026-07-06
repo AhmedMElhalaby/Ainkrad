@@ -31,6 +31,7 @@ final class AppEnvironmentTests {
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
         let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
         let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
+        let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -42,7 +43,8 @@ final class AppEnvironmentTests {
             connectionStore: connectionStore,
             marketplace: marketplace,
             marketplaceStore: marketplaceStore,
-            appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager)
+            appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager),
+            quitCoordinator: quitCoordinator
         )
 
         #expect(environment.registry === registry)
@@ -52,6 +54,7 @@ final class AppEnvironmentTests {
         #expect(environment.connectionStore === connectionStore)
         #expect(environment.marketplace === marketplace)
         #expect(environment.marketplaceStore === marketplaceStore)
+        #expect(environment.quitCoordinator === quitCoordinator)
     }
 
     @Test("bootstrap() assembles a working environment on isolated storage, Launcher dismissed")
@@ -70,5 +73,6 @@ final class AppEnvironmentTests {
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)
+        #expect(environment.quitCoordinator.isConfirming == false)
     }
 }

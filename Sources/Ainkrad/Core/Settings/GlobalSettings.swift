@@ -7,13 +7,16 @@ struct GlobalSettings: PersistableDocument {
     var theme: Theme = .neonBlue
     var appIconChoice: AppIconChoice = .auto
     var appIconAppearance: AppIconAppearance = .system
+    var confirmBeforeQuit: Bool = true
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
-         appIconAppearance: AppIconAppearance = .system) {
+         appIconAppearance: AppIconAppearance = .system,
+         confirmBeforeQuit: Bool = true) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
+        self.confirmBeforeQuit = confirmBeforeQuit
     }
 
     init(from decoder: Decoder) throws {
@@ -21,5 +24,6 @@ struct GlobalSettings: PersistableDocument {
         theme = try container.decodeIfPresent(Theme.self, forKey: .theme) ?? .neonBlue
         appIconChoice = try container.decodeIfPresent(AppIconChoice.self, forKey: .appIconChoice) ?? .auto
         appIconAppearance = try container.decodeIfPresent(AppIconAppearance.self, forKey: .appIconAppearance) ?? .system
+        confirmBeforeQuit = try container.decodeIfPresent(Bool.self, forKey: .confirmBeforeQuit) ?? true
     }
 }

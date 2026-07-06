@@ -6,11 +6,18 @@ import SwiftUI
 // one of the same name, so the SDK protocol would otherwise be unreachable.
 @main
 struct AinkradHostApp: App {
+    // Otherwise-pure-SwiftUI app; this adaptor exists solely so ⌘Q / the app
+    // menu's Quit / the Dock's Quit route through `AinkradAppDelegate` →
+    // `QuitCoordinator` for the in-app confirmation, instead of terminating
+    // immediately.
+    @NSApplicationDelegateAdaptor(AinkradAppDelegate.self) private var appDelegate
     @State private var environment: AppEnvironment
 
     init() {
         FontRegistrar.registerBundledFonts()
-        _environment = State(initialValue: AppEnvironment.bootstrap())
+        let environment = AppEnvironment.bootstrap()
+        _environment = State(initialValue: environment)
+        appDelegate.quitCoordinator = environment.quitCoordinator
     }
 
     var body: some Scene {
