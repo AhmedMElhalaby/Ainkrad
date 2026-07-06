@@ -45,6 +45,14 @@ struct StatusBarTests {
         #expect(BatteryInfo(percent: 100, isCharging: false).symbolName == "battery.100")
     }
 
+    @Test("symbolName at the exact case boundaries rounds up to the next glyph")
+    func batterySymbolNameBoundaries() {
+        #expect(BatteryInfo(percent: 13, isCharging: false).symbolName == "battery.25")
+        #expect(BatteryInfo(percent: 38, isCharging: false).symbolName == "battery.50")
+        #expect(BatteryInfo(percent: 63, isCharging: false).symbolName == "battery.75")
+        #expect(BatteryInfo(percent: 88, isCharging: false).symbolName == "battery.100")
+    }
+
     @Test("symbolName always shows the bolt glyph while charging, regardless of percent")
     func batterySymbolNameCharging() {
         #expect(BatteryInfo(percent: 12, isCharging: true).symbolName == "battery.100.bolt")

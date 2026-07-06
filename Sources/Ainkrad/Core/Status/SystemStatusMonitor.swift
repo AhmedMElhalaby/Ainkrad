@@ -17,7 +17,7 @@ final class SystemStatusMonitor {
     private(set) var battery: BatteryInfo?
 
     private var clockTimer: Timer?
-    private let pathMonitor = NWPathMonitor()
+    private var pathMonitor: NWPathMonitor?
     private let pathQueue = DispatchQueue(label: "com.ainkrad.app.status.network")
     private var isRunning = false
 
@@ -37,13 +37,18 @@ final class SystemStatusMonitor {
         RunLoop.main.add(timer, forMode: .common)
         clockTimer = timer
 
-        pathMonitor.pathUpdateHandler = { [weak self] path in
+        // NWPathMonitor cannot be restarted after `cancel()` — it becomes a
+        // permanent no-op — so a fresh instance is created on every start().
+        pathMonitor?.cancel()
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
             let status = NetworkStatus.resolve(from: path)
             Task { @MainActor in
                 self?.network = status
             }
         }
-        pathMonitor.start(queue: pathQueue)
+        monitor.start(queue: pathQueue)
+        pathMonitor = monitor
     }
 
     func stop() {
@@ -52,7 +57,8 @@ final class SystemStatusMonitor {
 
         clockTimer?.invalidate()
         clockTimer = nil
-        pathMonitor.cancel()
+        pathMonitor?.cancel()
+        pathMonitor = nil
     }
 
     /// Reads the first internal battery's charge/state from IOKit's power
@@ -76,7 +82,7 @@ final class SystemStatusMonitor {
                   maxCapacity > 0 else { continue }
 
             let percent = Int((Double(currentCapacity) / Double(maxCapacity) * 100).rounded())
-            let isCharging = (description[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+            let isCharging = description[kIOPSIsChargingKey] as? Bool ?? false
             return BatteryInfo(percent: percent, isCharging: isCharging)
         }
         return nil
