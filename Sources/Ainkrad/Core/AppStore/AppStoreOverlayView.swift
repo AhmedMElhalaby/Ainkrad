@@ -67,14 +67,27 @@ struct AppStoreOverlayView: View {
 
     private func panel(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            header(tokens: tokens)
-            LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 1)
-            filterBar(tokens: tokens)
-            content(tokens: tokens)
+            if let row = store.selectedRow {
+                AppStoreDetailView(
+                    entry: store.entry(for: row.id), row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
+                    onBack: { store.closeDetail() },
+                    onInstall: { Task { await store.install(row.id) } },
+                    onUpdate: { Task { await store.update(row.id) } },
+                    onUninstall: { store.uninstall(row.id) },
+                    onToggleEnabled: { store.setEnabled($0, for: row.id) })
+            } else {
+                header(tokens: tokens)
+                LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 1)
+                filterBar(tokens: tokens)
+                content(tokens: tokens)
+            }
         }
         .hudPanelChrome(tokens: tokens)
-        .onKeyPress(.escape) { onDismiss(); return .handled }
+        .onKeyPress(.escape) {
+            if store.selectedAppID != nil { store.closeDetail() } else { onDismiss() }
+            return .handled
+        }
     }
 
     private func header(tokens: DesignTokens) -> some View {
@@ -133,6 +146,7 @@ struct AppStoreOverlayView: View {
                     ForEach(rows) { row in
                         AppStoreCard(
                             row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
+                            onOpen: { store.openDetail(row.id) },
                             onInstall: { Task { await store.install(row.id) } },
                             onUpdate: { Task { await store.update(row.id) } },
                             onUninstall: { store.uninstall(row.id) },

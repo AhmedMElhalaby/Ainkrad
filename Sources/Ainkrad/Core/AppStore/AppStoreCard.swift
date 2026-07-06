@@ -1,11 +1,15 @@
 import SwiftUI
 
 /// One catalog/app card: icon, name, version line, description, and a trailing
-/// action area driven by `row.status` + whether it is busy.
+/// action area driven by `row.status` + whether it is busy. Tapping the
+/// icon/name/description area opens the app's detail page (AIN-147); the
+/// actions row below is excluded so Install/Update/Uninstall/enable taps
+/// don't also trigger navigation.
 struct AppStoreCard: View {
     let row: AppStoreRow
     let tokens: DesignTokens
     let isBusy: Bool
+    let onOpen: () -> Void
     let onInstall: () -> Void
     let onUpdate: () -> Void
     let onUninstall: () -> Void
@@ -13,29 +17,33 @@ struct AppStoreCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(tokens.surfaceElevated)
-                    .frame(width: 30, height: 30)
-                    .overlay(Image(systemName: row.icon).foregroundStyle(tokens.accentSecondary))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(row.displayName)
-                        .font(AinkradFont.display(13, weight: .medium))
-                        .foregroundStyle(tokens.foreground)
-                    Text(versionLine)
-                        .font(.system(size: 10))
-                        .foregroundStyle(tokens.foreground.opacity(0.5))
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(tokens.surfaceElevated)
+                        .frame(width: 30, height: 30)
+                        .overlay(Image(systemName: row.icon).foregroundStyle(tokens.accentSecondary))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.displayName)
+                            .font(AinkradFont.display(13, weight: .medium))
+                            .foregroundStyle(tokens.foreground)
+                        Text(versionLine)
+                            .font(.system(size: 10))
+                            .foregroundStyle(tokens.foreground.opacity(0.5))
+                    }
+                    Spacer()
+                    if row.status == .updateAvailable { badge("UPDATE") }
+                    else if isDevPlugin { badge("DEV") }
                 }
-                Spacer()
-                if row.status == .updateAvailable { badge("UPDATE") }
-                else if isDevPlugin { badge("DEV") }
-            }
 
-            Text(row.description.isEmpty ? " " : row.description)
-                .font(.system(size: 11))
-                .foregroundStyle(tokens.foreground.opacity(0.7))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(row.description.isEmpty ? " " : row.description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(tokens.foreground.opacity(0.7))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
 
             actions
         }

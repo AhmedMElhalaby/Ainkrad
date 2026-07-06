@@ -16,6 +16,9 @@ final class AppStoreStore {
     /// Non-nil while a reinstall of this appID awaits the user's Restore/Reset
     /// choice (retained data exists). Drives the overlay's modal.
     private(set) var pendingReinstall: String? = nil
+    /// Non-nil while the detail page for this appID is open (AIN-147). The
+    /// overlay swaps its grid for `AppStoreDetailView` while this is set.
+    private(set) var selectedAppID: String? = nil
 
     private let service: AppStoreServing
     private let registry: BuiltInAppRegistry
@@ -23,6 +26,12 @@ final class AppStoreStore {
     init(service: AppStoreServing, registry: BuiltInAppRegistry) {
         self.service = service
         self.registry = registry
+    }
+
+    /// The row for whichever app's detail page is open (AIN-147), if any.
+    var selectedRow: AppStoreRow? {
+        guard let selectedAppID else { return nil }
+        return rows.first { $0.id == selectedAppID }
     }
 
     var visibleRows: [AppStoreRow] {
@@ -119,6 +128,19 @@ final class AppStoreStore {
     func setEnabled(_ enabled: Bool, for id: String) {
         registry.setEnabled(enabled, for: id)
         reloadRows()
+    }
+
+    /// Opens the detail page for `appID` (AIN-147).
+    func openDetail(_ appID: String) { selectedAppID = appID }
+
+    /// Closes the detail page, returning the overlay to the grid.
+    func closeDetail() { selectedAppID = nil }
+
+    /// The full catalog record for `appID`, if it's in the cached catalog —
+    /// used by the detail page for the long description/screenshots/links
+    /// that don't fit in the flat `AppStoreRow` projection.
+    func entry(for appID: String) -> CatalogEntry? {
+        service.cachedCatalog.first { $0.appID == appID }
     }
 
     /// Runs an async action for one app id, tracking busy + surfacing errors,
