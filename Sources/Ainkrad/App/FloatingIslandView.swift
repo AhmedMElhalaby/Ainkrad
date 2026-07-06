@@ -60,8 +60,9 @@ struct FloatingIslandView: View {
     private let artworkAspect: CGFloat = 1536.0 / 1024.0
 
     /// 60fps clock driving idle drift, ring rotation, and `IslandState`
-    /// decay — the only place any of this view's `@State` changes.
-    private let tickTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
+    /// decay — the only place any of this view's `@State` changes. `@State`
+    /// so a single stable instance survives view re-creation.
+    @State private var tickTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
     private var imageName: String {
         switch environment.themeManager.currentTheme {
@@ -98,6 +99,21 @@ struct FloatingIslandView: View {
         )
     }
 
+    /// The 1.5-aspect rectangle the artwork actually occupies inside `available`
+    /// (matching `.aspectRatio(_:contentMode:.fit)`), so the depth shader's
+    /// normalization and the ring/flare positions register to the drawn art
+    /// rather than the letterboxed frame.
+    private func fittedSize(in available: CGSize, aspect: CGFloat) -> CGSize {
+        guard available.width > 0, available.height > 0 else { return available }
+        if available.width / available.height > aspect {
+            // Height-constrained: full height, narrower width.
+            return CGSize(width: available.height * aspect, height: available.height)
+        } else {
+            // Width-constrained: full width, shorter height.
+            return CGSize(width: available.width, height: available.width / aspect)
+        }
+    }
+
     var body: some View {
         if reduceMotion {
             artwork
@@ -114,6 +130,7 @@ struct FloatingIslandView: View {
 
     private var interactiveIsland: some View {
         GeometryReader { proxy in
+            let content = fittedSize(in: proxy.size, aspect: artworkAspect)
             let idle = CGPoint(x: sin(idlePhase * 0.62), y: sin(idlePhase * 0.41 + 1.3))
             let offset = IslandParallaxMath.offset(
                 pointerFraction: pointerFraction,
@@ -126,15 +143,15 @@ struct FloatingIslandView: View {
                 glow
                 artwork
                     .layerEffect(
-                        parallaxShader(offset: offset, size: proxy.size, depthName: depthImageName),
+                        parallaxShader(offset: offset, size: content, depthName: depthImageName),
                         maxSampleOffset: CGSize(width: 24, height: 24),
                         isEnabled: !reduceMotion && isVisible
                     )
                 IslandParticleField(tint: glowColor, parallax: offset, isActive: !reduceMotion && isVisible)
                     .allowsHitTesting(false)
-                energyRing(in: proxy.size)
+                energyRing(in: content)
                 if let flarePhase = environment.islandState.flarePhase {
-                    flare(phase: flarePhase, in: proxy.size)
+                    flare(phase: flarePhase, in: content)
                 }
             }
             .aspectRatio(artworkAspect, contentMode: .fit)
