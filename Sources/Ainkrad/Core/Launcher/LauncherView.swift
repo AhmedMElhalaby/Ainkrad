@@ -52,15 +52,15 @@ struct LauncherView: View {
     /// Sentinel id for the Settings entry — Settings is a summonable overlay,
     /// not a registered app, so it rides in the results as a system action.
     private static let settingsRowID = "settings"
-    private static let marketplaceRowID = "marketplace"
+    private static let appStoreRowID = "appStore"
 
     private var appRows: [AppRow] {
         var rows = store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
         if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Settings") {
             rows.append(AppRow(id: Self.settingsRowID, displayName: "Settings", icon: "gearshape"))
         }
-        if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Marketplace") {
-            rows.append(AppRow(id: Self.marketplaceRowID, displayName: "Marketplace", icon: "bag"))
+        if store.query.isEmpty || fuzzyMatches(query: store.query, target: "App Store") {
+            rows.append(AppRow(id: Self.appStoreRowID, displayName: "App Store", icon: "bag"))
         }
         return rows
     }
@@ -69,14 +69,16 @@ struct LauncherView: View {
         let tokens = environment.themeManager.tokens
         let results = appRows
 
-        ZStack {
-            Color.black.opacity(0.42)
-                .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismiss() }
 
-            panel(results: results, tokens: tokens)
-                .frame(width: 620)
-                .offset(y: -60)
+                panel(results: results, tokens: tokens)
+                    .frame(width: min(max(680, geo.size.width * 0.55), 820))
+                    .offset(y: -60)
+            }
         }
         .onAppear { isSearchFocused = true }
     }
@@ -122,21 +124,7 @@ struct LauncherView: View {
 
             footer(tokens: tokens)
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .hudPanelChrome(tokens: tokens)
         .onChange(of: store.query) { _, _ in selectedIndex = 0 }
     }
 
@@ -247,8 +235,8 @@ struct LauncherView: View {
             return
         }
 
-        if row.id == Self.marketplaceRowID {
-            environment.isMarketplacePresented = true
+        if row.id == Self.appStoreRowID {
+            environment.isAppStorePresented = true
             dismiss()
             return
         }

@@ -70,7 +70,7 @@ struct PluginInstallerTests {
         let http = StubHTTPClient(responses: [url: .success(try Data(contentsOf: zip))])
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore()); registry.install(builtIn: [])
         let installer = makeInstaller(http: http, root: root, registry: registry)
-        await #expect(throws: MarketplaceError.checksumMismatch) {
+        await #expect(throws: AppStoreError.checksumMismatch) {
             try await installer.install(entry(appID: "hello", url: url, sha: "deadbeef"))
         }
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Plugins/hello.bundle").path))
@@ -118,7 +118,7 @@ struct PluginInstallerTests {
                 isEnabledByDefault: true, source: .plugin(url: u, apiVersion: 1),
                 makeRootView: { AnyView(EmptyView()) }, makeSettingsView: { AnyView(EmptyView()) }, chromeFill: { nil })) })
         try await installer.install(entry(appID: "hello", url: url, sha: sha, version: "1.0.0"))
-        await #expect(throws: MarketplaceError.notNewer) {
+        await #expect(throws: AppStoreError.notNewer) {
             try await installer.update(entry(appID: "hello", url: url, sha: sha, version: "1.0.0"))
         }
         try await installer.update(entry(appID: "hello", url: url, sha: sha, version: "1.1.0"))
@@ -181,7 +181,7 @@ struct PluginInstallerErrorPathTests {
         let persistence = InMemoryPersistenceStore()
         let inst = installer(root: root, http: http, registry: registry, persistence: persistence)
         do { try await inst.install(entry("hello", url: url, sha: "x")); Issue.record("expected throw") }
-        catch let e as MarketplaceError { if case .download = e {} else { Issue.record("expected .download, got \(e)") } }
+        catch let e as AppStoreError { if case .download = e {} else { Issue.record("expected .download, got \(e)") } }
         catch { Issue.record("unexpected \(error)") }
         #expect(persistence.load(InstalledPluginsDocument.self)?.installed["hello"] == nil)
         #expect(registry.allApps.isEmpty)
@@ -195,7 +195,7 @@ struct PluginInstallerErrorPathTests {
         let http = StubHTTPClient(responses: [url: .success(bytes)])
         let inst = installer(root: root, http: http, registry: BuiltInAppRegistry(persistence: InMemoryPersistenceStore()), persistence: InMemoryPersistenceStore())
         do { try await inst.install(entry("hello", url: url, sha: sha(bytes))); Issue.record("expected throw") }
-        catch let e as MarketplaceError { if case .unpack = e {} else { Issue.record("expected .unpack, got \(e)") } }
+        catch let e as AppStoreError { if case .unpack = e {} else { Issue.record("expected .unpack, got \(e)") } }
         catch { Issue.record("unexpected \(error)") }
     }
 
@@ -214,7 +214,7 @@ struct PluginInstallerErrorPathTests {
         let http = StubHTTPClient(responses: [url: .success(bytes)])
         let inst = installer(root: root, http: http, registry: BuiltInAppRegistry(persistence: InMemoryPersistenceStore()), persistence: InMemoryPersistenceStore())
         do { try await inst.install(entry("hello", url: url, sha: sha(bytes))); Issue.record("expected throw") }
-        catch let e as MarketplaceError { if case .invalidBundle = e {} else { Issue.record("expected .invalidBundle, got \(e)") } }
+        catch let e as AppStoreError { if case .invalidBundle = e {} else { Issue.record("expected .invalidBundle, got \(e)") } }
         catch { Issue.record("unexpected \(error)") }
     }
 

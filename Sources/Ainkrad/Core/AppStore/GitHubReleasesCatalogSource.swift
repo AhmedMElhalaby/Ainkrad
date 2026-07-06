@@ -16,7 +16,7 @@ struct GitHubReleasesCatalogSource: CatalogSource {
         var entries: [CatalogEntry] = []
         for repo in repositories {
             do { entries.append(try await entry(for: repo)) }
-            catch { Log.marketplace.error("Catalog: skipped \(repo, privacy: .public): \(String(describing: error), privacy: .public)") }
+            catch { Log.appStore.error("Catalog: skipped \(repo, privacy: .public): \(String(describing: error), privacy: .public)") }
         }
         return entries
     }
@@ -33,6 +33,8 @@ struct GitHubReleasesCatalogSource: CatalogSource {
         return CatalogEntry(
             appID: manifest.id, displayName: manifest.name, icon: manifest.icon,
             description: manifest.description, version: release.tagName, apiVersion: manifest.apiVersion,
-            downloadURL: zipAsset.browserDownloadURL, sha256: manifest.sha256, sourceRepo: repo)
+            downloadURL: zipAsset.browserDownloadURL, sha256: manifest.sha256, sourceRepo: repo,
+            author: manifest.author, longDescription: manifest.longDescription,
+            screenshots: manifest.screenshots ?? [], links: manifest.links ?? [])
     }
 }

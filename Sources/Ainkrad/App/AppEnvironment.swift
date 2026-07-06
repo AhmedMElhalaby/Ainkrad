@@ -12,13 +12,22 @@ final class AppEnvironment {
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
     let connectionStore: ConnectionStore
-    let marketplace: MarketplaceService
-    let marketplaceStore: MarketplaceStore
+    let appStore: AppStoreService
+    let appStoreStore: AppStoreStore
     let appIconStore: AppIconStore
+    let shortcutStore: ShortcutStore
+    let quitCoordinator: QuitCoordinator
+    let generalSettingsStore: GeneralSettingsStore
+    let sounds: SoundPlaying
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
-    var isMarketplacePresented = false
+    var isAppStorePresented = false
+    /// Tracks the host window's full-screen state — set by
+    /// `KeyboardShortcutMonitor.MonitoringView` from `NSWindow`'s full-screen
+    /// notifications (AIN-109). Drives `HUDBar`'s full-screen status bar;
+    /// unused in windowed mode.
+    var isFullScreen = false
 
     init(
         persistence: PersistenceStore,
@@ -28,9 +37,13 @@ final class AppEnvironment {
         workspaceManager: WorkspaceManager,
         launcherStore: LauncherStore,
         connectionStore: ConnectionStore,
-        marketplace: MarketplaceService,
-        marketplaceStore: MarketplaceStore,
-        appIconStore: AppIconStore
+        appStore: AppStoreService,
+        appStoreStore: AppStoreStore,
+        appIconStore: AppIconStore,
+        shortcutStore: ShortcutStore,
+        quitCoordinator: QuitCoordinator,
+        generalSettingsStore: GeneralSettingsStore,
+        sounds: SoundPlaying
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -39,9 +52,13 @@ final class AppEnvironment {
         self.workspaceManager = workspaceManager
         self.launcherStore = launcherStore
         self.connectionStore = connectionStore
-        self.marketplace = marketplace
-        self.marketplaceStore = marketplaceStore
+        self.appStore = appStore
+        self.appStoreStore = appStoreStore
         self.appIconStore = appIconStore
+        self.shortcutStore = shortcutStore
+        self.quitCoordinator = quitCoordinator
+        self.generalSettingsStore = generalSettingsStore
+        self.sounds = sounds
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -59,8 +76,8 @@ final class AppEnvironment {
 
         let workspaceManager = WorkspaceManager()
 
-        // Plugin loading/marketplace plumbing needs to exist before
-        // `AppEnvironment` is constructed, since `marketplace` is one of its
+        // Plugin loading/App Store plumbing needs to exist before
+        // `AppEnvironment` is constructed, since `appStore` is one of its
         // stored dependencies.
         let documentsRoot = rootURL ?? FileDocumentStore.defaultDocumentsURL()
         let pluginDirs = [
@@ -85,14 +102,17 @@ final class AppEnvironment {
             retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
-        let marketplace = MarketplaceService(catalog: catalogService, installer: installer, persistence: persistence)
-        let marketplaceStore = MarketplaceStore(service: marketplace, registry: registry)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        let appStoreStore = AppStoreStore(service: appStore, registry: registry)
 
         let appIconStore = AppIconStore(persistence: persistence,
                                         applier: AppKitAppIconApplier(),
                                         themeManager: themeManager)
         themeManager.onThemeChange = { [weak appIconStore] in appIconStore?.applyCurrent() }
         appIconStore.applyCurrent()
+
+        let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
+        let sounds = SoundEngine(settings: generalSettingsStore)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -102,12 +122,16 @@ final class AppEnvironment {
             workspaceManager: workspaceManager,
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
             connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
-            marketplace: marketplace,
-            marketplaceStore: marketplaceStore,
-            appIconStore: appIconStore
+            appStore: appStore,
+            appStoreStore: appStoreStore,
+            appIconStore: appIconStore,
+            shortcutStore: ShortcutStore(persistence: persistence),
+            quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
+            generalSettingsStore: generalSettingsStore,
+            sounds: sounds
         )
 
-        // Terminal ships as a Marketplace plugin (AinkradTerminal), not compiled in.
+        // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
         // Still migrate any pre-4a host-global settings into its scoped store so the
         // installed plugin sees the user's existing configuration.
         let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import Ainkrad
 
 @Suite("ThemeManager")
@@ -36,5 +37,45 @@ final class ThemeManagerTests {
 
         let reloaded = ThemeManager(persistence: store)
         #expect(reloaded.currentTheme == .cyberPurple)
+    }
+
+    @Test("setAccentColorHex overrides tokens.accentPrimary; nil restores the theme's accent")
+    @MainActor
+    func setAccentColorHexOverridesTokens() {
+        let manager = makeManager()
+        manager.setAccentColorHex("FF00AA")
+        #expect(manager.tokens.accentPrimary == Color(hex: "FF00AA"))
+        #expect(manager.accentColorHex == "FF00AA")
+
+        manager.setAccentColorHex(nil)
+        #expect(manager.tokens == DesignTokens.neonBlue)
+        #expect(manager.accentColorHex == nil)
+    }
+
+    @Test("setAccentColorHex persists through SettingsStore and preserves the theme")
+    @MainActor
+    func setAccentColorHexPersists() {
+        let manager = ThemeManager(persistence: store)
+        manager.setTheme(.cyberPurple)
+        manager.setAccentColorHex("00FF00")
+
+        let reloaded = ThemeManager(persistence: store)
+        #expect(reloaded.currentTheme == .cyberPurple)
+        #expect(reloaded.accentColorHex == "00FF00")
+        #expect(reloaded.tokens.accentPrimary == Color(hex: "00FF00"))
+    }
+
+    @Test("setFontScale and setFontFamily update state and persist")
+    @MainActor
+    func setFontScaleAndFamilyPersist() {
+        let manager = ThemeManager(persistence: store)
+        manager.setFontScale(.large)
+        manager.setFontFamily(.jetBrainsMono)
+        #expect(manager.uiFontScale == .large)
+        #expect(manager.uiFontFamily == .jetBrainsMono)
+
+        let reloaded = ThemeManager(persistence: store)
+        #expect(reloaded.uiFontScale == .large)
+        #expect(reloaded.uiFontFamily == .jetBrainsMono)
     }
 }

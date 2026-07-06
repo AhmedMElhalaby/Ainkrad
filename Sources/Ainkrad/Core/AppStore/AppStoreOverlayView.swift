@@ -1,26 +1,40 @@
 import SwiftUI
 
-/// The Marketplace HUD overlay — browse the catalog and install / update /
+/// The App Store HUD overlay — browse the catalog and install / update /
 /// uninstall / enable apps. Same HUD language as the Launcher / Settings.
-struct MarketplaceOverlayView: View {
+struct AppStoreOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Bindable var store: MarketplaceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Bindable var store: AppStoreStore
     let onDismiss: () -> Void
 
     private let columns = [GridItem(.adaptive(minimum: 220), spacing: 12)]
 
     var body: some View {
         let tokens = environment.themeManager.tokens
-        ZStack {
-            Color.black.opacity(0.42).ignoresSafeArea().onTapGesture { onDismiss() }
-            panel(tokens: tokens).frame(width: 820, height: 560).offset(y: -30)
-            if let id = store.pendingReinstall {
-                reinstallModal(appID: id, tokens: tokens)
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity).ignoresSafeArea().onTapGesture { onDismiss() }
+                panel(tokens: tokens)
+                    .frame(
+                        width: min(max(900, geo.size.width * 0.82), 1120),
+                        height: min(max(600, geo.size.height * 0.82), 760)
+                    )
+                    .offset(y: -30)
+                if let id = store.pendingReinstall {
+                    reinstallModal(appID: id, tokens: tokens)
+                        .transition(reduceMotion ? .identity : .scale(scale: 0.94).combined(with: .opacity))
+                }
             }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.26), value: store.pendingReinstall)
         }
         .task { store.reloadRows() }
     }
 
+    /// The retained-data Restore/Reset prompt shown when reinstalling an app
+    /// that left settings behind — same HUD chrome as the rest of the
+    /// overlay, with a scale/opacity entrance and pressable buttons (AIN-149).
+    /// Skipped under Reduce Motion.
     private func reinstallModal(appID: String, tokens: DesignTokens) -> some View {
         let name = store.rows.first { $0.id == appID }?.displayName ?? appID
         return ZStack {
@@ -37,13 +51,13 @@ struct MarketplaceOverlayView: View {
                 HStack(spacing: 10) {
                     Spacer()
                     Button("Cancel") { store.cancelReinstall() }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .foregroundStyle(tokens.foreground.opacity(0.6))
                     Button("Reset to Defaults") { Task { await store.resetAndInstall(appID) } }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .foregroundStyle(tokens.accentTertiary)
                     Button("Restore") { Task { await store.restoreAndInstall(appID) } }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .padding(.horizontal, 12).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(tokens.accentPrimary.opacity(0.9)))
                         .foregroundStyle(tokens.background)
@@ -60,26 +74,32 @@ struct MarketplaceOverlayView: View {
 
     private func panel(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            header(tokens: tokens)
-            LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 1)
-            filterBar(tokens: tokens)
-            content(tokens: tokens)
+            if let row = store.selectedRow {
+                AppStoreDetailView(
+                    entry: store.entry(for: row.id), row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
+                    onBack: { store.closeDetail() },
+                    onInstall: { environment.sounds.play(.install); Task { await store.install(row.id) } },
+                    onUpdate: { Task { await store.update(row.id) } },
+                    onUninstall: { environment.sounds.play(.uninstall); store.uninstall(row.id) },
+                    onToggleEnabled: { environment.sounds.play(.toggle); store.setEnabled($0, for: row.id) })
+            } else {
+                header(tokens: tokens)
+                LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 1)
+                filterBar(tokens: tokens)
+                content(tokens: tokens)
+            }
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).strokeBorder(
-                LinearGradient(colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                               startPoint: .top, endPoint: .bottom), lineWidth: 1))
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-        .onKeyPress(.escape) { onDismiss(); return .handled }
+        .hudPanelChrome(tokens: tokens)
+        .onKeyPress(.escape) {
+            if store.selectedAppID != nil { store.closeDetail() } else { onDismiss() }
+            return .handled
+        }
     }
 
     private func header(tokens: DesignTokens) -> some View {
         HStack {
-            Text("MARKETPLACE").font(AinkradFont.display(14, weight: .semibold)).kerning(1)
+            Text("APP STORE").font(AinkradFont.display(14, weight: .semibold)).kerning(1)
                 .foregroundStyle(tokens.foreground)
             Spacer()
             Button { Task { await store.refresh() } } label: {
@@ -100,6 +120,7 @@ struct MarketplaceOverlayView: View {
             chip("All", .all, tokens: tokens)
             chip("Installed", .installed, tokens: tokens)
             chip(updateCount > 0 ? "Updates (\(updateCount))" : "Updates", .updates, tokens: tokens)
+            searchField(tokens: tokens)
             Spacer()
             if let error = store.error {
                 Text(errorText(error)).font(.system(size: 10)).foregroundStyle(tokens.accentTertiary)
@@ -111,7 +132,33 @@ struct MarketplaceOverlayView: View {
         .padding(.horizontal, 18).padding(.vertical, 10)
     }
 
-    private func chip(_ title: String, _ value: MarketplaceStore.Filter, tokens: DesignTokens) -> some View {
+    /// Live search over the visible rows (AIN-148) — name/description/author,
+    /// case-insensitive, client-side. Composes with the filter chips above.
+    private func searchField(tokens: DesignTokens) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+            TextField("Search apps…", text: $store.searchQuery)
+                .textFieldStyle(.plain)
+                .font(AinkradFont.display(12))
+                .foregroundStyle(tokens.foreground)
+                .tint(tokens.accentPrimary)
+            if !store.searchQuery.isEmpty {
+                Button { store.searchQuery = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.4))
+                }.buttonStyle(.plain).help("Clear search")
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .frame(width: 200)
+        .background(RoundedRectangle(cornerRadius: 7).fill(tokens.surface.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+    }
+
+    private func chip(_ title: String, _ value: AppStoreStore.Filter, tokens: DesignTokens) -> some View {
         let selected = store.filter == value
         return Button { store.filter = value } label: {
             Text(title).font(.system(size: 11, weight: .medium))
@@ -131,12 +178,13 @@ struct MarketplaceOverlayView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(rows) { row in
-                        MarketplaceCard(
+                        AppStoreCard(
                             row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
-                            onInstall: { Task { await store.install(row.id) } },
+                            onOpen: { store.openDetail(row.id) },
+                            onInstall: { environment.sounds.play(.install); Task { await store.install(row.id) } },
                             onUpdate: { Task { await store.update(row.id) } },
-                            onUninstall: { store.uninstall(row.id) },
-                            onToggleEnabled: { store.setEnabled($0, for: row.id) })
+                            onUninstall: { environment.sounds.play(.uninstall); store.uninstall(row.id) },
+                            onToggleEnabled: { environment.sounds.play(.toggle); store.setEnabled($0, for: row.id) })
                     }
                 }
                 .padding(18)
@@ -145,6 +193,8 @@ struct MarketplaceOverlayView: View {
     }
 
     private var emptyText: String {
+        let trimmedQuery = store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedQuery.isEmpty { return "No apps match \"\(trimmedQuery)\"." }
         switch store.filter {
         case .all: return "No apps available — check back later."
         case .installed: return "Nothing installed yet."
@@ -152,7 +202,7 @@ struct MarketplaceOverlayView: View {
         }
     }
 
-    private func errorText(_ e: MarketplaceError) -> String {
+    private func errorText(_ e: AppStoreError) -> String {
         switch e {
         case .download: return "Download failed."
         case .checksumMismatch: return "Integrity check failed."

@@ -1,36 +1,64 @@
 import Foundation
 import Observation
 
-/// View-model for the Marketplace overlay. Owns all UI state and derives a flat
-/// `[MarketplaceRow]` from the cached catalog + installed-state + the registry.
+/// View-model for the App Store overlay. Owns all UI state and derives a flat
+/// `[AppStoreRow]` from the cached catalog + installed-state + the registry.
 @MainActor
 @Observable
-final class MarketplaceStore {
+final class AppStoreStore {
     enum Filter: Equatable { case all, installed, updates }
 
     var filter: Filter = .all
-    private(set) var rows: [MarketplaceRow] = []
+    /// Live search over `rows`, composed with `filter` (AIN-148). Client-side
+    /// only — filters whatever's already loaded, no network.
+    var searchQuery: String = ""
+    private(set) var rows: [AppStoreRow] = []
     private(set) var busy: Set<String> = []
     private(set) var isRefreshing = false
-    var error: MarketplaceError?
+    var error: AppStoreError?
     /// Non-nil while a reinstall of this appID awaits the user's Restore/Reset
     /// choice (retained data exists). Drives the overlay's modal.
     private(set) var pendingReinstall: String? = nil
+    /// Non-nil while the detail page for this appID is open (AIN-147). The
+    /// overlay swaps its grid for `AppStoreDetailView` while this is set.
+    private(set) var selectedAppID: String? = nil
 
-    private let service: MarketplaceServing
+    private let service: AppStoreServing
     private let registry: BuiltInAppRegistry
 
-    init(service: MarketplaceServing, registry: BuiltInAppRegistry) {
+    init(service: AppStoreServing, registry: BuiltInAppRegistry) {
         self.service = service
         self.registry = registry
     }
 
-    var visibleRows: [MarketplaceRow] {
+    /// The row for whichever app's detail page is open (AIN-147), if any.
+    var selectedRow: AppStoreRow? {
+        guard let selectedAppID else { return nil }
+        return rows.first { $0.id == selectedAppID }
+    }
+
+    var visibleRows: [AppStoreRow] {
+        let filtered: [AppStoreRow]
         switch filter {
-        case .all: return rows
-        case .installed: return rows.filter { $0.status != .available }
-        case .updates: return rows.filter { $0.status == .updateAvailable }
+        case .all: filtered = rows
+        case .installed: filtered = rows.filter { $0.status != .available }
+        case .updates: filtered = rows.filter { $0.status == .updateAvailable }
         }
+        guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return filtered }
+        return filtered.filter { Self.matches($0, query: searchQuery) }
+    }
+
+    /// True when `row` matches `query` on `displayName`, `description`, or
+    /// `author` (case-insensitive). An empty or whitespace-only query matches
+    /// everything. Pure and free of store state so it's directly unit-testable.
+    static func matches(_ row: AppStoreRow, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+        let needle = trimmed.lowercased()
+        if row.displayName.lowercased().contains(needle) { return true }
+        if row.description.lowercased().contains(needle) { return true }
+        if let author = row.author, author.lowercased().contains(needle) { return true }
+        return false
     }
 
     /// Recompute rows from the current cached catalog + installed doc + registry.
@@ -46,12 +74,12 @@ final class MarketplaceStore {
         var installedIDs = Set(registry.allApps.map(\.id))
         installedIDs.formUnion(installedDoc.keys)
 
-        var installedRows: [MarketplaceRow] = []
+        var installedRows: [AppStoreRow] = []
         for id in installedIDs {
             let reg = registeredByID[id]
             let entry = catalogByID[id]
             let isBuiltIn = reg?.source == .builtIn
-            installedRows.append(MarketplaceRow(
+            installedRows.append(AppStoreRow(
                 id: id,
                 displayName: reg?.displayName ?? entry?.displayName ?? id,
                 icon: reg?.icon ?? entry?.icon ?? "app",
@@ -61,16 +89,17 @@ final class MarketplaceStore {
                 status: updates.contains(id) ? .updateAvailable : .installed,
                 isEnabled: registry.isEnabled(id),
                 kind: isBuiltIn ? .builtIn : .plugin,
-                isManaged: installedDoc[id] != nil))
+                isManaged: installedDoc[id] != nil,
+                author: entry?.author))
         }
 
-        var availableRows: [MarketplaceRow] = []
+        var availableRows: [AppStoreRow] = []
         for entry in catalog where !installedIDs.contains(entry.appID) {
-            availableRows.append(MarketplaceRow(
+            availableRows.append(AppStoreRow(
                 id: entry.appID, displayName: entry.displayName, icon: entry.icon,
                 description: entry.description, catalogVersion: entry.version,
                 installedVersion: nil, status: .available, isEnabled: false, kind: .plugin,
-                isManaged: false))
+                isManaged: false, author: entry.author))
         }
 
         rows = installedRows.sorted { $0.displayName < $1.displayName }
@@ -111,7 +140,7 @@ final class MarketplaceStore {
 
     func uninstall(_ id: String) {
         do { try service.uninstall(appID: id) }
-        catch let e as MarketplaceError { error = e }
+        catch let e as AppStoreError { error = e }
         catch { self.error = .notInstalled(id) }
         reloadRows()
     }
@@ -121,12 +150,25 @@ final class MarketplaceStore {
         reloadRows()
     }
 
+    /// Opens the detail page for `appID` (AIN-147).
+    func openDetail(_ appID: String) { selectedAppID = appID }
+
+    /// Closes the detail page, returning the overlay to the grid.
+    func closeDetail() { selectedAppID = nil }
+
+    /// The full catalog record for `appID`, if it's in the cached catalog —
+    /// used by the detail page for the long description/screenshots/links
+    /// that don't fit in the flat `AppStoreRow` projection.
+    func entry(for appID: String) -> CatalogEntry? {
+        service.cachedCatalog.first { $0.appID == appID }
+    }
+
     /// Runs an async action for one app id, tracking busy + surfacing errors,
     /// always clearing busy and recomputing rows afterwards.
     private func run(_ id: String, _ op: @escaping () async throws -> Void) async {
         busy.insert(id)
         do { try await op() }
-        catch let e as MarketplaceError { error = e }
+        catch let e as AppStoreError { error = e }
         catch { self.error = .download(String(describing: error)) }
         busy.remove(id)
         reloadRows()

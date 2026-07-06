@@ -54,7 +54,7 @@ struct RegisteredAppRegistryTests {
         #expect(registry.allApps.first(where: { $0.id == "terminal" })?.displayName == "Terminal")
     }
 
-    @Test("load failures are exposed for the marketplace UI")
+    @Test("load failures are exposed for the App Store UI")
     func exposesFailures() {
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
         registry.install(builtIn: [app("terminal")], loaded: [],

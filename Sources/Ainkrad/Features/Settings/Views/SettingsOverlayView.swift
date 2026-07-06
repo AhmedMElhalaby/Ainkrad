@@ -29,8 +29,10 @@ struct SettingsOverlayView: View {
     }
 
     private enum SettingsSection: Hashable {
+        case general
         case appearance
         case appIcon
+        case shortcuts
         case app(String)
     }
 
@@ -43,14 +45,19 @@ struct SettingsOverlayView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ZStack {
-            Color.black.opacity(0.42)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(OverlayChrome.backdropOpacity)
+                    .ignoresSafeArea()
+                    .onTapGesture { onDismiss() }
 
-            panel(tokens: tokens)
-                .frame(width: 780, height: 520)
-                .offset(y: -30)
+                panel(tokens: tokens)
+                    .frame(
+                        width: min(max(820, geo.size.width * 0.78), 1040),
+                        height: min(max(560, geo.size.height * 0.82), 720)
+                    )
+                    .offset(y: -30)
+            }
         }
     }
 
@@ -79,21 +86,7 @@ struct SettingsOverlayView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .background(tokens.background.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+        .hudPanelChrome(tokens: tokens)
         .onKeyPress(.escape) { onDismiss(); return .handled }
     }
 
@@ -121,8 +114,10 @@ struct SettingsOverlayView: View {
     private func sidebar(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             groupLabel("AINKRAD", tokens: tokens)
+            sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
             sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
             sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
+            sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
 
             groupLabel("BUILT-IN APPS", tokens: tokens)
                 .padding(.top, 12)
@@ -205,10 +200,14 @@ struct SettingsOverlayView: View {
     @ViewBuilder
     private func detail(tokens: DesignTokens) -> some View {
         switch selection {
+        case .general:
+            GeneralSettingsView()
         case .appearance:
             AppearanceSettingsView()
         case .appIcon:
             AppIconSettingsView()
+        case .shortcuts:
+            ShortcutsSettingsView()
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is
