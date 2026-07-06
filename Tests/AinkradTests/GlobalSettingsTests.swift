@@ -33,4 +33,38 @@ final class GlobalSettingsTests {
         let decoded = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
         #expect(decoded.theme == .neonBlue)
     }
+
+    @Test("defaults to medium/exo2/no accent override with no prior write")
+    func typographyDefaults() {
+        let settings = GlobalSettings()
+        #expect(settings.uiFontScale == .medium)
+        #expect(settings.uiFontFamily == .exo2)
+        #expect(settings.accentColorHex == nil)
+    }
+
+    @Test("a written typography selection round-trips through the persistence store")
+    func typographyRoundTrips() {
+        let store = InMemoryPersistenceStore()
+        var settings = GlobalSettings()
+        settings.uiFontScale = .large
+        settings.uiFontFamily = .jetBrainsMono
+        settings.accentColorHex = "FF00AA"
+        store.save(settings)
+
+        let reloaded = store.load(GlobalSettings.self)
+        #expect(reloaded?.uiFontScale == .large)
+        #expect(reloaded?.uiFontFamily == .jetBrainsMono)
+        #expect(reloaded?.accentColorHex == "FF00AA")
+    }
+
+    @Test("a legacy payload without the new typography keys decodes to defaults and preserves existing fields")
+    func legacyPayloadWithoutTypographyKeysDecodesToDefaults() throws {
+        let legacy = Data(#"{"theme":"cyberPurple","confirmBeforeQuit":false}"#.utf8)
+        let decoded = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
+        #expect(decoded.theme == .cyberPurple)
+        #expect(decoded.confirmBeforeQuit == false)
+        #expect(decoded.uiFontScale == .medium)
+        #expect(decoded.uiFontFamily == .exo2)
+        #expect(decoded.accentColorHex == nil)
+    }
 }

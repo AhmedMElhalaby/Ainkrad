@@ -84,4 +84,21 @@ struct DesignTokens: Equatable {
         accentTertiary: Color(hex: "859900"),
         foreground: Color(hex: "93A1A1")
     )
+
+    /// Returns a copy with `accentPrimary` replaced by `color`, or `self`
+    /// unchanged when `color` is `nil` — see AIN-143 (custom accent color).
+    /// `DesignTokens`' fields are all `let`, so this builds a new instance
+    /// rather than mutating in place.
+    func overridingAccentPrimary(_ color: Color?) -> DesignTokens {
+        guard let color else { return self }
+        return DesignTokens(
+            background: background,
+            surface: surface,
+            surfaceElevated: surfaceElevated,
+            accentPrimary: color,
+            accentSecondary: accentSecondary,
+            accentTertiary: accentTertiary,
+            foreground: foreground
+        )
+    }
 }
