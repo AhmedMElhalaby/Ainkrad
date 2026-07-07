@@ -46,5 +46,11 @@ struct IslandLayersTests {
         #expect(maxZ(.cloud) < minZ(.islet))
         #expect(maxZ(.islet) < IslandLayers.all.first { $0.kind == .citadel }!.z)
         #expect(IslandLayers.all.first { $0.kind == .citadel }!.z < minZ(.chevron))
+        // Wordmark itself is ordered chevron < logo < slogan.
+        let chevronZ = IslandLayers.all.first { $0.kind == .chevron }!.z
+        let logoZ = IslandLayers.all.first { $0.kind == .logo }!.z
+        let sloganZ = IslandLayers.all.first { $0.kind == .slogan }!.z
+        #expect(chevronZ < logoZ)
+        #expect(logoZ < sloganZ)
     }
 }

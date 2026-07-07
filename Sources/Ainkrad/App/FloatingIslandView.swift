@@ -55,6 +55,9 @@ struct FloatingIslandView: View {
             .onChange(of: environment.isLauncherPresented) { _, open in
                 environment.islandState.launcherActive(open)
             }
+            .onChange(of: isVisible) { _, vis in
+                if !vis { hovered = nil }
+            }
             .onChange(of: environment.workspaceManager.activeWorkspaceID) { old, new in
                 guard !reduceMotion else { return }
                 let ids = environment.workspaceManager.workspaces.map(\.id)
@@ -85,7 +88,7 @@ struct FloatingIslandView: View {
         ZStack {
             glow(rect: rect)
             ForEach(IslandLayers.sortedByZ) { layer in
-                layerView(layer, rect: rect, time: time)
+                layerView(layer, rect: rect, time: time, animating: animating)
             }
             if animating, let phase = environment.islandState.flarePhase {
                 flare(phase: phase, rect: rect)
@@ -155,12 +158,12 @@ struct FloatingIslandView: View {
     }
 
     @ViewBuilder
-    private func layerView(_ layer: IslandLayer, rect: CGRect, time: Double) -> some View {
+    private func layerView(_ layer: IslandLayer, rect: CGRect, time: Double, animating: Bool) -> some View {
         let w = rect.width * layer.width
         let px = rect.minX + rect.width * layer.cx
         let py = rect.minY + rect.height * layer.cy
-        let dx: CGFloat = layer.kind == .cloud ? IslandMotionMath.cloudDriftX(seed: layer.seed ?? 0, time: time) : 0
-        let dy: CGFloat = layer.kind == .islet ? IslandMotionMath.isletBobY(seed: layer.seed ?? 0, time: time) : 0
+        let dx: CGFloat = (animating && layer.kind == .cloud) ? IslandMotionMath.cloudDriftX(seed: layer.seed ?? 0, time: time) : 0
+        let dy: CGFloat = (animating && layer.kind == .islet) ? IslandMotionMath.isletBobY(seed: layer.seed ?? 0, time: time) : 0
         Image(layer.id)
             .resizable()
             .scaledToFit()
