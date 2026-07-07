@@ -180,13 +180,8 @@ struct TileLayoutView: View {
         }
     }
 
-    /// Island art ships in two accents; new themes use the nearer one.
-    private var islandAsset: String {
-        switch environment.themeManager.currentTheme {
-        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
-        default: return "Island-NeonBlue"
-        }
-    }
+    /// Blurred island backdrop for the tiled workspace — the composed v3 art.
+    private var islandAsset: String { "Island-Blue-Composite" }
 
 }
 
