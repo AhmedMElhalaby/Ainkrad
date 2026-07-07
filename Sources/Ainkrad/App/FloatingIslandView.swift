@@ -103,7 +103,7 @@ struct FloatingIslandView: View {
         // Ring: annulus band only.
         if let ring = IslandLayers.all.first(where: { $0.kind == .ring }) {
             let w = rect.width * ring.width
-            let h = rect.height * 0.5615    // ring height fraction (from extraction); matches drawn ring
+            let h = w * (576.0 / 567.0)     // ring sprite aspect (567×576); tracks width so it scales with the ring
             IslandRingBand()
                 .fill(Color.white.opacity(0.001), style: FillStyle(eoFill: true))
                 .frame(width: w, height: h)

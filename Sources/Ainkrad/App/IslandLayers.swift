@@ -18,7 +18,7 @@ struct IslandLayer: Identifiable, Equatable {
 
 enum IslandLayers {
     static let all: [IslandLayer] = [
-        IslandLayer(id: "Island-Blue-Ring",     kind: .ring,    cx: 0.5000, cy: 0.4995, width: 0.3685, z: 10, seed: nil),
+        IslandLayer(id: "Island-Blue-Ring",     kind: .ring,    cx: 0.5000, cy: 0.4995, width: 0.4350, z: 10, seed: nil),
 
         IslandLayer(id: "Island-Blue-Cloud-0",  kind: .cloud,   cx: 0.3356, cy: 0.5425, width: 0.2793, z: 20, seed: 0),
         IslandLayer(id: "Island-Blue-Cloud-1",  kind: .cloud,   cx: 0.6693, cy: 0.5776, width: 0.2891, z: 21, seed: 1),
@@ -41,7 +41,7 @@ enum IslandLayers {
 
         IslandLayer(id: "Island-Blue-Citadel",  kind: .citadel, cx: 0.5016, cy: 0.4819, width: 0.4551, z: 40, seed: nil),
 
-        IslandLayer(id: "Island-Blue-Chevron",  kind: .chevron, cx: 0.5003, cy: 0.7061, width: 0.1126, z: 50, seed: nil),
+        IslandLayer(id: "Island-Blue-Chevron",  kind: .chevron, cx: 0.5003, cy: 0.7750, width: 0.1126, z: 50, seed: nil),
         IslandLayer(id: "Island-Blue-Logo",     kind: .logo,    cx: 0.4997, cy: 0.8740, width: 0.5488, z: 51, seed: nil),
         IslandLayer(id: "Island-Blue-Slogan",   kind: .slogan,  cx: 0.5026, cy: 0.9707, width: 0.4193, z: 52, seed: nil),
     ]
