@@ -8,12 +8,14 @@ import SwiftUI
 /// flares from `IslandState`, and the whole island banks slightly on
 /// workspace switches. Purple-family themes get a runtime tint.
 ///
-/// Reduce Motion renders the static composition (no drift/bob/flare/banking).
-/// `isVisible` gates the 60 fps `IslandState` clock and the drift/bob timeline
-/// so a covered or background workspace costs nothing.
+/// Motion is gated by the "Animate home island" app setting (Settings →
+/// General), which is deliberately independent of the macOS "Reduce Motion"
+/// accessibility setting; when off, the static composition renders (no
+/// drift/bob/flare/banking). `isVisible` additionally gates the 60 fps
+/// `IslandState` clock and the drift/bob timeline so a covered or background
+/// workspace costs nothing.
 struct FloatingIslandView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var isVisible: Bool = true
 
@@ -35,11 +37,16 @@ struct FloatingIslandView: View {
     }
     private var accent: Color { environment.themeManager.tokens.accentPrimary }
 
+    /// Whether the home island animates — an app setting, deliberately
+    /// independent of the macOS "Reduce Motion" accessibility setting so the
+    /// user controls it here directly.
+    private var animateIsland: Bool { environment.generalSettingsStore.animateHomeIsland }
+
     var body: some View {
         GeometryReader { proxy in
             let rect = fittedRect(in: proxy.size)
             Group {
-                if isVisible && !reduceMotion {
+                if isVisible && animateIsland {
                     TimelineView(.animation) { context in
                         island(rect: rect, time: context.date.timeIntervalSinceReferenceDate)
                     }
@@ -71,7 +78,7 @@ struct FloatingIslandView: View {
             }
             .coordinateSpace(name: "island")
             .onReceive(tickTimer) { _ in
-                guard isVisible && !reduceMotion else { return }
+                guard isVisible && animateIsland else { return }
                 environment.islandState.tick(dt: 1.0 / 60.0)
             }
             .onChange(of: environment.isLauncherPresented) { _, open in
@@ -81,7 +88,7 @@ struct FloatingIslandView: View {
                 if !vis { hovered = nil }
             }
             .onChange(of: environment.workspaceManager.activeWorkspaceID) { old, new in
-                guard !reduceMotion else { return }
+                guard animateIsland else { return }
                 let ids = environment.workspaceManager.workspaces.map(\.id)
                 guard let o = ids.firstIndex(of: old), let n = ids.firstIndex(of: new) else { return }
                 environment.islandState.bank(n > o ? 1 : (n < o ? -1 : 0))
@@ -105,7 +112,7 @@ struct FloatingIslandView: View {
 
     @ViewBuilder
     private func island(rect: CGRect, time: Double) -> some View {
-        let animating = isVisible && !reduceMotion
+        let animating = isVisible && animateIsland
         let bank = animating ? CGFloat(environment.islandState.banking) * maxBankOffset : 0
         // The citadel (z 40) splits the stack: elements behind it (ring,
         // clouds, islets) get the reflected glow screen-blended over them; the
@@ -170,16 +177,16 @@ struct FloatingIslandView: View {
         return ZStack {
             // Wide soft halo spreading into the dark background.
             RadialGradient(
-                colors: [accent.opacity(0.34), accent.opacity(0.11), .clear],
-                center: .center, startRadius: 0, endRadius: rect.width * 0.62
+                colors: [accent.opacity(0.24), accent.opacity(0.11), .clear],
+                center: .center, startRadius: 0, endRadius: rect.width * 0.42
             )
-            .frame(width: rect.width * 1.5, height: rect.width * 1.5)
+            .frame(width: rect.width * 1.1, height: rect.width * 1.1)
             // Bright core filling the ring.
             RadialGradient(
-                colors: [accent.opacity(0.62 + intensity * 0.16), accent.opacity(0.24), .clear],
-                center: .center, startRadius: 0, endRadius: rect.width * 0.34
+                colors: [accent.opacity(0.42 + intensity * 0.16), accent.opacity(0.24), .clear],
+                center: .center, startRadius: 0, endRadius: rect.width * 0.24
             )
-            .frame(width: rect.width * 0.9, height: rect.width * 0.9)
+            .frame(width: rect.width * 0.6, height: rect.width * 0.6)
         }
         .position(x: rect.minX + rect.width * glowCenter.x, y: rect.minY + rect.height * glowCenter.y)
         .blendMode(.screen)

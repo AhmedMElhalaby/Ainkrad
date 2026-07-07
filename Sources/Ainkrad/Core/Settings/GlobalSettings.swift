@@ -17,6 +17,11 @@ struct GlobalSettings: PersistableDocument {
     /// title strip while in full-screen — see AIN-109. Has no effect in
     /// windowed mode.
     var showFullScreenStatusBar: Bool = true
+    /// Animates the home-screen Living Island (cloud drift, islet bob, ring
+    /// flare/banking). Defaults on and is independent of the macOS "Reduce
+    /// Motion" accessibility setting — this app toggle is the source of truth
+    /// so users can opt out here directly.
+    var animateHomeIsland: Bool = true
     /// Whether UI sound effects (open/close/install/etc — see AIN-108) play
     /// at all. Muting takes effect immediately, on the very next sound.
     var soundEnabled: Bool = true
@@ -40,6 +45,7 @@ struct GlobalSettings: PersistableDocument {
          uiFontFamily: UIFontFamily = .exo2,
          accentColorHex: String? = nil,
          showFullScreenStatusBar: Bool = true,
+         animateHomeIsland: Bool = true,
          soundEnabled: Bool = true,
          soundVolume: Double = 0.7,
          soundEventEnabled: [String: Bool] = [:],
@@ -52,6 +58,7 @@ struct GlobalSettings: PersistableDocument {
         self.uiFontFamily = uiFontFamily
         self.accentColorHex = accentColorHex
         self.showFullScreenStatusBar = showFullScreenStatusBar
+        self.animateHomeIsland = animateHomeIsland
         self.soundEnabled = soundEnabled
         self.soundVolume = soundVolume
         self.soundEventEnabled = soundEventEnabled
@@ -68,6 +75,7 @@ struct GlobalSettings: PersistableDocument {
         uiFontFamily = try container.decodeIfPresent(UIFontFamily.self, forKey: .uiFontFamily) ?? .exo2
         accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex)
         showFullScreenStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showFullScreenStatusBar) ?? true
+        animateHomeIsland = try container.decodeIfPresent(Bool.self, forKey: .animateHomeIsland) ?? true
         soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
         soundVolume = try container.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.7
         soundEventEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .soundEventEnabled) ?? [:]

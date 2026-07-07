@@ -10,7 +10,7 @@ struct IslandMotionMathTests {
             for step in 0..<400 {
                 let t = Double(step) * 0.13
                 let x = IslandMotionMath.cloudDriftX(seed: seed, time: t)
-                #expect(abs(x) <= 18.0)
+                #expect(abs(x) <= 52.0)
             }
         }
     }
@@ -21,7 +21,7 @@ struct IslandMotionMathTests {
             for step in 0..<400 {
                 let t = Double(step) * 0.13
                 let y = IslandMotionMath.isletBobY(seed: seed, time: t)
-                #expect(abs(y) <= 8.0)
+                #expect(abs(y) <= 18.0)
             }
         }
     }

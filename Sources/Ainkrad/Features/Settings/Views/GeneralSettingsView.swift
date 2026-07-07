@@ -22,6 +22,12 @@ struct GeneralSettingsView: View {
                     action: { store.setShowFullScreenStatusBar($0) })
 
                 row(tokens: tokens,
+                    title: "Animate home island",
+                    subtitle: "Drifting clouds, bobbing islets, and the reactive glow on the home screen. Independent of macOS Reduce Motion.",
+                    isOn: store.animateHomeIsland,
+                    action: { store.setAnimateHomeIsland($0) })
+
+                row(tokens: tokens,
                     title: "Sound effects",
                     subtitle: "Plays a short chime on HUD open/close, install, and other key actions.",
                     isOn: store.soundEnabled,

@@ -11,6 +11,7 @@ import Observation
 @Observable
 final class GeneralSettingsStore: SoundSettingsProviding {
     private(set) var showFullScreenStatusBar: Bool
+    private(set) var animateHomeIsland: Bool
     private(set) var soundEnabled: Bool
     private(set) var soundVolume: Double
     /// Per-event enable switches (missing key = enabled) and effect overrides
@@ -23,6 +24,7 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         self.persistence = persistence
         let settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         self.showFullScreenStatusBar = settings.showFullScreenStatusBar
+        self.animateHomeIsland = settings.animateHomeIsland
         self.soundEnabled = settings.soundEnabled
         self.soundVolume = settings.soundVolume
         self.soundEventEnabled = settings.soundEventEnabled
@@ -33,6 +35,13 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         showFullScreenStatusBar = isOn
         var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         settings.showFullScreenStatusBar = isOn
+        persistence.save(settings)
+    }
+
+    func setAnimateHomeIsland(_ isOn: Bool) {
+        animateHomeIsland = isOn
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.animateHomeIsland = isOn
         persistence.save(settings)
     }
 
