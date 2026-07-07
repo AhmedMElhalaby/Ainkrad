@@ -37,6 +37,9 @@ enum IslandLayers {
         IslandLayer(id: "Island-Blue-Cloud-6",  kind: .cloud,   cx: 0.5650, cy: 0.5350, width: 0.1150, z: 15, seed: 13),
         IslandLayer(id: "Island-Blue-Cloud-7",  kind: .cloud,   cx: 0.4100, cy: 0.7050, width: 0.1150, z: 16, seed: 14),
         IslandLayer(id: "Island-Blue-Cloud-0",  kind: .cloud,   cx: 0.5950, cy: 0.7000, width: 0.1250, z: 17, seed: 15),
+        IslandLayer(id: "Island-Blue-Cloud-1",  kind: .cloud,   cx: 0.3600, cy: 0.5850, width: 0.1100, z: 11, seed: 16),
+        IslandLayer(id: "Island-Blue-Cloud-2",  kind: .cloud,   cx: 0.6400, cy: 0.5950, width: 0.1100, z: 12, seed: 17),
+        IslandLayer(id: "Island-Blue-Cloud-4",  kind: .cloud,   cx: 0.5000, cy: 0.8050, width: 0.1400, z: 13, seed: 18),
 
         IslandLayer(id: "Island-Blue-Islet-0",  kind: .islet,   cx: 0.1989, cy: 0.4966, width: 0.0462, z: 30, seed: 0),
         IslandLayer(id: "Island-Blue-Islet-1",  kind: .islet,   cx: 0.2598, cy: 0.4536, width: 0.0612, z: 31, seed: 1),

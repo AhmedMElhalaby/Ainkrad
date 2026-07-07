@@ -52,10 +52,13 @@ struct FloatingIslandView: View {
             // TimelineView) with a deterministic pointer hit-test. Extends below
             // the frame to cover the wordmark, which sits at cy > 1.
             .overlay {
+                // Taller than the frame (no `.position`, which would clamp the
+                // hover region to the frame) so the wordmark at cy > 1 is
+                // reachable. Coordinates read in a named space aligned to the
+                // art rect.
                 Color.white.opacity(0.001)
-                    .frame(width: rect.width, height: rect.height * 1.3)
-                    .position(x: rect.midX, y: rect.minY + rect.height * 0.65)
-                    .onContinuousHover { phase in
+                    .frame(width: proxy.size.width, height: rect.height * 1.4)
+                    .onContinuousHover(coordinateSpace: .named("island")) { phase in
                         let hit: IslandLayer.Kind?
                         switch phase {
                         case .active(let p): hit = hoverHit(p, rect: rect)
@@ -66,6 +69,7 @@ struct FloatingIslandView: View {
                         }
                     }
             }
+            .coordinateSpace(name: "island")
             .onReceive(tickTimer) { _ in
                 guard isVisible && !reduceMotion else { return }
                 environment.islandState.tick(dt: 1.0 / 60.0)
@@ -122,12 +126,12 @@ struct FloatingIslandView: View {
     private func hoverHit(_ p: CGPoint, rect: CGRect) -> IslandLayer.Kind? {
         for kind in [IslandLayer.Kind.chevron, .logo, .slogan] {
             guard let l = IslandLayers.all.first(where: { $0.kind == kind }) else { continue }
-            let cx = rect.width * l.cx, cy = rect.height * l.cy
+            let cx = rect.minX + rect.width * l.cx, cy = rect.minY + rect.height * l.cy
             let hw = rect.width * l.width / 2, hh = rect.height * hoverHeight(for: kind) / 2
             if abs(p.x - cx) <= hw && abs(p.y - cy) <= hh { return kind }
         }
         if let r = IslandLayers.all.first(where: { $0.kind == .ring }) {
-            let cx = rect.width * r.cx, cy = rect.height * r.cy
+            let cx = rect.minX + rect.width * r.cx, cy = rect.minY + rect.height * r.cy
             let rw = rect.width * r.width, rh = rw * (576.0 / 567.0)   // ring sprite aspect
             let nx = (p.x - cx) / (rw / 2), ny = (p.y - cy) / (rh / 2)
             let radius = (nx * nx + ny * ny).squareRoot()
