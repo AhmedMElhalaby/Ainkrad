@@ -19,7 +19,6 @@ final class AppEnvironment {
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
     let sounds: SoundPlaying
-    let islandState: IslandState
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -44,8 +43,7 @@ final class AppEnvironment {
         shortcutStore: ShortcutStore,
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
-        sounds: SoundPlaying,
-        islandState: IslandState
+        sounds: SoundPlaying
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -61,7 +59,6 @@ final class AppEnvironment {
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
         self.sounds = sounds
-        self.islandState = islandState
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -139,8 +136,7 @@ final class AppEnvironment {
             shortcutStore: ShortcutStore(persistence: persistence),
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
-            sounds: sounds,
-            islandState: IslandState()
+            sounds: sounds
         )
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
