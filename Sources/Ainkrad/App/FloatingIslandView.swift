@@ -20,6 +20,9 @@ struct FloatingIslandView: View {
     /// 60 fps clock; the only place `IslandState` advances.
     @State private var tickTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
+    /// Which interactive element the pointer is over (ring/chevron/logo/slogan).
+    @State private var hovered: IslandLayer.Kind?
+
     /// The artwork's native pixel aspect (1536×1024).
     private let artworkAspect: CGFloat = 1536.0 / 1024.0
     private let maxBankOffset: CGFloat = 14
@@ -87,8 +90,50 @@ struct FloatingIslandView: View {
             if animating, let phase = environment.islandState.flarePhase {
                 flare(phase: phase, rect: rect)
             }
+            hoverTargets(rect: rect)
         }
         .offset(x: bank)
+    }
+
+    @ViewBuilder
+    private func hoverTargets(rect: CGRect) -> some View {
+        // Ring: annulus band only.
+        if let ring = IslandLayers.all.first(where: { $0.kind == .ring }) {
+            let w = rect.width * ring.width
+            let h = w / (0.3685 / 0.5615)   // ring sprite aspect (width/height from extraction)
+            IslandRingBand()
+                .fill(Color.white.opacity(0.001), style: FillStyle(eoFill: true))
+                .frame(width: w, height: h)
+                .position(x: rect.minX + rect.width * ring.cx, y: rect.minY + rect.height * ring.cy)
+                .onHover { setHover(.ring, $0) }
+        }
+        // Chevron / logo / slogan: rectangular targets at their own bounds.
+        ForEach(IslandLayers.all.filter { [.chevron, .logo, .slogan].contains($0.kind) }) { layer in
+            let w = rect.width * layer.width
+            let h = rect.height * hoverHeight(for: layer.kind)
+            Rectangle()
+                .fill(Color.white.opacity(0.001))
+                .frame(width: w, height: h)
+                .position(x: rect.minX + rect.width * layer.cx, y: rect.minY + rect.height * layer.cy)
+                .onHover { setHover(layer.kind, $0) }
+        }
+    }
+
+    /// Normalized hit-height per wordmark element (from extraction bboxes).
+    private func hoverHeight(for kind: IslandLayer.Kind) -> Double {
+        switch kind {
+        case .chevron: return 0.1504
+        case .logo:    return 0.0762
+        case .slogan:  return 0.0254
+        default:       return 0.05
+        }
+    }
+
+    private func setHover(_ kind: IslandLayer.Kind, _ inside: Bool) {
+        withAnimation(.easeOut(duration: 0.22)) {
+            if inside { hovered = kind }
+            else if hovered == kind { hovered = nil }
+        }
     }
 
     /// Localized soft blue radial glow behind the ring (no opaque bg).
@@ -123,6 +168,8 @@ struct FloatingIslandView: View {
             .colorMultiply(tint(for: layer))
             .brightness(layer.kind == .ring ? environment.islandState.ringIntensity * 0.12 : 0)
             .shadow(color: ringGlowColor(layer), radius: layer.kind == .ring ? 10 + environment.islandState.ringIntensity * 14 : 0)
+            .brightness(hovered == layer.kind ? 0.14 : 0)
+            .shadow(color: hovered == layer.kind ? accent.opacity(0.9) : .clear, radius: hovered == layer.kind ? 16 : 0)
             .position(x: px, y: py)
             .offset(x: dx, y: dy)
             .allowsHitTesting(false)
