@@ -28,6 +28,11 @@ enum IslandLayers {
         IslandLayer(id: "Island-Blue-Cloud-5",  kind: .cloud,   cx: 0.4007, cy: 0.3135, width: 0.0905, z: 25, seed: 5),
         IslandLayer(id: "Island-Blue-Cloud-6",  kind: .cloud,   cx: 0.4469, cy: 0.2437, width: 0.0710, z: 26, seed: 6),
         IslandLayer(id: "Island-Blue-Cloud-7",  kind: .cloud,   cx: 0.3636, cy: 0.6357, width: 0.0710, z: 27, seed: 7),
+        // Extra clouds filling the gap between the citadel's lower body and the chevron.
+        IslandLayer(id: "Island-Blue-Cloud-4",  kind: .cloud,   cx: 0.4050, cy: 0.6250, width: 0.1400, z: 18, seed: 8),
+        IslandLayer(id: "Island-Blue-Cloud-1",  kind: .cloud,   cx: 0.6000, cy: 0.6450, width: 0.1400, z: 19, seed: 9),
+        IslandLayer(id: "Island-Blue-Cloud-3",  kind: .cloud,   cx: 0.5000, cy: 0.7450, width: 0.1600, z: 28, seed: 10),
+        IslandLayer(id: "Island-Blue-Cloud-5",  kind: .cloud,   cx: 0.5050, cy: 0.5850, width: 0.1250, z: 29, seed: 11),
 
         IslandLayer(id: "Island-Blue-Islet-0",  kind: .islet,   cx: 0.1989, cy: 0.4966, width: 0.0462, z: 30, seed: 0),
         IslandLayer(id: "Island-Blue-Islet-1",  kind: .islet,   cx: 0.2598, cy: 0.4536, width: 0.0612, z: 31, seed: 1),

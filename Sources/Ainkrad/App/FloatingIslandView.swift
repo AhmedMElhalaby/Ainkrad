@@ -48,6 +48,9 @@ struct FloatingIslandView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            // Hover hit targets live in a stable overlay (not rebuilt by the
+            // per-frame TimelineView) so macOS hover tracking doesn't drop.
+            .overlay { hoverTargets(rect: rect) }
             .onReceive(tickTimer) { _ in
                 guard isVisible && !reduceMotion else { return }
                 environment.islandState.tick(dt: 1.0 / 60.0)
@@ -93,7 +96,6 @@ struct FloatingIslandView: View {
             if animating, let phase = environment.islandState.flarePhase {
                 flare(phase: phase, rect: rect)
             }
-            hoverTargets(rect: rect)
         }
         .offset(x: bank)
     }
@@ -171,8 +173,12 @@ struct FloatingIslandView: View {
             .colorMultiply(tint(for: layer))
             .brightness(layer.kind == .ring ? environment.islandState.ringIntensity * 0.12 : 0)
             .shadow(color: ringGlowColor(layer), radius: layer.kind == .ring ? 10 + environment.islandState.ringIntensity * 14 : 0)
-            .brightness(hovered == layer.kind ? 0.14 : 0)
-            .shadow(color: hovered == layer.kind ? accent.opacity(0.9) : .clear, radius: hovered == layer.kind ? 16 : 0)
+            // Hover glow: brighten, scale up slightly, and stack two accent
+            // blooms so it reads clearly even on the bright chevron / ring.
+            .brightness(hovered == layer.kind ? 0.28 : 0)
+            .shadow(color: hovered == layer.kind ? accent : .clear, radius: hovered == layer.kind ? 14 : 0)
+            .shadow(color: hovered == layer.kind ? accent.opacity(0.85) : .clear, radius: hovered == layer.kind ? 30 : 0)
+            .scaleEffect(hovered == layer.kind ? 1.06 : 1.0)
             .position(x: px, y: py)
             .offset(x: dx, y: dy)
             .allowsHitTesting(false)
