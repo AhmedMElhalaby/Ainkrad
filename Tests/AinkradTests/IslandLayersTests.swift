@@ -24,7 +24,7 @@ struct IslandLayersTests {
         #expect(count(.chevron) == 1)
         #expect(count(.logo) == 1)
         #expect(count(.slogan) == 1)
-        #expect(count(.cloud) == 12)
+        #expect(count(.cloud) == 16)
         #expect(count(.islet) == 9)
     }
 
@@ -32,7 +32,7 @@ struct IslandLayersTests {
     func seeds() {
         let cloudSeeds = IslandLayers.all.filter { $0.kind == .cloud }.compactMap { $0.seed }.sorted()
         let isletSeeds = IslandLayers.all.filter { $0.kind == .islet }.compactMap { $0.seed }.sorted()
-        #expect(cloudSeeds == Array(0..<12))
+        #expect(cloudSeeds == Array(0..<16))
         #expect(isletSeeds == Array(0..<9))
         for l in IslandLayers.all where [.ring,.citadel,.chevron,.logo,.slogan].contains(l.kind) {
             #expect(l.seed == nil)

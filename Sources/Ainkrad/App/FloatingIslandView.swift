@@ -48,9 +48,24 @@ struct FloatingIslandView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
-            // Hover hit targets live in a stable overlay (not rebuilt by the
-            // per-frame TimelineView) so macOS hover tracking doesn't drop.
-            .overlay { hoverTargets(rect: rect) }
+            // Hover: one stable transparent layer (not rebuilt by the per-frame
+            // TimelineView) with a deterministic pointer hit-test. Extends below
+            // the frame to cover the wordmark, which sits at cy > 1.
+            .overlay {
+                Color.white.opacity(0.001)
+                    .frame(width: rect.width, height: rect.height * 1.3)
+                    .position(x: rect.midX, y: rect.minY + rect.height * 0.65)
+                    .onContinuousHover { phase in
+                        let hit: IslandLayer.Kind?
+                        switch phase {
+                        case .active(let p): hit = hoverHit(p, rect: rect)
+                        case .ended:         hit = nil
+                        }
+                        if hit != hovered {
+                            withAnimation(.easeOut(duration: 0.2)) { hovered = hit }
+                        }
+                    }
+            }
             .onReceive(tickTimer) { _ in
                 guard isVisible && !reduceMotion else { return }
                 environment.islandState.tick(dt: 1.0 / 60.0)
@@ -100,28 +115,25 @@ struct FloatingIslandView: View {
         .offset(x: bank)
     }
 
-    @ViewBuilder
-    private func hoverTargets(rect: CGRect) -> some View {
-        // Ring: annulus band only.
-        if let ring = IslandLayers.all.first(where: { $0.kind == .ring }) {
-            let w = rect.width * ring.width
-            let h = w * (576.0 / 567.0)     // ring sprite aspect (567×576); tracks width so it scales with the ring
-            IslandRingBand()
-                .fill(Color.white.opacity(0.001), style: FillStyle(eoFill: true))
-                .frame(width: w, height: h)
-                .position(x: rect.minX + rect.width * ring.cx, y: rect.minY + rect.height * ring.cy)
-                .onHover { setHover(.ring, $0) }
+    /// Which interactive element (if any) the pointer at local `p` is over.
+    /// Coordinates are local to the hover layer, whose top-left aligns with the
+    /// art rect origin. Wordmark rectangles take priority over the ring so the
+    /// chevron wins where it overlaps the ring's lower band.
+    private func hoverHit(_ p: CGPoint, rect: CGRect) -> IslandLayer.Kind? {
+        for kind in [IslandLayer.Kind.chevron, .logo, .slogan] {
+            guard let l = IslandLayers.all.first(where: { $0.kind == kind }) else { continue }
+            let cx = rect.width * l.cx, cy = rect.height * l.cy
+            let hw = rect.width * l.width / 2, hh = rect.height * hoverHeight(for: kind) / 2
+            if abs(p.x - cx) <= hw && abs(p.y - cy) <= hh { return kind }
         }
-        // Chevron / logo / slogan: rectangular targets at their own bounds.
-        ForEach(IslandLayers.all.filter { [.chevron, .logo, .slogan].contains($0.kind) }) { layer in
-            let w = rect.width * layer.width
-            let h = rect.height * hoverHeight(for: layer.kind)
-            Rectangle()
-                .fill(Color.white.opacity(0.001))
-                .frame(width: w, height: h)
-                .position(x: rect.minX + rect.width * layer.cx, y: rect.minY + rect.height * layer.cy)
-                .onHover { setHover(layer.kind, $0) }
+        if let r = IslandLayers.all.first(where: { $0.kind == .ring }) {
+            let cx = rect.width * r.cx, cy = rect.height * r.cy
+            let rw = rect.width * r.width, rh = rw * (576.0 / 567.0)   // ring sprite aspect
+            let nx = (p.x - cx) / (rw / 2), ny = (p.y - cy) / (rh / 2)
+            let radius = (nx * nx + ny * ny).squareRoot()
+            if radius >= 0.68 && radius <= 1.06 { return .ring }        // annulus band
         }
+        return nil
     }
 
     /// Normalized hit-height per wordmark element (from extraction bboxes).
@@ -131,13 +143,6 @@ struct FloatingIslandView: View {
         case .logo:    return 0.0762
         case .slogan:  return 0.0254
         default:       return 0.05
-        }
-    }
-
-    private func setHover(_ kind: IslandLayer.Kind, _ inside: Bool) {
-        withAnimation(.easeOut(duration: 0.22)) {
-            if inside { hovered = kind }
-            else if hovered == kind { hovered = nil }
         }
     }
 
