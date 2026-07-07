@@ -8,7 +8,10 @@ struct IslandLayersTests {
         for l in IslandLayers.all {
             #expect(!l.id.isEmpty)
             #expect((0.0...1.0).contains(l.cx))
-            #expect((0.0...1.0).contains(l.cy))
+            // cy is normalized to the art rect but may exceed 1.0: the
+            // wordmark lockup (logo/slogan) intentionally sits just below
+            // the art rect. Keep a sane upper bound to still catch typos.
+            #expect((0.0...1.5).contains(l.cy))
             #expect(l.width > 0 && l.width <= 1.0)
         }
     }

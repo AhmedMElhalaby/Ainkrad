@@ -41,9 +41,9 @@ enum IslandLayers {
 
         IslandLayer(id: "Island-Blue-Citadel",  kind: .citadel, cx: 0.5016, cy: 0.4819, width: 0.4551, z: 40, seed: nil),
 
-        IslandLayer(id: "Island-Blue-Chevron",  kind: .chevron, cx: 0.5003, cy: 0.7750, width: 0.1126, z: 50, seed: nil),
-        IslandLayer(id: "Island-Blue-Logo",     kind: .logo,    cx: 0.4997, cy: 0.8740, width: 0.5488, z: 51, seed: nil),
-        IslandLayer(id: "Island-Blue-Slogan",   kind: .slogan,  cx: 0.5026, cy: 0.9707, width: 0.4193, z: 52, seed: nil),
+        IslandLayer(id: "Island-Blue-Chevron",  kind: .chevron, cx: 0.5003, cy: 0.8550, width: 0.1126, z: 50, seed: nil),
+        IslandLayer(id: "Island-Blue-Logo",     kind: .logo,    cx: 0.4997, cy: 1.0040, width: 0.5488, z: 51, seed: nil),
+        IslandLayer(id: "Island-Blue-Slogan",   kind: .slogan,  cx: 0.5026, cy: 1.1007, width: 0.4193, z: 52, seed: nil),
     ]
 
     /// `all` pre-sorted by draw order; avoids re-sorting every frame.
