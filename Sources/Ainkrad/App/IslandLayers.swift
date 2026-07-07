@@ -45,4 +45,7 @@ enum IslandLayers {
         IslandLayer(id: "Island-Blue-Logo",     kind: .logo,    cx: 0.4997, cy: 0.8740, width: 0.5488, z: 51, seed: nil),
         IslandLayer(id: "Island-Blue-Slogan",   kind: .slogan,  cx: 0.5026, cy: 0.9707, width: 0.4193, z: 52, seed: nil),
     ]
+
+    /// `all` pre-sorted by draw order; avoids re-sorting every frame.
+    static let sortedByZ: [IslandLayer] = all.sorted { $0.z < $1.z }
 }

@@ -53,6 +53,7 @@ struct FloatingIslandView: View {
                 environment.islandState.launcherActive(open)
             }
             .onChange(of: environment.workspaceManager.activeWorkspaceID) { old, new in
+                guard !reduceMotion else { return }
                 let ids = environment.workspaceManager.workspaces.map(\.id)
                 guard let o = ids.firstIndex(of: old), let n = ids.firstIndex(of: new) else { return }
                 environment.islandState.bank(n > o ? 1 : (n < o ? -1 : 0))
@@ -76,13 +77,14 @@ struct FloatingIslandView: View {
 
     @ViewBuilder
     private func island(rect: CGRect, time: Double) -> some View {
-        let bank = CGFloat(environment.islandState.banking) * maxBankOffset
+        let animating = isVisible && !reduceMotion
+        let bank = animating ? CGFloat(environment.islandState.banking) * maxBankOffset : 0
         ZStack {
             glow(rect: rect)
-            ForEach(IslandLayers.all.sorted { $0.z < $1.z }) { layer in
+            ForEach(IslandLayers.sortedByZ) { layer in
                 layerView(layer, rect: rect, time: time)
             }
-            if let phase = environment.islandState.flarePhase {
+            if animating, let phase = environment.islandState.flarePhase {
                 flare(phase: phase, rect: rect)
             }
         }
@@ -90,17 +92,21 @@ struct FloatingIslandView: View {
     }
 
     /// Localized soft blue radial glow behind the ring (no opaque bg).
-    private func glow(rect: CGRect) -> some View {
-        let ring = IslandLayers.all.first { $0.kind == .ring }!
+    private func glow(rect: CGRect) -> AnyView {
+        guard let ring = IslandLayers.all.first(where: { $0.kind == .ring }) else {
+            return AnyView(EmptyView())
+        }
         let intensity = environment.islandState.ringIntensity
-        return RadialGradient(
-            colors: [accent.opacity(0.10 + intensity * 0.22), .clear],
-            center: .center, startRadius: 0, endRadius: rect.width * 0.34
+        return AnyView(
+            RadialGradient(
+                colors: [accent.opacity(0.10 + intensity * 0.22), .clear],
+                center: .center, startRadius: 0, endRadius: rect.width * 0.34
+            )
+            .frame(width: rect.width * 0.9, height: rect.width * 0.9)
+            .position(x: rect.minX + rect.width * ring.cx, y: rect.minY + rect.height * ring.cy)
+            .blendMode(.screen)
+            .allowsHitTesting(false)
         )
-        .frame(width: rect.width * 0.9, height: rect.width * 0.9)
-        .position(x: rect.minX + rect.width * ring.cx, y: rect.minY + rect.height * ring.cy)
-        .blendMode(.screen)
-        .allowsHitTesting(false)
     }
 
     @ViewBuilder
