@@ -161,16 +161,26 @@ struct FloatingIslandView: View {
     /// Center of the artwork's glow — the citadel center.
     private var glowCenter: (x: Double, y: Double) { (0.5016, 0.4819) }
 
-    /// Always-on accent glow centered behind the citadel — the light source.
-    /// Independent of hover; `ringIntensity` only adds a gentle idle pulse on
-    /// top of a solid base so it is always visible.
+    /// Always-on accent bloom centered behind the citadel — the light source.
+    /// Two layers: a wide soft halo that fills well beyond the ring, plus a
+    /// brighter core. Independent of hover; `ringIntensity` only adds a gentle
+    /// idle pulse on top of a solid base so it is always visible.
     private func glow(rect: CGRect) -> some View {
         let intensity = environment.islandState.ringIntensity
-        return RadialGradient(
-            colors: [accent.opacity(0.40 + intensity * 0.14), accent.opacity(0.13), .clear],
-            center: .center, startRadius: 0, endRadius: rect.width * 0.42
-        )
-        .frame(width: rect.width * 1.05, height: rect.width * 1.05)
+        return ZStack {
+            // Wide soft halo spreading into the dark background.
+            RadialGradient(
+                colors: [accent.opacity(0.34), accent.opacity(0.11), .clear],
+                center: .center, startRadius: 0, endRadius: rect.width * 0.62
+            )
+            .frame(width: rect.width * 1.5, height: rect.width * 1.5)
+            // Bright core filling the ring.
+            RadialGradient(
+                colors: [accent.opacity(0.62 + intensity * 0.16), accent.opacity(0.24), .clear],
+                center: .center, startRadius: 0, endRadius: rect.width * 0.34
+            )
+            .frame(width: rect.width * 0.9, height: rect.width * 0.9)
+        }
         .position(x: rect.minX + rect.width * glowCenter.x, y: rect.minY + rect.height * glowCenter.y)
         .blendMode(.screen)
         .allowsHitTesting(false)
@@ -181,10 +191,10 @@ struct FloatingIslandView: View {
     /// the surrounding elements pick up the glow's color.
     private func reflectGlow(rect: CGRect) -> some View {
         RadialGradient(
-            colors: [accent.opacity(0.17), accent.opacity(0.05), .clear],
-            center: .center, startRadius: 0, endRadius: rect.width * 0.46
+            colors: [accent.opacity(0.28), accent.opacity(0.09), .clear],
+            center: .center, startRadius: 0, endRadius: rect.width * 0.52
         )
-        .frame(width: rect.width * 1.1, height: rect.width * 1.1)
+        .frame(width: rect.width * 1.25, height: rect.width * 1.25)
         .position(x: rect.minX + rect.width * glowCenter.x, y: rect.minY + rect.height * glowCenter.y)
         .blendMode(.screen)
         .allowsHitTesting(false)
