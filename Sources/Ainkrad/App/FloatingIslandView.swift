@@ -107,9 +107,17 @@ struct FloatingIslandView: View {
     private func island(rect: CGRect, time: Double) -> some View {
         let animating = isVisible && !reduceMotion
         let bank = animating ? CGFloat(environment.islandState.banking) * maxBankOffset : 0
+        // The citadel (z 40) splits the stack: elements behind it (ring,
+        // clouds, islets) get the reflected glow screen-blended over them; the
+        // citadel and wordmark draw on top, clean.
+        let citadelZ = 40
         ZStack {
             glow(rect: rect)
-            ForEach(IslandLayers.sortedByZ) { layer in
+            ForEach(IslandLayers.sortedByZ.filter { $0.z < citadelZ }) { layer in
+                layerView(layer, rect: rect, time: time, animating: animating)
+            }
+            reflectGlow(rect: rect)
+            ForEach(IslandLayers.sortedByZ.filter { $0.z >= citadelZ }) { layer in
                 layerView(layer, rect: rect, time: time, animating: animating)
             }
             if animating, let phase = environment.islandState.flarePhase {
@@ -150,22 +158,36 @@ struct FloatingIslandView: View {
         }
     }
 
-    /// Localized soft blue radial glow behind the ring (no opaque bg).
-    private func glow(rect: CGRect) -> AnyView {
-        guard let ring = IslandLayers.all.first(where: { $0.kind == .ring }) else {
-            return AnyView(EmptyView())
-        }
+    /// Center of the artwork's glow — the citadel center.
+    private var glowCenter: (x: Double, y: Double) { (0.5016, 0.4819) }
+
+    /// Always-on accent glow centered behind the citadel — the light source.
+    /// Independent of hover; `ringIntensity` only adds a gentle idle pulse on
+    /// top of a solid base so it is always visible.
+    private func glow(rect: CGRect) -> some View {
         let intensity = environment.islandState.ringIntensity
-        return AnyView(
-            RadialGradient(
-                colors: [accent.opacity(0.10 + intensity * 0.22), .clear],
-                center: .center, startRadius: 0, endRadius: rect.width * 0.34
-            )
-            .frame(width: rect.width * 0.9, height: rect.width * 0.9)
-            .position(x: rect.minX + rect.width * ring.cx, y: rect.minY + rect.height * ring.cy)
-            .blendMode(.screen)
-            .allowsHitTesting(false)
+        return RadialGradient(
+            colors: [accent.opacity(0.40 + intensity * 0.14), accent.opacity(0.13), .clear],
+            center: .center, startRadius: 0, endRadius: rect.width * 0.42
         )
+        .frame(width: rect.width * 1.05, height: rect.width * 1.05)
+        .position(x: rect.minX + rect.width * glowCenter.x, y: rect.minY + rect.height * glowCenter.y)
+        .blendMode(.screen)
+        .allowsHitTesting(false)
+    }
+
+    /// Accent light "reflected" onto the clouds/islets around the citadel:
+    /// screen-blended over them (drawn after them) but behind the citadel, so
+    /// the surrounding elements pick up the glow's color.
+    private func reflectGlow(rect: CGRect) -> some View {
+        RadialGradient(
+            colors: [accent.opacity(0.17), accent.opacity(0.05), .clear],
+            center: .center, startRadius: 0, endRadius: rect.width * 0.46
+        )
+        .frame(width: rect.width * 1.1, height: rect.width * 1.1)
+        .position(x: rect.minX + rect.width * glowCenter.x, y: rect.minY + rect.height * glowCenter.y)
+        .blendMode(.screen)
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder

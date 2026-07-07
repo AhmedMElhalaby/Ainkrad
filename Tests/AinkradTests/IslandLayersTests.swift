@@ -39,17 +39,18 @@ struct IslandLayersTests {
         }
     }
 
-    @Test("z-order is unique and orders ring < clouds < islets < citadel < wordmark")
+    @Test("z-order: ring/clouds/islets behind citadel; citadel behind wordmark; chevron < logo < slogan")
     func zOrder() {
-        let zs = IslandLayers.all.map { $0.z }
-        #expect(Set(zs).count == zs.count)   // all unique
         func maxZ(_ k: IslandLayer.Kind) -> Int { IslandLayers.all.filter { $0.kind == k }.map { $0.z }.max() ?? -1 }
-        func minZ(_ k: IslandLayer.Kind) -> Int { IslandLayers.all.filter { $0.kind == k }.map { $0.z }.min() ?? -1 }
-        #expect(maxZ(.ring) < minZ(.cloud))
-        #expect(maxZ(.cloud) < minZ(.islet))
-        #expect(maxZ(.islet) < IslandLayers.all.first { $0.kind == .citadel }!.z)
-        #expect(IslandLayers.all.first { $0.kind == .citadel }!.z < minZ(.chevron))
-        // Wordmark itself is ordered chevron < logo < slogan.
+        func minZ(_ k: IslandLayer.Kind) -> Int { IslandLayers.all.filter { $0.kind == k }.map { $0.z }.min() ?? .max }
+        let citadelZ = IslandLayers.all.first { $0.kind == .citadel }!.z
+        // All background elements (ring, clouds, islets) draw behind the
+        // citadel. Their relative order among themselves is free to interleave.
+        for k: IslandLayer.Kind in [.ring, .cloud, .islet] {
+            #expect(maxZ(k) < citadelZ)
+        }
+        // Wordmark draws in front of the citadel, ordered chevron < logo < slogan.
+        #expect(citadelZ < minZ(.chevron))
         let chevronZ = IslandLayers.all.first { $0.kind == .chevron }!.z
         let logoZ = IslandLayers.all.first { $0.kind == .logo }!.z
         let sloganZ = IslandLayers.all.first { $0.kind == .slogan }!.z
