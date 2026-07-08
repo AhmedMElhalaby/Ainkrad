@@ -18,6 +18,7 @@ final class AppEnvironment {
     let shortcutStore: ShortcutStore
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
+    let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
@@ -43,6 +44,7 @@ final class AppEnvironment {
         shortcutStore: ShortcutStore,
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
+        skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying
     ) {
         self.persistence = persistence
@@ -58,6 +60,7 @@ final class AppEnvironment {
         self.shortcutStore = shortcutStore
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
+        self.skySettingsStore = skySettingsStore
         self.sounds = sounds
     }
 
@@ -112,6 +115,7 @@ final class AppEnvironment {
         appIconStore.applyCurrent()
 
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
+        let skySettingsStore = SkySettingsStore(persistence: persistence)
         // User-data override dir for AIN-108's sound-pack overrides (e.g. via
         // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
         // back to the bundled synth wavs when a given override is absent.
@@ -136,6 +140,7 @@ final class AppEnvironment {
             shortcutStore: ShortcutStore(persistence: persistence),
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
+            skySettingsStore: skySettingsStore,
             sounds: sounds
         )
 

@@ -31,6 +31,16 @@ struct GlobalSettings: PersistableDocument {
     /// event's own sound". An unknown value (e.g. an effect removed in a later
     /// build) is ignored at read time and falls back to the event's own sound.
     var soundEventEffects: [String: String] = [:]
+    /// Master switch for the ambient sky's motion (Settings → Living Sky).
+    /// Off freezes every effect in place; the scene stays, the motion stops.
+    var skyMotionEnabled: Bool = true
+    /// Ambient-sky animation speed multiplier, clamped by `SkySettingsStore`
+    /// to 0.5…1.5.
+    var skyMotionSpeed: Double = 1.0
+    /// Per-effect switches, keyed by `SkyEffect.rawValue`. A missing key
+    /// means "enabled" — only explicit opt-outs are stored, so legacy docs
+    /// and future effects need no migration.
+    var skyEffectEnabled: [String: Bool] = [:]
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
@@ -43,7 +53,10 @@ struct GlobalSettings: PersistableDocument {
          soundEnabled: Bool = true,
          soundVolume: Double = 0.7,
          soundEventEnabled: [String: Bool] = [:],
-         soundEventEffects: [String: String] = [:]) {
+         soundEventEffects: [String: String] = [:],
+         skyMotionEnabled: Bool = true,
+         skyMotionSpeed: Double = 1.0,
+         skyEffectEnabled: [String: Bool] = [:]) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
@@ -56,6 +69,9 @@ struct GlobalSettings: PersistableDocument {
         self.soundVolume = soundVolume
         self.soundEventEnabled = soundEventEnabled
         self.soundEventEffects = soundEventEffects
+        self.skyMotionEnabled = skyMotionEnabled
+        self.skyMotionSpeed = skyMotionSpeed
+        self.skyEffectEnabled = skyEffectEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -72,5 +88,8 @@ struct GlobalSettings: PersistableDocument {
         soundVolume = try container.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.7
         soundEventEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .soundEventEnabled) ?? [:]
         soundEventEffects = try container.decodeIfPresent([String: String].self, forKey: .soundEventEffects) ?? [:]
+        skyMotionEnabled = try container.decodeIfPresent(Bool.self, forKey: .skyMotionEnabled) ?? true
+        skyMotionSpeed = try container.decodeIfPresent(Double.self, forKey: .skyMotionSpeed) ?? 1.0
+        skyEffectEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .skyEffectEnabled) ?? [:]
     }
 }

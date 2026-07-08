@@ -50,6 +50,7 @@ final class AppEnvironmentTests {
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
+            skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds
         )
 

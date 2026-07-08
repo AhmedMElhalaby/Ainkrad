@@ -31,6 +31,7 @@ struct SettingsOverlayView: View {
     private enum SettingsSection: Hashable {
         case general
         case appearance
+        case livingSky
         case appIcon
         case shortcuts
         case app(String)
@@ -116,6 +117,7 @@ struct SettingsOverlayView: View {
             groupLabel("AINKRAD", tokens: tokens)
             sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
             sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
+            sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
             sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
             sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
 
@@ -204,6 +206,8 @@ struct SettingsOverlayView: View {
             GeneralSettingsView()
         case .appearance:
             AppearanceSettingsView()
+        case .livingSky:
+            LivingSkySettingsView()
         case .appIcon:
             AppIconSettingsView()
         case .shortcuts:
