@@ -22,9 +22,6 @@ struct SkyStar: Equatable {
 enum SkyMath {
     static let starCount = 140
 
-    private static let shootingInterval = 24.0
-    private static let shootingDuration = 0.9
-
     /// Positive fractional part, used as the deterministic "hash" everywhere
     /// (also how drifting positions wrap across the sky's edges forever).
     private static func fract(_ value: Double) -> Double {
@@ -214,7 +211,7 @@ enum SkyMath {
 
     // MARK: Fireflies and bokeh
 
-    static let fireflyCount = 12
+    static let fireflyCount = 22
 
     /// One energy mote rising through the island's region, pulsing, fading
     /// in at the bottom of its column and out at the top — no pops.
@@ -262,6 +259,116 @@ enum SkyMath {
         )
     }
 
+    // MARK: Weather moods
+
+    /// The sky's slow mood, 0 (crystal clear) … 1 (hazy) — two incommensurate
+    /// multi-minute waves, so the atmosphere keeps wandering between moods
+    /// without ever repeating a schedule. Clear spells sharpen the stars and
+    /// thin the mist; hazy spells do the opposite.
+    static func weather(time: Double) -> Double {
+        0.5 + 0.5 * sin(time * 2 * .pi / 420 + 1.3 * sin(time * 2 * .pi / 660))
+    }
+
+    // MARK: Sky traffic
+
+    /// A distant vessel crossing far behind the island — a tiny glow with a
+    /// blinking beacon, gone in twenty seconds.
+    struct Vessel: Equatable {
+        let y: Double           // 0.05…0.4 — high sky lane
+        let direction: Double   // +1 left→right, −1 right→left
+        let progress: Double    // 0…1 across the sky
+        let brightness: Double  // 0…1, fades at both edges
+    }
+
+    static func vessel(time: Double) -> Vessel? {
+        let interval = 150.0, duration = 20.0
+        let cycleIndex = (time / interval).rounded(.down)
+        let gate = fract(sin(cycleIndex * 67.219 + 5.1) * 31872.42)
+        guard gate < 0.6 else { return nil }
+        let offset = fract(gate * 13.3) * (interval - duration - 1)
+        let local = time - cycleIndex * interval - offset
+        guard local >= 0, local <= duration else { return nil }
+        let progress = local / duration
+        return Vessel(
+            y: 0.08 + fract(gate * 29.7) * 0.28,
+            direction: fract(gate * 7.7) < 0.5 ? 1 : -1,
+            progress: progress,
+            brightness: sin(progress * .pi)
+        )
+    }
+
+    // MARK: Celestial (real time of day)
+
+    /// The moon and the day's mood. Unlike everything else in this file,
+    /// `dayFraction` is real local time (0 = midnight … 1 = next midnight) —
+    /// deliberately, so the workspace at 2 AM doesn't look like noon. The
+    /// function itself stays pure; the caller supplies the clock.
+    struct Celestial: Equatable {
+        let x: Double           // 0…1 across the sky (valid while bright)
+        let y: Double           // upper sky arc
+        let brightness: Double  // 0…1; 0 through the day
+        let glowBoost: Double   // 0…0.35 extra horizon glow at dawn/dusk
+    }
+
+    static func celestial(dayFraction: Double) -> Celestial {
+        let f = fract(dayFraction)
+        // Night runs 19:00 → 07:00; progress 0…1 across it.
+        let nightProgress: Double? =
+            f >= 0.79 ? (f - 0.79) / 0.5 :
+            f <= 0.29 ? (f + 0.21) / 0.5 : nil
+        let brightness = nightProgress.map { sin(.pi * $0) } ?? 0
+        // Dawn (~06:30) and dusk (~19:30) warm the horizon briefly.
+        func bump(_ center: Double) -> Double {
+            let d = (f - center) / 0.07
+            return max(0, 1 - d * d)
+        }
+        return Celestial(
+            x: nightProgress.map { 0.14 + $0 * 0.72 } ?? 0,
+            y: nightProgress.map { 0.30 - 0.22 * sin(.pi * $0) } ?? 0,
+            brightness: max(0, brightness),
+            glowBoost: 0.3 * max(bump(0.27), bump(0.81))
+        )
+    }
+
+    // MARK: Constellations
+
+    /// A rare little secret: a handful of neighboring stars brighten and
+    /// faint lines trace between them for a few seconds, then dissolve.
+    struct Constellation: Equatable {
+        let points: [CGPoint]   // normalized, upper sky
+        let progress: Double    // 0…1 through the moment
+        let brightness: Double  // 0…1, eased in and out
+    }
+
+    static func constellation(time: Double) -> Constellation? {
+        let interval = 90.0, duration = 10.0
+        let cycleIndex = (time / interval).rounded(.down)
+        let gate = fract(sin(cycleIndex * 29.443 + 7.7) * 15731.77)
+        guard gate < 0.5 else { return nil }
+        let offset = fract(gate * 11.3) * (interval - duration - 1)
+        let local = time - cycleIndex * interval - offset
+        guard local >= 0, local <= duration else { return nil }
+
+        let count = 4 + Int(fract(gate * 5.9) * 3)
+        let anchorX = 0.12 + fract(gate * 17.7) * 0.76
+        let anchorY = 0.06 + fract(gate * 31.3) * 0.30
+        let points = (0..<count).map { member -> CGPoint in
+            let m = Double(member)
+            let dx = (fract(sin(cycleIndex * 13.7 + m * 97.3) * 43758.5453) - 0.5) * 0.18
+            let dy = (fract(sin(cycleIndex * 17.9 + m * 61.7) * 27183.1) - 0.5) * 0.14
+            return CGPoint(
+                x: min(max(anchorX + dx, 0.02), 0.98),
+                y: min(max(anchorY + dy, 0.02), 0.48)
+            )
+        }
+        let progress = local / duration
+        return Constellation(
+            points: points,
+            progress: progress,
+            brightness: sin(progress * .pi)
+        )
+    }
+
     // MARK: Embers
 
     static let emberCount = 70
@@ -296,6 +403,7 @@ enum SkyMath {
     private static let showerInterval = 600.0   // one burst window every ~10 min
     private static let cometInterval = 480.0
     private static let surgeInterval = 300.0
+    private static let shootingDuration = 0.9
 
     /// A brief burst of 3–5 staggered, overlapping streaks. Empty outside
     /// its rare window.
@@ -352,7 +460,7 @@ enum SkyMath {
         return sin(local / 12 * .pi)
     }
 
-    // MARK: Shooting star
+    // MARK: Shooting stars
 
     struct ShootingStar: Equatable {
         let startX: Double      // 0…1
@@ -362,22 +470,30 @@ enum SkyMath {
         let brightness: Double  // 0…1, eased in and out
     }
 
-    /// A streak roughly every minute or two, alive for under a second.
-    /// Scheduling hashes the cycle index, so it is rare but deterministic.
-    static func shootingStar(time: Double) -> ShootingStar? {
-        let cycleIndex = (time / shootingInterval).rounded(.down)
-        let gate = fract(sin(cycleIndex * 91.317 + 4.2) * 24634.6345)
-        guard gate < 0.45 else { return nil }
-        let local = time - cycleIndex * shootingInterval
-        guard local >= 0, local <= shootingDuration else { return nil }
-        let progress = local / shootingDuration
-        let direction = fract(gate * 7.31) < 0.5 ? 1.0 : -1.0
-        return ShootingStar(
-            startX: 0.1 + fract(gate * 17.77) * 0.8,
-            startY: 0.05 + fract(gate * 31.13) * 0.3,
-            angle: direction * (0.30 + fract(gate * 3.77) * 0.25),
-            progress: progress,
-            brightness: sin(progress * .pi)
-        )
+    /// The ambient streaks: two independent lanes, each firing in most of
+    /// its ~13–19 s cycles at a hashed offset — so one is never far away,
+    /// the rhythm never feels metronomic, and now and then two cross the
+    /// sky together. Deterministic like everything else here.
+    static func shootingStars(time: Double) -> [ShootingStar] {
+        var streaks: [ShootingStar] = []
+        for lane in 0..<2 {
+            let interval = 13.0 + Double(lane) * 6
+            let cycleIndex = (time / interval).rounded(.down)
+            let gate = fract(sin(cycleIndex * 91.317 + 4.2 + Double(lane) * 37.7) * 24634.6345)
+            guard gate < 0.6 else { continue }
+            let offset = fract(gate * 9.1) * (interval - shootingDuration - 0.1)
+            let local = time - cycleIndex * interval - offset
+            guard local >= 0, local <= shootingDuration else { continue }
+            let progress = local / shootingDuration
+            let direction = fract(gate * 7.31) < 0.5 ? 1.0 : -1.0
+            streaks.append(ShootingStar(
+                startX: 0.1 + fract(gate * 17.77) * 0.8,
+                startY: 0.05 + fract(gate * 31.13) * 0.3,
+                angle: direction * (0.30 + fract(gate * 3.77) * 0.25),
+                progress: progress,
+                brightness: sin(progress * .pi)
+            ))
+        }
+        return streaks
     }
 }

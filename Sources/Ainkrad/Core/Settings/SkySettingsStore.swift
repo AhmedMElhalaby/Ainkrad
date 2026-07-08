@@ -14,6 +14,10 @@ enum SkyEffect: String, CaseIterable, Identifiable {
     case lightRays
     case fireflies
     case bokeh
+    case weather
+    case skyTraffic
+    case celestial
+    case constellations
 
     var id: String { rawValue }
 
@@ -29,6 +33,10 @@ enum SkyEffect: String, CaseIterable, Identifiable {
         case .lightRays: return "Light rays"
         case .fireflies: return "Island fireflies"
         case .bokeh: return "Foreground bokeh"
+        case .weather: return "Sky moods"
+        case .skyTraffic: return "Sky traffic"
+        case .celestial: return "Moon & day cycle"
+        case .constellations: return "Constellations"
         }
     }
 
@@ -37,13 +45,17 @@ enum SkyEffect: String, CaseIterable, Identifiable {
         case .stars: return "A starfield in slow, endless drift — twinkling, with occasional glints."
         case .aurora: return "Two soft ribbons of accent light shimmering high in the sky."
         case .embers: return "Tiny sparks rising gently from below."
-        case .shootingStars: return "A brief lone streak across the upper sky, about once a minute."
+        case .shootingStars: return "Brief streaks across the upper sky, every ten seconds or so — sometimes two together."
         case .skyMoments: return "Rare events: meteor-shower bursts, a slow comet, aurora surges."
         case .breathingSky: return "The horizon glow slowly swells and relaxes, like the sky inhaling."
         case .horizonMist: return "Faint fog bands sliding sideways near the horizon."
         case .lightRays: return "Soft god-rays fanning up from the sun below the horizon."
         case .fireflies: return "Energy motes drifting upward around the island."
         case .bokeh: return "A few large, out-of-focus orbs floating in the extreme foreground."
+        case .weather: return "Slow atmosphere moods — clear spells sharpen the stars, hazy spells thicken the mist."
+        case .skyTraffic: return "Every few minutes a distant vessel crosses the high sky, beacon blinking."
+        case .celestial: return "A moon that arcs through the real night, and a horizon that warms at dawn and dusk."
+        case .constellations: return "Rarely, neighboring stars brighten and faint lines trace between them."
         }
     }
 }

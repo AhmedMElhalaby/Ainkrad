@@ -31,19 +31,28 @@ final class SkyClock {
 /// individually switchable in Settings → Living Sky (`SkySettingsStore`),
 /// with a master animate switch and speed control.
 ///
-/// Deliberately game-like ambience rather than a flat app background; Reduce
-/// Motion (or the master switch) freezes the whole field in its launch
-/// arrangement.
+/// Deliberately game-like ambience rather than a flat app background. The
+/// app's own "Animate the sky" switch is the single authority here — by
+/// explicit product decision it does NOT follow macOS Reduce Motion, so the
+/// scene stays alive regardless of the system setting; users who want it
+/// still have the in-app switch.
 struct AmbientSkyView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var clock = SkyClock()
 
     var body: some View {
         let tokens = environment.themeManager.tokens
+        // Per-theme sky character (emphasis only — colors come from `tokens`).
+        // Read `currentTheme` (observed) so a theme switch repaints the sky.
+        let profile = environment.themeManager.currentTheme.skyProfile
         let sky = environment.skySettingsStore
-        let animated = !reduceMotion && sky.motionEnabled
+        let animated = sky.motionEnabled
+        // Register the per-effect switches as a body-level dependency: most
+        // reads happen inside the Canvas renderer closure, which @Observable
+        // doesn't track — without this line, toggles wouldn't repaint the
+        // frozen sky.
+        let _ = sky.effectEnabled
 
         ZStack {
             LinearGradient(
@@ -63,11 +72,11 @@ struct AmbientSkyView: View {
                             real: context.date.timeIntervalSinceReferenceDate,
                             speed: sky.motionSpeed
                         ),
-                        sky: sky, tokens: tokens
+                        sky: sky, tokens: tokens, profile: profile
                     )
                 }
             } else {
-                layers(at: 0, sky: sky, tokens: tokens)
+                layers(at: 0, sky: sky, tokens: tokens, profile: profile)
             }
         }
         .ignoresSafeArea()
@@ -82,49 +91,89 @@ struct AmbientSkyView: View {
     /// Everything above the base gradient: the two glows (breathing when the
     /// effect is on), then the canvas of drawn effects. At `time == 0` (the
     /// frozen path) the glows sit exactly at their historical static values.
-    @ViewBuilder
-    private func layers(at time: TimeInterval, sky: SkySettingsStore, tokens: DesignTokens) -> some View {
+    ///
+    /// The ZStack here is load-bearing: inside `TimelineView`, a bare view
+    /// tuple lays out as an implicit VERTICAL stack — the glows and canvas
+    /// become three hard-edged horizontal bands across the home screen.
+    /// `SkyRendererTests.animatedStructureHasNoBands` guards this.
+    private func layers(at time: TimeInterval, sky: SkySettingsStore, tokens: DesignTokens, profile: SkyProfile) -> some View {
         let breath = sky.isEnabled(.breathingSky) && time > 0 ? SkyMath.breath(time: time) : 0.5
+        // The one deliberate wall-clock input: the moon and the dawn/dusk
+        // horizon warmth follow real local time.
+        let celestial = sky.isEnabled(.celestial)
+            ? SkyMath.celestial(dayFraction: Self.currentDayFraction())
+            : nil
+        let glowBoost = celestial?.glowBoost ?? 0
 
-        // Horizon glow — a sun below the edge of the island.
-        RadialGradient(
-            colors: [tokens.accentPrimary.opacity(0.16 + 0.12 * breath), .clear],
-            center: .init(x: 0.5, y: 1.15),
-            startRadius: 0,
-            endRadius: 900
-        )
+        return ZStack {
+            // Horizon glow — a sun below the edge of the island.
+            RadialGradient(
+                colors: [tokens.accentPrimary.opacity((0.16 + 0.12 * breath) * (1 + glowBoost)), .clear],
+                center: .init(x: 0.5, y: 1.15),
+                startRadius: 0,
+                endRadius: 900
+            )
 
-        // High-altitude accent haze, offset so the two glows don't read as
-        // symmetric.
-        RadialGradient(
-            colors: [tokens.accentSecondary.opacity(0.05 + 0.06 * breath), .clear],
-            center: .init(x: 0.18, y: -0.1),
-            startRadius: 0,
-            endRadius: 700
-        )
+            // High-altitude accent haze, offset so the two glows don't read
+            // as symmetric.
+            RadialGradient(
+                colors: [tokens.accentSecondary.opacity((0.05 + 0.06 * breath) * (1 + glowBoost)), .clear],
+                center: .init(x: 0.18, y: -0.1),
+                startRadius: 0,
+                endRadius: 700
+            )
 
-        canvas(at: time, sky: sky, tokens: tokens)
+            canvas(at: time, sky: sky, celestial: celestial, tokens: tokens, profile: profile)
+        }
+    }
+
+    /// Local time of day as 0…1 from midnight — the input to
+    /// `SkyMath.celestial`.
+    private static func currentDayFraction(now: Date = Date()) -> Double {
+        let components = Calendar.current.dateComponents([.hour, .minute, .second], from: now)
+        let seconds = Double(components.hour ?? 0) * 3600
+            + Double(components.minute ?? 0) * 60
+            + Double(components.second ?? 0)
+        return seconds / 86400
     }
 
     /// One Canvas pass, back to front. Each effect draws only while its
     /// switch is on; streaks and events need `time > 0` (they don't exist in
     /// the frozen arrangement).
-    private func canvas(at time: TimeInterval, sky: SkySettingsStore, tokens: DesignTokens) -> some View {
+    private func canvas(
+        at time: TimeInterval, sky: SkySettingsStore,
+        celestial: SkyMath.Celestial?, tokens: DesignTokens, profile: SkyProfile
+    ) -> some View {
         Canvas { context, size in
             guard size.width > 0, size.height > 0 else { return }
 
+            // The weather mood gently rebalances stars/aurora/mist; 0.5 is
+            // the neutral point where every multiplier is exactly 1.
+            let mood = sky.isEnabled(.weather) && time > 0 ? SkyMath.weather(time: time) : 0.5
+
+            if let celestial {
+                SkyRenderer.moon(celestial, in: &context, size: size, tokens: tokens)
+            }
             if sky.isEnabled(.aurora) {
                 let surge = sky.isEnabled(.skyMoments) && time > 0 ? SkyMath.auroraSurge(time: time) : 0
-                SkyRenderer.aurora(in: &context, size: size, time: time, surge: surge, tokens: tokens)
+                SkyRenderer.aurora(in: &context, size: size, time: time, surge: surge,
+                                   intensity: (1.2 - 0.4 * mood) * profile.aurora, tokens: tokens)
             }
             if sky.isEnabled(.lightRays) {
-                SkyRenderer.lightRays(in: &context, size: size, time: time, tokens: tokens)
+                SkyRenderer.lightRays(in: &context, size: size, time: time,
+                                      emphasis: profile.lightRays, tokens: tokens)
             }
             if sky.isEnabled(.stars) {
-                SkyRenderer.stars(in: &context, size: size, time: time, tokens: tokens)
+                SkyRenderer.stars(in: &context, size: size, time: time,
+                                  intensity: 1.15 - 0.3 * mood, tokens: tokens)
             }
-            if time > 0, sky.isEnabled(.shootingStars), let streak = SkyMath.shootingStar(time: time) {
-                SkyRenderer.streak(streak, in: &context, size: size, comet: false, tokens: tokens)
+            if time > 0, sky.isEnabled(.constellations), let figure = SkyMath.constellation(time: time) {
+                SkyRenderer.constellation(figure, in: &context, size: size, tokens: tokens)
+            }
+            if time > 0, sky.isEnabled(.shootingStars) {
+                for streak in SkyMath.shootingStars(time: time) {
+                    SkyRenderer.streak(streak, in: &context, size: size, comet: false, tokens: tokens)
+                }
             }
             if time > 0, sky.isEnabled(.skyMoments) {
                 for streak in SkyMath.meteorShower(time: time) {
@@ -134,14 +183,20 @@ struct AmbientSkyView: View {
                     SkyRenderer.streak(comet, in: &context, size: size, comet: true, tokens: tokens)
                 }
             }
+            if time > 0, sky.isEnabled(.skyTraffic), let vessel = SkyMath.vessel(time: time) {
+                SkyRenderer.vessel(vessel, in: &context, size: size, time: time, tokens: tokens)
+            }
             if sky.isEnabled(.horizonMist) {
-                SkyRenderer.mist(in: &context, size: size, time: time, tokens: tokens)
+                SkyRenderer.mist(in: &context, size: size, time: time,
+                                 intensity: (0.4 + 1.2 * mood) * profile.mist, tokens: tokens)
             }
             if sky.isEnabled(.fireflies) {
-                SkyRenderer.fireflies(in: &context, size: size, time: time, tokens: tokens)
+                SkyRenderer.fireflies(in: &context, size: size, time: time,
+                                      emphasis: profile.fireflies, tokens: tokens)
             }
             if sky.isEnabled(.embers) {
-                SkyRenderer.embers(in: &context, size: size, time: time, tokens: tokens)
+                SkyRenderer.embers(in: &context, size: size, time: time,
+                                   emphasis: profile.embers, tokens: tokens)
             }
             if sky.isEnabled(.bokeh) {
                 SkyRenderer.bokeh(in: &context, size: size, time: time, tokens: tokens)
