@@ -28,7 +28,9 @@ struct RootView: View {
 
                 // Extends under the (hidden) title bar so the HUD is the
                 // top of the screen itself — the traffic lights float
-                // inside it.
+                // inside it. The bar is always shown; in full screen it also
+                // carries the status readouts, and the traffic lights within
+                // it reveal on top-edge hover (see `HUDBar`).
                 VStack(spacing: 0) {
                     HUDBar()
 
