@@ -18,6 +18,7 @@ final class AppEnvironment {
     let shortcutStore: ShortcutStore
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
+    let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
@@ -28,6 +29,11 @@ final class AppEnvironment {
     /// notifications (AIN-109). Drives `HUDBar`'s full-screen status bar;
     /// unused in windowed mode.
     var isFullScreen = false
+    /// In full screen the top bar (traffic lights + status + workspace dots)
+    /// stays hidden and reveals only while the pointer is at the top edge,
+    /// Xcode-style — set by `MonitoringView`'s mouse-moved monitor. Ignored
+    /// in windowed mode, where the bar is always shown.
+    var isTopBarRevealed = false
 
     init(
         persistence: PersistenceStore,
@@ -43,6 +49,7 @@ final class AppEnvironment {
         shortcutStore: ShortcutStore,
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
+        skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying
     ) {
         self.persistence = persistence
@@ -58,6 +65,7 @@ final class AppEnvironment {
         self.shortcutStore = shortcutStore
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
+        self.skySettingsStore = skySettingsStore
         self.sounds = sounds
     }
 
@@ -112,6 +120,7 @@ final class AppEnvironment {
         appIconStore.applyCurrent()
 
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
+        let skySettingsStore = SkySettingsStore(persistence: persistence)
         // User-data override dir for AIN-108's sound-pack overrides (e.g. via
         // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
         // back to the bundled synth wavs when a given override is absent.
@@ -136,6 +145,7 @@ final class AppEnvironment {
             shortcutStore: ShortcutStore(persistence: persistence),
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
+            skySettingsStore: skySettingsStore,
             sounds: sounds
         )
 
