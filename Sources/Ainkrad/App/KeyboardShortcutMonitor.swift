@@ -27,6 +27,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         private var mouseUpMonitor: Any?
         private var fullScreenEnterObserver: NSObjectProtocol?
         private var fullScreenExitObserver: NSObjectProtocol?
+        private var titlebarObservation: NSKeyValueObservation?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -41,7 +42,12 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 window.isMovableByWindowBackground = false
                 // Initial value on attach — the notifications below only
                 // fire on a subsequent transition (AIN-109).
-                environment?.isFullScreen = window.styleMask.contains(.fullScreen)
+                let isFullScreen = window.styleMask.contains(.fullScreen)
+                environment?.isFullScreen = isFullScreen
+                // In full screen we host our own top bar; hide the whole OS
+                // titlebar so hovering the top edge no longer slides it down
+                // over our bar (see `observeFullScreen`).
+                setTitlebarHidden(isFullScreen)
             }
             if window != nil {
                 guard monitor == nil else { return }
@@ -75,6 +81,8 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     NSEvent.removeMonitor(mouseUpMonitor)
                     self.mouseUpMonitor = nil
                 }
+                titlebarObservation?.invalidate()
+                titlebarObservation = nil
                 removeFullScreenObservers()
             }
         }
@@ -87,12 +95,48 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             fullScreenEnterObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didEnterFullScreenNotification, object: window, queue: .main
             ) { [weak self] _ in
-                Task { @MainActor in self?.environment?.isFullScreen = true }
+                Task { @MainActor in
+                    self?.environment?.isFullScreen = true
+                    self?.environment?.isTopBarRevealed = false
+                    self?.setTitlebarHidden(true)
+                }
             }
             fullScreenExitObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main
             ) { [weak self] _ in
-                Task { @MainActor in self?.environment?.isFullScreen = false }
+                Task { @MainActor in
+                    self?.environment?.isFullScreen = false
+                    self?.environment?.isTopBarRevealed = false
+                    // Restore the native titlebar + traffic lights for
+                    // windowed mode.
+                    self?.setTitlebarHidden(false)
+                }
+            }
+        }
+
+        /// Hides/shows the whole system titlebar. In full screen this stops it
+        /// from sliding into view over our own top bar when the pointer reaches
+        /// the top — hiding only the traffic-light buttons left an empty
+        /// titlebar still revealing.
+        ///
+        /// `NSTitlebarContainerView` is two levels above the standard buttons
+        /// (…ContainerView → NSTitlebarView → button). Hiding it once isn't
+        /// enough: AppKit sets `isHidden = false` to slide it in whenever the
+        /// pointer reaches the top. So we KVO-observe `isHidden` and flip it
+        /// straight back — synchronously, before the frame draws — which
+        /// suppresses it flash-free (a per-frame poll from the mouse monitor
+        /// instead fought the animation and flickered).
+        private func setTitlebarHidden(_ hidden: Bool) {
+            guard let container = window?.standardWindowButton(.closeButton)?.superview?.superview else { return }
+            titlebarObservation?.invalidate()
+            titlebarObservation = nil
+            if hidden {
+                container.isHidden = true
+                titlebarObservation = container.observe(\.isHidden, options: [.new]) { view, _ in
+                    if view.isHidden == false { view.isHidden = true }
+                }
+            } else {
+                container.isHidden = false
             }
         }
 

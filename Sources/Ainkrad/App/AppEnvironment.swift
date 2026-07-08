@@ -29,6 +29,11 @@ final class AppEnvironment {
     /// notifications (AIN-109). Drives `HUDBar`'s full-screen status bar;
     /// unused in windowed mode.
     var isFullScreen = false
+    /// In full screen the top bar (traffic lights + status + workspace dots)
+    /// stays hidden and reveals only while the pointer is at the top edge,
+    /// Xcode-style — set by `MonitoringView`'s mouse-moved monitor. Ignored
+    /// in windowed mode, where the bar is always shown.
+    var isTopBarRevealed = false
 
     init(
         persistence: PersistenceStore,

@@ -48,14 +48,18 @@ struct FullScreenStatusBarView: View {
         }
     }
 
+    /// Network/battery readouts carry the theme's `accentSecondary` so the
+    /// status bar reads as part of the current theme rather than flat neutral.
+    /// The clock stays in `foreground` (see `itemView`) as the legible anchor.
     private func symbolReadout(_ symbolName: String, text: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: symbolName)
                 .font(.system(size: 10))
+                .foregroundStyle(tokens.accentSecondary.opacity(0.95))
             Text(text)
                 .font(AinkradFont.mono(11))
+                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
         }
-        .foregroundStyle(tokens.foreground.opacity(0.7))
     }
 }
 

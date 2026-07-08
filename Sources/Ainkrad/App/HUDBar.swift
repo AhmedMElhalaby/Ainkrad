@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The top edge of the screen — not a bar. The system traffic lights and
@@ -23,7 +24,16 @@ struct HUDBar: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
+            // In full screen the system traffic lights are suppressed (they'd
+            // drag the OS titlebar over this bar), so we host our own to the
+            // left of the clock — hidden by default, revealed while the pointer
+            // is at the top edge (`isTopBarRevealed`), Xcode-style.
+            if environment.isFullScreen, environment.isTopBarRevealed {
+                WindowControlsView()
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+
             if showsStatusBar {
                 FullScreenStatusBarView(monitor: statusMonitor, tokens: tokens)
             }
@@ -36,6 +46,16 @@ struct HUDBar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 30)
+        .contentShape(Rectangle())
+        // Reveal the traffic lights the moment the pointer is anywhere in the
+        // status-bar strip, and keep them while it stays — hover tracking is
+        // immediate and stateful, unlike a motion-only mouse monitor that the
+        // menu-bar zone also contends for. Only meaningful in full screen.
+        .onHover { hovering in
+            guard environment.isFullScreen else { return }
+            environment.isTopBarRevealed = hovering
+        }
+        .animation(.easeOut(duration: 0.16), value: environment.isTopBarRevealed)
         // Only run the monitor's timer/NWPathMonitor while the bar is
         // actually shown, so full-screen + the toggle both gate the cost —
         // `initial: true` also starts it if the bar is already visible when
@@ -84,5 +104,51 @@ struct HUDBar: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: manager.activeWorkspaceID)
+    }
+}
+
+/// Full-screen stand-ins for the system traffic lights, hosted inside the
+/// app's own top bar. The real window buttons are hidden in full screen (see
+/// `KeyboardShortcutMonitor`) so the OS titlebar can't slide over our bar;
+/// these carry the same three actions and show their glyphs on hover, matching
+/// the native look.
+private struct WindowControlsView: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            control(color: Color(red: 1.0, green: 0.37, blue: 0.34),
+                    glyph: "xmark", help: "Close") { $0.performClose(nil) }
+            control(color: Color(red: 1.0, green: 0.74, blue: 0.18),
+                    glyph: "minus", help: "Minimize") { $0.miniaturize(nil) }
+            control(color: Color(red: 0.16, green: 0.79, blue: 0.25),
+                    glyph: "arrow.down.right.and.arrow.up.left",
+                    help: "Exit Full Screen") { $0.toggleFullScreen(nil) }
+        }
+        .onHover { isHovering = $0 }
+    }
+
+    private func control(
+        color: Color, glyph: String, help: String,
+        action: @escaping (NSWindow) -> Void
+    ) -> some View {
+        Button {
+            if let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first {
+                action(window)
+            }
+        } label: {
+            ZStack {
+                Circle().fill(color)
+                if isHovering {
+                    Image(systemName: glyph)
+                        .font(.system(size: 6.5, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.55))
+                }
+            }
+            .frame(width: 12, height: 12)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
