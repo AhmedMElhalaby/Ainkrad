@@ -99,7 +99,10 @@ final class AppEnvironment {
                              secretStore: secrets, themeManager: themeManager)
         }
 
-        let firstPartyRepos = ["AhmedMElhalaby/AinkradTerminal"]   // bundled first-party repo list (grows as apps ship)
+        let firstPartyRepos = [
+            "AhmedMElhalaby/AinkradTerminal",
+            "AhmedMElhalaby/GitMage",
+        ]   // bundled first-party repo list (grows as apps ship)
         let catalogService = CatalogService(
             source: GitHubReleasesCatalogSource(repositories: firstPartyRepos, http: URLSessionHTTPClient()),
             persistence: persistence)
