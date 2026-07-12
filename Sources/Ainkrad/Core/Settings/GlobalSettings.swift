@@ -41,6 +41,12 @@ struct GlobalSettings: PersistableDocument {
     /// means "enabled" — only explicit opt-outs are stored, so legacy docs
     /// and future effects need no migration.
     var skyEffectEnabled: [String: Bool] = [:]
+    /// Background opacity (0.3…1.0) of the summonable HUD overlays
+    /// (Launcher / Settings / App Store / Workspace Overview / Quit). Below 1
+    /// the blurred workspace behind shows through the panel.
+    var overlayBackgroundOpacity: Double = 0.94
+    /// Frost the overlay panel with a blur material behind its tint.
+    var overlayBlurEnabled: Bool = true
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
@@ -56,7 +62,9 @@ struct GlobalSettings: PersistableDocument {
          soundEventEffects: [String: String] = [:],
          skyMotionEnabled: Bool = true,
          skyMotionSpeed: Double = 1.0,
-         skyEffectEnabled: [String: Bool] = [:]) {
+         skyEffectEnabled: [String: Bool] = [:],
+         overlayBackgroundOpacity: Double = 0.94,
+         overlayBlurEnabled: Bool = true) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
@@ -72,6 +80,8 @@ struct GlobalSettings: PersistableDocument {
         self.skyMotionEnabled = skyMotionEnabled
         self.skyMotionSpeed = skyMotionSpeed
         self.skyEffectEnabled = skyEffectEnabled
+        self.overlayBackgroundOpacity = overlayBackgroundOpacity
+        self.overlayBlurEnabled = overlayBlurEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -91,5 +101,7 @@ struct GlobalSettings: PersistableDocument {
         skyMotionEnabled = try container.decodeIfPresent(Bool.self, forKey: .skyMotionEnabled) ?? true
         skyMotionSpeed = try container.decodeIfPresent(Double.self, forKey: .skyMotionSpeed) ?? 1.0
         skyEffectEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .skyEffectEnabled) ?? [:]
+        overlayBackgroundOpacity = try container.decodeIfPresent(Double.self, forKey: .overlayBackgroundOpacity) ?? 0.94
+        overlayBlurEnabled = try container.decodeIfPresent(Bool.self, forKey: .overlayBlurEnabled) ?? true
     }
 }

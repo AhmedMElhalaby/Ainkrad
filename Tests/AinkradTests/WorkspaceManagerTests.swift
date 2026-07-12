@@ -109,6 +109,35 @@ struct WorkspaceManagerTests {
         #expect(second.tileLayout.isEmpty)
     }
 
+    @Test("moveApp re-homes a pane from one workspace to another, preserving its block id")
+    func moveAppBetweenWorkspaces() {
+        let manager = WorkspaceManager()
+        let source = manager.activeWorkspace
+        let block = source.tileLayout.openApp("terminal")
+        let destination = manager.createWorkspace()
+
+        manager.moveApp(block.id, from: source.id, to: destination.id)
+
+        #expect(source.tileLayout.isEmpty)
+        #expect(destination.tileLayout.blocks.map(\.id) == [block.id])
+        #expect(destination.tileLayout.appIDs == ["terminal"])
+    }
+
+    @Test("moveApp is a no-op when source == destination or the block is missing")
+    func moveAppNoOps() {
+        let manager = WorkspaceManager()
+        let source = manager.activeWorkspace
+        let block = source.tileLayout.openApp("terminal")
+
+        manager.moveApp(block.id, from: source.id, to: source.id)
+        #expect(source.tileLayout.appIDs == ["terminal"])
+
+        let destination = manager.createWorkspace()
+        manager.moveApp(UUID(), from: source.id, to: destination.id)
+        #expect(source.tileLayout.appIDs == ["terminal"])
+        #expect(destination.tileLayout.isEmpty)
+    }
+
     @Test("switchTo an existing workspace id makes it active")
     func switchToExistingWorkspace() {
         let manager = WorkspaceManager()

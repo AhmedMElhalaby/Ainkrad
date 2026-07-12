@@ -26,6 +26,9 @@ struct AppearanceSettingsView: View {
 
                 typographySection(tokens: tokens)
                     .padding(.top, 8)
+
+                overlaysSection(tokens: tokens)
+                    .padding(.top, 8)
             }
             .padding(18)
         }
@@ -51,6 +54,40 @@ struct AppearanceSettingsView: View {
             labeled("ACCENT COLOR", tokens: tokens) {
                 accentColorRow(tokens: tokens, manager: manager)
             }
+        }
+    }
+
+    // MARK: - Overlays (background opacity + blur)
+
+    private func overlaysSection(tokens: DesignTokens) -> some View {
+        let store = environment.generalSettingsStore
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "OVERLAYS", tokens: tokens)
+
+            labeled("BACKGROUND OPACITY", tokens: tokens) {
+                HStack(spacing: 12) {
+                    Slider(
+                        value: Binding(
+                            get: { store.overlayBackgroundOpacity },
+                            set: { store.setOverlayBackgroundOpacity($0) }
+                        ),
+                        in: 0.3...1.0
+                    )
+                    .tint(tokens.accentPrimary)
+                    Text("\(Int(store.overlayBackgroundOpacity * 100))%")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.55))
+                        .frame(width: 42, alignment: .trailing)
+                }
+            }
+            labeled("BACKGROUND BLUR", tokens: tokens) {
+                segmented([true, false], selected: store.overlayBlurEnabled, tokens: tokens,
+                          title: { $0 ? "On" : "Off" }, action: { store.setOverlayBlurEnabled($0) })
+            }
+            Text("Lower opacity (and blur) let the workspace show through the Launcher, Settings, App Store, and other overlays.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

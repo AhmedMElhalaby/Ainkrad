@@ -58,6 +58,27 @@ final class WorkspaceManager {
         onStateChange?()
     }
 
+    /// Moves an open app (pane) from one workspace to another, preserving its
+    /// block identity. Running pane state is ephemeral by design, so the app
+    /// re-renders in its new home. No-op if source == destination or the block
+    /// isn't found.
+    func moveApp(_ blockID: UUID, from sourceID: UUID, to destinationID: UUID) {
+        guard sourceID != destinationID,
+              let source = workspaces.first(where: { $0.id == sourceID }),
+              let destination = workspaces.first(where: { $0.id == destinationID }),
+              let block = source.tileLayout.blocks.first(where: { $0.id == blockID }) else { return }
+        source.tileLayout.close(blockID)
+        destination.tileLayout.adopt(block)
+        onStateChange?()
+    }
+
+    /// Opens a second instance of an app in another workspace (copy, not move).
+    func duplicateApp(_ appID: String, to destinationID: UUID) {
+        guard let destination = workspaces.first(where: { $0.id == destinationID }) else { return }
+        destination.tileLayout.openApp(appID)
+        onStateChange?()
+    }
+
     func switchTo(_ id: UUID) {
         guard workspaces.contains(where: { $0.id == id }) else { return }
         activeWorkspaceID = id
