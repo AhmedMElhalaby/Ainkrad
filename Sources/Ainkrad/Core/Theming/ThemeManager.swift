@@ -38,9 +38,17 @@ final class ThemeManager {
         AinkradFont.configure(scale: uiFontScale.multiplier, family: uiFontFamily)
     }
 
+    /// Selecting a theme adopts that theme's own accent — any custom accent
+    /// override is cleared, so the accent always follows the theme on switch.
+    /// (A custom accent can be re-picked afterward; it sticks until the next
+    /// theme change.)
     func setTheme(_ theme: Theme) {
         currentTheme = theme
-        persist { $0.theme = theme }
+        accentColorHex = nil
+        persist {
+            $0.theme = theme
+            $0.accentColorHex = nil
+        }
         onThemeChange?()
         Log.settings.info("Theme changed to \(theme.rawValue, privacy: .public)")
     }

@@ -65,6 +65,23 @@ final class ThemeManagerTests {
         #expect(reloaded.tokens.accentPrimary == Color(hex: "00FF00"))
     }
 
+    @Test("changing theme clears a custom accent so the accent follows the theme")
+    @MainActor
+    func setThemeClearsAccentOverride() {
+        let manager = makeManager()
+        manager.setAccentColorHex("FF00AA")
+        #expect(manager.accentColorHex == "FF00AA")
+
+        manager.setTheme(.gruvbox)
+
+        #expect(manager.accentColorHex == nil)
+        #expect(manager.tokens.accentPrimary == DesignTokens.gruvbox.accentPrimary)
+
+        // And it's cleared in persistence too.
+        let reloaded = makeManager()
+        #expect(reloaded.accentColorHex == nil)
+    }
+
     @Test("setFontScale and setFontFamily update state and persist")
     @MainActor
     func setFontScaleAndFamilyPersist() {
