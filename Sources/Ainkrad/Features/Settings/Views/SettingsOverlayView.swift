@@ -13,9 +13,10 @@ struct SettingsOverlayView: View {
 
     /// `focusedAppID` opens the overlay directly on that app's settings —
     /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
+    /// Otherwise it lands on General — the natural top of the reordered sidebar.
     init(focusedAppID: String? = nil, onDismiss: @escaping () -> Void) {
         self.onDismiss = onDismiss
-        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .appearance)
+        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .general)
     }
 
     /// A value snapshot of a registered app for the sidebar — iterating
@@ -26,10 +27,12 @@ struct SettingsOverlayView: View {
         let id: String
         let displayName: String
         let icon: String
+        let isBuiltIn: Bool
     }
 
     private enum SettingsSection: Hashable {
         case general
+        case sound
         case appearance
         case livingSky
         case appIcon
@@ -40,8 +43,16 @@ struct SettingsOverlayView: View {
     /// Only enabled apps get a settings section — a disabled app is hidden here
     /// just as it is in the Launcher (`LauncherStore` filters `enabledApps`).
     private var appEntries: [AppEntry] {
-        environment.registry.enabledApps.map { AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
+        environment.registry.enabledApps.map {
+            AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon, isBuiltIn: $0.source == .builtIn)
+        }
     }
+
+    /// Apps compiled into the host (Terminal, Git Mage, …).
+    private var builtInAppEntries: [AppEntry] { appEntries.filter(\.isBuiltIn) }
+
+    /// Apps installed from the App Store as dynamic plugin bundles.
+    private var installedAppEntries: [AppEntry] { appEntries.filter { !$0.isBuiltIn } }
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -113,33 +124,56 @@ struct SettingsOverlayView: View {
     // MARK: - Sidebar
 
     private func sidebar(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            groupLabel("AINKRAD", tokens: tokens)
-            sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
-            sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
-            sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
-            sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
-            sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                groupLabel("AINKRAD", tokens: tokens)
+                sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
+                sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
+                sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
 
-            groupLabel("BUILT-IN APPS", tokens: tokens)
-                .padding(.top, 12)
-            ForEach(appEntries) { app in
-                sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                groupLabel("APPEARANCE", tokens: tokens)
+                    .padding(.top, 12)
+                sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
+                sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
+                sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
+
+                if !builtInAppEntries.isEmpty {
+                    groupLabel("BUILT-IN APPS", tokens: tokens)
+                        .padding(.top, 12)
+                    ForEach(builtInAppEntries) { app in
+                        sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                    }
+                }
+
+                if !installedAppEntries.isEmpty {
+                    groupLabel("INSTALLED", tokens: tokens)
+                        .padding(.top, 12)
+                    ForEach(installedAppEntries) { app in
+                        sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                    }
+                }
             }
-
-            Spacer()
+            .padding(12)
         }
-        .padding(12)
+        .scrollContentBackground(.hidden)
         .frame(width: 208, alignment: .topLeading)
     }
 
+    /// A group header in the HUD language: a short accent tick beside an
+    /// uppercase, letter-spaced label — echoing `SettingsSectionHeader`.
     private func groupLabel(_ text: String, tokens: DesignTokens) -> some View {
-        Text(text)
-            .font(AinkradFont.mono(9, weight: .medium))
-            .kerning(2.5)
-            .foregroundStyle(tokens.foreground.opacity(0.4))
-            .padding(.horizontal, 8)
-            .padding(.bottom, 2)
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(tokens.accentSecondary.opacity(0.85))
+                .frame(width: 2, height: 9)
+                .shadow(color: tokens.accentSecondary.opacity(0.7), radius: 3)
+            Text(text)
+                .font(AinkradFont.mono(9, weight: .medium))
+                .kerning(2.5)
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+        }
+        .padding(.horizontal, 8)
+        .padding(.bottom, 2)
     }
 
     private func sidebarRow(
@@ -182,18 +216,26 @@ struct SettingsOverlayView: View {
     /// use a tinted SF Symbol.
     @ViewBuilder
     private func rowIcon(appID: String?, systemIcon: String, isSelected: Bool, tokens: DesignTokens) -> some View {
+        appTile(appID: appID, systemIcon: systemIcon, size: 22, isSelected: isSelected, tokens: tokens)
+    }
+
+    /// Shared tile renderer: the theme's neon artwork for a registered app, or
+    /// a tinted SF Symbol fallback. Used by both sidebar rows and the app
+    /// settings identity header.
+    @ViewBuilder
+    private func appTile(appID: String?, systemIcon: String, size: CGFloat, isSelected: Bool, tokens: DesignTokens) -> some View {
         let assetName = appID.map { "AppTile-\($0)-\(environment.themeManager.currentTheme.rawValue)" }
 
         if let assetName, NSImage(named: assetName) != nil {
             Image(assetName)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 22, height: 22)
+                .frame(width: size, height: size)
         } else {
             Image(systemName: systemIcon)
-                .font(.system(size: 13))
+                .font(.system(size: size * 0.6))
                 .foregroundStyle(isSelected ? tokens.accentSecondary : tokens.foreground.opacity(0.55))
-                .frame(width: 22, height: 22)
+                .frame(width: size, height: size)
         }
     }
 
@@ -204,6 +246,8 @@ struct SettingsOverlayView: View {
         switch selection {
         case .general:
             GeneralSettingsView()
+        case .sound:
+            SoundSettingsView()
         case .appearance:
             AppearanceSettingsView()
         case .livingSky:
@@ -216,11 +260,60 @@ struct SettingsOverlayView: View {
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is
             // open its detail falls back to blank rather than lingering.
-            if let app = environment.registry.enabledApps.first(where: { $0.id == id }) {
-                app.makeSettingsView()
+            if let app = environment.registry.enabledApps.first(where: { $0.id == id }),
+               let entry = appEntries.first(where: { $0.id == id }) {
+                VStack(alignment: .leading, spacing: 0) {
+                    appSettingsHeader(entry, tokens: tokens)
+                    app.makeSettingsView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             } else {
                 Color.clear
             }
         }
+    }
+
+    /// A uniform identity header above every app's own settings — its neon
+    /// tile, name, and a Built-in / Installed badge — so first-party and
+    /// store-installed apps frame consistently regardless of what each app's
+    /// `makeSettingsView` renders below.
+    private func appSettingsHeader(_ entry: AppEntry, tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                appTile(appID: entry.id, systemIcon: entry.icon, size: 34, isSelected: true, tokens: tokens)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.displayName)
+                        .font(AinkradFont.display(15, weight: .semibold))
+                        .foregroundStyle(tokens.foreground.opacity(0.95))
+                    sourceBadge(isBuiltIn: entry.isBuiltIn, tokens: tokens)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            LinearGradient(
+                colors: [.clear, tokens.accentPrimary.opacity(0.28), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 1)
+        }
+    }
+
+    private func sourceBadge(isBuiltIn: Bool, tokens: DesignTokens) -> some View {
+        Text(isBuiltIn ? "BUILT-IN" : "INSTALLED")
+            .font(AinkradFont.mono(8, weight: .medium))
+            .kerning(1.5)
+            .foregroundStyle(isBuiltIn ? tokens.accentSecondary.opacity(0.9) : tokens.accentPrimary.opacity(0.95))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill((isBuiltIn ? tokens.accentSecondary : tokens.accentPrimary).opacity(0.12))
+            )
+            .overlay(
+                Capsule().strokeBorder((isBuiltIn ? tokens.accentSecondary : tokens.accentPrimary).opacity(0.35), lineWidth: 1)
+            )
     }
 }
