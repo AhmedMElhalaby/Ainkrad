@@ -73,7 +73,7 @@ struct AppIconSettingsView: View {
                 Button { action(item) } label: {
                     Text(title(item))
                         .font(AinkradFont.display(12, weight: isSel ? .medium : .regular))
-                        .foregroundStyle(isSel ? tokens.background : tokens.foreground.opacity(0.75))
+                        .foregroundStyle(isSel ? tokens.accentPrimary.contrastingText : tokens.foreground.opacity(0.75))
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .frame(maxWidth: .infinity)
                         .background(RoundedRectangle(cornerRadius: 8).fill(isSel ? tokens.accentPrimary.opacity(0.9) : tokens.surfaceElevated.opacity(0.5)))

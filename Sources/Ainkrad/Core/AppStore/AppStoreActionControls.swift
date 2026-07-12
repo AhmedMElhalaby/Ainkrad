@@ -114,7 +114,7 @@ private struct AppStoreActionButton: View {
             .font(.system(size: style.fontSize, weight: .medium))
             .padding(.horizontal, style.buttonHPad).padding(.vertical, style.buttonVPad)
             .background(filled ? tokens.accentPrimary.opacity(0.9) : .clear)
-            .foregroundStyle(filled ? tokens.background : tokens.foreground.opacity(0.8))
+            .foregroundStyle(filled ? tokens.accentPrimary.contrastingText : tokens.foreground.opacity(0.8))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(tokens.foreground.opacity(filled ? 0 : (isHovering ? 0.35 : 0.2)), lineWidth: 1)

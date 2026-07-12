@@ -68,7 +68,7 @@ struct LivingSkySettingsView: View {
                     } label: {
                         Text(preset.title)
                             .font(AinkradFont.display(12, weight: isSelected ? .medium : .regular))
-                            .foregroundStyle(isSelected ? tokens.background : tokens.foreground.opacity(0.75))
+                            .foregroundStyle(isSelected ? tokens.accentPrimary.contrastingText : tokens.foreground.opacity(0.75))
                             .padding(.vertical, 6)
                             .frame(maxWidth: .infinity)
                             .background(
