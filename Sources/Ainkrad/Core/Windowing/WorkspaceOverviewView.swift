@@ -396,7 +396,7 @@ struct WorkspaceOverviewView: View {
                 Image(systemName: icon).font(.system(size: 11, weight: .semibold))
                 Text(title).font(AinkradFont.display(12, weight: .medium))
             }
-            .foregroundStyle(.white.opacity(0.95))
+            .foregroundStyle(tokens.accentPrimary.contrastingText.opacity(0.95))
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(tokens.accentPrimary.opacity(0.9)))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(tokens.accentSecondary.opacity(0.4)))

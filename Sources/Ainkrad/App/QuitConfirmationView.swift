@@ -94,7 +94,7 @@ struct QuitConfirmationView: View {
         } label: {
             Text("Quit")
                 .font(AinkradFont.display(12, weight: .semibold))
-                .foregroundStyle(tokens.background)
+                .foregroundStyle(tokens.accentPrimary.contrastingText)
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
                 .background(tokens.accentPrimary)

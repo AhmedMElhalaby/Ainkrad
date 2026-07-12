@@ -72,7 +72,7 @@ struct AppStoreOverlayView: View {
                         .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
                         .padding(.horizontal, 12).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(tokens.accentPrimary.opacity(0.9)))
-                        .foregroundStyle(tokens.background)
+                        .foregroundStyle(tokens.accentPrimary.contrastingText)
                 }
             }
             .padding(20)
