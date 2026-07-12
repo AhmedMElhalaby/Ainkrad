@@ -99,12 +99,12 @@ final class AppEnvironment {
                              secretStore: secrets, themeManager: themeManager)
         }
 
-        let firstPartyRepos = [
-            "AhmedMElhalaby/AinkradTerminal",
-            "AhmedMElhalaby/GitMage",
-        ]   // bundled first-party repo list (grows as apps ship)
+        // The app catalog is a single hosted document (the central
+        // AinkradCatalog). Adding/updating apps is a catalog edit — no host
+        // release. Only this URL is compiled in.
+        let catalogURL = URL(string: "https://raw.githubusercontent.com/AhmedMElhalaby/AinkradCatalog/main/catalog.json")!
         let catalogService = CatalogService(
-            source: GitHubReleasesCatalogSource(repositories: firstPartyRepos, http: URLSessionHTTPClient()),
+            source: RemoteCatalogSource(url: catalogURL, http: URLSessionHTTPClient()),
             persistence: persistence)
         let installer = PluginInstaller(
             http: URLSessionHTTPClient(), unzipper: DittoUnzipper(),
