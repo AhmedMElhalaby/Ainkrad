@@ -17,6 +17,9 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     /// (missing key = the event's own sound) — see `GlobalSettings`.
     private(set) var soundEventEnabled: [String: Bool]
     private(set) var soundEventEffects: [String: String]
+    /// Overlay panel background opacity + blur (Settings → Appearance).
+    private(set) var overlayBackgroundOpacity: Double
+    private(set) var overlayBlurEnabled: Bool
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
@@ -27,6 +30,23 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         self.soundVolume = settings.soundVolume
         self.soundEventEnabled = settings.soundEventEnabled
         self.soundEventEffects = settings.soundEventEffects
+        self.overlayBackgroundOpacity = settings.overlayBackgroundOpacity
+        self.overlayBlurEnabled = settings.overlayBlurEnabled
+    }
+
+    func setOverlayBackgroundOpacity(_ value: Double) {
+        let clamped = min(max(value, 0.3), 1.0)
+        overlayBackgroundOpacity = clamped
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.overlayBackgroundOpacity = clamped
+        persistence.save(settings)
+    }
+
+    func setOverlayBlurEnabled(_ isOn: Bool) {
+        overlayBlurEnabled = isOn
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.overlayBlurEnabled = isOn
+        persistence.save(settings)
     }
 
     func setShowFullScreenStatusBar(_ isOn: Bool) {
