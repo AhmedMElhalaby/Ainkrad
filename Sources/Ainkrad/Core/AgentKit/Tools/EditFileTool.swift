@@ -49,8 +49,19 @@ struct EditFileTool: AgentTool {
             return Edit(path: path, original: "", updated: newString)
         }
 
-        guard exists else { throw ToolError.message("No file exists at \(path).") }
-        let original = try String(contentsOfFile: path, encoding: .utf8)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            throw ToolError.message("No file exists at \(path).")
+        }
+        guard !isDirectory.boolValue else {
+            throw ToolError.message("\(path) is a directory, not a file.")
+        }
+        let original: String
+        do {
+            original = try String(contentsOfFile: path, encoding: .utf8)
+        } catch {
+            throw ToolError.message("Could not read \(path): \(error.localizedDescription).")
+        }
         let occurrences = original.components(separatedBy: oldString).count - 1
         switch occurrences {
         case 0: throw ToolError.message("old_string was not found in \(path).")
@@ -63,7 +74,11 @@ struct EditFileTool: AgentTool {
 
     func execute(_ input: JSONValue) async throws -> ToolResult {
         let edit = try computeEdit(input)
-        try edit.updated.write(toFile: edit.path, atomically: true, encoding: .utf8)
+        do {
+            try edit.updated.write(toFile: edit.path, atomically: true, encoding: .utf8)
+        } catch {
+            throw ToolError.message("Could not write \(edit.path): \(error.localizedDescription).")
+        }
         return ToolResult(content: "Edited \(edit.path).", isError: false)
     }
 

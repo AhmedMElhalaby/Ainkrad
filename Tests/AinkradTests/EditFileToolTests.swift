@@ -46,6 +46,18 @@ struct EditFileToolTests {
         }
     }
 
+    @Test func directoryPathThrows() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("edittool-dir-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        await #expect(throws: ToolError.self) {
+            _ = try await EditFileTool().execute(.object([
+                "path": .string(dir.path), "old_string": .string("x"), "new_string": .string("y"),
+            ]))
+        }
+    }
+
     @Test func emptyOldStringCreatesFile() async throws {
         let path = tempPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
