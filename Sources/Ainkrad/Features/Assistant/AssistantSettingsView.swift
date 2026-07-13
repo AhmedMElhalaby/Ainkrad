@@ -237,18 +237,21 @@ struct AssistantSettingsView: View {
         let key = store.token(for: connection) ?? ""
         isRefreshingModels = true
         Task {
-            let models = await svc.models(kind: connection.kind, baseURL: connection.baseURL,
-                                          apiKey: key, curatedFallback: preset.curatedModels)
-            discoveredModels[connection.id] = models
+            let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
+                                                apiKey: key, curatedFallback: preset.curatedModels)
+            discoveredModels[connection.id] = result.models
             isRefreshingModels = false
-            reconcileModelIfNeeded(for: connection, availableModels: models)
+            if result.isLive {
+                reconcileModelIfNeeded(for: connection, availableModels: result.models)
+            }
         }
     }
 
     /// If the active connection's active model isn't valid for it (e.g. still the
     /// Claude default on a freshly-added non-Claude connection), fall back to the
     /// first available model for that connection. Never overrides an explicitly
-    /// chosen model that IS in the list.
+    /// chosen model that IS in the list. Only called when the model list was
+    /// genuinely fetched live — never on a curated fallback from a failed fetch.
     private func reconcileModelIfNeeded(for connection: Connection, availableModels: [String]) {
         let configStore = environment.agentConfigStore
         guard activeConnection()?.id == connection.id else { return }

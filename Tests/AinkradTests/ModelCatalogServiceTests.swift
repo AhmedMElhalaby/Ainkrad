@@ -43,6 +43,34 @@ struct ModelCatalogServiceTests {
         #expect(models == ["a", "b"])
     }
 
+    @Test("modelsResult signals isLive == false on a 500 fallback")
+    func modelsResultFallbackIsNotLive() async throws {
+        let stub = StubDataHTTPClient(status: 500, body: "boom", captured: nil)
+        let svc = ModelCatalogService(http: stub)
+        let result = await svc.modelsResult(kind: .openAICompatible, baseURL: "https://x/v1", apiKey: "k", curatedFallback: ["a", "b"])
+        #expect(result.models == ["a", "b"])
+        #expect(result.isLive == false)
+    }
+
+    @Test("modelsResult signals isLive == false on an empty parse")
+    func modelsResultEmptyParseIsNotLive() async throws {
+        let stub = StubDataHTTPClient(status: 200, body: "{\"data\":[]}", captured: nil)
+        let svc = ModelCatalogService(http: stub)
+        let result = await svc.modelsResult(kind: .openAICompatible, baseURL: "https://x/v1", apiKey: "k", curatedFallback: ["a", "b"])
+        #expect(result.models == ["a", "b"])
+        #expect(result.isLive == false)
+    }
+
+    @Test("modelsResult signals isLive == true on a successful fetch")
+    func modelsResultLiveFetchIsLive() async throws {
+        let stub = StubDataHTTPClient(status: 200,
+            body: "{\"data\":[{\"id\":\"gpt-5\"},{\"id\":\"gpt-5-mini\"}]}", captured: nil)
+        let svc = ModelCatalogService(http: stub)
+        let result = await svc.modelsResult(kind: .openAICompatible, baseURL: "https://api.openai.com/v1", apiKey: "k", curatedFallback: ["fallback"])
+        #expect(result.models == ["gpt-5", "gpt-5-mini"])
+        #expect(result.isLive == true)
+    }
+
     @Test("test() returns ok on 200")
     func testOK() async throws {
         let stub = StubDataHTTPClient(status: 200, body: "{\"data\":[{\"id\":\"m\"}]}", captured: nil)

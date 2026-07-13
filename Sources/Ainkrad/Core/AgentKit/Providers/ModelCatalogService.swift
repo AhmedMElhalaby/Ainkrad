@@ -19,16 +19,25 @@ final class ModelCatalogService {
     }
 
     func models(kind: ProviderKind, baseURL: String, apiKey: String, curatedFallback: [String]) async -> [String] {
+        await modelsResult(kind: kind, baseURL: baseURL, apiKey: apiKey, curatedFallback: curatedFallback).models
+    }
+
+    /// Same as `models(...)`, but also signals whether the returned list was
+    /// genuinely fetched live (`isLive == true`) or is the curated fallback
+    /// returned due to an invalid request, non-2xx response, transport error,
+    /// or empty parse (`isLive == false`). Callers should only treat the list
+    /// as authoritative (e.g. for reconciling a selected model) when `isLive`.
+    func modelsResult(kind: ProviderKind, baseURL: String, apiKey: String, curatedFallback: [String]) async -> (models: [String], isLive: Bool) {
         guard let request = Self.listRequest(kind: kind, baseURL: baseURL, apiKey: apiKey) else {
-            return curatedFallback
+            return (curatedFallback, false)
         }
         do {
             let (data, response) = try await http.data(for: request)
-            guard (200...299).contains(response.statusCode) else { return curatedFallback }
+            guard (200...299).contains(response.statusCode) else { return (curatedFallback, false) }
             let parsed = Self.parseModels(kind: kind, data: data)
-            return parsed.isEmpty ? curatedFallback : parsed
+            return parsed.isEmpty ? (curatedFallback, false) : (parsed, true)
         } catch {
-            return curatedFallback
+            return (curatedFallback, false)
         }
     }
 
