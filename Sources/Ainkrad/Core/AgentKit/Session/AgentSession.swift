@@ -132,6 +132,8 @@ final class AgentSession {
         case .textDelta(let delta):
             streamingText += delta
             state = .streaming
+        case .toolUseStart, .toolInputDelta, .toolUseComplete:
+            break   // wired up by the tool-use loop in a later task
         case .done:
             if !streamingText.isEmpty {
                 messages.append(AgentMessage(role: .assistant, text: streamingText))

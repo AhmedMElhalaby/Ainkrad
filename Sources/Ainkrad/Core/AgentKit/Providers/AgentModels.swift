@@ -11,6 +11,9 @@ struct AgentModelConfig: Equatable, Sendable {
 enum AgentEvent: Equatable, Sendable {
     case thinkingDelta(String)
     case textDelta(String)
+    case toolUseStart(id: String, name: String)
+    case toolInputDelta(id: String, partialJSON: String)
+    case toolUseComplete(id: String, name: String, input: JSONValue)
     case done(stopReason: String?)
     case failed(String)        // human-readable, key already redacted
 }
