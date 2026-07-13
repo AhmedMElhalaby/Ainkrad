@@ -16,7 +16,7 @@ final class FakeLLMProvider: LLMProvider {
         self.script = script
     }
 
-    func send(messages: [AgentMessage], system: String, model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema], model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
         wasCalled = true
         lastSystem = system
         lastApiKey = apiKey

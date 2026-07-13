@@ -83,7 +83,7 @@ final class AgentSession {
 
         currentTask = Task { [weak self] in
             guard let self else { return }
-            let stream = provider.send(messages: history, system: system, model: modelConfig, apiKey: apiKey)
+            let stream = provider.send(messages: history, system: system, tools: [], model: modelConfig, apiKey: apiKey)
             do {
                 for try await event in stream {
                     self.handle(event)

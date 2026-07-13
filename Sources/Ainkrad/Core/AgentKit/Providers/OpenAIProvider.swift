@@ -11,13 +11,14 @@ struct OpenAIProvider: LLMProvider {
     func send(
         messages: [AgentMessage],
         system: String,
+        tools: [AgentToolSchema],
         model: AgentModelConfig,
         apiKey: String
     ) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = Self.makeRequest(messages: messages, system: system, model: model, apiKey: apiKey)
+                    let request = Self.makeRequest(messages: messages, system: system, tools: tools, model: model, apiKey: apiKey)
                     let bytes = try await http.post(request)
 
                     var finishReason: String?
@@ -57,6 +58,7 @@ struct OpenAIProvider: LLMProvider {
     private static func makeRequest(
         messages: [AgentMessage],
         system: String,
+        tools: [AgentToolSchema],
         model: AgentModelConfig,
         apiKey: String
     ) -> URLRequest {
@@ -65,16 +67,50 @@ struct OpenAIProvider: LLMProvider {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
-        var wireMessages: [[String: String]] = [["role": "system", "content": system]]
-        wireMessages.append(contentsOf: messages.map { ["role": $0.role.rawValue, "content": $0.text] })
+        var wireMessages: [[String: Any]] = [["role": "system", "content": system]]
+        wireMessages.append(contentsOf: messages.flatMap(wireMessages(for:)))
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model.model,
             "stream": true,
             "messages": wireMessages,
         ]
+        if !tools.isEmpty {
+            body["tools"] = tools.map {
+                ["type": "function",
+                 "function": ["name": $0.name, "description": $0.description,
+                              "parameters": $0.parameters.toFoundationObject()]]
+            }
+        }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    /// One `AgentMessage` can expand into multiple OpenAI wire messages: an
+    /// assistant turn with tool calls, then one `role:"tool"` message per result.
+    private static func wireMessages(for message: AgentMessage) -> [[String: Any]] {
+        var texts: [String] = []
+        var toolCalls: [[String: Any]] = []
+        var toolResults: [[String: Any]] = []
+        for block in message.content {
+            switch block {
+            case .text(let t): texts.append(t)
+            case .toolUse(let id, let name, let input):
+                let args = String(decoding: (try? JSONSerialization.data(withJSONObject: input.toFoundationObject())) ?? Data("{}".utf8), as: UTF8.self)
+                toolCalls.append(["id": id, "type": "function",
+                                  "function": ["name": name, "arguments": args]])
+            case .toolResult(let toolUseID, let content, _):
+                toolResults.append(["role": "tool", "tool_call_id": toolUseID, "content": content])
+            }
+        }
+        var out: [[String: Any]] = []
+        if message.role == .assistant, !toolCalls.isEmpty {
+            out.append(["role": "assistant", "content": texts.joined(), "tool_calls": toolCalls])
+        } else if !texts.isEmpty || toolResults.isEmpty {
+            out.append(["role": message.role.rawValue, "content": texts.joined()])
+        }
+        out.append(contentsOf: toolResults)
+        return out
     }
 
     /// Best-effort human-readable message from a non-2xx response body. Never echoes the API key

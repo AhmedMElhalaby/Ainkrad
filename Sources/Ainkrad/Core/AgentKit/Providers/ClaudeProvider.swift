@@ -11,13 +11,14 @@ struct ClaudeProvider: LLMProvider {
     func send(
         messages: [AgentMessage],
         system: String,
+        tools: [AgentToolSchema],
         model: AgentModelConfig,
         apiKey: String
     ) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = Self.makeRequest(messages: messages, system: system, model: model, apiKey: apiKey)
+                    let request = Self.makeRequest(messages: messages, system: system, tools: tools, model: model, apiKey: apiKey)
                     let bytes = try await http.post(request)
 
                     var stopReason: String?
@@ -72,6 +73,7 @@ struct ClaudeProvider: LLMProvider {
     private static func makeRequest(
         messages: [AgentMessage],
         system: String,
+        tools: [AgentToolSchema],
         model: AgentModelConfig,
         apiKey: String
     ) -> URLRequest {
@@ -81,17 +83,37 @@ struct ClaudeProvider: LLMProvider {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model.model,
             "max_tokens": 64000,
             "stream": true,
             "system": system,
-            "messages": messages.map { ["role": $0.role.rawValue, "content": $0.text] },
+            "messages": messages.map(wireMessage),
             "thinking": ["type": "adaptive", "display": "summarized"],
             "output_config": ["effort": model.effort],
         ]
+        if !tools.isEmpty {
+            body["tools"] = tools.map {
+                ["name": $0.name, "description": $0.description,
+                 "input_schema": $0.parameters.toFoundationObject()]
+            }
+        }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    private static func wireMessage(_ message: AgentMessage) -> [String: Any] {
+        let blocks: [[String: Any]] = message.content.map { block in
+            switch block {
+            case .text(let t):
+                return ["type": "text", "text": t]
+            case .toolUse(let id, let name, let input):
+                return ["type": "tool_use", "id": id, "name": name, "input": input.toFoundationObject()]
+            case .toolResult(let toolUseID, let content, let isError):
+                return ["type": "tool_result", "tool_use_id": toolUseID, "content": content, "is_error": isError]
+            }
+        }
+        return ["role": message.role.rawValue, "content": blocks]
     }
 
     /// Best-effort human-readable message from a non-2xx response body. Never echoes the API key
