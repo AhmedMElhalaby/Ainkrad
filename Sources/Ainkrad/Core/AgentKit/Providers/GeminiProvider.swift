@@ -98,7 +98,7 @@ struct GeminiProvider: LLMProvider {
             switch block {
             case .text(let t):
                 return ["text": t]
-            case .toolUse(let _, let name, let input):
+            case .toolUse(_, let name, let input):
                 return ["functionCall": ["name": name, "args": input.toFoundationObject()]]
             case .toolResult(let toolUseID, let content, _):
                 // toolUseID == the function name (see class doc).

@@ -1,6 +1,5 @@
 // Sources/Ainkrad/Core/AgentKit/Providers/ModelCatalogService.swift
 import Foundation
-import Observation
 
 struct ConnectionTestResult: Equatable, Sendable {
     let ok: Bool
