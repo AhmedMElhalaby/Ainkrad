@@ -26,7 +26,7 @@ struct ClaudeToolParseTests {
         var events: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "read it")],
                                          system: "s", tools: [],
-                                         model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "k") {
             events.append(e)
         }

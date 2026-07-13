@@ -16,9 +16,9 @@ struct AssistantConnectionsTests {
     func addingPersistsConnectionAndSecret() {
         let store = makeStore()
 
-        let connection = store.addConnection(provider: .claude, displayName: "Claude Key", token: "sk-ant-123")
+        let connection = store.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude Key", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-ant-123")
 
-        #expect(connection.provider == .claude)
+        #expect(connection.kind == .claude)
         #expect(store.connections.map(\.id) == [connection.id])
         #expect(store.token(for: connection) == "sk-ant-123")
     }
@@ -26,7 +26,7 @@ struct AssistantConnectionsTests {
     @Test("token(for:) returns the persisted token")
     func tokenForReturnsPersistedToken() {
         let store = makeStore()
-        let connection = store.addConnection(provider: .openai, displayName: "OpenAI Key", token: "sk-oai-456")
+        let connection = store.addConnection(preset: ProviderPreset.preset(id: "openai"), displayName: "OpenAI Key", baseURL: ProviderPreset.preset(id: "openai").defaultBaseURL, token: "sk-oai-456")
 
         #expect(store.token(for: connection) == "sk-oai-456")
     }
@@ -34,7 +34,7 @@ struct AssistantConnectionsTests {
     @Test("removeConnection clears both the metadata and the secret")
     func removeClearsMetadataAndSecret() {
         let store = makeStore()
-        let connection = store.addConnection(provider: .claude, displayName: "Claude Key", token: "sk-ant-789")
+        let connection = store.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude Key", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-ant-789")
 
         store.removeConnection(connection)
 

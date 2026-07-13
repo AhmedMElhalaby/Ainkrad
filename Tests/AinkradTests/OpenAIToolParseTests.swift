@@ -23,7 +23,7 @@ struct OpenAIToolParseTests {
         var events: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "read it")],
                                          system: "s", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "k") {
             events.append(e)
         }

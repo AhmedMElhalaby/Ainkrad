@@ -3,7 +3,7 @@ import Foundation
 
 /// The wire protocol a provider speaks — the only thing that selects an
 /// `LLMProvider` implementation. Data-driven providers replace the old
-/// two-case `AgentProvider` enum.
+/// hardcoded two-case provider enum.
 enum ProviderKind: String, Codable, CaseIterable, Sendable {
     case claude
     case openAICompatible

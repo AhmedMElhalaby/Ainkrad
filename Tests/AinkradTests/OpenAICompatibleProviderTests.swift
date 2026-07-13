@@ -30,7 +30,7 @@ struct OpenAICompatibleProviderTests {
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")],
                                          system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-x") { out.append(e) }
         #expect(out == [.textDelta("Hello"), .textDelta(" world"), .done(stopReason: "stop")])
     }
@@ -41,7 +41,7 @@ struct OpenAICompatibleProviderTests {
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
         let provider = OpenAICompatibleProvider(http: stub, baseURL: "https://api.openai.com/v1")
         for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-x") {}
         let req = try #require(seen)
         #expect(req.url?.absoluteString == "https://api.openai.com/v1/chat/completions")
@@ -67,7 +67,7 @@ struct OpenAICompatibleProviderTests {
         let provider = OpenAICompatibleProvider(http: FailingHTTPClient(), baseURL: "https://api.openai.com/v1")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-secret") { out.append(e) }
         #expect(out.count == 1)
         if case .failed(let message) = out.first {
@@ -83,7 +83,7 @@ struct OpenAICompatibleProviderTests {
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
         let provider = OpenAICompatibleProvider(http: stub, baseURL: "https://openrouter.ai/api/v1")
         for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "s", tools: [],
-            model: AgentModelConfig(provider: .openai, model: "x", effort: "xhigh"), apiKey: "k") {}
+            model: AgentModelConfig(model: "x", effort: "xhigh"), apiKey: "k") {}
         #expect(try #require(seen).url?.absoluteString == "https://openrouter.ai/api/v1/chat/completions")
     }
 
@@ -93,7 +93,7 @@ struct OpenAICompatibleProviderTests {
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
         let provider = OpenAICompatibleProvider(http: stub, baseURL: "http://localhost:11434/v1")
         for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "s", tools: [],
-            model: AgentModelConfig(provider: .openai, model: "llama3.2", effort: "xhigh"), apiKey: "") {}
+            model: AgentModelConfig(model: "llama3.2", effort: "xhigh"), apiKey: "") {}
         #expect(try #require(seen).value(forHTTPHeaderField: "authorization") == nil)
     }
 }

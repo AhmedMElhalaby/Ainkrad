@@ -27,6 +27,7 @@ final class AppEnvironment {
     let agentContextSettingsStore: AgentContextSettingsStore
     let agentContextService: AgentContextService
     let agentSession: AgentSession
+    let modelCatalogService: ModelCatalogService
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -63,7 +64,8 @@ final class AppEnvironment {
         agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
         agentContextService: AgentContextService,
-        agentSession: AgentSession
+        agentSession: AgentSession,
+        modelCatalogService: ModelCatalogService
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -86,6 +88,7 @@ final class AppEnvironment {
         self.agentContextSettingsStore = agentContextSettingsStore
         self.agentContextService = agentContextService
         self.agentSession = agentSession
+        self.modelCatalogService = modelCatalogService
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -169,11 +172,13 @@ final class AppEnvironment {
                 workspaceManager?.activeWorkspaceID ?? UUID()
             })
         let agentToolRegistry = AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()])
+        let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentSession = AgentSession(
-            providerFor: { (provider: AgentProvider) -> LLMProvider in
-                switch provider {
+            providerFor: { (connection: Connection) -> LLMProvider in
+                switch connection.kind {
                 case .claude: return ClaudeProvider(http: streamingHTTP)
-                case .openai: return OpenAICompatibleProvider(http: streamingHTTP, baseURL: "https://api.openai.com/v1")
+                case .openAICompatible: return OpenAICompatibleProvider(http: streamingHTTP, baseURL: connection.baseURL)
+                case .gemini: return GeminiProvider(http: streamingHTTP, baseURL: connection.baseURL)
                 }
             },
             connections: connectionStore,
@@ -204,7 +209,8 @@ final class AppEnvironment {
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
-            agentSession: agentSession
+            agentSession: agentSession,
+            modelCatalogService: modelCatalogService
         )
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.

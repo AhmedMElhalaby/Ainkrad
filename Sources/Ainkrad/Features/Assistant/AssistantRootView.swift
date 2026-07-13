@@ -30,7 +30,6 @@ struct AssistantRootView: View {
     // MARK: - Header (provider + model)
 
     private func header(tokens: DesignTokens) -> some View {
-        let configStore = environment.agentConfigStore
         let session = environment.agentSession
 
         return HStack(spacing: 12) {
@@ -44,16 +43,7 @@ struct AssistantRootView: View {
 
             Spacer(minLength: 12)
 
-            NeonSegmentedPicker(
-                items: AgentProvider.allCases,
-                selection: Binding(
-                    get: { configStore.current.provider },
-                    set: { configStore.setProvider($0) }
-                ),
-                label: providerTitle,
-                tokens: tokens
-            )
-            .frame(width: 140)
+            connectionMenu(tokens: tokens)
 
             modelMenu(tokens: tokens)
 
@@ -88,11 +78,43 @@ struct AssistantRootView: View {
         .help("New chat")
     }
 
+    private func connectionMenu(tokens: DesignTokens) -> some View {
+        let configStore = environment.agentConfigStore
+        let store = environment.connectionStore
+        let active = activeConnection()
+
+        return Menu {
+            if store.connections.isEmpty {
+                Text("No connections")
+            } else {
+                ForEach(store.connections) { connection in
+                    Button(connection.displayName) {
+                        configStore.setActiveConnectionID(connection.id)
+                        configStore.setModel(ProviderPreset.preset(id: connection.presetID).curatedModels.first ?? configStore.current.model)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(active?.displayName ?? "No connection")
+                    .font(AinkradFont.display(11, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8))
+            }
+            .foregroundStyle(tokens.foreground.opacity(0.75))
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.5)))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
     private func modelMenu(tokens: DesignTokens) -> some View {
         let configStore = environment.agentConfigStore
 
         return Menu {
-            ForEach(modelOptions(for: configStore.current.provider), id: \.self) { model in
+            ForEach(modelOptions(for: activeConnection()), id: \.self) { model in
                 Button(model) { configStore.setModel(model) }
             }
         } label: {
@@ -111,15 +133,16 @@ struct AssistantRootView: View {
         .fixedSize()
     }
 
-    private func modelOptions(for provider: AgentProvider) -> [String] {
-        AgentModelCatalog.models(for: provider)
+    private func activeConnection() -> Connection? {
+        let store = environment.connectionStore
+        if let id = environment.agentConfigStore.activeConnectionID,
+           let match = store.connections.first(where: { $0.id == id }) { return match }
+        return store.connections.first
     }
 
-    private func providerTitle(_ provider: AgentProvider) -> String {
-        switch provider {
-        case .claude: return "Claude"
-        case .openai: return "OpenAI"
-        }
+    private func modelOptions(for connection: Connection?) -> [String] {
+        guard let connection else { return [] }
+        return ProviderPreset.preset(id: connection.presetID).curatedModels
     }
 
     private func permissionTitle(_ mode: AgentPermissionMode) -> String {

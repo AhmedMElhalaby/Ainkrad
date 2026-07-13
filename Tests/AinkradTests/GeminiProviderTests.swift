@@ -23,7 +23,7 @@ struct GeminiProviderTests {
                                       baseURL: "https://generativelanguage.googleapis.com/v1beta")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-            model: AgentModelConfig(provider: .openai, model: "gemini-2.5-flash", effort: "xhigh"), apiKey: "k") { out.append(e) }
+            model: AgentModelConfig(model: "gemini-2.5-flash", effort: "xhigh"), apiKey: "k") { out.append(e) }
         return out
     }
 
@@ -67,7 +67,7 @@ struct GeminiProviderTests {
         let provider = GeminiProvider(http: FailingHTTPClient(), baseURL: "https://x/v1beta")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "s", tools: [],
-            model: AgentModelConfig(provider: .openai, model: "gemini-2.5-flash", effort: "xhigh"), apiKey: "sk-secret") { out.append(e) }
+            model: AgentModelConfig(model: "gemini-2.5-flash", effort: "xhigh"), apiKey: "sk-secret") { out.append(e) }
         if case .failed(let m) = out.first { #expect(!m.contains("sk-secret")); #expect(m == "bad model") }
         else { Issue.record("expected .failed") }
     }
