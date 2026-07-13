@@ -17,10 +17,26 @@ struct URLSessionStreamingHTTPClient: StreamingHTTPClient {
             for try await line in bytes.lines { body += line + "\n" }
             throw StreamingHTTPError.status(http.statusCode, body: body)
         }
+        // Forward the response as RAW bytes, one Data per newline-terminated
+        // line. We must NOT use `bytes.lines` here: `AsyncBytes.lines` drops
+        // the empty lines that delimit SSE events (`\n\n`), so downstream the
+        // boundaries would be lost and every `data:` line would accumulate
+        // into a single undecodable blob. `SSEParser` owns all line/boundary
+        // parsing — it needs the blank lines preserved, so we hand it the raw
+        // byte stream verbatim (including the empty-line separators).
         return AsyncThrowingStream { cont in
             let task = Task {
                 do {
-                    for try await line in bytes.lines { cont.yield(Data((line + "\n").utf8)) }
+                    var buffer = [UInt8]()
+                    let newline = UInt8(ascii: "\n")
+                    for try await byte in bytes {
+                        buffer.append(byte)
+                        if byte == newline {
+                            cont.yield(Data(buffer))
+                            buffer.removeAll(keepingCapacity: true)
+                        }
+                    }
+                    if !buffer.isEmpty { cont.yield(Data(buffer)) }
                     cont.finish()
                 } catch { cont.finish(throwing: error) }
             }
