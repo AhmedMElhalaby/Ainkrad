@@ -30,11 +30,12 @@ private struct OKTool: AgentTool {
 
 @MainActor
 private func makeSession(provider: LLMProvider, tool: OKTool,
-                        mode: AgentPermissionMode) -> AgentSession {
+                        mode: AgentPermissionMode, gateReads: Bool = true) -> AgentSession {
     let persistence = InMemoryPersistenceStore()
     let ws = UUID()
     let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
     permissions.setMode(mode)
+    permissions.setGateReads(gateReads)
     let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
     // Seed a key so resolveAPIKey succeeds (config defaults to the Claude provider).
     _ = connections.addConnection(provider: .claude, displayName: "Claude", token: "k")
@@ -66,7 +67,7 @@ struct AgentSessionToolLoopTests {
             [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
             [.textDelta("done"), .done(stopReason: "end_turn")],
         ])
-        let session = makeSession(provider: provider, tool: OKTool(permission: .read), mode: .ask)
+        let session = makeSession(provider: provider, tool: OKTool(permission: .read), mode: .ask, gateReads: false)
         session.send("go")
         await session.currentTask?.value
         #expect(session.state == .idle)

@@ -8,23 +8,25 @@ enum PermissionDecision: Sendable, Equatable { case autoApprove, requireApproval
 
 enum AgentPermissionPolicy {
     /// Decide whether a pending tool call runs unattended or must hit the HUD.
-    /// - `ask`: reads auto-approve; writes require approval.
-    /// - `autoApprove`: reads and allowlisted tools auto-approve; other writes require approval.
-    /// - `fullAuto`: everything (writes included) auto-approves.
+    /// - `ask`: reads auto-approve unless `gateReads`; writes always require approval.
+    /// - `autoApprove`: allowlisted tools auto-approve; reads auto-approve unless `gateReads`;
+    ///   other writes require approval.
+    /// - `fullAuto`: everything (writes included) auto-approves, regardless of `gateReads`.
     static func decide(
         toolPermission: ToolPermissionClass,
         toolName: String,
         mode: AgentPermissionMode,
-        allowlist: Set<String>
+        allowlist: Set<String>,
+        gateReads: Bool
     ) -> PermissionDecision {
         switch mode {
         case .fullAuto:
             return .autoApprove
         case .ask:
-            return toolPermission == .read ? .autoApprove : .requireApproval
+            return (toolPermission == .read && !gateReads) ? .autoApprove : .requireApproval
         case .autoApprove:
-            if toolPermission == .read || allowlist.contains(toolName) { return .autoApprove }
-            return .requireApproval
+            if allowlist.contains(toolName) { return .autoApprove }
+            return (toolPermission == .read && !gateReads) ? .autoApprove : .requireApproval
         }
     }
 }

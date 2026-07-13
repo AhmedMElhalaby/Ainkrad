@@ -7,13 +7,18 @@ struct AgentPermissionDocument: PersistableDocument {
     var defaultMode: AgentPermissionMode = .ask
     var allowlist: [String] = []
     var perWorkspace: [String: AgentPermissionMode] = [:]
+    /// Global (not per-workspace) toggle: when true, `.read` tools require approval in
+    /// `Ask`/`Auto-approve` modes too (unless explicitly allowlisted).
+    var gateReads: Bool = true
 
     init(defaultMode: AgentPermissionMode = .ask,
          allowlist: [String] = [],
-         perWorkspace: [String: AgentPermissionMode] = [:]) {
+         perWorkspace: [String: AgentPermissionMode] = [:],
+         gateReads: Bool = true) {
         self.defaultMode = defaultMode
         self.allowlist = allowlist
         self.perWorkspace = perWorkspace
+        self.gateReads = gateReads
     }
 
     init(from decoder: Decoder) throws {
@@ -21,6 +26,7 @@ struct AgentPermissionDocument: PersistableDocument {
         defaultMode = try c.decodeIfPresent(AgentPermissionMode.self, forKey: .defaultMode) ?? .ask
         allowlist = try c.decodeIfPresent([String].self, forKey: .allowlist) ?? []
         perWorkspace = try c.decodeIfPresent([String: AgentPermissionMode].self, forKey: .perWorkspace) ?? [:]
+        gateReads = try c.decodeIfPresent(Bool.self, forKey: .gateReads) ?? true
     }
 }
 
@@ -46,8 +52,15 @@ final class AgentPermissionStore {
 
     var allowlist: Set<String> { Set(document.allowlist) }
 
+    var gateReads: Bool { document.gateReads }
+
     func setMode(_ mode: AgentPermissionMode) {
         document.perWorkspace[currentWorkspaceID().uuidString] = mode
+        persistence.save(document)
+    }
+
+    func setGateReads(_ value: Bool) {
+        document.gateReads = value
         persistence.save(document)
     }
 }

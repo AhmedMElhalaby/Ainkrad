@@ -241,7 +241,8 @@ final class AgentSession {
         }
         let decision = AgentPermissionPolicy.decide(
             toolPermission: tool.permission, toolName: tool.name,
-            mode: permissions.mode, allowlist: permissions.allowlist)
+            mode: permissions.mode, allowlist: permissions.allowlist,
+            gateReads: permissions.gateReads)
 
         if decision == .requireApproval {
             let preview = tool.approvalPreview(call.input)
