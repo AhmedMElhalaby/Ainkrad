@@ -13,6 +13,8 @@ struct AssistantSettingsView: View {
     @State private var revealedConnectionIDs: Set<UUID> = []
     @State private var discoveredModels: [UUID: [String]] = [:]
     @State private var isRefreshingModels = false
+    @State private var testResults: [UUID: ConnectionTestResult] = [:]
+    @State private var testingIDs: Set<UUID> = []
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -87,6 +89,23 @@ struct AssistantSettingsView: View {
                 .buttonStyle(.plain)
             }
 
+            Button { testConnection(connection) } label: {
+                if testingIDs.contains(connection.id) {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: "bolt.horizontal")
+                        .font(.system(size: 12)).foregroundStyle(tokens.foreground.opacity(0.55))
+                }
+            }
+            .buttonStyle(.plain).help("Test connection")
+
+            if let result = testResults[connection.id] {
+                Image(systemName: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(result.ok ? tokens.accentSecondary : tokens.accentTertiary)
+                    .help(result.message)
+            }
+
             Button {
                 revealedConnectionIDs.remove(connection.id)
                 store.removeConnection(connection)
@@ -146,6 +165,17 @@ struct AssistantSettingsView: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.3)))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.1), lineWidth: 1))
+    }
+
+    private func testConnection(_ connection: Connection) {
+        let key = environment.connectionStore.token(for: connection) ?? ""
+        let svc = environment.modelCatalogService
+        testingIDs.insert(connection.id)
+        Task {
+            let result = await svc.test(kind: connection.kind, baseURL: connection.baseURL, apiKey: key)
+            testResults[connection.id] = result
+            testingIDs.remove(connection.id)
+        }
     }
 
     private var canAddConnection: Bool {
