@@ -21,7 +21,8 @@ struct PluginLoaderTests {
                 appID: appID,
                 dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString),
                 secretStore: InMemorySecretStore(),
-                themeManager: ThemeManager(persistence: InMemoryPersistenceStore())
+                themeManager: ThemeManager(persistence: InMemoryPersistenceStore()),
+                hub: AgentContextRegistryHub()
             )
         }
     }

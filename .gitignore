@@ -19,3 +19,5 @@ dist/
 
 # Local xcodebuild output directory (see Makefile)
 build/
+
+.superpowers/

@@ -9,9 +9,14 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGNING_REQUIRED: NO
-    CODE_SIGNING_ALLOWED: NO
+    # Sign with a stable identity so macOS TCC (privacy/folder-access) grants
+    # persist — an ad-hoc/unsigned app has no designated requirement for the
+    # system to attach a saved grant to, so it re-prompts on every access.
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
+    DEVELOPMENT_TEAM: PSY67XNHG4
+    CODE_SIGNING_REQUIRED: YES
+    CODE_SIGNING_ALLOWED: YES
 
 packages:
   # AinkradAppKit — the Built-in App SDK (github.com/AhmedMElhalaby/AinkradAppKit).
@@ -19,7 +24,7 @@ packages:
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: 982fb593c6388cd51a178952375e02dd9c161877
+    revision: 5c754ca9716ece9acc112868a5c92789de15759e
 
 targets:
   Ainkrad:
