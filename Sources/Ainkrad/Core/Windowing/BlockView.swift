@@ -273,28 +273,11 @@ struct BlockView: View {
         }
     }
 
-    /// The app's neon tile artwork at HUD size, matching the Launcher rows;
-    /// falls back to the themed SF Symbol mini-tile.
-    @ViewBuilder
+    /// The app's neon tile at HUD size, drawn live from the active theme and
+    /// matching the Launcher rows; dims when the block is unfocused.
     private func headerTile(tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(block.appID)-\(environment.themeManager.currentTheme.rawValue)"
-
-        if NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .opacity(isFocused ? 1 : 0.65)
-        } else {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 18, height: 18)
-                .overlay(
-                    Image(systemName: app?.icon ?? "app")
-                        .font(.system(size: 9))
-                        .foregroundStyle(tokens.accentSecondary.opacity(isFocused ? 1 : 0.65))
-                )
-        }
+        NeonAppTile(symbol: app?.icon ?? "app", tokens: tokens, size: 18)
+            .opacity(isFocused ? 1 : 0.65)
     }
 
     // MARK: - Content

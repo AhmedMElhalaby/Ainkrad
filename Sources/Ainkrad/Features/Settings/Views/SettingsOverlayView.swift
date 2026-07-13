@@ -224,14 +224,11 @@ struct SettingsOverlayView: View {
     /// settings identity header.
     @ViewBuilder
     private func appTile(appID: String?, systemIcon: String, size: CGFloat, isSelected: Bool, tokens: DesignTokens) -> some View {
-        let assetName = appID.map { "AppTile-\($0)-\(environment.themeManager.currentTheme.rawValue)" }
-
-        if let assetName, NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
+        if appID != nil {
+            // A registered app: its live neon tile, following the active theme.
+            NeonAppTile(symbol: systemIcon, tokens: tokens, size: size)
         } else {
+            // A fixed settings section (General, Sound, …): a tinted SF Symbol.
             Image(systemName: systemIcon)
                 .font(.system(size: size * 0.6))
                 .foregroundStyle(isSelected ? tokens.accentSecondary : tokens.foreground.opacity(0.55))

@@ -404,21 +404,9 @@ struct WorkspaceOverviewView: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
     private func appIcon(_ appID: String, tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(appID)-\(environment.themeManager.currentTheme.rawValue)"
-        if NSImage(named: assetName) != nil {
-            Image(assetName).resizable().scaledToFit().frame(width: 26, height: 26)
-        } else {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 26, height: 26)
-                .overlay(
-                    Image(systemName: environment.registry.allApps.first(where: { $0.id == appID })?.icon ?? "app")
-                        .font(.system(size: 12))
-                        .foregroundStyle(tokens.accentSecondary)
-                )
-        }
+        let symbol = environment.registry.allApps.first(where: { $0.id == appID })?.icon ?? "app"
+        return NeonAppTile(symbol: symbol, tokens: tokens, size: 26)
     }
 
     private func footer(tokens: DesignTokens) -> some View {

@@ -26,10 +26,7 @@ struct AppStoreCard: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(tokens.surfaceElevated)
-                        .frame(width: 30, height: 30)
-                        .overlay(Image(systemName: row.icon).foregroundStyle(tokens.accentSecondary))
+                    NeonAppTile(symbol: row.icon, tokens: tokens, size: 30)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(row.displayName)
                             .font(AinkradFont.display(13, weight: .medium))

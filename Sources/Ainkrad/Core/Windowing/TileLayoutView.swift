@@ -248,20 +248,9 @@ private struct FocusSwitcherRail: View {
         .padding(.vertical, 2)
     }
 
-    @ViewBuilder
     private func chipContent(_ block: Block, tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(block.appID)-\(environment.themeManager.currentTheme.rawValue)"
-
-        if NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 26, height: 26)
-        } else {
-            Image(systemName: environment.registry.allApps.first(where: { $0.id == block.appID })?.icon ?? "app")
-                .font(.system(size: 12))
-                .foregroundStyle(tokens.accentSecondary)
-        }
+        let symbol = environment.registry.allApps.first(where: { $0.id == block.appID })?.icon ?? "app"
+        return NeonAppTile(symbol: symbol, tokens: tokens, size: 26)
     }
 }
 

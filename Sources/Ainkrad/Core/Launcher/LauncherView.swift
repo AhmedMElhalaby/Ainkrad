@@ -181,31 +181,9 @@ struct LauncherView: View {
         .animation(.easeOut(duration: 0.12), value: selectedIndex)
     }
 
-    /// The app's neon tile artwork when bundled (Spotlight-style), else a
-    /// themed mini-tile around its SF Symbol.
-    @ViewBuilder
+    /// The app's neon tile, drawn live from the active theme around its SF Symbol.
     private func tile(for row: AppRow, tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(row.id)-\(environment.themeManager.currentTheme.rawValue)"
-
-        if NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 32, height: 32)
-        } else {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: row.icon)
-                        .font(.system(size: 14))
-                        .foregroundStyle(tokens.accentSecondary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(tokens.accentPrimary.opacity(0.3), lineWidth: 1)
-                )
-        }
+        NeonAppTile(symbol: row.icon, tokens: tokens, size: 32)
     }
 
     private func footer(tokens: DesignTokens) -> some View {

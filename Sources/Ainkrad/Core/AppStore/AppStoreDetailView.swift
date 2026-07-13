@@ -58,10 +58,7 @@ struct AppStoreDetailView: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 18) {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 76, height: 76)
-                .overlay(Image(systemName: row.icon).font(.system(size: 32)).foregroundStyle(tokens.accentSecondary))
+            NeonAppTile(symbol: row.icon, tokens: tokens, size: 76)
             VStack(alignment: .leading, spacing: 5) {
                 Text(row.displayName)
                     .font(AinkradFont.display(20, weight: .semibold))
