@@ -138,6 +138,10 @@ final class AgentSession {
                                  model: AgentModelConfig, apiKey: String) async {
         var iterations = 0
         while true {
+            // Cooperative cancellation: `reset()` cancels this task (and unwedges
+            // any parked approval). Bail BEFORE re-sending so a reset never spawns
+            // a zombie turn that resurrects the just-cleared transcript.
+            if Task.isCancelled { return }
             let outcome = await runOneTurn(provider: provider, system: system, model: model, apiKey: apiKey)
             switch outcome {
             case .failed(let message):
@@ -168,6 +172,10 @@ final class AgentSession {
                 var resultBlocks: [AgentContentBlock] = []
                 for call in calls {
                     let result = await execute(call)
+                    // A reset during a parked approval cancels this task while
+                    // suspended inside `execute`. Bail before recording the
+                    // (denied) result so `messages` stays cleared and `.idle` holds.
+                    if Task.isCancelled { return }
                     resultBlocks.append(.toolResult(toolUseID: call.id, content: result.content, isError: result.isError))
                 }
                 messages.append(AgentMessage(role: .user, content: resultBlocks))

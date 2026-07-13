@@ -6,9 +6,11 @@ import Testing
 private final class ScriptedProvider: LLMProvider {
     // Each call returns the next scripted batch of events.
     var turns: [[AgentEvent]]
+    private(set) var sendCount = 0
     init(_ turns: [[AgentEvent]]) { self.turns = turns }
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
               model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+        sendCount += 1
         let batch = turns.isEmpty ? [] : turns.removeFirst()
         return AsyncThrowingStream { cont in
             for e in batch { cont.yield(e) }
@@ -102,5 +104,30 @@ struct AgentSessionToolLoopTests {
         }.first
         #expect(toolResult == "no thanks")
         #expect(session.state == .idle)
+    }
+
+    @Test func resetDuringApprovalDoesNotSpawnTurn() async {
+        let provider = ScriptedProvider([
+            [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            // A second batch exists only to prove a zombie turn WOULD consume it
+            // if the loop failed to bail on cancellation.
+            [.textDelta("zombie"), .done(stopReason: "end_turn")],
+        ])
+        let session = makeSession(provider: provider, tool: OKTool(permission: .write), mode: .ask)
+        session.send("edit")
+        guard await waitForApproval(session) else { Issue.record("expected awaitingApproval"); return }
+        #expect(provider.sendCount == 1)
+
+        // Capture the in-flight task before reset() nils the property, so we can
+        // await the cancelled task fully unwinding before asserting.
+        let inFlight = session.currentTask
+        session.reset()
+        await inFlight?.value
+
+        #expect(session.messages.isEmpty)
+        #expect(session.state == .idle)
+        // No re-send after reset: the cancellation guard bailed before the loop
+        // could resurrect the transcript and call provider.send again.
+        #expect(provider.sendCount == 1)
     }
 }

@@ -23,6 +23,7 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentConfigStore: AgentConfigStore
+    let agentPermissionStore: AgentPermissionStore
     let agentContextSettingsStore: AgentContextSettingsStore
     let agentContextService: AgentContextService
     let agentSession: AgentSession
@@ -59,6 +60,7 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentConfigStore: AgentConfigStore,
+        agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
         agentContextService: AgentContextService,
         agentSession: AgentSession
@@ -80,6 +82,7 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentConfigStore = agentConfigStore
+        self.agentPermissionStore = agentPermissionStore
         self.agentContextSettingsStore = agentContextSettingsStore
         self.agentContextService = agentContextService
         self.agentSession = agentSession
@@ -198,6 +201,7 @@ final class AppEnvironment {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentConfigStore: agentConfigStore,
+            agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
             agentSession: agentSession
