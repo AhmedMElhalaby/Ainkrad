@@ -1,0 +1,106 @@
+import Foundation
+import Testing
+@testable import Ainkrad
+
+@MainActor
+private final class ScriptedProvider: LLMProvider {
+    // Each call returns the next scripted batch of events.
+    var turns: [[AgentEvent]]
+    init(_ turns: [[AgentEvent]]) { self.turns = turns }
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
+              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+        let batch = turns.isEmpty ? [] : turns.removeFirst()
+        return AsyncThrowingStream { cont in
+            for e in batch { cont.yield(e) }
+            cont.finish()
+        }
+    }
+}
+
+@MainActor
+private struct OKTool: AgentTool {
+    let name = "ok_tool"
+    let description = "returns ok"
+    var parametersSchema: JSONValue { .object(["type": .string("object")]) }
+    let permission: ToolPermissionClass
+    func execute(_ input: JSONValue) async throws -> ToolResult { ToolResult(content: "OK", isError: false) }
+}
+
+@MainActor
+private func makeSession(provider: LLMProvider, tool: OKTool,
+                        mode: AgentPermissionMode) -> AgentSession {
+    let persistence = InMemoryPersistenceStore()
+    let ws = UUID()
+    let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+    permissions.setMode(mode)
+    let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+    // Seed a key so resolveAPIKey succeeds (config defaults to the Claude provider).
+    _ = connections.addConnection(provider: .claude, displayName: "Claude", token: "k")
+    let config = AgentConfigStore(persistence: persistence)
+    let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                      settings: AgentContextSettingsStore(persistence: persistence))
+    return AgentSession(
+        providerFor: { _ in provider },
+        connections: connections, config: config, context: context,
+        registry: AgentToolRegistry(tools: [tool]), permissions: permissions)
+}
+
+/// Spins the main actor until `session` parks on `.awaitingApproval`, bounded so
+/// a regression fails fast instead of hanging the suite forever.
+@MainActor
+private func waitForApproval(_ session: AgentSession, maxYields: Int = 200) async -> Bool {
+    for _ in 0..<maxYields {
+        if case .awaitingApproval = session.state { return true }
+        await Task.yield()
+    }
+    return false
+}
+
+@Suite("AgentSession tool loop")
+@MainActor
+struct AgentSessionToolLoopTests {
+    @Test func readToolRunsWithoutApprovalThenCompletes() async {
+        let provider = ScriptedProvider([
+            [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            [.textDelta("done"), .done(stopReason: "end_turn")],
+        ])
+        let session = makeSession(provider: provider, tool: OKTool(permission: .read), mode: .ask)
+        session.send("go")
+        await session.currentTask?.value
+        #expect(session.state == .idle)
+        #expect(session.messages.last?.text == "done")
+    }
+
+    @Test func writeToolWaitsForApprovalInAskMode() async {
+        let provider = ScriptedProvider([
+            [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            [.textDelta("applied"), .done(stopReason: "end_turn")],
+        ])
+        let session = makeSession(provider: provider, tool: OKTool(permission: .write), mode: .ask)
+        session.send("edit")
+        guard await waitForApproval(session) else { Issue.record("expected awaitingApproval"); return }
+        session.approve()
+        await session.currentTask?.value
+        #expect(session.state == .idle)
+        #expect(session.messages.last?.text == "applied")
+    }
+
+    @Test func denyFeedsReasonBack() async {
+        let provider = ScriptedProvider([
+            [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            [.textDelta("ok, skipped"), .done(stopReason: "end_turn")],
+        ])
+        let session = makeSession(provider: provider, tool: OKTool(permission: .write), mode: .ask)
+        session.send("edit")
+        guard await waitForApproval(session) else { Issue.record("expected awaitingApproval"); return }
+        session.deny(reason: "no thanks")
+        await session.currentTask?.value
+        // The tool_result fed back carries the denial reason.
+        let toolResult = session.messages.flatMap(\.content).compactMap { block -> String? in
+            if case .toolResult(_, let content, let isError) = block, isError { return content }
+            return nil
+        }.first
+        #expect(toolResult == "no thanks")
+        #expect(session.state == .idle)
+    }
+}

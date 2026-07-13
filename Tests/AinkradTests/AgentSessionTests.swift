@@ -48,11 +48,14 @@ private func makeSession(
         resolvedContext = AgentContextService(hub: hub, settings: contextSettings)
     }
     let resolvedConfig = config ?? AgentConfigStore(persistence: persistence)
+    let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
     return AgentSession(
         providerFor: { _ in fake },
         connections: connections,
         config: resolvedConfig,
         context: resolvedContext,
+        registry: AgentToolRegistry(tools: []),
+        permissions: permissions,
         basePrompt: basePrompt
     )
 }

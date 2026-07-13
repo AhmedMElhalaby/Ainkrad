@@ -48,7 +48,9 @@ final class AppEnvironmentTests {
             },
             connections: connectionStore,
             config: agentConfigStore,
-            context: agentContextService
+            context: agentContextService,
+            registry: AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()]),
+            permissions: AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
         )
 
         let environment = AppEnvironment(

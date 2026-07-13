@@ -160,6 +160,12 @@ final class AppEnvironment {
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
+        let agentPermissionStore = AgentPermissionStore(
+            persistence: persistence,
+            currentWorkspaceID: { [weak workspaceManager] in
+                workspaceManager?.activeWorkspaceID ?? UUID()
+            })
+        let agentToolRegistry = AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()])
         let agentSession = AgentSession(
             providerFor: { (provider: AgentProvider) -> LLMProvider in
                 switch provider {
@@ -169,7 +175,9 @@ final class AppEnvironment {
             },
             connections: connectionStore,
             config: agentConfigStore,
-            context: agentContextService
+            context: agentContextService,
+            registry: agentToolRegistry,
+            permissions: agentPermissionStore
         )
 
         let environment = AppEnvironment(
