@@ -22,7 +22,7 @@ struct ProviderToolRequestTests {
             AgentMessage(role: .user, content: [.toolResult(toolUseID: "t1", content: "data", isError: false)]),
         ]
         let stream = provider.send(messages: messages, system: "sys", tools: [schema],
-                                   model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
+                                   model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
                                    apiKey: "k")
         for try await _ in stream {}   // drives the request; capture protocol records the body
 

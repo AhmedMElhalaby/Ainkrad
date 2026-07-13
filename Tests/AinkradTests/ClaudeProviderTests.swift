@@ -31,7 +31,7 @@ struct ClaudeProviderTests {
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")],
                                          system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-x") { out.append(e) }
         #expect(out == [.thinkingDelta("hmm"), .textDelta("Hello"), .textDelta(" world"), .done(stopReason: "end_turn")])
     }
@@ -42,7 +42,7 @@ struct ClaudeProviderTests {
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
         let provider = ClaudeProvider(http: stub)
         for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-x") {}
         let req = try #require(seen)
         #expect(req.url?.absoluteString == "https://api.anthropic.com/v1/messages")
@@ -63,7 +63,7 @@ struct ClaudeProviderTests {
         let provider = ClaudeProvider(http: FailingHTTPClient())
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-secret") { out.append(e) }
         #expect(out.count == 1)
         if case .failed(let message) = out.first {

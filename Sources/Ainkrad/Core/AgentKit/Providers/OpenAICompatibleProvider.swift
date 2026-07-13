@@ -1,11 +1,15 @@
 import Foundation
 
-/// `LLMProvider` conformer that streams from `POST https://api.openai.com/v1/chat/completions`.
-struct OpenAIProvider: LLMProvider {
+/// `LLMProvider` conformer that streams from any OpenAI-compatible
+/// `POST {baseURL}/chat/completions` endpoint (OpenAI, OpenRouter, Groq,
+/// DeepSeek, xAI, Mistral, Ollama, or a custom URL).
+struct OpenAICompatibleProvider: LLMProvider {
     private let http: StreamingHTTPClient
+    private let baseURL: String
 
-    init(http: StreamingHTTPClient) {
+    init(http: StreamingHTTPClient, baseURL: String) {
         self.http = http
+        self.baseURL = baseURL
     }
 
     func send(
@@ -18,7 +22,7 @@ struct OpenAIProvider: LLMProvider {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = Self.makeRequest(messages: messages, system: system, tools: tools, model: model, apiKey: apiKey)
+                    let request = Self.makeRequest(baseURL: baseURL, messages: messages, system: system, tools: tools, model: model, apiKey: apiKey)
                     let bytes = try await http.post(request)
 
                     var finishReason: String?
@@ -79,15 +83,20 @@ struct OpenAIProvider: LLMProvider {
     // MARK: - Request building
 
     private static func makeRequest(
+        baseURL: String,
         messages: [AgentMessage],
         system: String,
         tools: [AgentToolSchema],
         model: AgentModelConfig,
         apiKey: String
     ) -> URLRequest {
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        let trimmed = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        var request = URLRequest(url: URL(string: trimmed + "/chat/completions")!)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
+        // Ollama and other keyless local endpoints send no auth header.
+        if !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
+        }
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
         var wireMessages: [[String: Any]] = [["role": "system", "content": system]]
@@ -144,7 +153,7 @@ struct OpenAIProvider: LLMProvider {
            let message = chunk.error?.message {
             return message
         }
-        return "OpenAI API request failed"
+        return "Provider API request failed"
     }
 
     // MARK: - Wire types

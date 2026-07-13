@@ -68,7 +68,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         let fake = FakeLLMProvider(script: [
             .thinkingDelta("pondering "),
@@ -99,7 +99,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         let fake = FakeLLMProvider(script: [
             .textDelta("partial"),
@@ -142,7 +142,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         let hub = AgentContextRegistryHub()
         let registry = HostContextRegistry(appID: "terminal", hub: hub)
@@ -166,7 +166,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         // Empty hub → assembleContext() returns "".
         let hub = AgentContextRegistryHub()
@@ -186,7 +186,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         let fake = FakeLLMProvider(script: [.textDelta("reply"), .done(stopReason: "end_turn")])
         let session = makeSession(fake: fake, connections: connections, persistence: persistence)
@@ -215,7 +215,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         // No `.done` and no `.failed` — the stream just ends (dropped
         // connection / undecodable trailing events).
@@ -247,7 +247,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         // Empty script: the stream finishes immediately with no events at all.
         let fake = FakeLLMProvider(script: [])
@@ -273,7 +273,7 @@ struct AgentSessionTests {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         // `.done` arrives without any preceding `.textDelta` — the model
         // produced no visible text this turn (e.g. tool-only turn, later
@@ -289,20 +289,12 @@ struct AgentSessionTests {
         #expect(!session.messages.contains { $0.role == .assistant })
     }
 
-    @Test("every AgentProvider case maps to a non-nil ConnectionProvider via rawValue")
-    func agentProviderMapsToConnectionProvider() {
-        for provider in AgentProvider.allCases {
-            #expect(ConnectionProvider(rawValue: provider.rawValue) != nil,
-                    "AgentProvider.\(provider) has no matching ConnectionProvider rawValue — resolveAPIKey(for:) depends on this coupling")
-        }
-    }
-
     @Test("reset clears transcript and state")
     func resetClearsState() async {
         let persistence = InMemoryPersistenceStore()
         let secrets = InMemorySecretStore()
         let connections = ConnectionStore(persistence: persistence, secrets: secrets)
-        connections.addConnection(provider: .claude, displayName: "Claude", token: "sk-test-123")
+        connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "sk-test-123")
 
         let fake = FakeLLMProvider(script: [.textDelta("hi"), .done(stopReason: "end_turn")])
         let session = makeSession(fake: fake, connections: connections, persistence: persistence)

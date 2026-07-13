@@ -38,7 +38,7 @@ private func makeSession(provider: LLMProvider, tool: OKTool,
     permissions.setGateReads(gateReads)
     let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
     // Seed a key so resolveAPIKey succeeds (config defaults to the Claude provider).
-    _ = connections.addConnection(provider: .claude, displayName: "Claude", token: "k")
+    _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
     let config = AgentConfigStore(persistence: persistence)
     let context = AgentContextService(hub: AgentContextRegistryHub(),
                                       settings: AgentContextSettingsStore(persistence: persistence))

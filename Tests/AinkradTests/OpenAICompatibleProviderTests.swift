@@ -3,8 +3,8 @@ import Foundation
 @testable import Ainkrad
 
 @MainActor
-@Suite("OpenAIProvider")
-struct OpenAIProviderTests {
+@Suite("OpenAICompatibleProvider")
+struct OpenAICompatibleProviderTests {
     struct StubStreamingHTTPClient: StreamingHTTPClient {
         let chunks: [String]
         let captured: (@Sendable (URLRequest) -> Void)?
@@ -26,11 +26,11 @@ struct OpenAIProviderTests {
 
     @Test("maps SSE deltas to AgentEvents in order")
     func mapsEvents() async throws {
-        let provider = OpenAIProvider(http: StubStreamingHTTPClient(chunks: fixture, captured: nil))
+        let provider = OpenAICompatibleProvider(http: StubStreamingHTTPClient(chunks: fixture, captured: nil), baseURL: "https://api.openai.com/v1")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")],
                                          system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-x") { out.append(e) }
         #expect(out == [.textDelta("Hello"), .textDelta(" world"), .done(stopReason: "stop")])
     }
@@ -39,9 +39,9 @@ struct OpenAIProviderTests {
     func requestShape() async throws {
         nonisolated(unsafe) var seen: URLRequest?
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
-        let provider = OpenAIProvider(http: stub)
+        let provider = OpenAICompatibleProvider(http: stub, baseURL: "https://api.openai.com/v1")
         for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-x") {}
         let req = try #require(seen)
         #expect(req.url?.absoluteString == "https://api.openai.com/v1/chat/completions")
@@ -64,10 +64,10 @@ struct OpenAIProviderTests {
                 throw StreamingHTTPError.status(401, body: "{\"error\":{\"message\":\"Invalid API key\"}}")
             }
         }
-        let provider = OpenAIProvider(http: FailingHTTPClient())
+        let provider = OpenAICompatibleProvider(http: FailingHTTPClient(), baseURL: "https://api.openai.com/v1")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-                                         model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
+                                         model: AgentModelConfig(model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-secret") { out.append(e) }
         #expect(out.count == 1)
         if case .failed(let message) = out.first {
@@ -75,5 +75,25 @@ struct OpenAIProviderTests {
         } else {
             Issue.record("expected .failed event")
         }
+    }
+
+    @Test("custom base URL is honored")
+    func customBaseURL() async throws {
+        nonisolated(unsafe) var seen: URLRequest?
+        let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
+        let provider = OpenAICompatibleProvider(http: stub, baseURL: "https://openrouter.ai/api/v1")
+        for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "s", tools: [],
+            model: AgentModelConfig(model: "x", effort: "xhigh"), apiKey: "k") {}
+        #expect(try #require(seen).url?.absoluteString == "https://openrouter.ai/api/v1/chat/completions")
+    }
+
+    @Test("empty key sends no authorization header (Ollama)")
+    func noKeyNoAuthHeader() async throws {
+        nonisolated(unsafe) var seen: URLRequest?
+        let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
+        let provider = OpenAICompatibleProvider(http: stub, baseURL: "http://localhost:11434/v1")
+        for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "s", tools: [],
+            model: AgentModelConfig(model: "llama3.2", effort: "xhigh"), apiKey: "") {}
+        #expect(try #require(seen).value(forHTTPHeaderField: "authorization") == nil)
     }
 }

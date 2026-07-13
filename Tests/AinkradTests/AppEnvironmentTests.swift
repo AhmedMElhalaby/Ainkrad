@@ -41,10 +41,11 @@ final class AppEnvironmentTests {
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
         let agentPermissionStore = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
         let agentSession = AgentSession(
-            providerFor: { (provider: AgentProvider) -> LLMProvider in
-                switch provider {
+            providerFor: { (connection: Connection) -> LLMProvider in
+                switch connection.kind {
                 case .claude: return ClaudeProvider(http: URLSessionStreamingHTTPClient())
-                case .openai: return OpenAIProvider(http: URLSessionStreamingHTTPClient())
+                case .openAICompatible: return OpenAICompatibleProvider(http: URLSessionStreamingHTTPClient(), baseURL: connection.baseURL)
+                case .gemini: return GeminiProvider(http: URLSessionStreamingHTTPClient(), baseURL: connection.baseURL)
                 }
             },
             connections: connectionStore,
@@ -75,7 +76,8 @@ final class AppEnvironmentTests {
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
-            agentSession: agentSession
+            agentSession: agentSession,
+            modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient())
         )
 
         #expect(environment.registry === registry)

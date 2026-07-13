@@ -36,7 +36,7 @@ final class AgentSession {
     /// Not part of the UI-facing contract.
     private(set) var currentTask: Task<Void, Never>?
 
-    private let providerFor: (AgentProvider) -> LLMProvider
+    private let providerFor: (Connection) -> LLMProvider
     private let connections: ConnectionStore
     private let config: AgentConfigStore
     private let context: AgentContextService
@@ -49,7 +49,7 @@ final class AgentSession {
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
 
     init(
-        providerFor: @escaping (AgentProvider) -> LLMProvider,
+        providerFor: @escaping (Connection) -> LLMProvider,
         connections: ConnectionStore,
         config: AgentConfigStore,
         context: AgentContextService,
@@ -83,14 +83,19 @@ final class AgentSession {
         messages.append(AgentMessage(role: .user, text: text))
 
         let modelConfig = config.current
-        guard let apiKey = resolveAPIKey(for: modelConfig.provider) else {
-            state = .failed("No API key configured for \(modelConfig.provider.rawValue)")
+        guard let connection = activeConnection() else {
+            state = .failed("No connection configured. Add one in Assistant settings.")
+            return
+        }
+        let apiKey = connections.token(for: connection) ?? ""
+        if ProviderPreset.preset(id: connection.presetID).requiresKey && apiKey.isEmpty {
+            state = .failed("No API key configured for \(connection.displayName)")
             return
         }
 
         let contextBlock = context.assembleContext()
         let system = contextBlock.isEmpty ? basePrompt : basePrompt + "\n\n" + contextBlock
-        let provider = providerFor(modelConfig.provider)
+        let provider = providerFor(connection)
 
         state = .thinking
         streamingText = ""
@@ -259,12 +264,12 @@ final class AgentSession {
         return await registry.run(call)
     }
 
-    private func resolveAPIKey(for provider: AgentProvider) -> String? {
-        let connectionProvider = ConnectionProvider(rawValue: provider.rawValue)
-        guard let connectionProvider else { return nil }
-        guard let match = connections.connections.first(where: { $0.provider == connectionProvider }) else {
-            return nil
+    /// The active connection: the configured one, else the first connection.
+    private func activeConnection() -> Connection? {
+        if let id = config.activeConnectionID,
+           let match = connections.connections.first(where: { $0.id == id }) {
+            return match
         }
-        return connections.token(for: match)
+        return connections.connections.first
     }
 }
