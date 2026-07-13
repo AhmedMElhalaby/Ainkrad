@@ -22,11 +22,21 @@ struct ClaudeProvider: LLMProvider {
                     let bytes = try await http.post(request)
 
                     var stopReason: String?
+                    var toolBlocks: [Int: (id: String, name: String, buffer: String)] = [:]
+
                     for try await payload in SSEParser.events(from: bytes) {
                         guard let data = payload.data(using: .utf8) else { continue }
                         guard let envelope = try? JSONDecoder().decode(SSEEnvelope.self, from: data) else { continue }
 
                         switch envelope.type {
+                        case "content_block_start":
+                            if envelope.contentBlock?.type == "tool_use",
+                               let index = envelope.index,
+                               let id = envelope.contentBlock?.id,
+                               let name = envelope.contentBlock?.name {
+                                toolBlocks[index] = (id, name, "")
+                                continuation.yield(.toolUseStart(id: id, name: name))
+                            }
                         case "content_block_delta":
                             if let delta = envelope.delta {
                                 switch delta.type {
@@ -38,9 +48,22 @@ struct ClaudeProvider: LLMProvider {
                                     if let text = delta.text {
                                         continuation.yield(.textDelta(text))
                                     }
+                                case "input_json_delta":
+                                    if let index = envelope.index, let partial = delta.partialJSON,
+                                       var entry = toolBlocks[index] {
+                                        entry.buffer += partial
+                                        toolBlocks[index] = entry
+                                        continuation.yield(.toolInputDelta(id: entry.id, partialJSON: partial))
+                                    }
                                 default:
                                     break
                                 }
+                            }
+                        case "content_block_stop":
+                            if let index = envelope.index, let entry = toolBlocks[index] {
+                                let input = JSONValue.parse(entry.buffer) ?? .object([:])
+                                continuation.yield(.toolUseComplete(id: entry.id, name: entry.name, input: input))
+                                toolBlocks[index] = nil
                             }
                         case "message_delta":
                             if let reason = envelope.delta?.stopReason {
@@ -130,14 +153,21 @@ struct ClaudeProvider: LLMProvider {
     // MARK: - Wire types
 
     private struct SSEEnvelope: Decodable {
+        struct ContentBlock: Decodable {
+            let type: String?
+            let id: String?
+            let name: String?
+        }
         struct Delta: Decodable {
             let type: String?
             let thinking: String?
             let text: String?
+            let partialJSON: String?
             let stopReason: String?
 
             enum CodingKeys: String, CodingKey {
                 case type, thinking, text
+                case partialJSON = "partial_json"
                 case stopReason = "stop_reason"
             }
         }
@@ -146,7 +176,14 @@ struct ClaudeProvider: LLMProvider {
         }
 
         let type: String
+        let index: Int?
+        let contentBlock: ContentBlock?
         let delta: Delta?
         let error: ErrorPayload?
+
+        enum CodingKeys: String, CodingKey {
+            case type, index, delta, error
+            case contentBlock = "content_block"
+        }
     }
 }
