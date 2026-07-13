@@ -17,6 +17,7 @@ struct AssistantSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 connectionsSection(tokens: tokens)
                 modelSection(tokens: tokens)
+                permissionsSection(tokens: tokens)
                 contextPrivacySection(tokens: tokens)
             }
             .padding(18)
@@ -189,6 +190,38 @@ struct AssistantSettingsView: View {
         switch provider {
         case .claude: return "Claude"
         case .openai: return "OpenAI"
+        }
+    }
+
+    // MARK: - Permissions
+
+    private func permissionsSection(tokens: DesignTokens) -> some View {
+        let permissionStore = environment.agentPermissionStore
+
+        return VStack(alignment: .leading, spacing: 12) {
+            SettingsSectionHeader(title: "PERMISSIONS", tokens: tokens)
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Ask before reading files")
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text("When on, the assistant asks before reading any file (except in Full-auto).")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                }
+                Spacer(minLength: 12)
+                NeonToggle(
+                    isOn: Binding(
+                        get: { permissionStore.gateReads },
+                        set: { permissionStore.setGateReads($0) }
+                    ),
+                    tokens: tokens
+                )
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
         }
     }
 

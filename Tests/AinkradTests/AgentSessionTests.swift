@@ -16,7 +16,7 @@ final class FakeLLMProvider: LLMProvider {
         self.script = script
     }
 
-    func send(messages: [AgentMessage], system: String, model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema], model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
         wasCalled = true
         lastSystem = system
         lastApiKey = apiKey
@@ -48,11 +48,14 @@ private func makeSession(
         resolvedContext = AgentContextService(hub: hub, settings: contextSettings)
     }
     let resolvedConfig = config ?? AgentConfigStore(persistence: persistence)
+    let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
     return AgentSession(
         providerFor: { _ in fake },
         connections: connections,
         config: resolvedConfig,
         context: resolvedContext,
+        registry: AgentToolRegistry(tools: []),
+        permissions: permissions,
         basePrompt: basePrompt
     )
 }

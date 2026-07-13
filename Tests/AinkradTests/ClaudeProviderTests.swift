@@ -30,7 +30,7 @@ struct ClaudeProviderTests {
         let provider = ClaudeProvider(http: StubStreamingHTTPClient(chunks: fixture, captured: nil))
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")],
-                                         system: "sys",
+                                         system: "sys", tools: [],
                                          model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-x") { out.append(e) }
         #expect(out == [.thinkingDelta("hmm"), .textDelta("Hello"), .textDelta(" world"), .done(stopReason: "end_turn")])
@@ -41,7 +41,7 @@ struct ClaudeProviderTests {
         nonisolated(unsafe) var seen: URLRequest?
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
         let provider = ClaudeProvider(http: stub)
-        for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys",
+        for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
                                          model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-x") {}
         let req = try #require(seen)
@@ -62,7 +62,7 @@ struct ClaudeProviderTests {
         }
         let provider = ClaudeProvider(http: FailingHTTPClient())
         var out: [AgentEvent] = []
-        for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys",
+        for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
                                          model: AgentModelConfig(provider: .claude, model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-secret") { out.append(e) }
         #expect(out.count == 1)

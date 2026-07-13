@@ -2,12 +2,6 @@ import Foundation
 
 enum AgentProvider: String, Codable, CaseIterable, Sendable { case claude, openai }
 
-struct AgentMessage: Equatable, Sendable {
-    enum Role: String, Sendable { case user, assistant }
-    var role: Role
-    var text: String
-}
-
 struct AgentModelConfig: Equatable, Sendable {
     var provider: AgentProvider
     var model: String          // e.g. "claude-opus-4-8" / "gpt-5"
@@ -17,6 +11,9 @@ struct AgentModelConfig: Equatable, Sendable {
 enum AgentEvent: Equatable, Sendable {
     case thinkingDelta(String)
     case textDelta(String)
+    case toolUseStart(id: String, name: String)
+    case toolInputDelta(id: String, partialJSON: String)
+    case toolUseComplete(id: String, name: String, input: JSONValue)
     case done(stopReason: String?)
     case failed(String)        // human-readable, key already redacted
 }

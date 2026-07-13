@@ -29,7 +29,7 @@ struct OpenAIProviderTests {
         let provider = OpenAIProvider(http: StubStreamingHTTPClient(chunks: fixture, captured: nil))
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")],
-                                         system: "sys",
+                                         system: "sys", tools: [],
                                          model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-x") { out.append(e) }
         #expect(out == [.textDelta("Hello"), .textDelta(" world"), .done(stopReason: "stop")])
@@ -40,7 +40,7 @@ struct OpenAIProviderTests {
         nonisolated(unsafe) var seen: URLRequest?
         let stub = StubStreamingHTTPClient(chunks: fixture, captured: { seen = $0 })
         let provider = OpenAIProvider(http: stub)
-        for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys",
+        for try await _ in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
                                          model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-x") {}
         let req = try #require(seen)
@@ -66,7 +66,7 @@ struct OpenAIProviderTests {
         }
         let provider = OpenAIProvider(http: FailingHTTPClient())
         var out: [AgentEvent] = []
-        for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys",
+        for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
                                          model: AgentModelConfig(provider: .openai, model: "gpt-5", effort: "xhigh"),
                                          apiKey: "sk-secret") { out.append(e) }
         #expect(out.count == 1)

@@ -23,6 +23,7 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentConfigStore: AgentConfigStore
+    let agentPermissionStore: AgentPermissionStore
     let agentContextSettingsStore: AgentContextSettingsStore
     let agentContextService: AgentContextService
     let agentSession: AgentSession
@@ -59,6 +60,7 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentConfigStore: AgentConfigStore,
+        agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
         agentContextService: AgentContextService,
         agentSession: AgentSession
@@ -80,6 +82,7 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentConfigStore = agentConfigStore
+        self.agentPermissionStore = agentPermissionStore
         self.agentContextSettingsStore = agentContextSettingsStore
         self.agentContextService = agentContextService
         self.agentSession = agentSession
@@ -160,6 +163,12 @@ final class AppEnvironment {
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
+        let agentPermissionStore = AgentPermissionStore(
+            persistence: persistence,
+            currentWorkspaceID: { [weak workspaceManager] in
+                workspaceManager?.activeWorkspaceID ?? UUID()
+            })
+        let agentToolRegistry = AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()])
         let agentSession = AgentSession(
             providerFor: { (provider: AgentProvider) -> LLMProvider in
                 switch provider {
@@ -169,7 +178,9 @@ final class AppEnvironment {
             },
             connections: connectionStore,
             config: agentConfigStore,
-            context: agentContextService
+            context: agentContextService,
+            registry: agentToolRegistry,
+            permissions: agentPermissionStore
         )
 
         let environment = AppEnvironment(
@@ -190,6 +201,7 @@ final class AppEnvironment {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentConfigStore: agentConfigStore,
+            agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
             agentSession: agentSession

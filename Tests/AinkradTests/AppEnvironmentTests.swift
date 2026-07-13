@@ -39,6 +39,7 @@ final class AppEnvironmentTests {
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
+        let agentPermissionStore = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
         let agentSession = AgentSession(
             providerFor: { (provider: AgentProvider) -> LLMProvider in
                 switch provider {
@@ -48,7 +49,9 @@ final class AppEnvironmentTests {
             },
             connections: connectionStore,
             config: agentConfigStore,
-            context: agentContextService
+            context: agentContextService,
+            registry: AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()]),
+            permissions: agentPermissionStore
         )
 
         let environment = AppEnvironment(
@@ -69,12 +72,15 @@ final class AppEnvironmentTests {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentConfigStore: agentConfigStore,
+            agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
             agentSession: agentSession
         )
 
         #expect(environment.registry === registry)
+        #expect(environment.agentPermissionStore === agentPermissionStore)
+        #expect(environment.agentPermissionStore.mode == .ask)
         #expect(environment.themeManager === themeManager)
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
