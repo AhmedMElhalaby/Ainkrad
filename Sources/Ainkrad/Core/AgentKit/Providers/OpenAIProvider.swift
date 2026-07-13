@@ -22,6 +22,8 @@ struct OpenAIProvider: LLMProvider {
                     let bytes = try await http.post(request)
 
                     var finishReason: String?
+                    var calls: [Int: (id: String, name: String, args: String)] = [:]
+
                     for try await payload in SSEParser.events(from: bytes) {
                         guard let data = payload.data(using: .utf8) else { continue }
                         guard let chunk = try? JSONDecoder().decode(ChatCompletionChunk.self, from: data) else { continue }
@@ -35,8 +37,29 @@ struct OpenAIProvider: LLMProvider {
                         if let content = choice.delta?.content, !content.isEmpty {
                             continuation.yield(.textDelta(content))
                         }
+                        for tc in choice.delta?.toolCalls ?? [] {
+                            var entry = calls[tc.index] ?? (id: "", name: "", args: "")
+                            if let id = tc.id { entry.id = id }
+                            if let name = tc.function?.name { entry.name = name }
+                            if entry.id.isEmpty == false, entry.name.isEmpty == false, calls[tc.index] == nil {
+                                continuation.yield(.toolUseStart(id: entry.id, name: entry.name))
+                            }
+                            if let args = tc.function?.arguments, !args.isEmpty {
+                                entry.args += args
+                                continuation.yield(.toolInputDelta(id: entry.id, partialJSON: args))
+                            }
+                            calls[tc.index] = entry
+                        }
                         if let reason = choice.finishReason {
                             finishReason = reason
+                        }
+                    }
+
+                    if finishReason == "tool_calls" {
+                        for index in calls.keys.sorted() {
+                            let entry = calls[index]!
+                            let input = JSONValue.parse(entry.args) ?? .object([:])
+                            continuation.yield(.toolUseComplete(id: entry.id, name: entry.name, input: input))
                         }
                     }
                     continuation.yield(.done(stopReason: finishReason))
@@ -129,7 +152,15 @@ struct OpenAIProvider: LLMProvider {
     private struct ChatCompletionChunk: Decodable {
         struct Choice: Decodable {
             struct Delta: Decodable {
+                struct ToolCall: Decodable {
+                    struct Function: Decodable { let name: String?; let arguments: String? }
+                    let index: Int
+                    let id: String?
+                    let function: Function?
+                }
                 let content: String?
+                let toolCalls: [ToolCall]?
+                enum CodingKeys: String, CodingKey { case content; case toolCalls = "tool_calls" }
             }
             let delta: Delta?
             let finishReason: String?
