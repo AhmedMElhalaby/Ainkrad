@@ -8,6 +8,7 @@ struct AssistantRootView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var draft = ""
     @State private var isThinkingExpanded = true
+    @State private var discoveredModels: [UUID: [String]] = [:]
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -62,6 +63,34 @@ struct AssistantRootView: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
+        .onAppear { if let c = activeConnection() { refreshModels(for: c) } }
+        .onChange(of: activeConnection()?.id) { _, _ in
+            if let c = activeConnection() { refreshModels(for: c) }
+        }
+    }
+
+    private func refreshModels(for connection: Connection) {
+        let store = environment.connectionStore
+        let svc = environment.modelCatalogService
+        let preset = ProviderPreset.preset(id: connection.presetID)
+        let key = store.token(for: connection) ?? ""
+        Task {
+            let models = await svc.models(kind: connection.kind, baseURL: connection.baseURL,
+                                          apiKey: key, curatedFallback: preset.curatedModels)
+            discoveredModels[connection.id] = models
+            reconcileModelIfNeeded(for: connection, availableModels: models)
+        }
+    }
+
+    /// If the active connection's active model isn't valid for it (e.g. still the
+    /// Claude default on a freshly-added non-Claude connection), fall back to the
+    /// first available model for that connection. Never overrides an explicitly
+    /// chosen model that IS in the list.
+    private func reconcileModelIfNeeded(for connection: Connection, availableModels: [String]) {
+        let configStore = environment.agentConfigStore
+        guard activeConnection()?.id == connection.id else { return }
+        guard !availableModels.isEmpty, !availableModels.contains(configStore.current.model) else { return }
+        configStore.setModel(availableModels[0])
     }
 
     private func newChatButton(session: AgentSession, tokens: DesignTokens) -> some View {
@@ -142,7 +171,7 @@ struct AssistantRootView: View {
 
     private func modelOptions(for connection: Connection?) -> [String] {
         guard let connection else { return [] }
-        return ProviderPreset.preset(id: connection.presetID).curatedModels
+        return discoveredModels[connection.id] ?? ProviderPreset.preset(id: connection.presetID).curatedModels
     }
 
     private func permissionTitle(_ mode: AgentPermissionMode) -> String {

@@ -11,6 +11,8 @@ struct AssistantSettingsView: View {
     @State private var newDisplayName: String = ""
     @State private var newConnectionToken = ""
     @State private var revealedConnectionIDs: Set<UUID> = []
+    @State private var discoveredModels: [UUID: [String]] = [:]
+    @State private var isRefreshingModels = false
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -189,10 +191,18 @@ struct AssistantSettingsView: View {
                         tokens: tokens)
                 }
                 labeled("MODEL", tokens: tokens) {
-                    NeonSegmentedPicker(
-                        items: modelOptions(for: active),
-                        selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
-                        label: { $0 }, tokens: tokens)
+                    HStack(spacing: 8) {
+                        NeonSegmentedPicker(
+                            items: modelOptions(for: active),
+                            selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
+                            label: { $0 }, tokens: tokens)
+                        Button { if let c = active { refreshModels(for: c) } } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11))
+                                .foregroundStyle(tokens.foreground.opacity(isRefreshingModels ? 0.3 : 0.6))
+                        }
+                        .buttonStyle(.plain).disabled(isRefreshingModels)
+                    }
                 }
                 if active?.kind == .claude {
                     labeled("EFFORT", tokens: tokens) {
@@ -204,6 +214,8 @@ struct AssistantSettingsView: View {
                 }
             }
         }
+        .onAppear { if let c = active { refreshModels(for: c) } }
+        .onChange(of: active?.id) { _, _ in if let c = active { refreshModels(for: c) } }
     }
 
     private func activeConnection() -> Connection? {
@@ -215,7 +227,33 @@ struct AssistantSettingsView: View {
 
     private func modelOptions(for connection: Connection?) -> [String] {
         guard let connection else { return [] }
-        return ProviderPreset.preset(id: connection.presetID).curatedModels
+        return discoveredModels[connection.id] ?? ProviderPreset.preset(id: connection.presetID).curatedModels
+    }
+
+    private func refreshModels(for connection: Connection) {
+        let store = environment.connectionStore
+        let svc = environment.modelCatalogService
+        let preset = ProviderPreset.preset(id: connection.presetID)
+        let key = store.token(for: connection) ?? ""
+        isRefreshingModels = true
+        Task {
+            let models = await svc.models(kind: connection.kind, baseURL: connection.baseURL,
+                                          apiKey: key, curatedFallback: preset.curatedModels)
+            discoveredModels[connection.id] = models
+            isRefreshingModels = false
+            reconcileModelIfNeeded(for: connection, availableModels: models)
+        }
+    }
+
+    /// If the active connection's active model isn't valid for it (e.g. still the
+    /// Claude default on a freshly-added non-Claude connection), fall back to the
+    /// first available model for that connection. Never overrides an explicitly
+    /// chosen model that IS in the list.
+    private func reconcileModelIfNeeded(for connection: Connection, availableModels: [String]) {
+        let configStore = environment.agentConfigStore
+        guard activeConnection()?.id == connection.id else { return }
+        guard !availableModels.isEmpty, !availableModels.contains(configStore.current.model) else { return }
+        configStore.setModel(availableModels[0])
     }
 
     // MARK: - Permissions
