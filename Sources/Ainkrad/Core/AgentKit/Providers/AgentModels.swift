@@ -2,12 +2,6 @@ import Foundation
 
 enum AgentProvider: String, Codable, CaseIterable, Sendable { case claude, openai }
 
-struct AgentMessage: Equatable, Sendable {
-    enum Role: String, Sendable { case user, assistant }
-    var role: Role
-    var text: String
-}
-
 struct AgentModelConfig: Equatable, Sendable {
     var provider: AgentProvider
     var model: String          // e.g. "claude-opus-4-8" / "gpt-5"
