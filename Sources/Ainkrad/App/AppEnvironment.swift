@@ -1,4 +1,5 @@
 import Foundation
+import AinkradAppKit
 
 /// The composition root, assembled once in `AinkradHostApp.init` and injected
 /// via `.environment(_:)`. See State, Persistence & Dependency Injection.md.
@@ -20,6 +21,11 @@ final class AppEnvironment {
     let generalSettingsStore: GeneralSettingsStore
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
+    let agentContextHub: AgentContextRegistryHub
+    let agentConfigStore: AgentConfigStore
+    let agentContextSettingsStore: AgentContextSettingsStore
+    let agentContextService: AgentContextService
+    let agentSession: AgentSession
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -50,7 +56,12 @@ final class AppEnvironment {
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
         skySettingsStore: SkySettingsStore,
-        sounds: SoundPlaying
+        sounds: SoundPlaying,
+        agentContextHub: AgentContextRegistryHub,
+        agentConfigStore: AgentConfigStore,
+        agentContextSettingsStore: AgentContextSettingsStore,
+        agentContextService: AgentContextService,
+        agentSession: AgentSession
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -67,6 +78,11 @@ final class AppEnvironment {
         self.generalSettingsStore = generalSettingsStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
+        self.agentContextHub = agentContextHub
+        self.agentConfigStore = agentConfigStore
+        self.agentContextSettingsStore = agentContextSettingsStore
+        self.agentContextService = agentContextService
+        self.agentSession = agentSession
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -94,9 +110,10 @@ final class AppEnvironment {
         ]
         let pluginDataRoot = documentsRoot.appendingPathComponent("PluginData", isDirectory: true)
         let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
+        let agentContextHub = AgentContextRegistryHub()
         let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy()) { appID in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
-                             secretStore: secrets, themeManager: themeManager)
+                             secretStore: secrets, themeManager: themeManager, hub: agentContextHub)
         }
 
         // The app catalog is a single hosted document (the central
@@ -134,6 +151,27 @@ final class AppEnvironment {
         // ever runs once, from `AinkradHostApp.init`.
         sounds.play(.appLaunch)
 
+        let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
+
+        // AgentKit services (M5 Phase B): one shared streaming HTTP client
+        // backs both providers; `AgentSession` is the single read-only chat
+        // loop the Assistant built-in (and, later, the ambient island) bind to.
+        let streamingHTTP = URLSessionStreamingHTTPClient()
+        let agentConfigStore = AgentConfigStore(persistence: persistence)
+        let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
+        let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
+        let agentSession = AgentSession(
+            providerFor: { (provider: AgentProvider) -> LLMProvider in
+                switch provider {
+                case .claude: return ClaudeProvider(http: streamingHTTP)
+                case .openai: return OpenAIProvider(http: streamingHTTP)
+                }
+            },
+            connections: connectionStore,
+            config: agentConfigStore,
+            context: agentContextService
+        )
+
         let environment = AppEnvironment(
             persistence: persistence,
             secrets: secrets,
@@ -141,7 +179,7 @@ final class AppEnvironment {
             themeManager: themeManager,
             workspaceManager: workspaceManager,
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
-            connectionStore: ConnectionStore(persistence: persistence, secrets: secrets),
+            connectionStore: connectionStore,
             appStore: appStore,
             appStoreStore: appStoreStore,
             appIconStore: appIconStore,
@@ -149,20 +187,31 @@ final class AppEnvironment {
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
             skySettingsStore: skySettingsStore,
-            sounds: sounds
+            sounds: sounds,
+            agentContextHub: agentContextHub,
+            agentConfigStore: agentConfigStore,
+            agentContextSettingsStore: agentContextSettingsStore,
+            agentContextService: agentContextService,
+            agentSession: agentSession
         )
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
         // Still migrate any pre-4a host-global settings into its scoped store so the
         // installed plugin sees the user's existing configuration.
         let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
-                                            secretStore: secrets, themeManager: themeManager)
+                                            secretStore: secrets, themeManager: themeManager, hub: agentContextHub)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
 
+        // Assistant is a host-embedded built-in (its views read `AppEnvironment`
+        // directly), scoped like any other app for its documents/secrets/theme/context.
+        let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
+                                             secretStore: secrets, themeManager: themeManager, hub: agentContextHub)
+
         let loaded = loader.loadAll(from: pluginDirs)
-        registry.install(builtIn: [], loaded: loaded.apps, failures: loaded.failures)
+        registry.install(builtIn: [RegisteredApp.builtIn(AssistantApp.self, host: assistantHost)],
+                         loaded: loaded.apps, failures: loaded.failures)
 
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)

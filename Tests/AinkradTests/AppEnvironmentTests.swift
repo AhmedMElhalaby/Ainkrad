@@ -35,6 +35,21 @@ final class AppEnvironmentTests {
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
         let sounds = SoundEngine(settings: generalSettingsStore)
+        let agentContextHub = AgentContextRegistryHub()
+        let agentConfigStore = AgentConfigStore(persistence: persistence)
+        let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
+        let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
+        let agentSession = AgentSession(
+            providerFor: { (provider: AgentProvider) -> LLMProvider in
+                switch provider {
+                case .claude: return ClaudeProvider(http: URLSessionStreamingHTTPClient())
+                case .openai: return OpenAIProvider(http: URLSessionStreamingHTTPClient())
+                }
+            },
+            connections: connectionStore,
+            config: agentConfigStore,
+            context: agentContextService
+        )
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -51,7 +66,12 @@ final class AppEnvironmentTests {
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
             skySettingsStore: SkySettingsStore(persistence: persistence),
-            sounds: sounds
+            sounds: sounds,
+            agentContextHub: agentContextHub,
+            agentConfigStore: agentConfigStore,
+            agentContextSettingsStore: agentContextSettingsStore,
+            agentContextService: agentContextService,
+            agentSession: agentSession
         )
 
         #expect(environment.registry === registry)
@@ -79,7 +99,9 @@ final class AppEnvironmentTests {
         defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
         let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        #expect(environment.registry.allApps.isEmpty)   // Terminal is now an App Store plugin, not built-in
+        // Terminal is an App Store plugin, not built-in; Assistant is the one
+        // compiled-in built-in the host registers itself (M5 Phase B).
+        #expect(environment.registry.allApps.map(\.id) == ["assistant"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)
