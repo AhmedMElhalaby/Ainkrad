@@ -44,7 +44,7 @@ final class AppEnvironmentTests {
             providerFor: { (provider: AgentProvider) -> LLMProvider in
                 switch provider {
                 case .claude: return ClaudeProvider(http: URLSessionStreamingHTTPClient())
-                case .openai: return OpenAIProvider(http: URLSessionStreamingHTTPClient())
+                case .openai: return OpenAICompatibleProvider(http: URLSessionStreamingHTTPClient(), baseURL: "https://api.openai.com/v1")
                 }
             },
             connections: connectionStore,

@@ -173,7 +173,7 @@ final class AppEnvironment {
             providerFor: { (provider: AgentProvider) -> LLMProvider in
                 switch provider {
                 case .claude: return ClaudeProvider(http: streamingHTTP)
-                case .openai: return OpenAIProvider(http: streamingHTTP)
+                case .openai: return OpenAICompatibleProvider(http: streamingHTTP, baseURL: "https://api.openai.com/v1")
                 }
             },
             connections: connectionStore,
