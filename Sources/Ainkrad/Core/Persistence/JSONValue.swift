@@ -76,4 +76,19 @@ extension JSONValue {
         guard let data = string.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(JSONValue.self, from: data)
     }
+
+    /// Inverse of `toFoundationObject()` — lifts a Foundation JSON value
+    /// (from `JSONSerialization`) into a `JSONValue`.
+    static func fromFoundationObject(_ object: Any) -> JSONValue {
+        switch object {
+        case let s as String: return .string(s)
+        case let b as Bool: return .bool(b)
+        case let n as Int: return .number(Double(n))
+        case let n as Double: return .number(n)
+        case let n as NSNumber: return .number(n.doubleValue)
+        case let a as [Any]: return .array(a.map(fromFoundationObject))
+        case let d as [String: Any]: return .object(d.mapValues(fromFoundationObject))
+        default: return .null
+        }
+    }
 }
