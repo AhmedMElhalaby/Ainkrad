@@ -26,7 +26,20 @@ struct AssistantRootView: View {
                 draft: $draft
             )
         }
-        .background(tokens.background)
+        .background {
+            // Glass surface: an optional frost (blurs the sibling window
+            // content behind the pane — the revealed sky + island) plus an
+            // opacity-tinted fill. At opacity 1.0 + blur off this is identical
+            // to the previous opaque background. Reading the store here makes
+            // the surface update live as the settings sliders change.
+            let appearance = environment.assistantAppearanceStore
+            ZStack {
+                if appearance.blurEnabled {
+                    VisualEffectBlur()
+                }
+                tokens.background.opacity(appearance.surfaceOpacity)
+            }
+        }
     }
 
     // MARK: - Header (new chat only)
