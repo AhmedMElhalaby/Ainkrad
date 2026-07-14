@@ -34,6 +34,7 @@ final class AppEnvironment {
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
     var isAppStorePresented = false
+    var isQuickAskPresented = false
     /// Tracks the host window's full-screen state — set by
     /// `KeyboardShortcutMonitor.MonitoringView` from `NSWindow`'s full-screen
     /// notifications (AIN-109). Drives `HUDBar`'s full-screen status bar;

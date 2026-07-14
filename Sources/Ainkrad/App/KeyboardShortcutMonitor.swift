@@ -293,6 +293,17 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isAppStorePresented = false
                 environment.isWorkspaceOverviewPresented.toggle()
                 return true
+            case .openQuickAsk:
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
+                environment.isAppStorePresented = false
+                if environment.isQuickAskPresented {
+                    environment.isQuickAskPresented = false
+                } else {
+                    environment.isLauncherPresented = false
+                    environment.isQuickAskPresented = true
+                }
+                return true
             case .closeBlock:
                 let layout = environment.workspaceManager.activeWorkspace.tileLayout
                 if let focusedBlockID = layout.focusedBlockID {
