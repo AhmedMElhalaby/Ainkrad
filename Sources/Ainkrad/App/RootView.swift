@@ -8,7 +8,7 @@ struct RootView: View {
 
     private var isOverlayPresented: Bool {
         environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
-            || environment.isAppStorePresented || environment.quitCoordinator.isConfirming
+            || environment.isAppStorePresented || environment.isQuickAskPresented || environment.quitCoordinator.isConfirming
     }
 
     /// The app of the focused pane in the active workspace, so Settings can
@@ -76,6 +76,13 @@ struct RootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
 
+            if environment.isQuickAskPresented {
+                QuickAskOverlayView {
+                    environment.isQuickAskPresented = false
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
+
             if environment.quitCoordinator.isConfirming {
                 QuitConfirmationView()
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
@@ -98,6 +105,9 @@ struct RootView: View {
             environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
         }
         .onChange(of: environment.isWorkspaceOverviewPresented) { _, isPresented in
+            environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
+        }
+        .onChange(of: environment.isQuickAskPresented) { _, isPresented in
             environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
         }
         // Switching the active workspace (⌘1-9, ⌥Tab, cycle, HUD dots all
