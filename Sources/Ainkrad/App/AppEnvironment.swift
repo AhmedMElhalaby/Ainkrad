@@ -22,6 +22,7 @@ final class AppEnvironment {
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
+    let agentActionHub: AgentActionRegistryHub
     let agentConfigStore: AgentConfigStore
     let agentPermissionStore: AgentPermissionStore
     let agentContextSettingsStore: AgentContextSettingsStore
@@ -60,6 +61,7 @@ final class AppEnvironment {
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
+        agentActionHub: AgentActionRegistryHub,
         agentConfigStore: AgentConfigStore,
         agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
@@ -83,6 +85,7 @@ final class AppEnvironment {
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
         self.agentContextHub = agentContextHub
+        self.agentActionHub = agentActionHub
         self.agentConfigStore = agentConfigStore
         self.agentPermissionStore = agentPermissionStore
         self.agentContextSettingsStore = agentContextSettingsStore
@@ -117,9 +120,11 @@ final class AppEnvironment {
         let pluginDataRoot = documentsRoot.appendingPathComponent("PluginData", isDirectory: true)
         let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
         let agentContextHub = AgentContextRegistryHub()
-        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy()) { appID in
+        let agentActionHub = AgentActionRegistryHub()
+        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 3) { appID in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
-                             secretStore: secrets, themeManager: themeManager, hub: agentContextHub)
+                             secretStore: secrets, themeManager: themeManager,
+                             hub: agentContextHub, actionHub: agentActionHub)
         }
 
         // The app catalog is a single hosted document (the central
@@ -171,7 +176,12 @@ final class AppEnvironment {
             currentWorkspaceID: { [weak workspaceManager] in
                 workspaceManager?.activeWorkspaceID ?? UUID()
             })
-        let agentToolRegistry = AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()])
+        let agentToolRegistry = AgentToolRegistry(tools: [
+            ReadFileTool(), EditFileTool(),
+            WorkspaceControlTool(workspaces: workspaceManager),
+            RunTerminalTool(actionHub: agentActionHub),
+            GitOpTool(actionHub: agentActionHub),
+        ])
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
@@ -205,6 +215,7 @@ final class AppEnvironment {
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,
+            agentActionHub: agentActionHub,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
@@ -217,7 +228,8 @@ final class AppEnvironment {
         // Still migrate any pre-4a host-global settings into its scoped store so the
         // installed plugin sees the user's existing configuration.
         let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
-                                            secretStore: secrets, themeManager: themeManager, hub: agentContextHub)
+                                            secretStore: secrets, themeManager: themeManager,
+                                            hub: agentContextHub, actionHub: agentActionHub)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
@@ -225,7 +237,8 @@ final class AppEnvironment {
         // Assistant is a host-embedded built-in (its views read `AppEnvironment`
         // directly), scoped like any other app for its documents/secrets/theme/context.
         let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
-                                             secretStore: secrets, themeManager: themeManager, hub: agentContextHub)
+                                             secretStore: secrets, themeManager: themeManager,
+                                             hub: agentContextHub, actionHub: agentActionHub)
 
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(builtIn: [RegisteredApp.builtIn(AssistantApp.self, host: assistantHost)],

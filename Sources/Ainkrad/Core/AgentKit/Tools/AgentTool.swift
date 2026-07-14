@@ -37,6 +37,9 @@ protocol AgentTool {
     var permission: ToolPermissionClass { get }
     func execute(_ input: JSONValue) async throws -> ToolResult
     func approvalPreview(_ input: JSONValue) -> ToolApprovalPreview
+    /// Whether THIS specific call is irreversible (destructive). The Full-auto
+    /// guard routes irreversible calls to the approval HUD even in `.fullAuto`.
+    func isIrreversible(_ input: JSONValue) -> Bool
 }
 
 extension AgentTool {
@@ -50,4 +53,6 @@ extension AgentTool {
         let summary = data.map { String(decoding: $0, as: UTF8.self) } ?? ""
         return ToolApprovalPreview(title: name, summary: summary, diff: nil)
     }
+
+    func isIrreversible(_ input: JSONValue) -> Bool { false }
 }

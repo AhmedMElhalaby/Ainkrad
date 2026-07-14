@@ -36,6 +36,7 @@ final class AppEnvironmentTests {
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
         let sounds = SoundEngine(settings: generalSettingsStore)
         let agentContextHub = AgentContextRegistryHub()
+        let agentActionHub = AgentActionRegistryHub()
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
@@ -72,6 +73,7 @@ final class AppEnvironmentTests {
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,
+            agentActionHub: agentActionHub,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,

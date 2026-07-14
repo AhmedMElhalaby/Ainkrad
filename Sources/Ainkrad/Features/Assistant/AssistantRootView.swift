@@ -208,7 +208,8 @@ struct AssistantRootView: View {
                             diff: pending.preview.diff,
                             tokens: tokens,
                             onApprove: { session.approve() },
-                            onDeny: { session.deny(reason: "Denied by user.") }
+                            onDeny: { session.deny(reason: "Denied by user.") },
+                            onApproveAlways: { session.approve(always: true) }
                         )
                         .id("approval")
                     }

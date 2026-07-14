@@ -131,4 +131,41 @@ struct AgentSessionToolLoopTests {
         // could resurrect the transcript and call provider.send again.
         #expect(provider.sendCount == 1)
     }
+
+    @Test func approveAlwaysAllowlistsToolAndSkipsFutureApproval() async {
+        let persistence = InMemoryPersistenceStore()
+        let ws = UUID()
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        permissions.setMode(.autoApprove)
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude", baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let tool = OKTool(permission: .write)
+        let provider = ScriptedProvider([
+            [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            [.textDelta("first"), .done(stopReason: "end_turn")],
+            [.toolUseComplete(id: "2", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            [.textDelta("second"), .done(stopReason: "end_turn")],
+        ])
+        let session = AgentSession(
+            providerFor: { _ in provider },
+            connections: connections, config: config, context: context,
+            registry: AgentToolRegistry(tools: [tool]), permissions: permissions)
+
+        session.send("edit")
+        guard await waitForApproval(session) else { Issue.record("expected awaitingApproval"); return }
+        session.approve(always: true)
+        await session.currentTask?.value
+        #expect(session.state == .idle)
+        #expect(session.messages.last?.text == "first")
+        #expect(permissions.allowlist.contains("ok_tool"))
+
+        // A subsequent identical call auto-approves: no second .awaitingApproval.
+        session.send("edit again")
+        await session.currentTask?.value
+        #expect(session.state == .idle)
+        #expect(session.messages.last?.text == "second")
+    }
 }
