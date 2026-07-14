@@ -118,8 +118,9 @@ struct AssistantRootView: View {
     }
 
     private func textBubble(for message: AgentMessage, tokens: DesignTokens) -> some View {
-        HStack {
-            if message.role == .user { Spacer(minLength: 40) }
+        let isUser = message.role == .user
+        return HStack {
+            if isUser { Spacer(minLength: 40) }
 
             Text(message.text)
                 .font(AinkradFont.display(13))
@@ -127,16 +128,11 @@ struct AssistantRootView: View {
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(message.role == .user
-                              ? tokens.accentPrimary.opacity(0.18)
-                              : tokens.surfaceElevated.opacity(0.5))
+                        .fill(isUser ? tokens.accentPrimary.opacity(0.18) : tokens.surfaceElevated.opacity(0.4))
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1)
-                )
+                .shadow(color: (isUser ? tokens.accentPrimary : tokens.accentSecondary).opacity(0.12), radius: 6)
 
-            if message.role == .assistant { Spacer(minLength: 40) }
+            if !isUser { Spacer(minLength: 40) }
         }
     }
 
@@ -161,7 +157,9 @@ struct AssistantRootView: View {
             }
 
             if session.state == .streaming || !session.streamingText.isEmpty {
-                Text(session.streamingText)
+                (Text(session.streamingText)
+                    + Text(session.state == .streaming ? " ▍" : "")
+                        .foregroundColor(tokens.accentSecondary))
                     .font(AinkradFont.display(13))
                     .foregroundStyle(tokens.foreground.opacity(0.9))
             } else if session.streamingThinking.isEmpty {
@@ -172,8 +170,8 @@ struct AssistantRootView: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.4)))
+        .shadow(color: tokens.accentSecondary.opacity(0.1), radius: 6)
     }
 
     private func thinkingDisclosure(session: AgentSession, tokens: DesignTokens) -> some View {
@@ -206,8 +204,8 @@ struct AssistantRootView: View {
             .foregroundStyle(tokens.accentTertiary)
             .padding(.horizontal, 12).padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentTertiary.opacity(0.35), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.accentTertiary.opacity(0.1)))
+            .shadow(color: tokens.accentTertiary.opacity(0.15), radius: 6)
     }
 
 }

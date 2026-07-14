@@ -42,26 +42,18 @@ struct ToolCallCardView: View {
             if onApprove != nil || onDeny != nil {
                 HStack(spacing: 8) {
                     Spacer()
-                    Button("Deny") { onDeny?() }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(tokens.accentTertiary)
+                    ToolCardButton(title: "Deny", tint: tokens.accentTertiary, filled: false, tokens: tokens) { onDeny?() }
                     if let onApproveAlways {
-                        Button("Allow always") { onApproveAlways() }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(tokens.accentSecondary)
+                        ToolCardButton(title: "Allow always", tint: tokens.accentSecondary, filled: false, tokens: tokens) { onApproveAlways() }
                     }
-                    Button("Approve") { onApprove?() }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 12).padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(tokens.accentPrimary.opacity(0.9)))
-                        .foregroundStyle(tokens.background)
+                    ToolCardButton(title: "Approve", tint: tokens.accentPrimary, filled: true, tokens: tokens) { onApprove?() }
                 }
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentSecondary.opacity(0.3), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        .shadow(color: tokens.accentSecondary.opacity(0.14), radius: 7)
     }
 
     private func diffAttributed(_ diff: String) -> AttributedString {
@@ -74,5 +66,34 @@ struct ToolCallCardView: View {
             out += seg
         }
         return out
+    }
+}
+
+/// A tool-card action button with a hover highlight. `filled` renders the
+/// primary (Approve) affordance as a solid accent chip; the others are text
+/// buttons that gain a soft tinted fill on hover.
+private struct ToolCardButton: View {
+    let title: String
+    let tint: Color
+    let filled: Bool
+    let tokens: DesignTokens
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(AinkradFont.display(12, weight: filled ? .semibold : .regular))
+                .foregroundStyle(filled ? tint.contrastingText : tint.opacity(isHovering ? 1 : 0.85))
+                .padding(.horizontal, 12).padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(filled ? tint.opacity(0.9) : tint.opacity(isHovering ? 0.18 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
