@@ -35,12 +35,11 @@ struct AssistantRootView: View {
             let appearance = environment.assistantAppearanceStore
             ZStack {
                 if appearance.blurEnabled {
-                    // Reduced-strength frost: at full opacity the .hudWindow
-                    // material reads too milky over the live scene, so the blur
-                    // is composited at partial alpha — a lighter frost that lets
-                    // more of the sharp sky/island through.
-                    VisualEffectBlur()
-                        .opacity(0.5)
+                    // The macOS within-window backdrop blur, using the neutral
+                    // `.contentBackground` material rather than the dark, heavily
+                    // tinted `.hudWindow` — a cleaner, less-frosty blur that reads
+                    // as a standard translucent-window blur over the live scene.
+                    VisualEffectBlur(material: .contentBackground)
                 }
                 tokens.background.opacity(appearance.surfaceOpacity)
             }
