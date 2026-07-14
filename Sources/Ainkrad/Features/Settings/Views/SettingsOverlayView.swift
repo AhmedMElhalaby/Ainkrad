@@ -262,11 +262,81 @@ struct SettingsOverlayView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     appSettingsHeader(entry, tokens: tokens)
                     app.makeSettingsView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    appAppearanceSection(appID: id, tokens: tokens)
+                        .padding(18)
+                    Spacer(minLength: 0)
                 }
             } else {
                 Color.clear
             }
+        }
+    }
+
+    /// The host-provided appearance controls appended below EVERY app's own
+    /// settings: a blur toggle for all apps (the host renders the blurred
+    /// backdrop behind a translucent pane), plus a surface-opacity slider only
+    /// for host-background apps (the Assistant — plugins own their transparency).
+    @ViewBuilder
+    private func appAppearanceSection(appID: String, tokens: DesignTokens) -> some View {
+        let appearance = environment.appAppearanceStore
+
+        VStack(alignment: .leading, spacing: 12) {
+            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+
+            if appID == AssistantApp.id {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Surface opacity")
+                            .font(AinkradFont.display(13, weight: .medium))
+                            .foregroundStyle(tokens.foreground.opacity(0.9))
+                        Text("Lower opacity lets the workspace show through this app.")
+                            .font(AinkradFont.display(11))
+                            .foregroundStyle(tokens.foreground.opacity(0.5))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    HStack(spacing: 10) {
+                        Slider(
+                            value: Binding(
+                                get: { appearance.surfaceOpacity(appID) },
+                                set: { appearance.setSurfaceOpacity(appID, $0) }
+                            ),
+                            in: 0.3...1.0
+                        )
+                        .tint(tokens.accentPrimary)
+                        .frame(width: 130)
+                        Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
+                            .font(AinkradFont.display(11))
+                            .foregroundStyle(tokens.foreground.opacity(0.55))
+                            .frame(width: 42, alignment: .trailing)
+                    }
+                }
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Blur")
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text("Blur the workspace revealed behind this app when it's translucent.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                NeonToggle(
+                    isOn: Binding(
+                        get: { appearance.blurEnabled(appID) },
+                        set: { appearance.setBlurEnabled(appID, $0) }
+                    ),
+                    tokens: tokens
+                )
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
         }
     }
 

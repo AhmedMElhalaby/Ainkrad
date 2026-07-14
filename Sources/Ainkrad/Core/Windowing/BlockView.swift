@@ -36,6 +36,20 @@ struct BlockView: View {
         tileLayout.focusedBlockID == block.id
     }
 
+    /// The pane is translucent when its app declares a sub-opaque window fill
+    /// (Assistant opacity slider, Terminal scheme opacity, Git Mage transparency).
+    private var isTranslucentPane: Bool {
+        guard let fill = app?.chromeFill() else { return false }
+        return NSColor(fill).alphaComponent < 1
+    }
+
+    /// Render the host's blurred sky+island behind this pane only when the app's
+    /// blur is enabled AND the pane is translucent (otherwise the pane content
+    /// covers it — rendering would be wasted, and there'd be nothing to reveal).
+    private var glassBlur: Bool {
+        environment.appAppearanceStore.blurEnabled(block.appID) && isTranslucentPane
+    }
+
     private var isInFocusMode: Bool {
         workspace?.viewMode == .focus
     }
@@ -71,8 +85,23 @@ struct BlockView: View {
 
             content(tokens: tokens)
         }
-        // The body is clear so a translucent terminal reveals the blurred
-        // island/sky behind the pane; an opaque terminal fills it solidly.
+        // The pane body is clear, so a translucent app (Terminal scheme
+        // opacity, Git Mage transparency, Assistant opacity) reveals whatever
+        // sits behind it: the shared sharp workspace backdrop by default, or —
+        // when this app's blur is enabled — the host-rendered Gaussian blur
+        // below. A view can't blur the layers behind it, so the host draws its
+        // own sky+island copy here and blurs that. It sits behind the WHOLE
+        // pane (header + content), so the two frost continuously (no seam).
+        .background {
+            if glassBlur {
+                ZStack {
+                    AmbientSkyView()
+                    FloatingIslandView()
+                        .frame(maxWidth: 860, maxHeight: 574)
+                }
+                .blur(radius: 26)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
