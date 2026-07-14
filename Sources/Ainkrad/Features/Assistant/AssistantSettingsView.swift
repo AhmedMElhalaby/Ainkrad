@@ -2,8 +2,8 @@ import SwiftUI
 
 /// The Assistant's Settings surface (rendered inside the BUILT-IN APPS
 /// section of `SettingsOverlayView`): Connections (API keys), Model
-/// (provider/model/effort), Permissions, Context privacy (per-source opt-outs),
-/// and Appearance (surface opacity/blur).
+/// (provider/model/effort), Permissions, and Context privacy (per-source
+/// opt-outs).
 struct AssistantSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -26,7 +26,6 @@ struct AssistantSettingsView: View {
                 modelSection(tokens: tokens)
                 permissionsSection(tokens: tokens)
                 contextPrivacySection(tokens: tokens)
-                appearanceSection(tokens: tokens)
             }
             .padding(18)
         }
@@ -385,39 +384,6 @@ struct AssistantSettingsView: View {
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
-    }
-
-    // MARK: - Appearance
-
-    private func appearanceSection(tokens: DesignTokens) -> some View {
-        let store = environment.assistantAppearanceStore
-        return VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
-
-            labeled("SURFACE OPACITY", tokens: tokens) {
-                HStack(spacing: 12) {
-                    Slider(
-                        value: Binding(get: { store.surfaceOpacity }, set: { store.setSurfaceOpacity($0) }),
-                        in: 0.3...1.0
-                    )
-                    .tint(tokens.accentPrimary)
-                    Text("\(Int(store.surfaceOpacity * 100))%")
-                        .font(AinkradFont.display(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.55))
-                        .frame(width: 42, alignment: .trailing)
-                }
-            }
-            labeled("BACKGROUND BLUR", tokens: tokens) {
-                NeonSegmentedPicker(
-                    items: [true, false],
-                    selection: Binding(get: { store.blurEnabled }, set: { store.setBlurEnabled($0) }),
-                    label: { $0 ? "On" : "Off" }, tokens: tokens)
-            }
-            Text("Lower opacity (and blur) let the workspace show through the Assistant.")
-                .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 
     private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
