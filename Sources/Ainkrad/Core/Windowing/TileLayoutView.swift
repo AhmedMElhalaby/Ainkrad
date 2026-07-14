@@ -165,27 +165,25 @@ struct TileLayoutView: View {
         }
     }
 
-    /// The single blurred floating island shared by the whole workspace —
-    /// revealed through translucent terminals (all panes see the same image,
-    /// so it reads as one background with the windows floating on top).
+    /// The backdrop revealed through any translucent pane. It deliberately does
+    /// NOT paint an opaque base: the global `AmbientSkyView` (sky + live motion)
+    /// is already mounted behind the whole carousel, so leaving this layer
+    /// transparent lets that living scene show through. In front of the sky it
+    /// renders the real `FloatingIslandView` — framed exactly like the empty
+    /// workspace — so a translucent pane reveals the SAME island a user sees on
+    /// an empty workspace, not a static blurred stand-in. A single faint scrim
+    /// keeps pane content legible over a busy sky.
     private var workspaceBackdrop: some View {
         let tokens = environment.themeManager.tokens
         return ZStack {
-            tokens.background
-            Image(islandAsset)
-                .resizable()
-                .scaledToFit()
-                .blur(radius: 30)
-                .padding(40)
+            FloatingIslandView()
+                .frame(maxWidth: 860, maxHeight: 574)
+            // Legibility scrim only — low enough that motion clearly shows
+            // through, high enough that text over a busy sky stays readable.
+            // Tuned during screenshot review.
+            tokens.background.opacity(0.12)
         }
-    }
-
-    /// Island art ships in two accents; new themes use the nearer one.
-    private var islandAsset: String {
-        switch environment.themeManager.currentTheme {
-        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
-        default: return "Island-NeonBlue"
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
 }
