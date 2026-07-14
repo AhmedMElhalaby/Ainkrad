@@ -19,6 +19,7 @@ final class AppEnvironment {
     let shortcutStore: ShortcutStore
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
+    let assistantAppearanceStore: AssistantAppearanceStore
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
@@ -58,6 +59,7 @@ final class AppEnvironment {
         shortcutStore: ShortcutStore,
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
+        assistantAppearanceStore: AssistantAppearanceStore,
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
@@ -82,6 +84,7 @@ final class AppEnvironment {
         self.shortcutStore = shortcutStore
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
+        self.assistantAppearanceStore = assistantAppearanceStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
         self.agentContextHub = agentContextHub
@@ -151,6 +154,7 @@ final class AppEnvironment {
         appIconStore.applyCurrent()
 
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
+        let assistantAppearanceStore = AssistantAppearanceStore(persistence: persistence)
         let skySettingsStore = SkySettingsStore(persistence: persistence)
         // User-data override dir for AIN-108's sound-pack overrides (e.g. via
         // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
@@ -212,6 +216,7 @@ final class AppEnvironment {
             shortcutStore: ShortcutStore(persistence: persistence),
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
+            assistantAppearanceStore: assistantAppearanceStore,
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,
