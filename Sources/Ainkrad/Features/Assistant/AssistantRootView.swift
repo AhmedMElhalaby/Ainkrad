@@ -17,11 +17,7 @@ struct AssistantRootView: View {
         VStack(alignment: .leading, spacing: 0) {
             header(tokens: tokens)
 
-            hairline(tokens: tokens)
-
             transcript(session: session, tokens: tokens)
-
-            hairline(tokens: tokens)
 
             composer(session: session, tokens: tokens)
         }
@@ -34,15 +30,7 @@ struct AssistantRootView: View {
         let session = environment.agentSession
 
         return HStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 13))
-                .foregroundStyle(tokens.accentSecondary)
-            Text("ASSISTANT")
-                .font(AinkradFont.display(11, weight: .semibold))
-                .kerning(2.5)
-                .foregroundStyle(tokens.foreground.opacity(0.6))
-
-            Spacer(minLength: 12)
+            Spacer(minLength: 0)
 
             connectionMenu(tokens: tokens)
 
@@ -97,17 +85,7 @@ struct AssistantRootView: View {
     }
 
     private func newChatButton(session: AgentSession, tokens: DesignTokens) -> some View {
-        Button {
-            session.reset()
-        } label: {
-            Image(systemName: "square.and.pencil")
-                .font(.system(size: 12))
-                .foregroundStyle(tokens.foreground.opacity(0.6))
-                .padding(6)
-                .background(Circle().fill(tokens.surfaceElevated.opacity(0.5)))
-        }
-        .buttonStyle(.plain)
-        .help("New chat")
+        HoverNewChatButton(tokens: tokens) { session.reset() }
     }
 
     private func connectionMenu(tokens: DesignTokens) -> some View {
@@ -399,12 +377,25 @@ struct AssistantRootView: View {
         session.send(text)
     }
 
-    private func hairline(tokens: DesignTokens) -> some View {
-        LinearGradient(
-            colors: [.clear, tokens.accentPrimary.opacity(0.4), .clear],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .frame(height: 1)
+}
+
+/// New-chat control with a hover highlight (motion is first-class in the HUD).
+private struct HoverNewChatButton: View {
+    let tokens: DesignTokens
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 12))
+                .foregroundStyle(tokens.foreground.opacity(isHovering ? 0.9 : 0.6))
+                .padding(6)
+                .background(Circle().fill(tokens.surfaceElevated.opacity(isHovering ? 0.75 : 0.5)))
+        }
+        .buttonStyle(.plain)
+        .help("New chat")
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.14), value: isHovering)
     }
 }
