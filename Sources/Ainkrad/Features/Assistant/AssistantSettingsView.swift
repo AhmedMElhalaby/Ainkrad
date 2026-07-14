@@ -348,7 +348,7 @@ struct AssistantSettingsView: View {
     // MARK: - Appearance
 
     private func appearanceSection(tokens: DesignTokens) -> some View {
-        let appearance = environment.assistantAppearanceStore
+        let appearance = environment.appAppearanceStore
 
         return VStack(alignment: .leading, spacing: 12) {
             SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
@@ -369,14 +369,14 @@ struct AssistantSettingsView: View {
                 HStack(spacing: 10) {
                     Slider(
                         value: Binding(
-                            get: { appearance.surfaceOpacity },
-                            set: { appearance.setSurfaceOpacity($0) }
+                            get: { appearance.surfaceOpacity("assistant") },
+                            set: { appearance.setSurfaceOpacity("assistant", $0) }
                         ),
                         in: 0.3...1.0
                     )
                     .tint(tokens.accentPrimary)
                     .frame(width: 130)
-                    Text("\(Int(appearance.surfaceOpacity * 100))%")
+                    Text("\(Int(appearance.surfaceOpacity("assistant") * 100))%")
                         .font(AinkradFont.display(11))
                         .foregroundStyle(tokens.foreground.opacity(0.55))
                         .frame(width: 42, alignment: .trailing)
@@ -398,8 +398,8 @@ struct AssistantSettingsView: View {
                 Spacer(minLength: 12)
                 NeonToggle(
                     isOn: Binding(
-                        get: { appearance.blurEnabled },
-                        set: { appearance.setBlurEnabled($0) }
+                        get: { appearance.blurEnabled("assistant") },
+                        set: { appearance.setBlurEnabled("assistant", $0) }
                     ),
                     tokens: tokens
                 )

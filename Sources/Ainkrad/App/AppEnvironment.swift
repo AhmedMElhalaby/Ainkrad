@@ -19,7 +19,7 @@ final class AppEnvironment {
     let shortcutStore: ShortcutStore
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
-    let assistantAppearanceStore: AssistantAppearanceStore
+    let appAppearanceStore: AppAppearanceStore
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
@@ -59,7 +59,7 @@ final class AppEnvironment {
         shortcutStore: ShortcutStore,
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
-        assistantAppearanceStore: AssistantAppearanceStore,
+        appAppearanceStore: AppAppearanceStore,
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
@@ -84,7 +84,7 @@ final class AppEnvironment {
         self.shortcutStore = shortcutStore
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
-        self.assistantAppearanceStore = assistantAppearanceStore
+        self.appAppearanceStore = appAppearanceStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
         self.agentContextHub = agentContextHub
@@ -154,7 +154,7 @@ final class AppEnvironment {
         appIconStore.applyCurrent()
 
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
-        let assistantAppearanceStore = AssistantAppearanceStore(persistence: persistence)
+        let appAppearanceStore = AppAppearanceStore(persistence: persistence)
         let skySettingsStore = SkySettingsStore(persistence: persistence)
         // User-data override dir for AIN-108's sound-pack overrides (e.g. via
         // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
@@ -216,7 +216,7 @@ final class AppEnvironment {
             shortcutStore: ShortcutStore(persistence: persistence),
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
-            assistantAppearanceStore: assistantAppearanceStore,
+            appAppearanceStore: appAppearanceStore,
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,
@@ -258,7 +258,7 @@ final class AppEnvironment {
                     // the slider live re-evaluates the backdrop + header.
                     chromeFillOverride: {
                         AssistantApp.surfaceFill(
-                            opacity: assistantAppearanceStore.surfaceOpacity,
+                            opacity: appAppearanceStore.surfaceOpacity("assistant"),
                             base: themeManager.tokens.background
                         )
                     }

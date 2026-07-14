@@ -34,9 +34,9 @@ struct AssistantRootView: View {
             // is allowed) — a genuine standard blur, not a tinted material.
             // At opacity 1.0 + blur off this is identical to the old opaque
             // background. Reading the store here keeps the surface live.
-            let appearance = environment.assistantAppearanceStore
+            let appearance = environment.appAppearanceStore
             ZStack {
-                if appearance.blurEnabled {
+                if appearance.blurEnabled("assistant") {
                     ZStack {
                         AmbientSkyView()
                         FloatingIslandView()
@@ -45,7 +45,7 @@ struct AssistantRootView: View {
                     .blur(radius: 26)
                     .clipped()
                 }
-                tokens.background.opacity(appearance.surfaceOpacity)
+                tokens.background.opacity(appearance.surfaceOpacity("assistant"))
             }
         }
     }

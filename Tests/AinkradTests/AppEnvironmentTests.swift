@@ -70,7 +70,7 @@ final class AppEnvironmentTests {
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
-            assistantAppearanceStore: AssistantAppearanceStore(persistence: persistence),
+            appAppearanceStore: AppAppearanceStore(persistence: persistence),
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,
