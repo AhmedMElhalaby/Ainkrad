@@ -78,6 +78,12 @@ struct ShortcutActionDefaultsTests {
         #expect(ShortcutAction.closeBlock.defaultChord ==
                 KeyChord(keyCode: 13, command: true, shift: false, option: false, control: false))
     }
+
+    @Test("openQuickAsk defaults to ⌘⇧Space (keyCode 49)")
+    func openQuickAsk() {
+        #expect(ShortcutAction.openQuickAsk.defaultChord ==
+            KeyChord(keyCode: 49, command: true, shift: true, option: false, control: false))
+    }
 }
 
 @Suite("ShortcutBindings")

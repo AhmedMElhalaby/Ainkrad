@@ -8,6 +8,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
     case newWorkspace
     case toggleWorkspaceOverview
     case closeBlock
+    case openQuickAsk
 
     var displayName: String {
         switch self {
@@ -17,6 +18,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
         case .newWorkspace: return "New Workspace"
         case .toggleWorkspaceOverview: return "Toggle Workspace Overview"
         case .closeBlock: return "Close Block"
+        case .openQuickAsk: return "Open Quick Ask"
         }
     }
 
@@ -36,6 +38,8 @@ enum ShortcutAction: String, Codable, CaseIterable {
             return KeyChord(keyCode: 48, command: false, shift: false, option: true, control: false)   // ⌥Tab
         case .closeBlock:
             return KeyChord(keyCode: 13, command: true, shift: false, option: false, control: false)   // ⌘W
+        case .openQuickAsk:
+            return KeyChord(keyCode: 49, command: true, shift: true, option: false, control: false)  // ⌘⇧Space
         }
     }
 }
