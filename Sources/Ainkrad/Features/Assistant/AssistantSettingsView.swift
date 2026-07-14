@@ -254,6 +254,7 @@ struct AssistantSettingsView: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.45)))
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
     }
 
     // MARK: - Permissions
