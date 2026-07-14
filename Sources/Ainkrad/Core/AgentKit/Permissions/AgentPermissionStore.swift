@@ -71,4 +71,18 @@ final class AgentPermissionStore {
         document.allowlist.append(toolName)
         persistence.save(document)
     }
+
+    /// Remove `toolName` from the persisted allowlist (no-op if absent).
+    func removeFromAllowlist(_ toolName: String) {
+        guard let index = document.allowlist.firstIndex(of: toolName) else { return }
+        document.allowlist.remove(at: index)
+        persistence.save(document)
+    }
+
+    /// Empty the persisted allowlist (all "Allow always" grants revoked).
+    func clearAllowlist() {
+        guard !document.allowlist.isEmpty else { return }
+        document.allowlist.removeAll()
+        persistence.save(document)
+    }
 }

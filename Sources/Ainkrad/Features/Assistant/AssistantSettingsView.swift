@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The Assistant's Settings surface (rendered inside the BUILT-IN APPS
 /// section of `SettingsOverlayView`): Connections (API keys), Model
-/// (provider/model/effort), and Context privacy (per-source opt-outs).
+/// (provider/model/effort), Permissions, and Context privacy (per-source
+/// opt-outs).
 struct AssistantSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -11,10 +12,10 @@ struct AssistantSettingsView: View {
     @State private var newDisplayName: String = ""
     @State private var newConnectionToken = ""
     @State private var revealedConnectionIDs: Set<UUID> = []
-    @State private var discoveredModels: [UUID: [String]] = [:]
-    @State private var isRefreshingModels = false
+    @State private var modelPicker = AssistantModelPickerModel()
     @State private var testResults: [UUID: ConnectionTestResult] = [:]
     @State private var testingIDs: Set<UUID> = []
+    @State private var hoveredConnectionID: UUID?
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -74,57 +75,61 @@ struct AssistantSettingsView: View {
 
             Spacer(minLength: 8)
 
-            if requiresKey {
-                Button {
-                    if isRevealed {
-                        revealedConnectionIDs.remove(connection.id)
-                    } else {
-                        revealedConnectionIDs.insert(connection.id)
+            HStack(spacing: 12) {
+                if requiresKey {
+                    Button {
+                        if isRevealed {
+                            revealedConnectionIDs.remove(connection.id)
+                        } else {
+                            revealedConnectionIDs.insert(connection.id)
+                        }
+                    } label: {
+                        Image(systemName: isRevealed ? "eye.slash" : "eye")
+                            .font(.system(size: 12))
+                            .foregroundStyle(tokens.foreground.opacity(0.55))
                     }
-                } label: {
-                    Image(systemName: isRevealed ? "eye.slash" : "eye")
+                    .buttonStyle(.plain)
+                }
+
+                Button { testConnection(connection) } label: {
+                    if testingIDs.contains(connection.id) {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: "bolt.horizontal")
+                            .font(.system(size: 12)).foregroundStyle(tokens.foreground.opacity(0.55))
+                    }
+                }
+                .buttonStyle(.plain).help("Test connection")
+
+                if let result = testResults[connection.id] {
+                    Image(systemName: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .font(.system(size: 12))
-                        .foregroundStyle(tokens.foreground.opacity(0.55))
+                        .foregroundStyle(result.ok ? tokens.accentSecondary : tokens.accentTertiary)
+                        .help(result.message)
+                }
+
+                Button {
+                    revealedConnectionIDs.remove(connection.id)
+                    store.removeConnection(connection)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(tokens.accentTertiary.opacity(0.85))
                 }
                 .buttonStyle(.plain)
             }
-
-            Button { testConnection(connection) } label: {
-                if testingIDs.contains(connection.id) {
-                    ProgressView().controlSize(.mini)
-                } else {
-                    Image(systemName: "bolt.horizontal")
-                        .font(.system(size: 12)).foregroundStyle(tokens.foreground.opacity(0.55))
-                }
-            }
-            .buttonStyle(.plain).help("Test connection")
-
-            if let result = testResults[connection.id] {
-                Image(systemName: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(result.ok ? tokens.accentSecondary : tokens.accentTertiary)
-                    .help(result.message)
-            }
-
-            Button {
-                revealedConnectionIDs.remove(connection.id)
-                store.removeConnection(connection)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 12))
-                    .foregroundStyle(tokens.accentTertiary.opacity(0.85))
-            }
-            .buttonStyle(.plain)
+            .opacity(hoveredConnectionID == connection.id ? 1 : 0.35)
+            .animation(.easeOut(duration: 0.14), value: hoveredConnectionID)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        .onHover { hovering in hoveredConnectionID = hovering ? connection.id : nil }
     }
 
     private func addConnectionRow(tokens: DesignTokens) -> some View {
         let preset = newPreset
         return VStack(alignment: .leading, spacing: 8) {
-            Menu {
+            menu(label: preset.displayName, tokens: tokens) {
                 ForEach(ProviderPreset.all) { p in
                     Button(p.displayName) {
                         newPreset = p
@@ -132,17 +137,8 @@ struct AssistantSettingsView: View {
                         if newDisplayName.isEmpty { newDisplayName = p.displayName }
                     }
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(preset.displayName).font(AinkradFont.display(12, weight: .medium))
-                    Image(systemName: "chevron.down").font(.system(size: 8))
-                }
-                .foregroundStyle(tokens.foreground.opacity(0.8))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.5)))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
             }
-            .menuStyle(.borderlessButton).fixedSize()
+            .fixedSize()
 
             if preset.allowsBaseURLEdit {
                 NeonSecureField(text: $newBaseURL, placeholder: "Base URL", tokens: tokens)
@@ -164,7 +160,6 @@ struct AssistantSettingsView: View {
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.3)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.1), lineWidth: 1))
     }
 
     private func testConnection(_ connection: Connection) {
@@ -197,7 +192,7 @@ struct AssistantSettingsView: View {
     private func modelSection(tokens: DesignTokens) -> some View {
         let configStore = environment.agentConfigStore
         let store = environment.connectionStore
-        let active = activeConnection()
+        let active = modelPicker.activeConnection(environment)
 
         return VStack(alignment: .leading, spacing: 12) {
             SettingsSectionHeader(title: "MODEL", tokens: tokens)
@@ -207,31 +202,25 @@ struct AssistantSettingsView: View {
                     .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
             } else {
                 labeled("CONNECTION", tokens: tokens) {
-                    NeonSegmentedPicker(
-                        items: store.connections.map(\.id),
-                        selection: Binding(
-                            get: { active?.id ?? store.connections[0].id },
-                            set: { id in
-                                configStore.setActiveConnectionID(id)
-                                if let c = store.connections.first(where: { $0.id == id }) {
-                                    configStore.setModel(ProviderPreset.preset(id: c.presetID).curatedModels.first ?? configStore.current.model)
-                                }
-                            }),
-                        label: { id in store.connections.first(where: { $0.id == id })?.displayName ?? "?" },
-                        tokens: tokens)
+                    menu(label: active?.displayName ?? "Select…", tokens: tokens) {
+                        ForEach(store.connections) { connection in
+                            Button(connection.displayName) { modelPicker.selectConnection(connection, environment) }
+                        }
+                    }
                 }
                 labeled("MODEL", tokens: tokens) {
                     HStack(spacing: 8) {
-                        NeonSegmentedPicker(
-                            items: modelOptions(for: active),
-                            selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
-                            label: { $0 }, tokens: tokens)
-                        Button { if let c = active { refreshModels(for: c) } } label: {
+                        menu(label: configStore.current.model, tokens: tokens) {
+                            ForEach(modelPicker.modelOptions(for: active), id: \.self) { m in
+                                Button(m) { configStore.setModel(m) }
+                            }
+                        }
+                        Button { if let c = active { modelPicker.refreshModels(for: c, environment) } } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
-                                .foregroundStyle(tokens.foreground.opacity(isRefreshingModels ? 0.3 : 0.6))
+                                .foregroundStyle(tokens.foreground.opacity(modelPicker.isRefreshing ? 0.3 : 0.6))
                         }
-                        .buttonStyle(.plain).disabled(isRefreshingModels)
+                        .buttonStyle(.plain).disabled(modelPicker.isRefreshing)
                     }
                 }
                 if active?.kind == .claude {
@@ -244,81 +233,115 @@ struct AssistantSettingsView: View {
                 }
             }
         }
-        .onAppear { if let c = active { refreshModels(for: c) } }
-        .onChange(of: active?.id) { _, _ in if let c = active { refreshModels(for: c) } }
+        .onAppear { if let c = active { modelPicker.refreshModels(for: c, environment) } }
+        .onChange(of: active?.id) { _, _ in if let c = active { modelPicker.refreshModels(for: c, environment) } }
     }
 
-    private func activeConnection() -> Connection? {
-        let store = environment.connectionStore
-        if let id = environment.agentConfigStore.activeConnectionID,
-           let match = store.connections.first(where: { $0.id == id }) { return match }
-        return store.connections.first
-    }
-
-    private func modelOptions(for connection: Connection?) -> [String] {
-        guard let connection else { return [] }
-        return discoveredModels[connection.id] ?? ProviderPreset.preset(id: connection.presetID).curatedModels
-    }
-
-    private func refreshModels(for connection: Connection) {
-        let store = environment.connectionStore
-        let svc = environment.modelCatalogService
-        let preset = ProviderPreset.preset(id: connection.presetID)
-        let key = store.token(for: connection) ?? ""
-        isRefreshingModels = true
-        Task {
-            let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
-                                                apiKey: key, curatedFallback: preset.curatedModels)
-            discoveredModels[connection.id] = result.models
-            isRefreshingModels = false
-            if result.isLive {
-                reconcileModelIfNeeded(for: connection, availableModels: result.models)
+    /// A borderless neon dropdown label — the deseparatored menu style shared by
+    /// the CONNECTION/MODEL rows (no stroke; soft fill only).
+    private func menu<Content: View>(label: String, tokens: DesignTokens,
+                                     @ViewBuilder _ content: () -> Content) -> some View {
+        Menu {
+            content()
+        } label: {
+            HStack(spacing: 6) {
+                Text(label).font(AinkradFont.display(12, weight: .medium)).lineLimit(1)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down").font(.system(size: 8))
             }
+            .foregroundStyle(tokens.foreground.opacity(0.8))
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.45)))
         }
-    }
-
-    /// If the active connection's active model isn't valid for it (e.g. still the
-    /// Claude default on a freshly-added non-Claude connection), fall back to the
-    /// first available model for that connection. Never overrides an explicitly
-    /// chosen model that IS in the list. Only called when the model list was
-    /// genuinely fetched live — never on a curated fallback from a failed fetch.
-    private func reconcileModelIfNeeded(for connection: Connection, availableModels: [String]) {
-        let configStore = environment.agentConfigStore
-        guard activeConnection()?.id == connection.id else { return }
-        guard !availableModels.isEmpty, !availableModels.contains(configStore.current.model) else { return }
-        configStore.setModel(availableModels[0])
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
     }
 
     // MARK: - Permissions
 
     private func permissionsSection(tokens: DesignTokens) -> some View {
         let permissionStore = environment.agentPermissionStore
+        let allowed = permissionStore.allowlist.sorted()
 
         return VStack(alignment: .leading, spacing: 12) {
             SettingsSectionHeader(title: "PERMISSIONS", tokens: tokens)
 
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Ask before reading files")
-                        .font(AinkradFont.display(13, weight: .medium))
-                        .foregroundStyle(tokens.foreground.opacity(0.9))
-                    Text("When on, the assistant asks before reading any file (except in Full-auto).")
-                        .font(AinkradFont.display(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.5))
+            labeled("DEFAULT MODE", tokens: tokens) {
+                menu(label: modeTitle(permissionStore.mode), tokens: tokens) {
+                    ForEach(AgentPermissionMode.allCases, id: \.self) { mode in
+                        Button(modeTitle(mode)) { permissionStore.setMode(mode) }
+                    }
                 }
-                Spacer(minLength: 12)
-                NeonToggle(
-                    isOn: Binding(
-                        get: { permissionStore.gateReads },
-                        set: { permissionStore.setGateReads($0) }
-                    ),
-                    tokens: tokens
-                )
             }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+
+            permissionToggleRow(
+                title: "Ask before reading files",
+                subtitle: "When on, the assistant asks before reading any file (except in Full-auto).",
+                isOn: Binding(get: { permissionStore.gateReads }, set: { permissionStore.setGateReads($0) }),
+                tokens: tokens)
+
+            labeled("ALWAYS-ALLOWED TOOLS", tokens: tokens) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if allowed.isEmpty {
+                        Text("No tools are always-allowed yet. Use \u{201C}Allow always\u{201D} on an approval to add one.")
+                            .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(allowed, id: \.self) { name in
+                            HStack(spacing: 10) {
+                                Text(toolLabel(name))
+                                    .font(AinkradFont.display(12, weight: .medium))
+                                    .foregroundStyle(tokens.foreground.opacity(0.85))
+                                Spacer(minLength: 8)
+                                Button { permissionStore.removeFromAllowlist(name) } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(tokens.accentTertiary.opacity(0.8))
+                                }
+                                .buttonStyle(.plain).help("Remove")
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 9).fill(tokens.surfaceElevated.opacity(0.45)))
+                        }
+                        Button { permissionStore.clearAllowlist() } label: {
+                            Text("Clear all")
+                                .font(AinkradFont.display(11, weight: .medium))
+                                .foregroundStyle(tokens.accentTertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
+    }
+
+    private func permissionToggleRow(title: String, subtitle: String,
+                                     isOn: Binding<Bool>, tokens: DesignTokens) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(AinkradFont.display(13, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.9))
+                Text(subtitle).font(AinkradFont.display(11))
+                    .foregroundStyle(tokens.foreground.opacity(0.5))
+            }
+            Spacer(minLength: 12)
+            NeonToggle(isOn: isOn, tokens: tokens)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+    }
+
+    private func modeTitle(_ mode: AgentPermissionMode) -> String {
+        switch mode {
+        case .ask: return "Ask"
+        case .autoApprove: return "Auto-approve"
+        case .fullAuto: return "Full-auto"
+        }
+    }
+
+    /// Humanize a stored tool name (e.g. "run_terminal" → "Run terminal").
+    private func toolLabel(_ name: String) -> String {
+        name.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     // MARK: - Context privacy
@@ -361,8 +384,7 @@ struct AssistantSettingsView: View {
             )
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
     }
 
     private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
