@@ -35,7 +35,12 @@ struct AssistantRootView: View {
             let appearance = environment.assistantAppearanceStore
             ZStack {
                 if appearance.blurEnabled {
+                    // Reduced-strength frost: at full opacity the .hudWindow
+                    // material reads too milky over the live scene, so the blur
+                    // is composited at partial alpha — a lighter frost that lets
+                    // more of the sharp sky/island through.
                     VisualEffectBlur()
+                        .opacity(0.5)
                 }
                 tokens.background.opacity(appearance.surfaceOpacity)
             }

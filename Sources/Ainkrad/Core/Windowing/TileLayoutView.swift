@@ -176,8 +176,18 @@ struct TileLayoutView: View {
     private var workspaceBackdrop: some View {
         let tokens = environment.themeManager.tokens
         return ZStack {
-            FloatingIslandView()
-                .frame(maxWidth: 860, maxHeight: 574)
+            // Match the empty workspace's island placement. There the island is
+            // the top child of a centered stack that also holds the shortcut
+            // hints below it, so the island sits ABOVE the geometric center.
+            // Centering the island alone would drop it lower, making it appear
+            // to "slide down" when a pane opens — so reserve the same hint
+            // footprint (~two hint rows + their top padding) beneath it, keeping
+            // the revealed island at the exact height it has on the main screen.
+            VStack(spacing: 0) {
+                FloatingIslandView()
+                    .frame(maxWidth: 860, maxHeight: 574)
+                Color.clear.frame(height: 72)
+            }
             // Legibility scrim only — low enough that motion clearly shows
             // through, high enough that text over a busy sky stays readable.
             // Tuned during screenshot review.
