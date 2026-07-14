@@ -85,13 +85,13 @@ struct BlockView: View {
 
             content(tokens: tokens)
         }
-        // The body is clear so a translucent terminal reveals the blurred
-        // island/sky behind the pane; an opaque terminal fills it solidly.
-        // Host-rendered Gaussian blur of the live scene, behind the WHOLE pane
-        // (header + content) so a translucent app reveals a blurred workspace.
-        // A view can't blur the layers behind it, so the host draws its own
-        // sky+island copy here and blurs that. Sits behind the header too, so
-        // the header and body frost continuously (no seam).
+        // The pane body is clear, so a translucent app (Terminal scheme
+        // opacity, Git Mage transparency, Assistant opacity) reveals whatever
+        // sits behind it: the shared sharp workspace backdrop by default, or —
+        // when this app's blur is enabled — the host-rendered Gaussian blur
+        // below. A view can't blur the layers behind it, so the host draws its
+        // own sky+island copy here and blurs that. It sits behind the WHOLE
+        // pane (header + content), so the two frost continuously (no seam).
         .background {
             if glassBlur {
                 ZStack {
