@@ -68,4 +68,37 @@ struct AgentPermissionStoreTests {
         let reloaded = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
         #expect(reloaded.allowlist.contains("run_terminal"))
     }
+
+    @Test func removeFromAllowlistRemovesToolName() {
+        let store = AgentPermissionStore(persistence: InMemoryPersistenceStore(), currentWorkspaceID: { UUID() })
+        store.addToAllowlist("run_terminal")
+        store.removeFromAllowlist("run_terminal")
+        #expect(!store.allowlist.contains("run_terminal"))
+    }
+
+    @Test func removeFromAllowlistIsNoOpWhenAbsent() {
+        let store = AgentPermissionStore(persistence: InMemoryPersistenceStore(), currentWorkspaceID: { UUID() })
+        store.addToAllowlist("edit_file")
+        store.removeFromAllowlist("run_terminal")
+        #expect(store.allowlist == ["edit_file"])
+    }
+
+    @Test func clearAllowlistEmpties() {
+        let store = AgentPermissionStore(persistence: InMemoryPersistenceStore(), currentWorkspaceID: { UUID() })
+        store.addToAllowlist("edit_file")
+        store.addToAllowlist("run_terminal")
+        store.clearAllowlist()
+        #expect(store.allowlist.isEmpty)
+    }
+
+    @Test func removeFromAllowlistPersistsAcrossReload() {
+        let persistence = InMemoryPersistenceStore()
+        let store = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
+        store.addToAllowlist("edit_file")
+        store.addToAllowlist("run_terminal")
+        store.removeFromAllowlist("edit_file")
+
+        let reloaded = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
+        #expect(reloaded.allowlist == ["run_terminal"])
+    }
 }
