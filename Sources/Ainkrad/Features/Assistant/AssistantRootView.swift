@@ -8,7 +8,7 @@ struct AssistantRootView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var draft = ""
     @State private var isThinkingExpanded = true
-    @State private var discoveredModels: [UUID: [String]] = [:]
+    @State private var modelPicker = AssistantModelPickerModel()
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -19,148 +19,31 @@ struct AssistantRootView: View {
 
             transcript(session: session, tokens: tokens)
 
-            composer(session: session, tokens: tokens)
+            AssistantComposerBar(
+                session: session,
+                tokens: tokens,
+                modelPicker: modelPicker,
+                draft: $draft
+            )
         }
         .background(tokens.background)
     }
 
-    // MARK: - Header (provider + model)
+    // MARK: - Header (new chat only)
 
     private func header(tokens: DesignTokens) -> some View {
         let session = environment.agentSession
 
         return HStack(spacing: 12) {
             Spacer(minLength: 0)
-
-            connectionMenu(tokens: tokens)
-
-            modelMenu(tokens: tokens)
-
-            NeonSegmentedPicker(
-                items: AgentPermissionMode.allCases,
-                selection: Binding(
-                    get: { environment.agentPermissionStore.mode },
-                    set: { environment.agentPermissionStore.setMode($0) }
-                ),
-                label: permissionTitle,
-                tokens: tokens
-            )
-            .frame(width: 150)
-
             newChatButton(session: session, tokens: tokens)
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
-        .onAppear { if let c = activeConnection() { refreshModels(for: c) } }
-        .onChange(of: activeConnection()?.id) { _, _ in
-            if let c = activeConnection() { refreshModels(for: c) }
-        }
-    }
-
-    private func refreshModels(for connection: Connection) {
-        let store = environment.connectionStore
-        let svc = environment.modelCatalogService
-        let preset = ProviderPreset.preset(id: connection.presetID)
-        let key = store.token(for: connection) ?? ""
-        Task {
-            let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
-                                                apiKey: key, curatedFallback: preset.curatedModels)
-            discoveredModels[connection.id] = result.models
-            if result.isLive {
-                reconcileModelIfNeeded(for: connection, availableModels: result.models)
-            }
-        }
-    }
-
-    /// If the active connection's active model isn't valid for it (e.g. still the
-    /// Claude default on a freshly-added non-Claude connection), fall back to the
-    /// first available model for that connection. Never overrides an explicitly
-    /// chosen model that IS in the list. Only called when the model list was
-    /// genuinely fetched live — never on a curated fallback from a failed fetch.
-    private func reconcileModelIfNeeded(for connection: Connection, availableModels: [String]) {
-        let configStore = environment.agentConfigStore
-        guard activeConnection()?.id == connection.id else { return }
-        guard !availableModels.isEmpty, !availableModels.contains(configStore.current.model) else { return }
-        configStore.setModel(availableModels[0])
     }
 
     private func newChatButton(session: AgentSession, tokens: DesignTokens) -> some View {
         HoverNewChatButton(tokens: tokens) { session.reset() }
-    }
-
-    private func connectionMenu(tokens: DesignTokens) -> some View {
-        let configStore = environment.agentConfigStore
-        let store = environment.connectionStore
-        let active = activeConnection()
-
-        return Menu {
-            if store.connections.isEmpty {
-                Text("No connections")
-            } else {
-                ForEach(store.connections) { connection in
-                    Button(connection.displayName) {
-                        configStore.setActiveConnectionID(connection.id)
-                        configStore.setModel(ProviderPreset.preset(id: connection.presetID).curatedModels.first ?? configStore.current.model)
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Text(active?.displayName ?? "No connection")
-                    .font(AinkradFont.display(11, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8))
-            }
-            .foregroundStyle(tokens.foreground.opacity(0.75))
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.5)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private func modelMenu(tokens: DesignTokens) -> some View {
-        let configStore = environment.agentConfigStore
-
-        return Menu {
-            ForEach(modelOptions(for: activeConnection()), id: \.self) { model in
-                Button(model) { configStore.setModel(model) }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Text(configStore.current.model)
-                    .font(AinkradFont.mono(11))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8))
-            }
-            .foregroundStyle(tokens.foreground.opacity(0.75))
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.5)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private func activeConnection() -> Connection? {
-        let store = environment.connectionStore
-        if let id = environment.agentConfigStore.activeConnectionID,
-           let match = store.connections.first(where: { $0.id == id }) { return match }
-        return store.connections.first
-    }
-
-    private func modelOptions(for connection: Connection?) -> [String] {
-        guard let connection else { return [] }
-        return discoveredModels[connection.id] ?? ProviderPreset.preset(id: connection.presetID).curatedModels
-    }
-
-    private func permissionTitle(_ mode: AgentPermissionMode) -> String {
-        switch mode {
-        case .ask: return "Ask"
-        case .autoApprove: return "Auto"
-        case .fullAuto: return "Full-auto"
-        }
     }
 
     // MARK: - Transcript
@@ -325,56 +208,6 @@ struct AssistantRootView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentTertiary.opacity(0.35), lineWidth: 1))
-    }
-
-    // MARK: - Composer
-
-    private func composer(session: AgentSession, tokens: DesignTokens) -> some View {
-        let isBusy = Self.isBusy(session.state)
-
-        return HStack(spacing: 10) {
-            TextField("Message Assistant…", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(AinkradFont.display(13))
-                .foregroundStyle(tokens.foreground)
-                .tint(tokens.accentSecondary)
-                .disabled(isBusy)
-                .lineLimit(1...5)
-                .onSubmit { send(session: session) }
-
-            Button {
-                send(session: session)
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(canSend(isBusy: isBusy) ? tokens.accentSecondary : tokens.foreground.opacity(0.25))
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend(isBusy: isBusy))
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
-        .padding(14)
-    }
-
-    private func canSend(isBusy: Bool) -> Bool {
-        !isBusy && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private static func isBusy(_ state: AgentSession.State) -> Bool {
-        switch state {
-        case .thinking, .streaming, .callingTool, .awaitingApproval: return true
-        case .idle, .failed: return false
-        }
-    }
-
-    private func send(session: AgentSession) {
-        let isBusy = Self.isBusy(session.state)
-        guard canSend(isBusy: isBusy) else { return }
-        let text = draft
-        draft = ""
-        session.send(text)
     }
 
 }
