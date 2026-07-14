@@ -246,8 +246,27 @@ final class AppEnvironment {
                                              hub: agentContextHub, actionHub: agentActionHub)
 
         let loaded = loader.loadAll(from: pluginDirs)
-        registry.install(builtIn: [RegisteredApp.builtIn(AssistantApp.self, host: assistantHost)],
-                         loaded: loaded.apps, failures: loaded.failures)
+        registry.install(
+            builtIn: [
+                RegisteredApp.builtIn(
+                    AssistantApp.self,
+                    host: assistantHost,
+                    // Reading `surfaceOpacity` inside this closure — invoked
+                    // synchronously from `TileLayoutView.hasTranslucentPane`
+                    // and `BlockView.headerBackground` during their view
+                    // bodies — registers an @Observable dependency, so dialing
+                    // the slider live re-evaluates the backdrop + header.
+                    chromeFillOverride: {
+                        AssistantApp.surfaceFill(
+                            opacity: assistantAppearanceStore.surfaceOpacity,
+                            base: themeManager.tokens.background
+                        )
+                    }
+                )
+            ],
+            loaded: loaded.apps,
+            failures: loaded.failures
+        )
 
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)

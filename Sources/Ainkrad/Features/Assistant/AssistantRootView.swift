@@ -26,7 +26,28 @@ struct AssistantRootView: View {
                 draft: $draft
             )
         }
-        .background(tokens.background)
+        .background {
+            // Glass surface: an opacity-tinted fill, optionally over a real
+            // Gaussian blur of the living scene. A view can't blur the layers
+            // BEHIND it, so when blur is on the panel renders its OWN copy of
+            // the ambient sky + island and blurs THAT (blurring your own content
+            // is allowed) — a genuine standard blur, not a tinted material.
+            // At opacity 1.0 + blur off this is identical to the old opaque
+            // background. Reading the store here keeps the surface live.
+            let appearance = environment.assistantAppearanceStore
+            ZStack {
+                if appearance.blurEnabled {
+                    ZStack {
+                        AmbientSkyView()
+                        FloatingIslandView()
+                            .frame(maxWidth: 860, maxHeight: 574)
+                    }
+                    .blur(radius: 26)
+                    .clipped()
+                }
+                tokens.background.opacity(appearance.surfaceOpacity)
+            }
+        }
     }
 
     // MARK: - Header (new chat only)

@@ -18,4 +18,13 @@ enum AssistantApp: AinkradApp {
     static func makeSettingsView(host: HostServices) -> AnyView {
         AnyView(AssistantSettingsView())
     }
+
+    /// The Assistant's window fill for a given surface opacity. Translucent
+    /// (so `TileLayoutView.hasTranslucentPane` triggers and the header unifies
+    /// with the body) only when the user has dialed opacity below 1; `nil`
+    /// means opaque — no backdrop, today's look. Pure + host-independent so it
+    /// is unit-testable without `AppEnvironment`.
+    static func surfaceFill(opacity: Double, base: Color) -> Color? {
+        opacity < 1 ? base.opacity(opacity) : nil
+    }
 }

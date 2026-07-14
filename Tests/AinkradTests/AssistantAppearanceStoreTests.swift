@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Ainkrad
 
@@ -30,5 +31,18 @@ struct AssistantAppearanceStoreTests {
         let reloaded = AssistantAppearanceStore(persistence: persistence)
         #expect(reloaded.surfaceOpacity == 0.6)
         #expect(reloaded.blurEnabled == true)
+    }
+}
+
+@Suite("AssistantApp.surfaceFill")
+@MainActor
+struct AssistantSurfaceFillTests {
+    @Test func opaqueAtFullOpacityReturnsNil() {
+        #expect(AssistantApp.surfaceFill(opacity: 1.0, base: .white) == nil)
+    }
+
+    @Test func translucentBelowFullOpacityReturnsAColor() {
+        #expect(AssistantApp.surfaceFill(opacity: 0.5, base: .white) != nil)
+        #expect(AssistantApp.surfaceFill(opacity: 0.0, base: .white) != nil)
     }
 }
