@@ -11,6 +11,7 @@ struct ToolCallCardView: View {
     let tokens: DesignTokens
     var onApprove: (() -> Void)?
     var onDeny: (() -> Void)?
+    var onApproveAlways: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -44,6 +45,11 @@ struct ToolCallCardView: View {
                     Button("Deny") { onDeny?() }
                         .buttonStyle(.plain)
                         .foregroundStyle(tokens.accentTertiary)
+                    if let onApproveAlways {
+                        Button("Allow always") { onApproveAlways() }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(tokens.accentSecondary)
+                    }
                     Button("Approve") { onApprove?() }
                         .buttonStyle(.plain)
                         .padding(.horizontal, 12).padding(.vertical, 5)

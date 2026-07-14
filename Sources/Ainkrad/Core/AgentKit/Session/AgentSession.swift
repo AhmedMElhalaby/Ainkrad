@@ -108,9 +108,14 @@ final class AgentSession {
         }
     }
 
-    /// Resume a parked approval by allowing the pending tool call to run.
-    func approve() {
+    /// Resume a parked approval by allowing the pending tool call to run. When
+    /// `always` is true, the pending call's tool is added to the auto-approve
+    /// allowlist before resuming, so future calls to it skip the HUD.
+    func approve(always: Bool = false) {
         guard let cont = approvalContinuation else { return }
+        if always, case .awaitingApproval(let pending) = state {
+            permissions.addToAllowlist(pending.call.name)
+        }
         approvalContinuation = nil
         cont.resume(returning: .approved)
     }
@@ -247,7 +252,7 @@ final class AgentSession {
         let decision = AgentPermissionPolicy.decide(
             toolPermission: tool.permission, toolName: tool.name,
             mode: permissions.mode, allowlist: permissions.allowlist,
-            gateReads: permissions.gateReads)
+            gateReads: permissions.gateReads, isIrreversible: tool.isIrreversible(call.input))
 
         if decision == .requireApproval {
             let preview = tool.approvalPreview(call.input)

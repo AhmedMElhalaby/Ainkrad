@@ -63,4 +63,12 @@ final class AgentPermissionStore {
         document.gateReads = value
         persistence.save(document)
     }
+
+    /// Append `toolName` to the persisted allowlist (no-op if already present),
+    /// so a future call to that tool auto-approves in `Ask`/`Auto-approve`.
+    func addToAllowlist(_ toolName: String) {
+        guard !document.allowlist.contains(toolName) else { return }
+        document.allowlist.append(toolName)
+        persistence.save(document)
+    }
 }

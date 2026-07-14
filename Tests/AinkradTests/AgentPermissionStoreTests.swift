@@ -43,4 +43,29 @@ struct AgentPermissionStoreTests {
         let reloaded = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
         #expect(reloaded.gateReads == false)
     }
+
+    @Test func addToAllowlistAddsToolName() {
+        let ws = UUID()
+        let store = AgentPermissionStore(persistence: InMemoryPersistenceStore(), currentWorkspaceID: { ws })
+        store.addToAllowlist("run_terminal")
+        #expect(store.allowlist.contains("run_terminal"))
+    }
+
+    @Test func addToAllowlistIsIdempotent() {
+        let ws = UUID()
+        let store = AgentPermissionStore(persistence: InMemoryPersistenceStore(), currentWorkspaceID: { ws })
+        store.addToAllowlist("run_terminal")
+        store.addToAllowlist("run_terminal")
+        #expect(store.allowlist.count == 1)
+    }
+
+    @Test func addToAllowlistSurvivesReload() {
+        let ws = UUID()
+        let persistence = InMemoryPersistenceStore()
+        let store = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        store.addToAllowlist("run_terminal")
+
+        let reloaded = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        #expect(reloaded.allowlist.contains("run_terminal"))
+    }
 }
