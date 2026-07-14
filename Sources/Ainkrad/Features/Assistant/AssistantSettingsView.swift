@@ -25,6 +25,7 @@ struct AssistantSettingsView: View {
                 connectionsSection(tokens: tokens)
                 modelSection(tokens: tokens)
                 permissionsSection(tokens: tokens)
+                appearanceSection(tokens: tokens)
                 contextPrivacySection(tokens: tokens)
             }
             .padding(18)
@@ -342,6 +343,70 @@ struct AssistantSettingsView: View {
     /// Humanize a stored tool name (e.g. "run_terminal" → "Run terminal").
     private func toolLabel(_ name: String) -> String {
         name.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    // MARK: - Appearance
+
+    private func appearanceSection(tokens: DesignTokens) -> some View {
+        let appearance = environment.assistantAppearanceStore
+
+        return VStack(alignment: .leading, spacing: 12) {
+            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+
+            // Surface opacity — floored at 0.3 (matching the overlay control)
+            // so the surface never becomes fully invisible/unusable.
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Surface opacity")
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text("Lower opacity (and blur) let the workspace show through the Assistant.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                HStack(spacing: 10) {
+                    Slider(
+                        value: Binding(
+                            get: { appearance.surfaceOpacity },
+                            set: { appearance.setSurfaceOpacity($0) }
+                        ),
+                        in: 0.3...1.0
+                    )
+                    .tint(tokens.accentPrimary)
+                    .frame(width: 130)
+                    Text("\(Int(appearance.surfaceOpacity * 100))%")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.55))
+                        .frame(width: 42, alignment: .trailing)
+                }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+
+            // Blur (frost)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Blur")
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text("Frost the glass so the revealed workspace is softly blurred.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                }
+                Spacer(minLength: 12)
+                NeonToggle(
+                    isOn: Binding(
+                        get: { appearance.blurEnabled },
+                        set: { appearance.setBlurEnabled($0) }
+                    ),
+                    tokens: tokens
+                )
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        }
     }
 
     // MARK: - Context privacy
