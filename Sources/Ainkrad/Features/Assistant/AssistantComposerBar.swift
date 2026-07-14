@@ -10,6 +10,7 @@ struct AssistantComposerBar: View {
     let tokens: DesignTokens
     let modelPicker: AssistantModelPickerModel
     @Binding var draft: String
+    var autoFocusOnAppear: Bool = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -55,6 +56,9 @@ struct AssistantComposerBar: View {
         .shadow(color: tokens.accentPrimary.opacity(isFocused ? 0.18 : 0), radius: 10)
         .animation(.easeOut(duration: 0.16), value: isFocused)
         .padding(14)
+        .onAppear {
+            if autoFocusOnAppear { isFocused = true }
+        }
     }
 
     private var permissionModeMenu: some View {

@@ -6,6 +6,8 @@ import SwiftUI
 /// sections) rather than going through `HostServices`.
 struct AssistantRootView: View {
     @Environment(AppEnvironment.self) private var environment
+    var showsHeader: Bool = true
+    var autoFocusComposer: Bool = false
     @State private var draft = ""
     @State private var isThinkingExpanded = true
     @State private var modelPicker = AssistantModelPickerModel()
@@ -15,7 +17,9 @@ struct AssistantRootView: View {
         let session = environment.agentSession
 
         VStack(alignment: .leading, spacing: 0) {
-            header(tokens: tokens)
+            if showsHeader {
+                header(tokens: tokens)
+            }
 
             transcript(session: session, tokens: tokens)
 
@@ -23,7 +27,8 @@ struct AssistantRootView: View {
                 session: session,
                 tokens: tokens,
                 modelPicker: modelPicker,
-                draft: $draft
+                draft: $draft,
+                autoFocusOnAppear: autoFocusComposer
             )
         }
         .background {
