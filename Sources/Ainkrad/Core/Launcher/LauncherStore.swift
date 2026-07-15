@@ -1,4 +1,5 @@
 import Observation
+import AinkradAppKit
 
 /// Backs the ⌘K Launcher overlay: fuzzy-filtered enabled apps and the
 /// open-app action. Workspace management deliberately does NOT live here —
@@ -8,6 +9,12 @@ import Observation
 @Observable
 final class LauncherStore {
     var query: String = ""
+
+    /// Set post-construction from `AppEnvironment.bootstrap` (`environment`
+    /// doesn't exist yet when `launcherStore` itself is built) — invoked
+    /// instead of tiling for `.overlay`-presentation apps (Slice 3), mirroring
+    /// how the Settings/App Store sentinel rows flip an `AppEnvironment` flag.
+    var presentOverlay: ((String) -> Void)?
 
     private let registry: BuiltInAppRegistry
     private let workspaceManager: WorkspaceManager
@@ -21,10 +28,16 @@ final class LauncherStore {
         registry.enabledApps.filter { fuzzyMatches(query: query, target: $0.displayName) }
     }
 
-    /// The main workspace is the home island and stays empty: summoning an
-    /// app from it spawns a fresh workspace (and switches to it). On any
-    /// other workspace the app splits into the current layout.
+    /// `.overlay`-presentation apps are summoned as a floating host overlay
+    /// instead of tiling (Slice 3). Otherwise: the main workspace is the home
+    /// island and stays empty, so summoning an app from it spawns a fresh
+    /// workspace (and switches to it); on any other workspace the app splits
+    /// into the current layout.
     func selectApp(_ app: RegisteredApp) {
+        guard app.presentation == .pane else {
+            presentOverlay?(app.id)
+            return
+        }
         if workspaceManager.activeWorkspace.isMain {
             workspaceManager.createWorkspace().tileLayout.openApp(app.id)
         } else {

@@ -72,7 +72,7 @@ final class PluginLoader {
         // subprocess/XPC boundary, out of scope here.
         let appType = principal.app()
         let host = makeHostServices(metadata.appID)
-        return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host))
+        return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host, presentation: metadata.presentation))
     }
 }
 
@@ -81,7 +81,7 @@ extension RegisteredApp {
     /// host services. Plugins are enabled by default; the registry override
     /// still applies.
     @MainActor
-    static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices) -> RegisteredApp {
+    static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices, presentation: PluginPresentation) -> RegisteredApp {
         RegisteredApp(
             id: app.id,
             displayName: app.displayName,
@@ -90,7 +90,8 @@ extension RegisteredApp {
             source: .plugin(url: url, apiVersion: apiVersion),
             makeRootView: { app.makeRootView(host: host) },
             makeSettingsView: { app.makeSettingsView(host: host) },
-            chromeFill: { app.chromeFill(host: host) }
+            chromeFill: { app.chromeFill(host: host) },
+            presentation: presentation
         )
     }
 }

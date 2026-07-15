@@ -35,6 +35,11 @@ final class AppEnvironment {
     var isSettingsPresented = false
     var isAppStorePresented = false
     var isQuickAskPresented = false
+    /// The id of a `.overlay`-presentation plugin app currently summoned as a
+    /// floating host overlay (Slice 3), or `nil` when none is shown. Cleared
+    /// automatically when any app opens (see the launch-hub open handler in
+    /// `bootstrap()`), so an overlay never lingers behind a newly-opened pane.
+    var presentedOverlayAppID: String? = nil
     /// Tracks the host window's full-screen state — set by
     /// `KeyboardShortcutMonitor.MonitoringView` from `NSWindow`'s full-screen
     /// notifications (AIN-109). Drives `HUDBar`'s full-screen status bar;
@@ -125,10 +130,11 @@ final class AppEnvironment {
         let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
-        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 3) { appID in
+        let pluginLaunchHub = PluginLaunchHub()
+        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 4) { appID in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager,
-                             hub: agentContextHub, actionHub: agentActionHub)
+                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
         }
 
         // The app catalog is a single hosted document (the central
@@ -235,7 +241,7 @@ final class AppEnvironment {
         // installed plugin sees the user's existing configuration.
         let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
-                                            hub: agentContextHub, actionHub: agentActionHub)
+                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
@@ -244,7 +250,7 @@ final class AppEnvironment {
         // directly), scoped like any other app for its documents/secrets/theme/context.
         let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
-                                             hub: agentContextHub, actionHub: agentActionHub)
+                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
 
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
@@ -277,6 +283,19 @@ final class AppEnvironment {
         workspaceManager.onStateChange = { [weak workspaceManager] in
             guard let workspaceManager else { return }
             persistence.save(workspaceManager.snapshot())
+        }
+
+        environment.launcherStore.presentOverlay = { [weak environment] appID in
+            environment?.presentedOverlayAppID = appID
+        }
+
+        // Captures `[weak environment]` (rather than `[weak workspaceManager]`,
+        // as pre-Slice-3) so it can also clear `presentedOverlayAppID` — any
+        // app opening (tiled or via this hub) dismisses a summoned plugin
+        // overlay, mirroring the Settings/App Store overlays' dismiss-on-open.
+        pluginLaunchHub.setOpenHandler { [weak environment] appID in
+            environment?.workspaceManager.activeWorkspace.tileLayout.openApp(appID)
+            environment?.presentedOverlayAppID = nil
         }
 
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")

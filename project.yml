@@ -24,7 +24,7 @@ packages:
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: 45ed078cf445b38d6a187ab46455f985d8265694
+    revision: 229164797acce68bedc8e8f5fbbe7ff175acf60d
 
 targets:
   Ainkrad:
