@@ -23,7 +23,8 @@ packages:
   # DYNAMIC library: the host embeds one copy; plugin bundles resolve it at
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
-    path: ../AinkradAppKit
+    url: https://github.com/AhmedMElhalaby/AinkradAppKit
+    revision: 229164797acce68bedc8e8f5fbbe7ff175acf60d
 
 targets:
   Ainkrad:
