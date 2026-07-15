@@ -119,7 +119,8 @@ extension HostThemeTokens {
             background: t.background, surface: t.surface,
             surfaceElevated: t.surfaceElevated, accentPrimary: t.accentPrimary,
             accentSecondary: t.accentSecondary, accentTertiary: t.accentTertiary,
-            foreground: t.foreground
+            foreground: t.foreground,
+            success: t.success, warning: t.warning, danger: t.danger
         )
     }
 }
