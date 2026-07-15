@@ -7,9 +7,13 @@ struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
     private var isOverlayPresented: Bool {
-        environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
+        var presented = environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
             || environment.isAppStorePresented || environment.isQuickAskPresented || environment.quitCoordinator.isConfirming
             || environment.presentedOverlayAppID != nil
+        #if DEBUG
+        presented = presented || environment.isComponentGalleryPresented
+        #endif
+        return presented
     }
 
     /// The app of the focused pane in the active workspace, so Settings can
@@ -84,6 +88,15 @@ struct RootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
 
+            #if DEBUG
+            if environment.isComponentGalleryPresented {
+                ComponentGalleryView {
+                    environment.isComponentGalleryPresented = false
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
+            #endif
+
             if environment.quitCoordinator.isConfirming {
                 QuitConfirmationView()
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
@@ -119,6 +132,11 @@ struct RootView: View {
         .onChange(of: environment.isQuickAskPresented) { _, isPresented in
             environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
         }
+        #if DEBUG
+        .onChange(of: environment.isComponentGalleryPresented) { _, isPresented in
+            environment.sounds.play(isPresented ? .overlayOpen : .overlayClose)
+        }
+        #endif
         // Switching the active workspace (⌘1-9, ⌥Tab, cycle, HUD dots all
         // funnel through this one property) plays `.workspaceSwitch`.
         // `onChange` without `initial: true` never fires for the value the
