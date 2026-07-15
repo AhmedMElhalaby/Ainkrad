@@ -296,9 +296,9 @@ final class AppEnvironment {
         // as pre-Slice-3) so it can also clear `presentedOverlayAppID` — any
         // app opening (tiled or via this hub) dismisses a summoned plugin
         // overlay, mirroring the Settings/App Store overlays' dismiss-on-open.
-        pluginLaunchHub.setOpenHandler { [weak environment, registry] appID in
+        pluginLaunchHub.setOpenHandler { [weak environment] appID in
             guard let environment else { return }
-            let declared = registry.allApps.first { $0.id == appID }?.presentation ?? .pane
+            let declared = environment.registry.allApps.first { $0.id == appID }?.presentation ?? .pane
             let effective = environment.appAppearanceStore.presentationOverride(appID) ?? declared
             if effective == .overlay {
                 environment.presentedOverlayAppID = appID
