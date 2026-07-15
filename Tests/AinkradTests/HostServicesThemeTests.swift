@@ -14,7 +14,9 @@ struct HostServicesThemeTests {
         let host = HostServicesImpl(appID: "t", dataRootURL: root,
                                     secretStore: InMemorySecretStore(), themeManager: tm,
                                     hub: AgentContextRegistryHub(), actionHub: AgentActionRegistryHub(),
-                                    launchHub: PluginLaunchHub())
+                                    launchHub: PluginLaunchHub(),
+                                    declaredPresentation: .pane,
+                                    appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore()))
         return (host, tm)
     }
 

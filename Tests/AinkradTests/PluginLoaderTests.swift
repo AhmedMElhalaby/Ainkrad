@@ -16,7 +16,7 @@ struct PluginLoaderTests {
     }
 
     private func loader(signaturePolicy: PluginSignaturePolicy = DevModeSignaturePolicy()) -> PluginLoader {
-        PluginLoader(signaturePolicy: signaturePolicy) { appID in
+        PluginLoader(signaturePolicy: signaturePolicy) { appID, declaredPresentation in
             HostServicesImpl(
                 appID: appID,
                 dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString),
@@ -24,7 +24,9 @@ struct PluginLoaderTests {
                 themeManager: ThemeManager(persistence: InMemoryPersistenceStore()),
                 hub: AgentContextRegistryHub(),
                 actionHub: AgentActionRegistryHub(),
-                launchHub: PluginLaunchHub()
+                launchHub: PluginLaunchHub(),
+                declaredPresentation: declaredPresentation,
+                appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore())
             )
         }
     }

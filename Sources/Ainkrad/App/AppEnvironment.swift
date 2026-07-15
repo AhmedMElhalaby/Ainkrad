@@ -131,10 +131,12 @@ final class AppEnvironment {
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
         let pluginLaunchHub = PluginLaunchHub()
-        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 4) { appID in
+        let appAppearanceStore = AppAppearanceStore(persistence: persistence)
+        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 4) { appID, declaredPresentation in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager,
-                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
+                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                             declaredPresentation: declaredPresentation, appAppearanceStore: appAppearanceStore)
         }
 
         // The app catalog is a single hosted document (the central
@@ -161,7 +163,6 @@ final class AppEnvironment {
         appIconStore.applyCurrent()
 
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
-        let appAppearanceStore = AppAppearanceStore(persistence: persistence)
         let skySettingsStore = SkySettingsStore(persistence: persistence)
         // User-data override dir for AIN-108's sound-pack overrides (e.g. via
         // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
@@ -241,7 +242,8 @@ final class AppEnvironment {
         // installed plugin sees the user's existing configuration.
         let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
-                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
+                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                            declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
@@ -250,7 +252,8 @@ final class AppEnvironment {
         // directly), scoped like any other app for its documents/secrets/theme/context.
         let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
-                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
+                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                             declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
