@@ -29,6 +29,13 @@ struct ComponentGalleryView: View {
     @State private var wave2Chips = ["Removable", "Draft"]
 
     private var galleryTokens: HostThemeTokens { HostThemeTokens(from: galleryTheme) }
+    private var galleryStatusColors: AinkradStatusColors {
+        AinkradStatusColors(
+            success: galleryTheme.tokens.success,
+            warning: galleryTheme.tokens.warning,
+            danger: galleryTheme.tokens.danger
+        )
+    }
     private var galleryTypography: AinkradTypography { .default }
 
     var body: some View {
@@ -47,6 +54,7 @@ struct ComponentGalleryView: View {
         }
         // Local-only override — does NOT touch `environment.themeManager`.
         .environment(\.ainkradTheme, galleryTokens)
+        .environment(\.ainkradStatusColors, galleryStatusColors)
         .environment(\.ainkradTypography, galleryTypography)
     }
 
@@ -137,9 +145,9 @@ struct ComponentGalleryView: View {
             }
 
             HStack(spacing: AinkradSpacing.lg) {
-                statusSwatch(label: "Success", color: galleryTokens.success)
-                statusSwatch(label: "Warning", color: galleryTokens.warning)
-                statusSwatch(label: "Danger", color: galleryTokens.danger)
+                statusSwatch(label: "Success", color: galleryTheme.tokens.success)
+                statusSwatch(label: "Warning", color: galleryTheme.tokens.warning)
+                statusSwatch(label: "Danger", color: galleryTheme.tokens.danger)
             }
             .padding(.top, AinkradSpacing.sm)
         }

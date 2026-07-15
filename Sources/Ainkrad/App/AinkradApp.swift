@@ -31,6 +31,11 @@ struct AinkradHostApp: App {
                 // `themeManager.currentTheme`/`uiFontFamily`/`uiFontScale`
                 // here — all `@Observable` — keeps this live on theme change.
                 .environment(\.ainkradTheme, HostThemeTokens(from: environment.themeManager.currentTheme))
+                .environment(\.ainkradStatusColors, AinkradStatusColors(
+                    success: environment.themeManager.tokens.success,
+                    warning: environment.themeManager.tokens.warning,
+                    danger: environment.themeManager.tokens.danger
+                ))
                 .environment(\.ainkradTypography, AinkradTypography(
                     fontFamilyName: environment.themeManager.uiFontFamily.fontName,
                     scale: environment.themeManager.uiFontScale.multiplier
