@@ -23,7 +23,8 @@ struct PluginLoaderTests {
                 secretStore: InMemorySecretStore(),
                 themeManager: ThemeManager(persistence: InMemoryPersistenceStore()),
                 hub: AgentContextRegistryHub(),
-                actionHub: AgentActionRegistryHub()
+                actionHub: AgentActionRegistryHub(),
+                launchHub: PluginLaunchHub()
             )
         }
     }

@@ -13,7 +13,8 @@ struct HostServicesThemeTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let host = HostServicesImpl(appID: "t", dataRootURL: root,
                                     secretStore: InMemorySecretStore(), themeManager: tm,
-                                    hub: AgentContextRegistryHub(), actionHub: AgentActionRegistryHub())
+                                    hub: AgentContextRegistryHub(), actionHub: AgentActionRegistryHub(),
+                                    launchHub: PluginLaunchHub())
         return (host, tm)
     }
 

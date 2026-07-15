@@ -14,10 +14,11 @@ final class HostServicesImpl: HostServices {
     let theme: HostTheme
     let context: PluginContextRegistry
     let actions: AgentActionProvider
+    let apps: PluginAppLauncher
     private let themeManager: ThemeManager
 
     init(appID: String, dataRootURL: URL, secretStore: SecretStore, themeManager: ThemeManager,
-         hub: AgentContextRegistryHub, actionHub: AgentActionRegistryHub) {
+         hub: AgentContextRegistryHub, actionHub: AgentActionRegistryHub, launchHub: PluginLaunchHub) {
         self.documents = ScopedPluginDocumentStore(directory: dataRootURL.appendingPathComponent(appID, isDirectory: true))
         self.secrets = ScopedPluginSecretStore(appID: appID, backing: secretStore)
         self.log = PluginLoggerImpl(appID: appID)
@@ -25,6 +26,7 @@ final class HostServicesImpl: HostServices {
         self.theme = HostTheme(HostThemeTokens(from: themeManager.currentTheme))
         self.context = HostContextRegistry(appID: appID, hub: hub)
         self.actions = HostActionRegistry(appID: appID, hub: actionHub)
+        self.apps = HostAppLauncher(appID: appID, hub: launchHub)
         armThemeSync()
     }
 

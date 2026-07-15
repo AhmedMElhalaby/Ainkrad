@@ -125,10 +125,11 @@ final class AppEnvironment {
         let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
-        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 3) { appID in
+        let pluginLaunchHub = PluginLaunchHub()
+        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 4) { appID in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager,
-                             hub: agentContextHub, actionHub: agentActionHub)
+                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
         }
 
         // The app catalog is a single hosted document (the central
@@ -235,7 +236,7 @@ final class AppEnvironment {
         // installed plugin sees the user's existing configuration.
         let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
-                                            hub: agentContextHub, actionHub: agentActionHub)
+                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
@@ -244,7 +245,7 @@ final class AppEnvironment {
         // directly), scoped like any other app for its documents/secrets/theme/context.
         let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
-                                             hub: agentContextHub, actionHub: agentActionHub)
+                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub)
 
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
@@ -277,6 +278,10 @@ final class AppEnvironment {
         workspaceManager.onStateChange = { [weak workspaceManager] in
             guard let workspaceManager else { return }
             persistence.save(workspaceManager.snapshot())
+        }
+
+        pluginLaunchHub.setOpenHandler { [weak workspaceManager] appID in
+            workspaceManager?.activeWorkspace.tileLayout.openApp(appID)
         }
 
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")
