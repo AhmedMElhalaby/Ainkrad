@@ -33,6 +33,7 @@ struct ComponentGalleryView: View {
     @State private var wave3MultiSelectSelection: Set<String> = ["Option A"]
     @State private var wave3ComboboxSelection: String?
     @State private var wave3ComboboxText = ""
+    @State private var wave3SearchableSelectSelection = "Alabama"
     @State private var wave3CheckboxOn = true
     @State private var wave3RadioSelection = "Option A"
     @State private var wave3StepperValue = 3
@@ -431,9 +432,16 @@ struct ComponentGalleryView: View {
 
     private var wave3SampleItems: [String] { ["Option A", "Option B", "Option C"] }
 
+    private var wave3SearchableSelectItems: [String] {
+        [
+            "Alabama", "Alaska", "Arizona", "Arkansas", "California",
+            "Colorado", "Connecticut", "Delaware", "Florida", "Georgia"
+        ]
+    }
+
     private var wave3SelectionRow: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
-            AinkradCaption("Select, MultiSelect, Combobox (custom dropdowns)")
+            AinkradCaption("Select, MultiSelect, Combobox, SearchableSelect (custom dropdowns)")
             HStack(alignment: .top, spacing: AinkradSpacing.md) {
                 AinkradSelect(items: wave3SampleItems, selection: $wave3SelectSelection) { $0 }
                 AinkradMultiSelect(items: wave3SampleItems, selection: $wave3MultiSelectSelection) { $0 }
@@ -442,6 +450,12 @@ struct ComponentGalleryView: View {
                     selection: $wave3ComboboxSelection,
                     text: $wave3ComboboxText
                 ) { $0 }
+                AinkradSearchableSelect(
+                    items: wave3SearchableSelectItems,
+                    selection: $wave3SearchableSelectSelection,
+                    label: { $0 },
+                    placeholder: "Search states…"
+                )
             }
         }
     }
