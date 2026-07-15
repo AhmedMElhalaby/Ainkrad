@@ -18,10 +18,12 @@ final class LauncherStore {
 
     private let registry: BuiltInAppRegistry
     private let workspaceManager: WorkspaceManager
+    private let appAppearanceStore: AppAppearanceStore
 
-    init(registry: BuiltInAppRegistry, workspaceManager: WorkspaceManager) {
+    init(registry: BuiltInAppRegistry, workspaceManager: WorkspaceManager, appAppearanceStore: AppAppearanceStore) {
         self.registry = registry
         self.workspaceManager = workspaceManager
+        self.appAppearanceStore = appAppearanceStore
     }
 
     var appResults: [RegisteredApp] {
@@ -34,7 +36,8 @@ final class LauncherStore {
     /// workspace (and switches to it); on any other workspace the app splits
     /// into the current layout.
     func selectApp(_ app: RegisteredApp) {
-        guard app.presentation == .pane else {
+        let effective = appAppearanceStore.presentationOverride(app.id) ?? app.presentation
+        guard effective == .pane else {
             presentOverlay?(app.id)
             return
         }

@@ -216,7 +216,7 @@ final class AppEnvironment {
             registry: registry,
             themeManager: themeManager,
             workspaceManager: workspaceManager,
-            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager),
+            launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager, appAppearanceStore: appAppearanceStore),
             connectionStore: connectionStore,
             appStore: appStore,
             appStoreStore: appStoreStore,
@@ -296,9 +296,16 @@ final class AppEnvironment {
         // as pre-Slice-3) so it can also clear `presentedOverlayAppID` — any
         // app opening (tiled or via this hub) dismisses a summoned plugin
         // overlay, mirroring the Settings/App Store overlays' dismiss-on-open.
-        pluginLaunchHub.setOpenHandler { [weak environment] appID in
-            environment?.workspaceManager.activeWorkspace.tileLayout.openApp(appID)
-            environment?.presentedOverlayAppID = nil
+        pluginLaunchHub.setOpenHandler { [weak environment, registry] appID in
+            guard let environment else { return }
+            let declared = registry.allApps.first { $0.id == appID }?.presentation ?? .pane
+            let effective = environment.appAppearanceStore.presentationOverride(appID) ?? declared
+            if effective == .overlay {
+                environment.presentedOverlayAppID = appID
+            } else {
+                environment.workspaceManager.activeWorkspace.tileLayout.openApp(appID)
+                environment.presentedOverlayAppID = nil
+            }
         }
 
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")

@@ -19,7 +19,8 @@ final class AppEnvironmentTests {
         let registry = BuiltInAppRegistry(persistence: persistence)
         let themeManager = ThemeManager(persistence: persistence)
         let workspaceManager = WorkspaceManager()
-        let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
+        let appAppearanceStore = AppAppearanceStore(persistence: persistence)
+        let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager, appAppearanceStore: appAppearanceStore)
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
         let catalogService = CatalogService(
             source: NoOpCatalogSource(), persistence: persistence)
@@ -70,7 +71,7 @@ final class AppEnvironmentTests {
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
-            appAppearanceStore: AppAppearanceStore(persistence: persistence),
+            appAppearanceStore: appAppearanceStore,
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,

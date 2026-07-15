@@ -31,7 +31,8 @@ final class PluginOverlayLaunchTests {
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore())
         registry.install(builtIn: [overlayApp, paneApp])
         let workspaceManager = WorkspaceManager()
-        let store = LauncherStore(registry: registry, workspaceManager: workspaceManager)
+        let appAppearanceStore = AppAppearanceStore(persistence: InMemoryPersistenceStore())
+        let store = LauncherStore(registry: registry, workspaceManager: workspaceManager, appAppearanceStore: appAppearanceStore)
         return (store, workspaceManager)
     }
 
