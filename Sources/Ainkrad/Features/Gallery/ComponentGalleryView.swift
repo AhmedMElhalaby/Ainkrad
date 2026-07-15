@@ -46,6 +46,17 @@ struct ComponentGalleryView: View {
     @State private var wave3SegmentedSelection = 0
     @State private var wave3SliderValue = 0.4
 
+    // MARK: Wave 4: Navigation · Feedback
+    @State private var wave4TabsSelection = "Overview"
+    @State private var wave4PaginationPage = 0
+    @State private var wave4CommandMenuSelection: String?
+    @State private var wave4NavListSelection = "Dashboard"
+    @State private var wave4PopoverPresented = false
+    @State private var wave4ConfirmDialogPresented = false
+    @State private var wave4DestructiveConfirmDialogPresented = false
+
+    @Environment(\.ainkradToastCenter) private var galleryToastCenter
+
     private var galleryTokens: HostThemeTokens { HostThemeTokens(from: galleryTheme) }
     private var galleryStatusColors: AinkradStatusColors {
         AinkradStatusColors(
@@ -92,11 +103,13 @@ struct ComponentGalleryView: View {
                     sectionHeaderSection
                     wave2Section
                     wave3Section
+                    wave4Section
                 }
                 .padding(AinkradSpacing.lg)
             }
         }
         .ainkradPanel()
+        .ainkradToastHost()
         .onKeyPress(.escape) { onDismiss(); return .handled }
     }
 
@@ -510,6 +523,159 @@ struct ComponentGalleryView: View {
             AinkradCaption("Form Row")
             AinkradFormRow(title: "Enable feature", help: "A checkbox in a form row") {
                 AinkradCheckbox(isOn: $wave3CheckboxOn)
+            }
+        }
+    }
+
+    // MARK: - Wave 4: Navigation · Feedback
+
+    private var wave4Section: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
+            AinkradSectionHeader(title: "Navigation · Feedback", subtitle: "Wave-4 Cardinal HUD components")
+
+            wave4NavigationRow
+            wave4CommandNavRow
+            wave4StatusSpinnerRow
+            wave4BannerToastRow
+            wave4TooltipPopoverRow
+            wave4ConfirmDialogRow
+            wave4StateViewsRow
+        }
+    }
+
+    private var wave4Tabs: [String] { ["Overview", "Details", "History"] }
+    private var wave4Breadcrumb: [String] { ["Ainkrad", "Projects", "Component Gallery"] }
+    private var wave4CommandMenuItems: [(icon: String, label: String)] {
+        [
+            ("terminal", "Terminal"),
+            ("gearshape", "Settings"),
+            ("square.stack.3d.up", "Workspaces"),
+            ("bolt.fill", "Actions")
+        ]
+    }
+    private var wave4NavListItems: [String] { ["Dashboard", "Repositories", "Pull Requests", "Settings"] }
+
+    private var wave4NavigationRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Tabs, Breadcrumb, Pagination")
+            AinkradTabs(tabs: wave4Tabs, selection: $wave4TabsSelection) { $0 }
+            AinkradBreadcrumb(items: wave4Breadcrumb)
+            AinkradPagination(page: $wave4PaginationPage, pageCount: 5)
+        }
+    }
+
+    private var wave4CommandNavRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Command Menu, Nav List")
+            HStack(alignment: .top, spacing: AinkradSpacing.lg) {
+                AinkradCommandMenu(
+                    items: wave4CommandMenuItems.map(\.label),
+                    selection: $wave4CommandMenuSelection,
+                    icon: { label in wave4CommandMenuItems.first { $0.label == label }?.icon ?? "questionmark" },
+                    label: { $0 }
+                )
+                .frame(width: 180)
+                AinkradNavList(
+                    items: wave4NavListItems,
+                    selection: $wave4NavListSelection,
+                    icon: { _ in "chevron.right" },
+                    label: { $0 }
+                )
+                .frame(width: 200)
+            }
+        }
+    }
+
+    private var wave4StatusSpinnerRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Status Bar (accent & status kinds), Spinner")
+            HStack(spacing: AinkradSpacing.lg) {
+                VStack(alignment: .leading, spacing: AinkradSpacing.xs) {
+                    AinkradStatusBar(value: 0.75, kind: .accent)
+                    AinkradStatusBar(value: 0.4, kind: .status(.warning))
+                    AinkradStatusBar(value: 0.9, kind: .status(.danger))
+                }
+                .frame(width: 160)
+                AinkradSpinner()
+            }
+        }
+    }
+
+    private var wave4BannerToastRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Banner (per status), Toast")
+            VStack(alignment: .leading, spacing: AinkradSpacing.xs) {
+                ForEach(AinkradStatus.allCases, id: \.self) { status in
+                    AinkradBanner(message: "\(String(describing: status).capitalized) banner message", status: status)
+                }
+            }
+            AinkradButton(title: "Fire Toast", style: .secondary) {
+                galleryToastCenter.show("Sample toast message", status: .success)
+            }
+        }
+    }
+
+    private var wave4TooltipPopoverRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Tooltip, Popover")
+            HStack(spacing: AinkradSpacing.lg) {
+                AinkradButton(title: "Hover me", style: .ghost, action: {})
+                    .ainkradTooltip("This is a Cardinal HUD tooltip")
+                AinkradButton(title: "Show Popover", style: .secondary) {
+                    wave4PopoverPresented = true
+                }
+                .ainkradPopover(isPresented: $wave4PopoverPresented) {
+                    Text("Popover content")
+                        .font(AinkradFontResolver.font(.body, typography: galleryTypography))
+                        .foregroundStyle(galleryTokens.foreground)
+                }
+            }
+        }
+    }
+
+    private var wave4ConfirmDialogRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Confirm Dialog (default & destructive)")
+            HStack(spacing: AinkradSpacing.lg) {
+                AinkradButton(title: "Confirm…", style: .secondary) {
+                    wave4ConfirmDialogPresented = true
+                }
+                AinkradButton(title: "Delete…", style: .danger) {
+                    wave4DestructiveConfirmDialogPresented = true
+                }
+            }
+        }
+        .overlay {
+            AinkradConfirmDialog(
+                isPresented: $wave4ConfirmDialogPresented,
+                title: "Confirm Action",
+                message: "Are you sure you want to proceed?",
+                onConfirm: {}
+            )
+            AinkradConfirmDialog(
+                isPresented: $wave4DestructiveConfirmDialogPresented,
+                title: "Delete Item",
+                message: "This action cannot be undone.",
+                confirmTitle: "Delete",
+                isDestructive: true,
+                onConfirm: {}
+            )
+        }
+    }
+
+    private var wave4StateViewsRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Restyled: Empty State (with & without action), Error State, Loading State")
+            HStack(spacing: AinkradSpacing.md) {
+                AinkradEmptyState(icon: "tray", title: "Nothing here", message: "No items yet.",
+                                  actionTitle: "Add Item", action: {})
+                    .frame(height: 180)
+                AinkradEmptyState(icon: "tray", title: "Nothing here", message: "No items yet.")
+                    .frame(height: 180)
+                AinkradErrorState(message: "Something went wrong.", retryTitle: "Retry", retry: {})
+                    .frame(height: 180)
+                AinkradLoadingState(label: "Loading…")
+                    .frame(height: 180)
             }
         }
     }
