@@ -1,11 +1,15 @@
 import Foundation
 import Observation
+import AinkradAppKit
 
 /// One app's surface appearance. `surfaceOpacity` is honored only for
 /// host-background apps (the Assistant); every app honors `blurEnabled`.
 struct AppAppearanceEntry: Codable, Equatable {
     var surfaceOpacity: Double = 1.0
     var blurEnabled: Bool = false
+    /// User override of the app's presentation, as `PluginPresentation.rawValue`.
+    /// `nil` = use the bundle's declared default. Applies on next open.
+    var presentationOverride: String? = nil
 }
 
 /// Per-app surface appearance, keyed by `appID` (the Assistant is one surface
@@ -70,6 +74,17 @@ final class AppAppearanceStore {
     func setSurfaceOpacity(_ appID: String, _ value: Double) {
         var entry = document.entries[appID] ?? AppAppearanceEntry()
         entry.surfaceOpacity = min(max(value, 0), 1)
+        document.entries[appID] = entry
+        persistence.save(document)
+    }
+
+    func presentationOverride(_ appID: String) -> PluginPresentation? {
+        document.entries[appID]?.presentationOverride.flatMap(PluginPresentation.init(rawValue:))
+    }
+
+    func setPresentationOverride(_ appID: String, _ value: PluginPresentation?) {
+        var entry = document.entries[appID] ?? AppAppearanceEntry()
+        entry.presentationOverride = value?.rawValue
         document.entries[appID] = entry
         persistence.save(document)
     }

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import SwiftUI
 @testable import Ainkrad
+import AinkradAppKit
 
 @Suite("AppAppearanceStore")
 @MainActor
@@ -48,6 +49,16 @@ struct AppAppearanceStoreTests {
         let store = AppAppearanceStore(persistence: persistence)
         #expect(store.surfaceOpacity("assistant") == 0.4)
         #expect(store.blurEnabled("assistant") == true)
+    }
+
+    @Test("presentation override round-trips and defaults to nil")
+    func presentationOverrideRoundTrips() {
+        let store = AppAppearanceStore(persistence: InMemoryPersistenceStore())
+        #expect(store.presentationOverride("leyline") == nil)
+        store.setPresentationOverride("leyline", .overlay)
+        #expect(store.presentationOverride("leyline") == .overlay)
+        store.setPresentationOverride("leyline", nil)
+        #expect(store.presentationOverride("leyline") == nil)
     }
 }
 
