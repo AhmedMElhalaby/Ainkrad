@@ -28,6 +28,23 @@ struct ComponentGalleryView: View {
     @State private var wave2ToggleOn = true
     @State private var wave2Chips = ["Removable", "Draft"]
 
+    // MARK: Wave 3: Inputs · Forms
+    @State private var wave3SelectSelection = "Option A"
+    @State private var wave3MultiSelectSelection: Set<String> = ["Option A"]
+    @State private var wave3ComboboxSelection: String?
+    @State private var wave3ComboboxText = ""
+    @State private var wave3CheckboxOn = true
+    @State private var wave3RadioSelection = "Option A"
+    @State private var wave3StepperValue = 3
+    @State private var wave3RangeSliderValue: ClosedRange<Double> = 0.25...0.75
+    @State private var wave3SearchText = ""
+    @State private var wave3TextAreaText = "Sample multi-line text\nfor the text area."
+    @State private var wave3TextFieldText = "Sample text"
+    @State private var wave3SecureFieldText = "sk-••••••••"
+    @State private var wave3ToggleOn = true
+    @State private var wave3SegmentedSelection = 0
+    @State private var wave3SliderValue = 0.4
+
     private var galleryTokens: HostThemeTokens { HostThemeTokens(from: galleryTheme) }
     private var galleryStatusColors: AinkradStatusColors {
         AinkradStatusColors(
@@ -73,6 +90,7 @@ struct ComponentGalleryView: View {
                     stateViewsSection
                     sectionHeaderSection
                     wave2Section
+                    wave3Section
                 }
                 .padding(AinkradSpacing.lg)
             }
@@ -259,7 +277,7 @@ struct ComponentGalleryView: View {
         VStack(alignment: .leading, spacing: AinkradSpacing.md) {
             AinkradSectionHeader(title: "Pickers")
             AinkradSegmentedPicker(items: Array(0..<3), selection: $pickerSelection) { "Item \($0)" }
-            AinkradMenuPicker(items: ["Option A", "Option B", "Option C"], selection: $menuSelection) { $0 }
+            AinkradSelect(items: ["Option A", "Option B", "Option C"], selection: $menuSelection) { $0 }
         }
     }
 
@@ -393,6 +411,92 @@ struct ComponentGalleryView: View {
             AinkradCaption("Label & Caption")
             AinkradLabel("Sample label text", systemName: "text.alignleft")
             AinkradCaption("Sample dimmed caption text")
+        }
+    }
+
+    // MARK: - Wave 3: Inputs · Forms
+
+    private var wave3Section: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
+            AinkradSectionHeader(title: "Inputs · Forms", subtitle: "Wave-3 selection, input, and form controls")
+
+            wave3SelectionRow
+            wave3ChoiceRow
+            wave3NumericRow
+            wave3TextRow
+            wave3RestyledRow
+            wave3FormRowSample
+        }
+    }
+
+    private var wave3SampleItems: [String] { ["Option A", "Option B", "Option C"] }
+
+    private var wave3SelectionRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Select, MultiSelect, Combobox (custom dropdowns)")
+            HStack(alignment: .top, spacing: AinkradSpacing.md) {
+                AinkradSelect(items: wave3SampleItems, selection: $wave3SelectSelection) { $0 }
+                AinkradMultiSelect(items: wave3SampleItems, selection: $wave3MultiSelectSelection) { $0 }
+                AinkradCombobox(
+                    items: wave3SampleItems,
+                    selection: $wave3ComboboxSelection,
+                    text: $wave3ComboboxText
+                ) { $0 }
+            }
+        }
+    }
+
+    private var wave3ChoiceRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Checkbox, Radio Group")
+            HStack(alignment: .top, spacing: AinkradSpacing.lg) {
+                AinkradCheckbox(isOn: $wave3CheckboxOn, label: "Enable feature")
+                AinkradRadioGroup(options: wave3SampleItems, selection: $wave3RadioSelection) { $0 }
+            }
+        }
+    }
+
+    private var wave3NumericRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Stepper, Range Slider")
+            HStack(alignment: .top, spacing: AinkradSpacing.lg) {
+                AinkradStepper(value: $wave3StepperValue, in: 0...10)
+                AinkradRangeSlider(range: $wave3RangeSliderValue, bounds: 0...1)
+            }
+        }
+    }
+
+    private var wave3TextRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Search Field, Text Area")
+            VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+                AinkradSearchField(text: $wave3SearchText, placeholder: "Search…")
+                AinkradTextArea(text: $wave3TextAreaText, placeholder: "Text area")
+            }
+        }
+    }
+
+    private var wave3RestyledRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Restyled: Text Field, Secure Field, Toggle, Segmented Picker, Slider")
+            VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+                AinkradTextField(text: $wave3TextFieldText, placeholder: "Text field")
+                AinkradSecureField(text: $wave3SecureFieldText, placeholder: "Secure field")
+                HStack(spacing: AinkradSpacing.lg) {
+                    AinkradToggle(isOn: $wave3ToggleOn)
+                    AinkradSegmentedPicker(items: Array(0..<3), selection: $wave3SegmentedSelection) { "Item \($0)" }
+                }
+                AinkradSlider(value: $wave3SliderValue, in: 0...1)
+            }
+        }
+    }
+
+    private var wave3FormRowSample: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Form Row")
+            AinkradFormRow(title: "Enable feature", help: "A checkbox in a form row") {
+                AinkradCheckbox(isOn: $wave3CheckboxOn)
+            }
         }
     }
 
