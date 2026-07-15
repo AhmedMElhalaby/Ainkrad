@@ -24,7 +24,7 @@ packages:
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: 229164797acce68bedc8e8f5fbbe7ff175acf60d
+    revision: 2ca63d0f4375973d5aa5802b84d124bc710c1d33
 
 targets:
   Ainkrad:
@@ -45,7 +45,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
-        MARKETING_VERSION: "0.8.0"
+        MARKETING_VERSION: "0.8.1"
         CURRENT_PROJECT_VERSION: "10"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES

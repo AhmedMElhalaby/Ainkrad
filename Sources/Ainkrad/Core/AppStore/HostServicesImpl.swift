@@ -15,10 +15,14 @@ final class HostServicesImpl: HostServices {
     let context: PluginContextRegistry
     let actions: AgentActionProvider
     let apps: PluginAppLauncher
+    let presentation: PluginPresentationControl
     private let themeManager: ThemeManager
 
     init(appID: String, dataRootURL: URL, secretStore: SecretStore, themeManager: ThemeManager,
-         hub: AgentContextRegistryHub, actionHub: AgentActionRegistryHub, launchHub: PluginLaunchHub) {
+         hub: AgentContextRegistryHub, actionHub: AgentActionRegistryHub,
+         launchHub: PluginLaunchHub,
+         declaredPresentation: PluginPresentation,
+         appAppearanceStore: AppAppearanceStore) {
         self.documents = ScopedPluginDocumentStore(directory: dataRootURL.appendingPathComponent(appID, isDirectory: true))
         self.secrets = ScopedPluginSecretStore(appID: appID, backing: secretStore)
         self.log = PluginLoggerImpl(appID: appID)
@@ -27,6 +31,8 @@ final class HostServicesImpl: HostServices {
         self.context = HostContextRegistry(appID: appID, hub: hub)
         self.actions = HostActionRegistry(appID: appID, hub: actionHub)
         self.apps = HostAppLauncher(appID: appID, hub: launchHub)
+        self.presentation = HostPresentationControl(
+            appID: appID, declaredDefault: declaredPresentation, store: appAppearanceStore)
         armThemeSync()
     }
 
@@ -43,6 +49,21 @@ final class HostServicesImpl: HostServices {
             }
         }
     }
+}
+
+/// Host-side `PluginPresentationControl`: reads/writes the per-appID override in
+/// `AppAppearanceStore`, falling back to the bundle's declared default.
+@MainActor
+final class HostPresentationControl: PluginPresentationControl {
+    private let appID: String
+    private let declaredDefault: PluginPresentation
+    private let store: AppAppearanceStore
+    init(appID: String, declaredDefault: PluginPresentation, store: AppAppearanceStore) {
+        self.appID = appID; self.declaredDefault = declaredDefault; self.store = store
+    }
+    var current: PluginPresentation { store.presentationOverride(appID) ?? declaredDefault }
+    func set(_ presentation: PluginPresentation) { store.setPresentationOverride(appID, presentation) }
+    func reset() { store.setPresentationOverride(appID, nil) }
 }
 
 /// Key→data storage confined to a single directory. Keys are sanitized so a

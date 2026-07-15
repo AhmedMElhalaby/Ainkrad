@@ -12,11 +12,11 @@ import protocol AinkradAppKit.AinkradApp
 final class PluginLoader {
     private let signaturePolicy: PluginSignaturePolicy
     private let minSupportedAPIVersion: Int
-    private let makeHostServices: (String) -> HostServices
+    private let makeHostServices: (String, PluginPresentation) -> HostServices
 
     init(signaturePolicy: PluginSignaturePolicy,
          minSupportedAPIVersion: Int = 1,
-         makeHostServices: @escaping (String) -> HostServices) {
+         makeHostServices: @escaping (String, PluginPresentation) -> HostServices) {
         self.signaturePolicy = signaturePolicy
         self.minSupportedAPIVersion = minSupportedAPIVersion
         self.makeHostServices = makeHostServices
@@ -71,7 +71,7 @@ final class PluginLoader {
         // loading. Inherent to in-process loading — isolating it would need a
         // subprocess/XPC boundary, out of scope here.
         let appType = principal.app()
-        let host = makeHostServices(metadata.appID)
+        let host = makeHostServices(metadata.appID, metadata.presentation)
         return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host, presentation: metadata.presentation))
     }
 }
