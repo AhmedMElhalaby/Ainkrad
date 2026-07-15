@@ -19,14 +19,14 @@ struct PluginOverlayView: View {
                     .onTapGesture { onDismiss() }
 
                 app.makeRootView()
-                    .frame(width: min(max(680, geo.size.width * 0.55), 820),
-                           height: min(max(420, geo.size.height * 0.6), 640))
+                    .frame(width: min(max(560, geo.size.width * 0.42), 700),
+                           height: min(max(460, geo.size.height * 0.66), 760))
                     .hudPanelChrome(tokens: tokens)
                     .focusable()
                     .focused($isFocused)
                     .focusEffectDisabled()
                     .onKeyPress(.escape) { onDismiss(); return .handled }
-                    .offset(y: -40)
+                    .offset(y: -28)
             }
         }
         .onAppear { isFocused = true }
