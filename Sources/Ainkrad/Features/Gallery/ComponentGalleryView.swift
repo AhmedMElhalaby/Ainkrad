@@ -22,6 +22,9 @@ struct ComponentGalleryView: View {
     @State private var sliderValue = 0.6
     @State private var pickerSelection = 0
     @State private var menuSelection = "Option A"
+    @State private var scanlineOn = true
+    @State private var hexGridOn = true
+    @State private var glowBloomOn = true
 
     private var galleryTokens: HostThemeTokens { HostThemeTokens(from: galleryTheme) }
     private var galleryTypography: AinkradTypography { .default }
@@ -51,6 +54,7 @@ struct ComponentGalleryView: View {
             themeSwitcher
             ScrollView {
                 VStack(alignment: .leading, spacing: AinkradSpacing.xl) {
+                    foundationSection
                     scalesSection
                     panelSection
                     cardSection
@@ -89,6 +93,71 @@ struct ComponentGalleryView: View {
     }
 
     // MARK: - Sections
+
+    private var foundationSection: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
+            AinkradSectionHeader(title: "Foundation", subtitle: "Chamfer, brackets, accent rule, effects, status colors")
+
+            HStack(spacing: AinkradSpacing.md) {
+                ChamferShape()
+                    .fill(galleryTokens.surfaceElevated)
+                    .frame(width: 120, height: 80)
+                    .cornerBrackets()
+            }
+
+            AccentRule(label: "Accent Rule")
+
+            HStack(spacing: AinkradSpacing.md) {
+                VStack(spacing: 4) {
+                    effectSamplePanel.scanlineOverlay(active: scanlineOn)
+                    Toggle("Scanline", isOn: $scanlineOn)
+                        .toggleStyle(.checkbox)
+                        .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
+                        .foregroundStyle(galleryTokens.foreground.opacity(0.7))
+                }
+
+                VStack(spacing: 4) {
+                    effectSamplePanel.hexGridBackground(active: hexGridOn)
+                    Toggle("Hex Grid", isOn: $hexGridOn)
+                        .toggleStyle(.checkbox)
+                        .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
+                        .foregroundStyle(galleryTokens.foreground.opacity(0.7))
+                }
+
+                VStack(spacing: 4) {
+                    effectSamplePanel.glowBloom(active: glowBloomOn)
+                    Toggle("Glow Bloom", isOn: $glowBloomOn)
+                        .toggleStyle(.checkbox)
+                        .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
+                        .foregroundStyle(galleryTokens.foreground.opacity(0.7))
+                }
+            }
+
+            HStack(spacing: AinkradSpacing.lg) {
+                statusSwatch(label: "Success", color: galleryTokens.success)
+                statusSwatch(label: "Warning", color: galleryTokens.warning)
+                statusSwatch(label: "Danger", color: galleryTokens.danger)
+            }
+            .padding(.top, AinkradSpacing.sm)
+        }
+    }
+
+    private var effectSamplePanel: some View {
+        RoundedRectangle(cornerRadius: AinkradRadius.sm)
+            .fill(galleryTokens.surface)
+            .frame(width: 96, height: 64)
+    }
+
+    private func statusSwatch(label: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: AinkradRadius.sm)
+                .fill(color)
+                .frame(width: 64, height: 32)
+            Text(label)
+                .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
+                .foregroundStyle(galleryTokens.foreground.opacity(0.6))
+        }
+    }
 
     private var scalesSection: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.md) {
