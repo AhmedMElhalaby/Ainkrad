@@ -9,6 +9,7 @@ struct RootView: View {
     private var isOverlayPresented: Bool {
         environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
             || environment.isAppStorePresented || environment.isQuickAskPresented || environment.quitCoordinator.isConfirming
+            || environment.presentedOverlayAppID != nil
     }
 
     /// The app of the focused pane in the active workspace, so Settings can
@@ -86,6 +87,14 @@ struct RootView: View {
             if environment.quitCoordinator.isConfirming {
                 QuitConfirmationView()
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
+
+            if let id = environment.presentedOverlayAppID,
+               let app = environment.registry.allApps.first(where: { $0.id == id }) {
+                PluginOverlayView(app: app, tokens: environment.themeManager.tokens) {
+                    environment.presentedOverlayAppID = nil
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
         }
         .animation(.easeOut(duration: 0.16), value: isOverlayPresented)

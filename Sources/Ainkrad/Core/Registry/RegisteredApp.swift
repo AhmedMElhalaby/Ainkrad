@@ -20,6 +20,10 @@ struct RegisteredApp: Identifiable {
     let makeRootView: @MainActor () -> AnyView
     let makeSettingsView: @MainActor () -> AnyView
     let chromeFill: @MainActor () -> Color?
+    /// How the app's window should be presented (Slice 3): tiled into the
+    /// workspace layout (`.pane`, the default) or summoned as a floating
+    /// host overlay (`.overlay`) that auto-dismisses when any app opens.
+    var presentation: PluginPresentation = .pane
 }
 
 /// A bundle the loader skipped, surfaced for the later App Store UI.
@@ -50,7 +54,8 @@ extension RegisteredApp {
             // A built-in whose fill depends on host-side state the SDK
             // `chromeFill(host:)` can't see (e.g. the Assistant's appearance
             // store) supplies it here; otherwise fall back to the SDK path.
-            chromeFill: chromeFillOverride ?? { app.chromeFill(host: host) }
+            chromeFill: chromeFillOverride ?? { app.chromeFill(host: host) },
+            presentation: .pane
         )
     }
 }
