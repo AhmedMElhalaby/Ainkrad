@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 /// The floating-island hero artwork at the center of an empty workspace
 /// (AIN-107, "Living Island"). Renders the static painted artwork for the
@@ -42,5 +43,9 @@ struct FloatingIslandView: View {
         Image(imageName)
             .resizable()
             .scaledToFit()
+            // Subtle static HUD targeting frame around the hero — a single,
+            // easily-removable modifier; does not touch the artwork or any
+            // ambient-sky motion beneath it.
+            .cornerBrackets(length: 20, inset: 10)
     }
 }
