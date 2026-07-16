@@ -220,11 +220,11 @@ private struct FocusSwitcherRail: View {
                     chipContent(block, tokens: tokens)
                         .frame(width: 36, height: 36)
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
+                            ChamferShape(cut: AinkradRadius.sm)
                                 .fill(isFocused ? tokens.accentPrimary.opacity(0.16) : tokens.surface.opacity(0.6))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            ChamferShape(cut: AinkradRadius.sm)
                                 .strokeBorder(isFocused ? tokens.accentPrimary.opacity(0.5) : tokens.foreground.opacity(0.1), lineWidth: 1)
                         )
                         .overlay(
