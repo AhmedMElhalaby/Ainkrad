@@ -213,24 +213,21 @@ struct ComponentGalleryView: View {
             HStack(spacing: AinkradSpacing.md) {
                 VStack(spacing: 4) {
                     effectSamplePanel.scanlineOverlay(active: scanlineOn)
-                    Toggle("Scanline", isOn: $scanlineOn)
-                        .toggleStyle(.checkbox)
+                    AinkradCheckbox(isOn: $scanlineOn, label: "Scanline")
                         .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
                         .foregroundStyle(galleryTokens.foreground.opacity(0.7))
                 }
 
                 VStack(spacing: 4) {
                     effectSamplePanel.hexGridBackground(active: hexGridOn)
-                    Toggle("Hex Grid", isOn: $hexGridOn)
-                        .toggleStyle(.checkbox)
+                    AinkradCheckbox(isOn: $hexGridOn, label: "Hex Grid")
                         .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
                         .foregroundStyle(galleryTokens.foreground.opacity(0.7))
                 }
 
                 VStack(spacing: 4) {
                     effectSamplePanel.glowBloom(active: glowBloomOn)
-                    Toggle("Glow Bloom", isOn: $glowBloomOn)
-                        .toggleStyle(.checkbox)
+                    AinkradCheckbox(isOn: $glowBloomOn, label: "Glow Bloom")
                         .font(AinkradFontResolver.font(.caption, typography: galleryTypography))
                         .foregroundStyle(galleryTokens.foreground.opacity(0.7))
                 }
@@ -462,9 +459,11 @@ struct ComponentGalleryView: View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
             AinkradCaption("Chips, badges (all statuses), keyboard shortcuts")
             HStack(spacing: AinkradSpacing.md) {
-                AinkradChip(label: "Removable", systemName: "tag", onRemove: {
-                    wave2Chips.removeAll { $0 == "Removable" }
-                })
+                ForEach(wave2Chips, id: \.self) { chip in
+                    AinkradChip(label: chip, systemName: "tag", onRemove: {
+                        wave2Chips.removeAll { $0 == chip }
+                    })
+                }
                 AinkradChip(label: "Static")
             }
             HStack(spacing: AinkradSpacing.sm) {
