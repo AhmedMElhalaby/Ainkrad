@@ -40,6 +40,10 @@ struct AinkradHostApp: App {
                     fontFamilyName: environment.themeManager.uiFontFamily.fontName,
                     scale: environment.themeManager.uiFontScale.multiplier
                 ))
+                // AINKRAD-controlled motion, independent of the macOS Reduce
+                // Motion accessibility toggle — see GlobalSettings.uiReduceMotion.
+                // Default false = motion on.
+                .environment(\.ainkradReduceMotion, environment.generalSettingsStore.uiReduceMotion)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
