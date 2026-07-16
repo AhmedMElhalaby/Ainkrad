@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The App Store's per-app detail page (AIN-147): large icon, name, author,
 /// version, long description, screenshot gallery, links, and the primary
@@ -126,8 +127,8 @@ struct AppStoreDetailView: View {
                 }
             }
             .frame(width: 220, height: 140)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+            .clipShape(ChamferShape(cut: AinkradRadius.md))
+            .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .help("View full size")
@@ -135,11 +136,11 @@ struct AppStoreDetailView: View {
 
     private func screenshotBox(systemImage: String?, tint: Color) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated)
+            ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated)
             if let systemImage {
                 Image(systemName: systemImage).foregroundStyle(tint.opacity(0.7))
             } else {
-                ProgressView().controlSize(.small)
+                AinkradSpinner()
             }
         }
     }
