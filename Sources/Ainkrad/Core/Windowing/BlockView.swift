@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AinkradAppKit
 
 /// One pane: a floating, rounded panel over the sky — HUD header (neon
 /// tile art, Exo 2 title, magnify, styled ×) above the hosted app content.
@@ -102,11 +103,11 @@ struct BlockView: View {
                 .blur(radius: 26)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(ChamferShape(cut: AinkradRadius.md))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            ChamferShape(cut: AinkradRadius.md)
                 .strokeBorder(
-                    isFocused ? tokens.accentPrimary.opacity(0.55) : tokens.foreground.opacity(0.1),
+                    isFocused ? tokens.accentSecondary.opacity(0.55) : tokens.foreground.opacity(0.1),
                     lineWidth: 1
                 )
         )
@@ -116,7 +117,7 @@ struct BlockView: View {
                 .padding(-2)
         )
         .overlay(dropZoneHighlight(tokens: tokens))
-        .shadow(color: isFocused ? tokens.accentPrimary.opacity(0.28) : .black.opacity(0.25), radius: isFocused ? 22 : 12)
+        .modifier(PaneFocusGlow(isFocused: isFocused))
         .opacity(paneOpacity)
         .scaleEffect(paneScale)
         .contentShape(Rectangle())
@@ -155,10 +156,10 @@ struct BlockView: View {
         // if a stale `dropEdge` lingers from a pane the drag passed over.
         if let dropEdge, tileLayout.draggingBlockID != nil {
             let isHorizontal = dropEdge == .leading || dropEdge == .trailing
-            let zone = RoundedRectangle(cornerRadius: 10)
+            let zone = ChamferShape(cut: AinkradRadius.sm)
                 .fill(tokens.accentPrimary.opacity(0.16))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    ChamferShape(cut: AinkradRadius.sm)
                         .strokeBorder(tokens.accentSecondary.opacity(0.65), lineWidth: 1)
                 )
                 .overlay(
@@ -319,6 +320,20 @@ struct BlockView: View {
             app.makeRootView()
         } else {
             tokens.surface
+        }
+    }
+}
+
+/// Focused panes wear the shared Cardinal HUD panel glow; unfocused panes
+/// keep a calm contact shadow so the grid doesn't read as flat.
+private struct PaneFocusGlow: ViewModifier {
+    let isFocused: Bool
+
+    func body(content: Content) -> some View {
+        if isFocused {
+            content.ainkradPanelGlow()
+        } else {
+            content.shadow(color: .black.opacity(0.25), radius: 12)
         }
     }
 }
