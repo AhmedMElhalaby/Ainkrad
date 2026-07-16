@@ -55,6 +55,13 @@ struct ComponentGalleryView: View {
     @State private var wave4ConfirmDialogPresented = false
     @State private var wave4DestructiveConfirmDialogPresented = false
 
+    // MARK: Wave 5: Data · Overlays
+    @State private var wave5TableSort: AinkradTableSort? = nil
+    @State private var wave5ListRowSelection = "cpu-core-0"
+    @State private var wave5ModalPresented = false
+    @State private var wave5SheetPresented = false
+    @State private var wave5DrawerPresented = false
+
     private var galleryTokens: HostThemeTokens { HostThemeTokens(from: galleryTheme) }
     private var galleryStatusColors: AinkradStatusColors {
         AinkradStatusColors(
@@ -102,6 +109,7 @@ struct ComponentGalleryView: View {
                     wave2Section
                     wave3Section
                     wave4Section
+                    wave5Section
                 }
                 .padding(AinkradSpacing.lg)
             }
@@ -127,6 +135,42 @@ struct ComponentGalleryView: View {
             isDestructive: true,
             onConfirm: {}
         )
+        // Same "attach at the gallery ROOT" rationale as the confirm dialogs
+        // above — `.ainkradModal`/`.ainkradSheet`/`.ainkradDrawer` dim and
+        // scope to the entire gallery app surface, not a small inner box.
+        .ainkradModal(isPresented: $wave5ModalPresented) {
+            wave5OverlaySampleContent(
+                title: "Modal Title",
+                message: "Sample modal content, centered in the gallery app surface.",
+                dismiss: { wave5ModalPresented = false }
+            )
+        }
+        .ainkradSheet(isPresented: $wave5SheetPresented, edge: .bottom) {
+            wave5OverlaySampleContent(
+                title: "Sheet Title",
+                message: "Sample sheet content, sliding up from the bottom edge.",
+                dismiss: { wave5SheetPresented = false }
+            )
+        }
+        .ainkradDrawer(isPresented: $wave5DrawerPresented, edge: .leading) {
+            wave5OverlaySampleContent(
+                title: "Drawer Title",
+                message: "Sample drawer content, sliding in from the leading edge.",
+                dismiss: { wave5DrawerPresented = false }
+            )
+        }
+    }
+
+    private func wave5OverlaySampleContent(title: String, message: String, dismiss: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
+            Text(title)
+                .font(AinkradFontResolver.font(.headline, weight: .semibold, typography: galleryTypography))
+                .foregroundStyle(galleryTokens.foreground)
+            Text(message)
+                .font(AinkradFontResolver.font(.body, typography: galleryTypography))
+                .foregroundStyle(galleryTokens.foreground.opacity(0.8))
+            AinkradButton(title: "Close", style: .secondary, action: dismiss)
+        }
     }
 
     private var header: some View {
@@ -678,6 +722,155 @@ struct ComponentGalleryView: View {
         }
     }
 
+    // MARK: - Wave 5: Data · Overlays
+
+    private var wave5Section: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
+            AinkradSectionHeader(title: "Data · Overlays", subtitle: "Wave-5 Cardinal HUD components")
+
+            wave5ListRowsColumn
+            wave5StatRowsColumn
+            wave5IconGlyphRow
+            wave5DataTableSample
+            wave5MeterRow
+            wave5AppTileRow
+            wave5CodeBlockSample
+            wave5OverlayTriggersRow
+        }
+    }
+
+    private var wave5ListRowsColumn: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("List Row (selected, trailing badge, right-click first row for a CUSTOM context menu)")
+            VStack(spacing: AinkradSpacing.xs) {
+                AinkradListRow(
+                    isSelected: wave5ListRowSelection == "cpu-core-0",
+                    onTap: { wave5ListRowSelection = "cpu-core-0" },
+                    leading: { AinkradIconGlyph(systemName: "cpu", filled: true) },
+                    title: "cpu-core-0",
+                    subtitle: "4 threads · 3.2 GHz",
+                    trailing: { AinkradBadge(text: "Active", status: .success) }
+                )
+                .ainkradContextMenu([
+                    AinkradMenuItem(title: "Inspect", systemName: "magnifyingglass", action: {}),
+                    AinkradMenuItem(title: "Restart", systemName: "arrow.clockwise", action: {}),
+                    AinkradMenuItem(title: "Terminate", systemName: "xmark.octagon", isDestructive: true, action: {})
+                ])
+
+                AinkradListRow(
+                    isSelected: wave5ListRowSelection == "gpu-0",
+                    onTap: { wave5ListRowSelection = "gpu-0" },
+                    leading: { AinkradIconGlyph(systemName: "cpu.fill") },
+                    title: "gpu-0",
+                    subtitle: "Metal · 16 GB",
+                    trailing: { AinkradBadge(text: "Idle", status: .neutral) }
+                )
+
+                AinkradListRow(
+                    leading: { AinkradIconGlyph(systemName: "network") },
+                    title: "net-0",
+                    trailing: { AinkradBadge(text: "Warning", status: .warning) }
+                )
+            }
+        }
+    }
+
+    private var wave5StatRowsColumn: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Stat Row (per status)")
+            VStack(spacing: 2) {
+                AinkradStatRow(label: "Uptime", value: "14d 6h", status: .neutral)
+                AinkradStatRow(label: "Load Avg", value: "0.42", status: .success)
+                AinkradStatRow(label: "Temp", value: "78°C", status: .warning)
+            }
+        }
+    }
+
+    private var wave5IconGlyphRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Icon Glyph (outline & filled)")
+            HStack(spacing: AinkradSpacing.md) {
+                AinkradIconGlyph(systemName: "bolt")
+                AinkradIconGlyph(systemName: "bolt.fill", filled: true)
+                AinkradIconGlyph(systemName: "shield")
+                AinkradIconGlyph(systemName: "shield.fill", filled: true)
+                AinkradIconGlyph(systemName: "flame", size: 20)
+                AinkradIconGlyph(systemName: "flame.fill", size: 20, filled: true)
+            }
+        }
+    }
+
+    private var wave5TableRows: [GalleryProcessRow] {
+        [
+            GalleryProcessRow(id: "1", name: "agentd", cpu: "12.4", status: "Running"),
+            GalleryProcessRow(id: "2", name: "terminal-host", cpu: "3.1", status: "Running"),
+            GalleryProcessRow(id: "3", name: "indexer", cpu: "44.8", status: "Busy"),
+            GalleryProcessRow(id: "4", name: "sync-worker", cpu: "0.2", status: "Idle"),
+            GalleryProcessRow(id: "5", name: "watcher", cpu: "1.6", status: "Idle")
+        ]
+    }
+
+    private var wave5TableColumns: [AinkradTableColumn<GalleryProcessRow>] {
+        [
+            AinkradTableColumn(id: "name", title: "Process", cell: { $0.name }),
+            AinkradTableColumn(id: "cpu", title: "CPU %", alignment: .trailing, cell: { $0.cpu }),
+            AinkradTableColumn(id: "status", title: "Status", cell: { $0.status })
+        ]
+    }
+
+    private var wave5DataTableSample: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Data Table (click a header to sort)")
+            AinkradDataTable(rows: wave5TableRows, columns: wave5TableColumns, sort: $wave5TableSort)
+        }
+    }
+
+    private var wave5MeterRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Meter")
+            HStack(spacing: AinkradSpacing.lg) {
+                AinkradMeter(value: 0.42, label: "CPU")
+                AinkradMeter(value: 0.86, label: "Disk", kind: .status(.warning))
+            }
+        }
+    }
+
+    private var wave5AppTileRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("App Tile")
+            HStack(spacing: AinkradSpacing.md) {
+                AinkradAppTile(symbol: "terminal", title: "Terminal")
+                AinkradAppTile(symbol: "gearshape", title: "Settings", isSelected: true)
+            }
+        }
+    }
+
+    private var wave5CodeBlockSample: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Code Block")
+            AinkradCodeBlock(
+                """
+                func meterFraction(value: Double, total: Double) -> Double {
+                    guard total > 0 else { return 0 }
+                    return max(0, min(value / total, 1))
+                }
+                """,
+                language: "swift"
+            )
+        }
+    }
+
+    private var wave5OverlayTriggersRow: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            AinkradCaption("Modal, Sheet, Drawer — scoped to the gallery app surface (attached at panel root)")
+            HStack(spacing: AinkradSpacing.lg) {
+                AinkradButton(title: "Show Modal", style: .secondary) { wave5ModalPresented = true }
+                AinkradButton(title: "Show Sheet", style: .secondary) { wave5SheetPresented = true }
+                AinkradButton(title: "Show Drawer", style: .secondary) { wave5DrawerPresented = true }
+            }
+        }
+    }
+
     private func elevationSample(label: String, shadow: ShadowSpec) -> some View {
         VStack(spacing: 4) {
             RoundedRectangle(cornerRadius: AinkradRadius.sm)
@@ -709,6 +902,16 @@ struct ComponentGalleryView: View {
 /// still see the pre-host default, never the center the host renders from.
 /// A separate child view like this one, nested inside that same subtree, is
 /// the correct place to read it.
+/// Sample row for the Wave-5 `AinkradDataTable` demo — a fake process
+/// readout with a few text columns, matching the table's v1 text-cell-only
+/// contract.
+private struct GalleryProcessRow: Identifiable {
+    let id: String
+    let name: String
+    let cpu: String
+    let status: String
+}
+
 private struct FireToastButton: View {
     @Environment(\.ainkradToastCenter) private var center
 
