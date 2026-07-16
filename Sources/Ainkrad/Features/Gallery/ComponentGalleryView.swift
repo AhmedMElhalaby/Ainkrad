@@ -650,18 +650,14 @@ struct ComponentGalleryView: View {
     private var wave4ConfirmDialogRow: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
             AinkradCaption("Confirm Dialog (default & destructive) — centers in the gallery app surface")
-            VStack(spacing: AinkradSpacing.lg) {
-                HStack(spacing: AinkradSpacing.lg) {
-                    AinkradButton(title: "Confirm…", style: .secondary) {
-                        wave4ConfirmDialogPresented = true
-                    }
-                    AinkradButton(title: "Delete…", style: .danger) {
-                        wave4DestructiveConfirmDialogPresented = true
-                    }
+            HStack(spacing: AinkradSpacing.lg) {
+                AinkradButton(title: "Confirm…", style: .secondary) {
+                    wave4ConfirmDialogPresented = true
+                }
+                AinkradButton(title: "Delete…", style: .danger) {
+                    wave4DestructiveConfirmDialogPresented = true
                 }
             }
-            .frame(width: 320, height: 160)
-            .ainkradPanel()
         }
     }
 
