@@ -109,6 +109,24 @@ struct ComponentGalleryView: View {
         .ainkradPanel()
         .ainkradToastHost()
         .onKeyPress(.escape) { onDismiss(); return .handled }
+        // Attached at the gallery ROOT (the whole app surface), not a small
+        // inner box — demonstrates `.ainkradConfirmDialog`'s documented
+        // "attach at your app/surface root" usage: it dims and centers the
+        // dialog within the entire gallery app, not just one control.
+        .ainkradConfirmDialog(
+            isPresented: $wave4ConfirmDialogPresented,
+            title: "Confirm Action",
+            message: "Are you sure you want to proceed?",
+            onConfirm: {}
+        )
+        .ainkradConfirmDialog(
+            isPresented: $wave4DestructiveConfirmDialogPresented,
+            title: "Delete Item",
+            message: "This action cannot be undone.",
+            confirmTitle: "Delete",
+            isDestructive: true,
+            onConfirm: {}
+        )
     }
 
     private var header: some View {
@@ -631,7 +649,7 @@ struct ComponentGalleryView: View {
 
     private var wave4ConfirmDialogRow: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
-            AinkradCaption("Confirm Dialog (default & destructive) — scoped to this box, not the window")
+            AinkradCaption("Confirm Dialog (default & destructive) — centers in the gallery app surface")
             VStack(spacing: AinkradSpacing.lg) {
                 HStack(spacing: AinkradSpacing.lg) {
                     AinkradButton(title: "Confirm…", style: .secondary) {
@@ -644,20 +662,6 @@ struct ComponentGalleryView: View {
             }
             .frame(width: 320, height: 160)
             .ainkradPanel()
-            .ainkradConfirmDialog(
-                isPresented: $wave4ConfirmDialogPresented,
-                title: "Confirm Action",
-                message: "Are you sure you want to proceed?",
-                onConfirm: {}
-            )
-            .ainkradConfirmDialog(
-                isPresented: $wave4DestructiveConfirmDialogPresented,
-                title: "Delete Item",
-                message: "This action cannot be undone.",
-                confirmTitle: "Delete",
-                isDestructive: true,
-                onConfirm: {}
-            )
         }
     }
 
