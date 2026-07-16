@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The Settings overlay — the third summonable panel (⌘, or the Launcher's
 /// Settings entry), in the same HUD language as the Launcher and Workspace
@@ -297,14 +298,13 @@ struct SettingsOverlayView: View {
                     }
                     Spacer(minLength: 12)
                     HStack(spacing: 10) {
-                        Slider(
+                        AinkradSlider(
                             value: Binding(
                                 get: { appearance.surfaceOpacity(appID) },
                                 set: { appearance.setSurfaceOpacity(appID, $0) }
                             ),
                             in: 0.3...1.0
                         )
-                        .tint(tokens.accentPrimary)
                         .frame(width: 130)
                         Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
                             .font(AinkradFont.display(11))
@@ -313,7 +313,7 @@ struct SettingsOverlayView: View {
                     }
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
             }
 
             HStack(alignment: .top, spacing: 12) {
@@ -327,16 +327,15 @@ struct SettingsOverlayView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
-                NeonToggle(
+                AinkradToggle(
                     isOn: Binding(
                         get: { appearance.blurEnabled(appID) },
                         set: { appearance.setBlurEnabled(appID, $0) }
-                    ),
-                    tokens: tokens
+                    )
                 )
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         }
     }
 
