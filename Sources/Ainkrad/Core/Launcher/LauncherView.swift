@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 /// Four corner brackets — the targeting-cursor treatment for the selected
 /// Launcher row.
@@ -161,26 +162,17 @@ struct LauncherView: View {
     }
 
     private func rowView(_ row: AppRow, isSelected: Bool, tokens: DesignTokens) -> some View {
-        HStack(spacing: 12) {
-            tile(for: row, tokens: tokens)
-
-            Text(row.displayName)
-                .font(AinkradFont.display(14, weight: .medium))
-                .foregroundStyle(tokens.foreground.opacity(isSelected ? 1 : 0.75))
-
-            Spacer()
-
-            if isSelected {
-                Text("↩")
-                    .font(AinkradFont.mono(11))
-                    .foregroundStyle(tokens.accentSecondary.opacity(0.8))
+        AinkradListRow(
+            isSelected: isSelected,
+            leading: { tile(for: row, tokens: tokens) },
+            title: row.displayName,
+            trailing: {
+                if isSelected {
+                    Text("↩")
+                        .font(AinkradFont.mono(11))
+                        .foregroundStyle(tokens.accentSecondary.opacity(0.8))
+                }
             }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 48)
-        .background(
-            RoundedRectangle(cornerRadius: 9)
-                .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
         )
         .overlay(
             TargetingBrackets()
