@@ -12,7 +12,7 @@ import AinkradAppKit
 /// this pane to the full canvas.
 struct BlockView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let block: Block
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
