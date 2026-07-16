@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Settings → App Icon: manual picker for the running app's Dock icon.
 /// COLOR (Auto/Blue/Purple; Auto follows the theme) and APPEARANCE
@@ -20,12 +21,18 @@ struct AppIconSettingsView: View {
                 preview(store: store, tokens: tokens)
 
                 labeled("COLOR", tokens: tokens) {
-                    segmented(AppIconChoice.allCases, selected: store.choice, tokens: tokens,
-                              title: colorTitle, action: { store.selectColor($0) })
+                    AinkradSegmentedPicker(
+                        items: AppIconChoice.allCases,
+                        selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
+                        label: colorTitle
+                    )
                 }
                 labeled("APPEARANCE", tokens: tokens) {
-                    segmented(AppIconAppearance.allCases, selected: store.appearance, tokens: tokens,
-                              title: appearanceTitle, action: { store.selectAppearance($0) })
+                    AinkradSegmentedPicker(
+                        items: AppIconAppearance.allCases,
+                        selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),
+                        label: appearanceTitle
+                    )
                 }
             }
             .padding(18)
@@ -46,11 +53,11 @@ struct AppIconSettingsView: View {
                    let img = NSImage(contentsOf: url) {
                     Image(nsImage: img).resizable().scaledToFit()
                 } else {
-                    RoundedRectangle(cornerRadius: 20).fill(tokens.surfaceElevated)
+                    ChamferShape(cut: 20).fill(tokens.surfaceElevated)
                 }
             }
             .frame(width: 96, height: 96)
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .clipShape(ChamferShape(cut: 22))
             Spacer()
         }
     }
@@ -63,27 +70,6 @@ struct AppIconSettingsView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.45))
             content()
         }
-    }
-
-    private func segmented<T: Hashable>(_ items: [T], selected: T, tokens: DesignTokens,
-                                        title: @escaping (T) -> String, action: @escaping (T) -> Void) -> some View {
-        HStack(spacing: 6) {
-            ForEach(items, id: \.self) { item in
-                let isSel = item == selected
-                Button { action(item) } label: {
-                    Text(title(item))
-                        .font(AinkradFont.display(12, weight: isSel ? .medium : .regular))
-                        .foregroundStyle(isSel ? tokens.accentPrimary.contrastingText : tokens.foreground.opacity(0.75))
-                        .padding(.horizontal, 14).padding(.vertical, 6)
-                        .frame(maxWidth: .infinity)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(isSel ? tokens.accentPrimary.opacity(0.9) : tokens.surfaceElevated.opacity(0.5)))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tokens.accentPrimary.opacity(isSel ? 0 : 0.15), lineWidth: 1))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .animation(.easeOut(duration: 0.14), value: selected)
     }
 
     private func colorTitle(_ c: AppIconChoice) -> String {
