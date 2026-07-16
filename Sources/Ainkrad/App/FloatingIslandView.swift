@@ -43,9 +43,5 @@ struct FloatingIslandView: View {
         Image(imageName)
             .resizable()
             .scaledToFit()
-            // Subtle static HUD targeting frame around the hero — a single,
-            // easily-removable modifier; does not touch the artwork or any
-            // ambient-sky motion beneath it.
-            .cornerBrackets(length: 20, inset: 10)
     }
 }
