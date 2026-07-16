@@ -631,24 +631,26 @@ struct ComponentGalleryView: View {
 
     private var wave4ConfirmDialogRow: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
-            AinkradCaption("Confirm Dialog (default & destructive)")
-            HStack(spacing: AinkradSpacing.lg) {
-                AinkradButton(title: "Confirm…", style: .secondary) {
-                    wave4ConfirmDialogPresented = true
-                }
-                AinkradButton(title: "Delete…", style: .danger) {
-                    wave4DestructiveConfirmDialogPresented = true
+            AinkradCaption("Confirm Dialog (default & destructive) — scoped to this box, not the window")
+            VStack(spacing: AinkradSpacing.lg) {
+                HStack(spacing: AinkradSpacing.lg) {
+                    AinkradButton(title: "Confirm…", style: .secondary) {
+                        wave4ConfirmDialogPresented = true
+                    }
+                    AinkradButton(title: "Delete…", style: .danger) {
+                        wave4DestructiveConfirmDialogPresented = true
+                    }
                 }
             }
-        }
-        .overlay {
-            AinkradConfirmDialog(
+            .frame(width: 320, height: 160)
+            .ainkradPanel()
+            .ainkradConfirmDialog(
                 isPresented: $wave4ConfirmDialogPresented,
                 title: "Confirm Action",
                 message: "Are you sure you want to proceed?",
                 onConfirm: {}
             )
-            AinkradConfirmDialog(
+            .ainkradConfirmDialog(
                 isPresented: $wave4DestructiveConfirmDialogPresented,
                 title: "Delete Item",
                 message: "This action cannot be undone.",
