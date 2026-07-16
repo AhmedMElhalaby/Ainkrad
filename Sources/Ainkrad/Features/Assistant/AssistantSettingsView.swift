@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The Assistant's Settings surface (rendered inside the BUILT-IN APPS
 /// section of `SettingsOverlayView`): Connections (API keys), Model
@@ -93,7 +94,7 @@ struct AssistantSettingsView: View {
 
                 Button { testConnection(connection) } label: {
                     if testingIDs.contains(connection.id) {
-                        ProgressView().controlSize(.mini)
+                        AinkradSpinner(size: 14)
                     } else {
                         Image(systemName: "bolt.horizontal")
                             .font(.system(size: 12)).foregroundStyle(tokens.foreground.opacity(0.55))
@@ -122,22 +123,29 @@ struct AssistantSettingsView: View {
             .animation(.easeOut(duration: 0.14), value: hoveredConnectionID)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
         .onHover { hovering in hoveredConnectionID = hovering ? connection.id : nil }
     }
 
     private func addConnectionRow(tokens: DesignTokens) -> some View {
         let preset = newPreset
         return VStack(alignment: .leading, spacing: 8) {
-            menu(label: preset.displayName, tokens: tokens) {
-                ForEach(ProviderPreset.all) { p in
-                    Button(p.displayName) {
+            // Keyed on the preset `id` (String) — `ProviderPreset` isn't Hashable
+            // and lives out of task scope. The setter carries the exact
+            // preset/baseURL/displayName write-back the old Menu did.
+            AinkradSelect(
+                items: ProviderPreset.all.map(\.id),
+                selection: Binding(
+                    get: { newPreset.id },
+                    set: { id in
+                        let p = ProviderPreset.preset(id: id)
                         newPreset = p
                         newBaseURL = p.defaultBaseURL
                         if newDisplayName.isEmpty { newDisplayName = p.displayName }
                     }
-                }
-            }
+                ),
+                label: { ProviderPreset.preset(id: $0).displayName }
+            )
             .fixedSize()
 
             if preset.allowsBaseURLEdit {
@@ -159,7 +167,7 @@ struct AssistantSettingsView: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.3)))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.3)))
     }
 
     private func testConnection(_ connection: Connection) {
@@ -202,19 +210,31 @@ struct AssistantSettingsView: View {
                     .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
             } else {
                 labeled("CONNECTION", tokens: tokens) {
-                    menu(label: active?.displayName ?? "Select…", tokens: tokens) {
-                        ForEach(store.connections) { connection in
-                            Button(connection.displayName) { modelPicker.selectConnection(connection, environment) }
-                        }
-                    }
+                    // Keyed on connection `id` (UUID) — `Connection` isn't Hashable
+                    // and lives out of task scope. Setter preserves the exact
+                    // `selectConnection` write-back (switch + curated-model reset
+                    // + refresh). This branch is only reached when connections is
+                    // non-empty, so a connection always resolves.
+                    AinkradSelect(
+                        items: store.connections.map(\.id),
+                        selection: Binding(
+                            get: { active?.id ?? store.connections.first?.id ?? UUID() },
+                            set: { id in
+                                if let connection = store.connections.first(where: { $0.id == id }) {
+                                    modelPicker.selectConnection(connection, environment)
+                                }
+                            }
+                        ),
+                        label: { id in store.connections.first(where: { $0.id == id })?.displayName ?? "Select…" }
+                    )
                 }
                 labeled("MODEL", tokens: tokens) {
                     HStack(spacing: 8) {
-                        menu(label: configStore.current.model, tokens: tokens) {
-                            ForEach(modelPicker.modelOptions(for: active), id: \.self) { m in
-                                Button(m) { configStore.setModel(m) }
-                            }
-                        }
+                        AinkradSelect(
+                            items: modelPicker.modelOptions(for: active),
+                            selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
+                            label: { $0 }
+                        )
                         Button { if let c = active { modelPicker.refreshModels(for: c, environment) } } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
@@ -225,36 +245,16 @@ struct AssistantSettingsView: View {
                 }
                 if active?.kind == .claude {
                     labeled("EFFORT", tokens: tokens) {
-                        NeonSegmentedPicker(
+                        AinkradSegmentedPicker(
                             items: ["low", "medium", "high", "xhigh"],
                             selection: Binding(get: { configStore.current.effort }, set: { configStore.setEffort($0) }),
-                            label: { $0.capitalized }, tokens: tokens)
+                            label: { $0.capitalized })
                     }
                 }
             }
         }
         .onAppear { if let c = active { modelPicker.refreshModels(for: c, environment) } }
         .onChange(of: active?.id) { _, _ in if let c = active { modelPicker.refreshModels(for: c, environment) } }
-    }
-
-    /// A borderless neon dropdown label — the deseparatored menu style shared by
-    /// the CONNECTION/MODEL rows (no stroke; soft fill only).
-    private func menu<Content: View>(label: String, tokens: DesignTokens,
-                                     @ViewBuilder _ content: () -> Content) -> some View {
-        Menu {
-            content()
-        } label: {
-            HStack(spacing: 6) {
-                Text(label).font(AinkradFont.display(12, weight: .medium)).lineLimit(1)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.down").font(.system(size: 8))
-            }
-            .foregroundStyle(tokens.foreground.opacity(0.8))
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.45)))
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
     }
 
     // MARK: - Permissions
@@ -267,11 +267,11 @@ struct AssistantSettingsView: View {
             SettingsSectionHeader(title: "PERMISSIONS", tokens: tokens)
 
             labeled("DEFAULT MODE", tokens: tokens) {
-                menu(label: modeTitle(permissionStore.mode), tokens: tokens) {
-                    ForEach(AgentPermissionMode.allCases, id: \.self) { mode in
-                        Button(modeTitle(mode)) { permissionStore.setMode(mode) }
-                    }
-                }
+                AinkradSelect(
+                    items: AgentPermissionMode.allCases,
+                    selection: Binding(get: { permissionStore.mode }, set: { permissionStore.setMode($0) }),
+                    label: { modeTitle($0) }
+                )
             }
 
             permissionToggleRow(
@@ -301,7 +301,7 @@ struct AssistantSettingsView: View {
                                 .buttonStyle(.plain).help("Remove")
                             }
                             .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 9).fill(tokens.surfaceElevated.opacity(0.45)))
+                            .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
                         }
                         Button { permissionStore.clearAllowlist() } label: {
                             Text("Clear all")
@@ -325,10 +325,10 @@ struct AssistantSettingsView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.5))
             }
             Spacer(minLength: 12)
-            NeonToggle(isOn: isOn, tokens: tokens)
+            AinkradToggle(isOn: isOn)
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
     }
 
     private func modeTitle(_ mode: AgentPermissionMode) -> String {
@@ -375,16 +375,15 @@ struct AssistantSettingsView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.5))
             }
             Spacer(minLength: 12)
-            NeonToggle(
+            AinkradToggle(
                 isOn: Binding(
                     get: { store.isEnabled(kind: kind) },
                     set: { store.setEnabled($0, for: kind) }
-                ),
-                tokens: tokens
+                )
             )
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
     }
 
     private func labeled<Content: View>(_ title: String, tokens: DesignTokens,

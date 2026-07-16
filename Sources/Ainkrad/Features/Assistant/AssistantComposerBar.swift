@@ -1,9 +1,11 @@
 import SwiftUI
+import AinkradAppKit
 
-/// The Assistant composer: one seamless neon surface (soft elevated fill + a
-/// focus ring — the only stroke) with a bottom control strip holding the
-/// connection·model pill, the compact permission-mode menu, and send. Owns the
-/// draft binding shared with `AssistantRootView`.
+/// The Assistant composer: one seamless neon surface (soft elevated fill) with a
+/// bottom control strip holding the connection·model pill, the compact
+/// permission-mode select, and send. Owns the draft binding shared with
+/// `AssistantRootView`. The text field is `AinkradTextArea`, which carries its
+/// own chamfer focus ring.
 struct AssistantComposerBar: View {
     @Environment(AppEnvironment.self) private var environment
     let session: AgentSession
@@ -11,21 +13,13 @@ struct AssistantComposerBar: View {
     let modelPicker: AssistantModelPickerModel
     @Binding var draft: String
     var autoFocusOnAppear: Bool = false
-    @FocusState private var isFocused: Bool
 
     var body: some View {
         let isBusy = AssistantComposerBar.isBusy(session.state)
 
         return VStack(alignment: .leading, spacing: 8) {
-            TextField("Message Assistant…", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(AinkradFont.display(13))
-                .foregroundStyle(tokens.foreground)
-                .tint(tokens.accentSecondary)
-                .focused($isFocused)
+            AinkradTextArea(text: $draft, placeholder: "Message Assistant…")
                 .disabled(isBusy)
-                .lineLimit(1...6)
-                .onSubmit { send() }
 
             HStack(spacing: 8) {
                 AssistantConnectionModelPicker(
@@ -34,7 +28,7 @@ struct AssistantComposerBar: View {
                     onManageConnections: { environment.isSettingsPresented = true }
                 )
 
-                permissionModeMenu
+                permissionModeSelect
 
                 Spacer(minLength: 8)
 
@@ -48,48 +42,20 @@ struct AssistantComposerBar: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(tokens.surfaceElevated.opacity(0.45)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(tokens.accentSecondary.opacity(isFocused ? 0.5 : 0), lineWidth: 1)
-        )
-        .shadow(color: tokens.accentPrimary.opacity(isFocused ? 0.18 : 0), radius: 10)
-        .animation(.easeOut(duration: 0.16), value: isFocused)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         .padding(14)
-        .onAppear {
-            if autoFocusOnAppear { isFocused = true }
-        }
     }
 
-    private var permissionModeMenu: some View {
+    private var permissionModeSelect: some View {
         let store = environment.agentPermissionStore
-        return Menu {
-            ForEach(AgentPermissionMode.allCases, id: \.self) { mode in
-                Button { store.setMode(mode) } label: {
-                    if store.mode == mode {
-                        Label(AssistantComposerBar.title(mode), systemImage: "checkmark")
-                    } else {
-                        Text(AssistantComposerBar.title(mode))
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(AssistantComposerBar.dotColor(store.mode, tokens))
-                    .frame(width: 7, height: 7)
-                Text(AssistantComposerBar.title(store.mode))
-                    .font(AinkradFont.display(11, weight: .medium))
-                Image(systemName: "chevron.down").font(.system(size: 8))
-            }
-            .foregroundStyle(tokens.foreground.opacity(0.75))
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.45)))
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        // `AinkradSelect` is a single `Binding<T>` with no on-change hook, so the
+        // `store.setMode` write-back rides in the binding's setter.
+        return AinkradSelect(
+            items: AgentPermissionMode.allCases,
+            selection: Binding(get: { store.mode }, set: { store.setMode($0) }),
+            label: { AssistantComposerBar.title($0) }
+        )
         .fixedSize()
-        .animation(.easeOut(duration: 0.16), value: store.mode)
     }
 
     private func canSend(isBusy: Bool) -> Bool {
@@ -115,16 +81,6 @@ struct AssistantComposerBar: View {
         case .ask: return "Ask"
         case .autoApprove: return "Auto"
         case .fullAuto: return "Full-auto"
-        }
-    }
-
-    /// Dot color encodes the mode: Ask = accentSecondary, Auto = accentPrimary,
-    /// Full-auto = accentTertiary (the destructive-leaning accent).
-    static func dotColor(_ mode: AgentPermissionMode, _ tokens: DesignTokens) -> Color {
-        switch mode {
-        case .ask: return tokens.accentSecondary
-        case .autoApprove: return tokens.accentPrimary
-        case .fullAuto: return tokens.accentTertiary
         }
     }
 }
