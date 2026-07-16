@@ -1,5 +1,4 @@
 import SwiftUI
-import AinkradAppKit
 
 /// The empty workspace: the ambient sky shows through, with the floating
 /// island artwork, wordmark, and a HUD-style Launcher prompt at center.
