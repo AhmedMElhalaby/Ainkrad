@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AinkradAppKit
 
 /// One pane: a floating, rounded panel over the sky — HUD header (neon
 /// tile art, Exo 2 title, magnify, styled ×) above the hosted app content.
@@ -11,7 +12,7 @@ import UniformTypeIdentifiers
 /// this pane to the full canvas.
 struct BlockView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let block: Block
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
@@ -102,9 +103,9 @@ struct BlockView: View {
                 .blur(radius: 26)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(ChamferShape(cut: AinkradRadius.md))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            ChamferShape(cut: AinkradRadius.md)
                 .strokeBorder(
                     isFocused ? tokens.accentPrimary.opacity(0.55) : tokens.foreground.opacity(0.1),
                     lineWidth: 1
@@ -155,10 +156,10 @@ struct BlockView: View {
         // if a stale `dropEdge` lingers from a pane the drag passed over.
         if let dropEdge, tileLayout.draggingBlockID != nil {
             let isHorizontal = dropEdge == .leading || dropEdge == .trailing
-            let zone = RoundedRectangle(cornerRadius: 10)
+            let zone = ChamferShape(cut: AinkradRadius.sm)
                 .fill(tokens.accentPrimary.opacity(0.16))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    ChamferShape(cut: AinkradRadius.sm)
                         .strokeBorder(tokens.accentSecondary.opacity(0.65), lineWidth: 1)
                 )
                 .overlay(

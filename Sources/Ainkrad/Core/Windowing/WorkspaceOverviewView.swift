@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AinkradAppKit
 
 /// The ⌥Tab Workspace Overview — a master–detail workspace manager in the HUD
 /// language. Left: the workspace list (mini layout previews, rename, reorder,
@@ -48,7 +49,7 @@ struct WorkspaceOverviewView: View {
                     .overlay {
                         if let pendingDeletion {
                             ZStack {
-                                RoundedRectangle(cornerRadius: OverlayChrome.cornerRadius)
+                                ChamferShape(cut: OverlayChrome.cornerRadius)
                                     .fill(.black.opacity(0.5))
                                     .transition(.opacity)
                                 DeleteWorkspaceConfirmation(
@@ -210,12 +211,12 @@ struct WorkspaceOverviewView: View {
         }
         .padding(.horizontal, 9).padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            ChamferShape(cut: AinkradRadius.md)
                 .fill(isSelected ? tokens.accentPrimary.opacity(0.14)
                       : (isActive ? tokens.accentPrimary.opacity(0.06) : .clear))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            ChamferShape(cut: AinkradRadius.md)
                 .strokeBorder(isDropTarget ? tokens.accentSecondary.opacity(0.9)
                               : (isSelected ? tokens.accentPrimary.opacity(0.4) : .clear),
                               lineWidth: isDropTarget ? 1.5 : 1)
