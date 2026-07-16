@@ -107,7 +107,7 @@ struct BlockView: View {
         .overlay(
             ChamferShape(cut: AinkradRadius.md)
                 .strokeBorder(
-                    isFocused ? tokens.accentSecondary.opacity(0.55) : tokens.foreground.opacity(0.1),
+                    isFocused ? tokens.accentPrimary.opacity(0.55) : tokens.foreground.opacity(0.1),
                     lineWidth: 1
                 )
         )
@@ -117,7 +117,7 @@ struct BlockView: View {
                 .padding(-2)
         )
         .overlay(dropZoneHighlight(tokens: tokens))
-        .modifier(PaneFocusGlow(isFocused: isFocused))
+        .shadow(color: isFocused ? tokens.accentPrimary.opacity(0.28) : .black.opacity(0.25), radius: isFocused ? 22 : 12)
         .opacity(paneOpacity)
         .scaleEffect(paneScale)
         .contentShape(Rectangle())
@@ -320,20 +320,6 @@ struct BlockView: View {
             app.makeRootView()
         } else {
             tokens.surface
-        }
-    }
-}
-
-/// Focused panes wear the shared Cardinal HUD panel glow; unfocused panes
-/// keep a calm contact shadow so the grid doesn't read as flat.
-private struct PaneFocusGlow: ViewModifier {
-    let isFocused: Bool
-
-    func body(content: Content) -> some View {
-        if isFocused {
-            content.ainkradPanelGlow()
-        } else {
-            content.shadow(color: .black.opacity(0.25), radius: 12)
         }
     }
 }
