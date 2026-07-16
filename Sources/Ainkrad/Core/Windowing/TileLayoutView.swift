@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 private struct PaneResizesImmediatelyKey: EnvironmentKey {
     static let defaultValue = false
@@ -58,7 +59,7 @@ struct TileLayoutView: View {
 
                 if workspace.viewMode == .focus, tileLayout.blocks.count > 1 {
                     FocusSwitcherRail(workspace: workspace)
-                        .padding(.leading, 8)
+                        .padding(.leading, AinkradSpacing.sm)
                         // Only the rail fades in/out; the panes must NOT
                         // animate their size on a Focus toggle (that flood of
                         // intermediate resizes duplicates terminal output).
@@ -66,8 +67,8 @@ struct TileLayoutView: View {
                         .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
                 }
             }
-            .padding([.horizontal, .bottom], 10)
-            .padding(.top, 4)
+            .padding([.horizontal, .bottom], AinkradSpacing.sm)
+            .padding(.top, AinkradSpacing.xs)
         }
     }
 
@@ -76,7 +77,7 @@ struct TileLayoutView: View {
             // Always compute the normal split geometry. Focus Mode is handled
             // in the view (below) WITHOUT collapsing panes to zero size —
             // zero-resizing a terminal corrupts/duplicates its output.
-            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: 8, collapseTo: nil)
+            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: AinkradSpacing.sm, collapseTo: nil)
             let inFocus = workspace.viewMode == .focus && tileLayout.blocks.count > 1
             let focusedID = tileLayout.focusedBlockID
             let fullRect = CGRect(origin: .zero, size: proxy.size)
