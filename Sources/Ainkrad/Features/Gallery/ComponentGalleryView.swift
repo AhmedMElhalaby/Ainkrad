@@ -55,8 +55,6 @@ struct ComponentGalleryView: View {
     @State private var wave4ConfirmDialogPresented = false
     @State private var wave4DestructiveConfirmDialogPresented = false
 
-    @Environment(\.ainkradToastCenter) private var galleryToastCenter
-
     private var galleryTokens: HostThemeTokens { HostThemeTokens(from: galleryTheme) }
     private var galleryStatusColors: AinkradStatusColors {
         AinkradStatusColors(
@@ -609,9 +607,7 @@ struct ComponentGalleryView: View {
                     AinkradBanner(message: "\(String(describing: status).capitalized) banner message", status: status)
                 }
             }
-            AinkradButton(title: "Fire Toast", style: .secondary) {
-                galleryToastCenter.show("Sample toast message", status: .success)
-            }
+            FireToastButton()
         }
     }
 
@@ -699,6 +695,25 @@ struct ComponentGalleryView: View {
 
     private var radiusSamples: [(label: String, value: CGFloat)] {
         [("sm", AinkradRadius.sm), ("md", AinkradRadius.md), ("lg", AinkradRadius.lg), ("panel", AinkradRadius.panel)]
+    }
+}
+
+/// Reads `\.ainkradToastCenter` from its OWN position in the view tree (a
+/// genuine descendant of wherever `.ainkradToastHost()` is mounted), rather
+/// than at `ComponentGalleryView`'s level. A `@Environment` read only sees
+/// environment values set by a view's ANCESTORS — `.ainkradToastHost()` is
+/// mounted on `panel`, a child `ComponentGalleryView` builds in its own
+/// `body`, so `ComponentGalleryView` reading the environment on itself would
+/// still see the pre-host default, never the center the host renders from.
+/// A separate child view like this one, nested inside that same subtree, is
+/// the correct place to read it.
+private struct FireToastButton: View {
+    @Environment(\.ainkradToastCenter) private var center
+
+    var body: some View {
+        AinkradButton(title: "Fire Toast", style: .secondary) {
+            center.show("Sample toast message", status: .success)
+        }
     }
 }
 #endif
