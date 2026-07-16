@@ -55,7 +55,19 @@ private struct HUDPanelChrome: ViewModifier {
                 }
             }
             .clipShape(ChamferShape(cut: OverlayChrome.cornerRadius))
-            .ainkradEdgeRing(radius: OverlayChrome.cornerRadius)
+            // Accent border must follow the CHAMFER (the SDK `.ainkradEdgeRing`
+            // strokes a RoundedRectangle, which made overlays read as rounded
+            // despite the chamfer clip). Stroke the same ChamferShape so the
+            // frame reads as Cardinal HUD.
+            .overlay(
+                ChamferShape(cut: OverlayChrome.cornerRadius)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [tokens.accentSecondary.opacity(0.55),
+                                     tokens.accentPrimary.opacity(0.28)],
+                            startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1)
+            )
             .ainkradPanelGlow()
     }
 }
