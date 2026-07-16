@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The Assistant Block's content: a transcript bound to the host's single
 /// `AgentSession`, a collapsible "thinking" disclosure, and a composer. Reads
@@ -138,7 +139,7 @@ struct AssistantRootView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.9))
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    ChamferShape(cut: AinkradRadius.md)
                         .fill(isUser ? tokens.accentPrimary.opacity(0.18) : tokens.surfaceElevated.opacity(0.4))
                 )
                 .shadow(color: (isUser ? tokens.accentPrimary : tokens.accentSecondary).opacity(0.12), radius: 6)
@@ -181,7 +182,7 @@ struct AssistantRootView: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.4)))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.4)))
         .shadow(color: tokens.accentSecondary.opacity(0.1), radius: 6)
     }
 
@@ -215,7 +216,7 @@ struct AssistantRootView: View {
             .foregroundStyle(tokens.accentTertiary)
             .padding(.horizontal, 12).padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.accentTertiary.opacity(0.1)))
+            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentTertiary.opacity(0.1)))
             .shadow(color: tokens.accentTertiary.opacity(0.15), radius: 6)
     }
 
