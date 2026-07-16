@@ -199,7 +199,7 @@ struct SettingsOverlayView: View {
             .padding(.horizontal, 8)
             .frame(height: 38)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                ChamferShape(cut: AinkradRadius.md)
                     .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
             )
             .overlay(
