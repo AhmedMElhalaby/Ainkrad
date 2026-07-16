@@ -20,6 +20,10 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     /// Overlay panel background opacity + blur (Settings → Appearance).
     private(set) var overlayBackgroundOpacity: Double
     private(set) var overlayBlurEnabled: Bool
+    /// AINKRAD-controlled motion preference (independent of the macOS
+    /// system-level Reduce Motion toggle), injected into `\.ainkradReduceMotion`
+    /// at the host root. No settings UI yet — default false = motion on.
+    private(set) var uiReduceMotion: Bool
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
@@ -32,6 +36,7 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         self.soundEventEffects = settings.soundEventEffects
         self.overlayBackgroundOpacity = settings.overlayBackgroundOpacity
         self.overlayBlurEnabled = settings.overlayBlurEnabled
+        self.uiReduceMotion = settings.uiReduceMotion
     }
 
     func setOverlayBackgroundOpacity(_ value: Double) {

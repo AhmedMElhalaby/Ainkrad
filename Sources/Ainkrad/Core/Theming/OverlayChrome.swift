@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 /// Shared visual language for the summonable HUD overlays — Launcher,
 /// Settings, App Store, Workspace Overview, Quit. Centralizing the backdrop
@@ -7,7 +8,7 @@ import AppKit
 /// though each panel's content differs.
 enum OverlayChrome {
     /// Panel corner radius, shared by every overlay's outer frame.
-    static let cornerRadius: CGFloat = 14
+    static let cornerRadius: CGFloat = AinkradRadius.panel
     /// Opacity of the dimming scrim behind a summoned overlay.
     static let backdropOpacity: Double = 0.42
     /// Default panel background opacity (overridable in Settings → Appearance).

@@ -35,6 +35,11 @@ final class AppEnvironment {
     var isSettingsPresented = false
     var isAppStorePresented = false
     var isQuickAskPresented = false
+    #if DEBUG
+    /// Component Gallery — DEBUG-only, reachable via the Launcher's system
+    /// action row. Never compiled into release builds (AIN — Slice 1b Task 8).
+    var isComponentGalleryPresented = false
+    #endif
     /// The id of a `.overlay`-presentation plugin app currently summoned as a
     /// floating host overlay (Slice 3), or `nil` when none is shown. Cleared
     /// automatically when any app opens (see the launch-hub open handler in

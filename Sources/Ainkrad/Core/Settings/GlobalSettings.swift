@@ -47,6 +47,9 @@ struct GlobalSettings: PersistableDocument {
     var overlayBackgroundOpacity: Double = 0.94
     /// Frost the overlay panel with a blur material behind its tint.
     var overlayBlurEnabled: Bool = true
+    /// AINKRAD-controlled motion preference, independent of the macOS
+    /// system-level Reduce Motion toggle. Default false = motion on.
+    var uiReduceMotion: Bool = false
 
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
@@ -64,7 +67,8 @@ struct GlobalSettings: PersistableDocument {
          skyMotionSpeed: Double = 1.0,
          skyEffectEnabled: [String: Bool] = [:],
          overlayBackgroundOpacity: Double = 0.94,
-         overlayBlurEnabled: Bool = true) {
+         overlayBlurEnabled: Bool = true,
+         uiReduceMotion: Bool = false) {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
@@ -82,6 +86,7 @@ struct GlobalSettings: PersistableDocument {
         self.skyEffectEnabled = skyEffectEnabled
         self.overlayBackgroundOpacity = overlayBackgroundOpacity
         self.overlayBlurEnabled = overlayBlurEnabled
+        self.uiReduceMotion = uiReduceMotion
     }
 
     init(from decoder: Decoder) throws {
@@ -103,5 +108,6 @@ struct GlobalSettings: PersistableDocument {
         skyEffectEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .skyEffectEnabled) ?? [:]
         overlayBackgroundOpacity = try container.decodeIfPresent(Double.self, forKey: .overlayBackgroundOpacity) ?? 0.94
         overlayBlurEnabled = try container.decodeIfPresent(Bool.self, forKey: .overlayBlurEnabled) ?? true
+        uiReduceMotion = try container.decodeIfPresent(Bool.self, forKey: .uiReduceMotion) ?? false
     }
 }

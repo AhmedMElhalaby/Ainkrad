@@ -53,6 +53,11 @@ struct LauncherView: View {
     /// not a registered app, so it rides in the results as a system action.
     private static let settingsRowID = "settings"
     private static let appStoreRowID = "appStore"
+    #if DEBUG
+    /// DEBUG-only system action — never appears in a release build's
+    /// Launcher (Slice 1b Task 8).
+    private static let galleryRowID = "componentGallery"
+    #endif
 
     private var appRows: [AppRow] {
         var rows = store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
@@ -62,6 +67,11 @@ struct LauncherView: View {
         if store.query.isEmpty || fuzzyMatches(query: store.query, target: "App Store") {
             rows.append(AppRow(id: Self.appStoreRowID, displayName: "App Store", icon: "bag"))
         }
+        #if DEBUG
+        if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Component Gallery") {
+            rows.append(AppRow(id: Self.galleryRowID, displayName: "Component Gallery", icon: "swatchpalette"))
+        }
+        #endif
         return rows
     }
 
@@ -218,6 +228,14 @@ struct LauncherView: View {
             dismiss()
             return
         }
+
+        #if DEBUG
+        if row.id == Self.galleryRowID {
+            environment.isComponentGalleryPresented = true
+            dismiss()
+            return
+        }
+        #endif
 
         guard let app = store.appResults.first(where: { $0.id == row.id }) else { return }
         store.selectApp(app)
