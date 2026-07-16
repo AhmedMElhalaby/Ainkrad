@@ -152,7 +152,7 @@ struct AppStoreOverlayView: View {
                             .foregroundStyle(tokens.foreground.opacity(0.6))
                     }
                 default:
-                    ProgressView().controlSize(.large)
+                    AinkradSpinner(size: 36)
                 }
             }
             .padding(48)
@@ -231,9 +231,9 @@ struct AppStoreOverlayView: View {
     private func filterBar(tokens: DesignTokens) -> some View {
         let updateCount = store.rows.filter { $0.status == .updateAvailable }.count
         return HStack(spacing: 8) {
-            chip("All", .all, tokens: tokens)
-            chip("Installed", .installed, tokens: tokens)
-            chip(updateCount > 0 ? "Updates (\(updateCount))" : "Updates", .updates, tokens: tokens)
+            AinkradSegmentedPicker(items: AppStoreStore.Filter.allCases, selection: $store.filter) { filter in
+                filterLabel(filter, updateCount: updateCount)
+            }
             searchField(tokens: tokens)
             Spacer()
             if let error = store.error {
@@ -272,15 +272,12 @@ struct AppStoreOverlayView: View {
         .overlay(ChamferShape(cut: AinkradRadius.sm).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
     }
 
-    private func chip(_ title: String, _ value: AppStoreStore.Filter, tokens: DesignTokens) -> some View {
-        let selected = store.filter == value
-        return Button { store.filter = value } label: {
-            Text(title).font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(Capsule().fill(selected ? tokens.accentPrimary.opacity(0.2) : tokens.surface.opacity(0.6)))
-                .overlay(Capsule().strokeBorder(selected ? tokens.accentPrimary.opacity(0.5) : .clear, lineWidth: 1))
-                .foregroundStyle(selected ? tokens.foreground : tokens.foreground.opacity(0.6))
-        }.buttonStyle(.plain)
+    private func filterLabel(_ filter: AppStoreStore.Filter, updateCount: Int) -> String {
+        switch filter {
+        case .all: return "All"
+        case .installed: return "Installed"
+        case .updates: return updateCount > 0 ? "Updates (\(updateCount))" : "Updates"
+        }
     }
 
     @ViewBuilder private func content(tokens: DesignTokens) -> some View {

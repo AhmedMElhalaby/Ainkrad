@@ -6,7 +6,7 @@ import Observation
 @MainActor
 @Observable
 final class AppStoreStore {
-    enum Filter: Equatable { case all, installed, updates }
+    enum Filter: CaseIterable, Hashable { case all, installed, updates }
 
     var filter: Filter = .all
     /// Live search over `rows`, composed with `filter` (AIN-148). Client-side
