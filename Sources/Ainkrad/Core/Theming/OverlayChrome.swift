@@ -36,9 +36,9 @@ struct VisualEffectBlur: NSViewRepresentable {
 }
 
 /// The shared panel finish: a (settings-driven) translucent + optionally
-/// blurred background, rounded clip, a top-to-bottom gradient border stroke,
-/// and the two-layer glow/contact shadow. Applied to each overlay's outermost
-/// panel container. Reads the overlay opacity/blur settings live.
+/// blurred background, chamfered clip, and the Cardinal HUD edge-ring +
+/// panel glow. Applied to each overlay's outermost panel container. Reads
+/// the overlay opacity/blur settings live.
 private struct HUDPanelChrome: ViewModifier {
     let tokens: DesignTokens
     @Environment(AppEnvironment.self) private var environment
@@ -54,20 +54,9 @@ private struct HUDPanelChrome: ViewModifier {
                     tokens.background.opacity(store.overlayBackgroundOpacity)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: OverlayChrome.cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: OverlayChrome.cornerRadius)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [tokens.accentSecondary.opacity(0.55), tokens.accentPrimary.opacity(0.25)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: tokens.accentPrimary.opacity(0.35), radius: 42)
-            .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+            .clipShape(ChamferShape(cut: OverlayChrome.cornerRadius))
+            .ainkradEdgeRing(radius: OverlayChrome.cornerRadius)
+            .ainkradPanelGlow()
     }
 }
 
