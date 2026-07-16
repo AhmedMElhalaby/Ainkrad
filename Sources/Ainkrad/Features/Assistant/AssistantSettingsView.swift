@@ -7,6 +7,7 @@ import AinkradAppKit
 /// opt-outs).
 struct AssistantSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     @State private var newPreset: ProviderPreset = ProviderPreset.preset(id: "openai")
     @State private var newBaseURL: String = ProviderPreset.preset(id: "openai").defaultBaseURL
@@ -120,7 +121,7 @@ struct AssistantSettingsView: View {
                 .buttonStyle(.plain)
             }
             .opacity(hoveredConnectionID == connection.id ? 1 : 0.35)
-            .animation(.easeOut(duration: 0.14), value: hoveredConnectionID)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hoveredConnectionID)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))

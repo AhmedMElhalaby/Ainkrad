@@ -7,6 +7,7 @@ import AinkradAppKit
 /// sections) rather than going through `HostServices`.
 struct AssistantRootView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     var showsHeader: Bool = true
     var autoFocusComposer: Bool = false
     @State private var draft = ""
@@ -101,7 +102,7 @@ struct AssistantRootView: View {
             }
             .scrollContentBackground(.hidden)
             .onChange(of: session.messages.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("streaming", anchor: .bottom) }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { proxy.scrollTo("streaming", anchor: .bottom) }
             }
             .onChange(of: session.streamingText) { _, _ in
                 proxy.scrollTo("streaming", anchor: .bottom)
@@ -227,6 +228,7 @@ private struct HoverNewChatButton: View {
     let tokens: DesignTokens
     let action: () -> Void
     @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -239,6 +241,6 @@ private struct HoverNewChatButton: View {
         .buttonStyle(.plain)
         .help("New chat")
         .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.14), value: isHovering)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovering)
     }
 }

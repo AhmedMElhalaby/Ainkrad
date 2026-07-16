@@ -8,6 +8,7 @@ import AinkradAppKit
 /// — Direction.md.
 struct SettingsOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let onDismiss: () -> Void
 
     @State private var selection: SettingsSection
@@ -210,7 +211,7 @@ struct SettingsOverlayView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
     }
 
     /// App rows use the neon tile artwork (Launcher-matching); fixed sections
