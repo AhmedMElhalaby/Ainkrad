@@ -44,6 +44,7 @@ struct AinkradHostApp: App {
                 // Motion accessibility toggle — see GlobalSettings.uiReduceMotion.
                 // Default false = motion on.
                 .environment(\.ainkradReduceMotion, environment.generalSettingsStore.uiReduceMotion)
+                .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
