@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// One catalog/app card: icon, name, version line, description, and a trailing
 /// action area driven by `row.status` + whether it is busy. Tapping the
@@ -6,9 +7,11 @@ import SwiftUI
 /// actions row below is excluded so Install/Update/Uninstall/enable taps
 /// don't also trigger navigation. The actions themselves live in the shared
 /// `AppStoreActionControls` (AIN-149) so the grid card and the detail page
-/// never diverge. On hover the card lifts slightly and its border brightens
-/// — skipped under Reduce Motion, though the hover state itself still
-/// tracks instantly.
+/// never diverge. The chamfer, hover glow, and border-brighten (skipped
+/// under Reduce Motion) all come from `AinkradCard` — this view only wires
+/// the open-vs-actions hit split on top of it: `AinkradCard`'s own `onTap`
+/// is left `nil` so the whole card never routes taps, and `onOpen` is
+/// attached only to the content sub-area above the actions row.
 struct AppStoreCard: View {
     let row: AppStoreRow
     let tokens: DesignTokens
@@ -19,51 +22,38 @@ struct AppStoreCard: View {
     let onUninstall: () -> Void
     let onToggleEnabled: (Bool) -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        AinkradCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    NeonAppTile(symbol: row.icon, tokens: tokens, size: 30)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(row.displayName)
-                            .font(AinkradFont.display(13, weight: .medium))
-                            .foregroundStyle(tokens.foreground)
-                        Text(versionLine)
-                            .font(.system(size: 10))
-                            .foregroundStyle(tokens.foreground.opacity(0.5))
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        NeonAppTile(symbol: row.icon, tokens: tokens, size: 30)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(row.displayName)
+                                .font(AinkradFont.display(13, weight: .medium))
+                                .foregroundStyle(tokens.foreground)
+                            Text(versionLine)
+                                .font(.system(size: 10))
+                                .foregroundStyle(tokens.foreground.opacity(0.5))
+                        }
+                        Spacer()
+                        if row.status == .updateAvailable { badge("UPDATE") }
+                        else if isDevPlugin { badge("DEV") }
                     }
-                    Spacer()
-                    if row.status == .updateAvailable { badge("UPDATE") }
-                    else if isDevPlugin { badge("DEV") }
+
+                    Text(row.description.isEmpty ? " " : row.description)
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.7))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onOpen)
 
-                Text(row.description.isEmpty ? " " : row.description)
-                    .font(.system(size: 11))
-                    .foregroundStyle(tokens.foreground.opacity(0.7))
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                AppStoreActionControls(
+                    row: row, tokens: tokens, isBusy: isBusy,
+                    onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
             }
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onOpen)
-
-            AppStoreActionControls(
-                row: row, tokens: tokens, isBusy: isBusy,
-                onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surface.opacity(0.9)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(tokens.foreground.opacity(isHovering ? 0.22 : 0.1), lineWidth: 1)
-        )
-        .shadow(color: tokens.accentPrimary.opacity(isHovering ? 0.22 : 0), radius: 14)
-        .scaleEffect(isHovering && !reduceMotion ? 1.01 : 1.0)
-        .onHover { hovering in
-            guard !reduceMotion else { isHovering = hovering; return }
-            withAnimation(.easeOut(duration: 0.18)) { isHovering = hovering }
         }
     }
 

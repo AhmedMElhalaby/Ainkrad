@@ -1,10 +1,11 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The App Store HUD overlay — browse the catalog and install / update /
 /// uninstall / enable apps. Same HUD language as the Launcher / Settings.
 struct AppStoreOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     @Bindable var store: AppStoreStore
     let onDismiss: () -> Void
 
@@ -62,23 +63,15 @@ struct AppStoreOverlayView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
                     Spacer()
-                    Button("Cancel") { store.cancelReinstall() }
-                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
-                        .foregroundStyle(tokens.foreground.opacity(0.6))
-                    Button("Reset to Defaults") { Task { await store.resetAndInstall(appID) } }
-                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
-                        .foregroundStyle(tokens.accentTertiary)
-                    Button("Restore") { Task { await store.restoreAndInstall(appID) } }
-                        .buttonStyle(AppStorePressableButtonStyle(reduceMotion: reduceMotion))
-                        .padding(.horizontal, 12).padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(tokens.accentPrimary.opacity(0.9)))
-                        .foregroundStyle(tokens.accentPrimary.contrastingText)
+                    AinkradButton(title: "Cancel", style: .ghost) { store.cancelReinstall() }
+                    AinkradButton(title: "Reset to Defaults", style: .secondary) { Task { await store.resetAndInstall(appID) } }
+                    AinkradButton(title: "Restore", style: .primary) { Task { await store.restoreAndInstall(appID) } }
                 }
             }
             .padding(20)
             .frame(width: 380)
-            .background(RoundedRectangle(cornerRadius: 12).fill(tokens.surface))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(tokens.accentPrimary.opacity(0.4), lineWidth: 1))
+            .background(ChamferShape(cut: AinkradRadius.panel).fill(tokens.surface))
+            .overlay(ChamferShape(cut: AinkradRadius.panel).strokeBorder(tokens.accentPrimary.opacity(0.4), lineWidth: 1))
             .shadow(color: .black.opacity(0.5), radius: 24, y: 8)
         }
         .onKeyPress(.escape) { store.cancelReinstall(); return .handled }
@@ -159,7 +152,7 @@ struct AppStoreOverlayView: View {
                             .foregroundStyle(tokens.foreground.opacity(0.6))
                     }
                 default:
-                    ProgressView().controlSize(.large)
+                    AinkradSpinner(size: 36)
                 }
             }
             .padding(48)
@@ -238,9 +231,9 @@ struct AppStoreOverlayView: View {
     private func filterBar(tokens: DesignTokens) -> some View {
         let updateCount = store.rows.filter { $0.status == .updateAvailable }.count
         return HStack(spacing: 8) {
-            chip("All", .all, tokens: tokens)
-            chip("Installed", .installed, tokens: tokens)
-            chip(updateCount > 0 ? "Updates (\(updateCount))" : "Updates", .updates, tokens: tokens)
+            AinkradSegmentedPicker(items: AppStoreStore.Filter.allCases, selection: $store.filter) { filter in
+                filterLabel(filter, updateCount: updateCount)
+            }
             searchField(tokens: tokens)
             Spacer()
             if let error = store.error {
@@ -275,26 +268,22 @@ struct AppStoreOverlayView: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 5)
         .frame(width: 200)
-        .background(RoundedRectangle(cornerRadius: 7).fill(tokens.surface.opacity(0.6)))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surface.opacity(0.6)))
+        .overlay(ChamferShape(cut: AinkradRadius.sm).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
     }
 
-    private func chip(_ title: String, _ value: AppStoreStore.Filter, tokens: DesignTokens) -> some View {
-        let selected = store.filter == value
-        return Button { store.filter = value } label: {
-            Text(title).font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(Capsule().fill(selected ? tokens.accentPrimary.opacity(0.2) : tokens.surface.opacity(0.6)))
-                .overlay(Capsule().strokeBorder(selected ? tokens.accentPrimary.opacity(0.5) : .clear, lineWidth: 1))
-                .foregroundStyle(selected ? tokens.foreground : tokens.foreground.opacity(0.6))
-        }.buttonStyle(.plain)
+    private func filterLabel(_ filter: AppStoreStore.Filter, updateCount: Int) -> String {
+        switch filter {
+        case .all: return "All"
+        case .installed: return "Installed"
+        case .updates: return updateCount > 0 ? "Updates (\(updateCount))" : "Updates"
+        }
     }
 
     @ViewBuilder private func content(tokens: DesignTokens) -> some View {
         let rows = store.visibleRows
         if rows.isEmpty {
-            VStack { Spacer(); Text(emptyText).font(.system(size: 13)).foregroundStyle(tokens.foreground.opacity(0.5)); Spacer() }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            AinkradEmptyState(icon: emptyIcon, title: emptyTitle, message: emptyText)
         } else {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 12) {
@@ -320,6 +309,26 @@ struct AppStoreOverlayView: View {
         case .all: return "No apps available — check back later."
         case .installed: return "Nothing installed yet."
         case .updates: return "Everything is up to date."
+        }
+    }
+
+    private var emptyTitle: String {
+        let trimmedQuery = store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedQuery.isEmpty { return "No Matches" }
+        switch store.filter {
+        case .all: return "No Apps"
+        case .installed: return "Nothing Installed"
+        case .updates: return "Up to Date"
+        }
+    }
+
+    private var emptyIcon: String {
+        let trimmedQuery = store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedQuery.isEmpty { return "magnifyingglass" }
+        switch store.filter {
+        case .all: return "square.grid.2x2"
+        case .installed: return "shippingbox"
+        case .updates: return "checkmark.seal"
         }
     }
 
