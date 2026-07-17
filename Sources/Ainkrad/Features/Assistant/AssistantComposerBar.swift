@@ -18,7 +18,7 @@ struct AssistantComposerBar: View {
         let isBusy = AssistantComposerBar.isBusy(session.state)
 
         return VStack(alignment: .leading, spacing: 8) {
-            AinkradTextArea(text: $draft, placeholder: "Message Assistant…")
+            AinkradTextArea(text: $draft, placeholder: "Message Assistant…", autoFocus: autoFocusOnAppear)
                 .disabled(isBusy)
 
             HStack(spacing: 8) {
