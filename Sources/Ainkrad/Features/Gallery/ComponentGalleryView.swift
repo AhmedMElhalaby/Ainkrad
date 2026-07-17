@@ -29,7 +29,7 @@ struct ComponentGalleryView: View {
     @State private var wave2Chips = ["Removable", "Draft"]
 
     // MARK: Wave 3: Inputs · Forms
-    @State private var wave3SelectSelection = "Option A"
+    @State private var wave3SelectSelection = "California"
     @State private var wave3MultiSelectSelection: Set<String> = ["Option A"]
     @State private var wave3ComboboxSelection: String?
     @State private var wave3ComboboxText = ""
@@ -513,21 +513,28 @@ struct ComponentGalleryView: View {
 
     private var wave3SelectionRow: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
-            AinkradCaption("Select, MultiSelect, Combobox, SearchableSelect (custom dropdowns)")
+            AinkradCaption("Select, MultiSelect, Combobox, SearchableSelect — dropdowns now ALWAYS search; panel width ≥ field width")
             HStack(alignment: .top, spacing: AinkradSpacing.md) {
-                AinkradSelect(items: wave3SampleItems, selection: $wave3SelectSelection) { $0 }
+                // Wide field + long list: opening it shows the search field and
+                // a panel floored to this 260pt field width.
+                AinkradSelect(items: wave3SearchableSelectItems, selection: $wave3SelectSelection) { $0 }
+                    .frame(width: 260)
                 AinkradMultiSelect(items: wave3SampleItems, selection: $wave3MultiSelectSelection) { $0 }
                 AinkradCombobox(
                     items: wave3SampleItems,
                     selection: $wave3ComboboxSelection,
                     text: $wave3ComboboxText
                 ) { $0 }
+                // Narrow field: panel floors to this 110pt width (content wider
+                // than that still wins), and AinkradSearchableSelect is now just
+                // an alias of the always-searchable AinkradSelect.
                 AinkradSearchableSelect(
                     items: wave3SearchableSelectItems,
                     selection: $wave3SearchableSelectSelection,
                     label: { $0 },
                     placeholder: "Search states…"
                 )
+                .frame(width: 110)
             }
         }
     }
