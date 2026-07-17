@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The ONE home for the Assistant's connection+model selection logic, previously
 /// duplicated in `AssistantRootView` and `AssistantSettingsView`. Consumers hold
@@ -72,59 +73,85 @@ final class AssistantModelPickerModel {
     }
 }
 
-/// The composer's connection·model pill: a single menu grouped by connection,
-/// each connection a submenu of its (discovered or curated) models. Selecting a
-/// model switches connection + model together. A trailing "Manage connections…"
-/// item opens Assistant settings. Seamless — no border, only a soft fill.
+/// The composer's connection·model picker: ONE searchable select (never a
+/// nested `Menu`) whose options are `(connection, model)` pairs rendered
+/// "Connection · Model", plus a trailing "Manage connections…" sentinel.
+/// Selecting a pair switches connection + model together; the sentinel opens
+/// Assistant settings WITHOUT mutating the selection. Seamless — the kit
+/// control carries its own chamfer chrome.
 struct AssistantConnectionModelPicker: View {
     @Environment(AppEnvironment.self) private var environment
     let model: AssistantModelPickerModel
     let tokens: DesignTokens
     var onManageConnections: () -> Void
 
+    /// The flattened option space: a real connection+model pair, the "Manage
+    /// connections…" sentinel, or an empty placeholder when no connection exists.
+    private enum Option: Hashable {
+        case pair(connection: UUID, model: String)
+        case manage
+        case empty
+    }
+
+    private static let manageLabel = "Manage connections…"
+
     var body: some View {
         let connections = environment.connectionStore.connections
         let active = model.activeConnection(environment)
-        let currentModel = environment.agentConfigStore.current.model
 
-        Menu {
-            if connections.isEmpty {
-                Text("No connections")
-            } else {
-                ForEach(connections) { connection in
-                    Menu(connection.displayName) {
-                        ForEach(model.modelOptions(for: connection), id: \.self) { m in
-                            Button {
-                                model.selectConnectionModel(connection, model: m, environment)
-                            } label: {
-                                if connection.id == active?.id && m == currentModel {
-                                    Label(m, systemImage: "checkmark")
-                                } else {
-                                    Text(m)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Divider()
-            Button("Manage connections…") { onManageConnections() }
-        } label: {
-            HStack(spacing: 5) {
-                Text(active?.displayName ?? "No connection")
-                    .font(AinkradFont.display(11, weight: .medium))
-                Text("·").foregroundStyle(tokens.foreground.opacity(0.35))
-                Text(currentModel).font(AinkradFont.mono(11))
-                Image(systemName: "chevron.down").font(.system(size: 8))
-            }
-            .foregroundStyle(tokens.foreground.opacity(0.75))
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(0.45)))
+        var options: [Option] = connections.flatMap { connection in
+            model.modelOptions(for: connection).map { Option.pair(connection: connection.id, model: $0) }
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        options.append(.manage)
+
+        return AinkradSearchableSelect(
+            items: options,
+            selection: selectionBinding(active: active),
+            label: label,
+            placeholder: "Search connections & models…"
+        )
         .fixedSize()
         .onAppear { if let c = active { model.refreshModels(for: c, environment) } }
         .onChange(of: active?.id) { _, _ in if let c = active { model.refreshModels(for: c, environment) } }
+    }
+
+    /// Maps the store's live selection to the matching pair (or `.empty`) for the
+    /// getter, and routes the setter: a real pair → `selectConnectionModel`; the
+    /// sentinel → `onManageConnections()` with NO model mutation (the computed
+    /// getter re-reads the unchanged store, so the trigger label reverts on its
+    /// own). The getter never crashes when the current model isn't yet in the
+    /// discovered list — it still resolves a "Connection · Model" label.
+    private func selectionBinding(active: Connection?) -> Binding<Option> {
+        Binding(
+            get: {
+                guard let active else { return .empty }
+                return .pair(connection: active.id, model: environment.agentConfigStore.current.model)
+            },
+            set: { option in
+                switch option {
+                case .pair(let connectionID, let modelName):
+                    if let connection = environment.connectionStore.connections.first(where: { $0.id == connectionID }) {
+                        model.selectConnectionModel(connection, model: modelName, environment)
+                    }
+                case .manage:
+                    onManageConnections()
+                case .empty:
+                    break
+                }
+            }
+        )
+    }
+
+    private func label(_ option: Option) -> String {
+        switch option {
+        case .empty:
+            return "No connection"
+        case .manage:
+            return AssistantConnectionModelPicker.manageLabel
+        case .pair(let connectionID, let modelName):
+            let name = environment.connectionStore.connections
+                .first(where: { $0.id == connectionID })?.displayName ?? "Connection"
+            return "\(name) · \(modelName)"
+        }
     }
 }

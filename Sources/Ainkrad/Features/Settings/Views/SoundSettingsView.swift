@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Settings → Sound: the sound-effects master toggle + volume (AIN-108) and
 /// per-event cue configuration. Split out of General into its own section so
@@ -59,36 +60,22 @@ struct SoundSettingsView: View {
 
             Spacer(minLength: 12)
 
-            Menu {
-                ForEach(UISound.allCases) { effect in
-                    Button {
-                        store.setEffect(effect, for: event)
-                        environment.sounds.preview(effect)
-                    } label: {
-                        if effect == chosen {
-                            Label(effectLabel(effect, for: event), systemImage: "checkmark")
-                        } else {
-                            Text(effectLabel(effect, for: event))
-                        }
+            // Effect chooser as a HUD popover. The custom binding preserves both
+            // the store write-back AND the on-change preview side-effect that the
+            // native menu fired per item tap (AinkradSelect is a pure Binding<T>).
+            AinkradSelect(
+                items: UISound.allCases,
+                selection: Binding(
+                    get: { chosen },
+                    set: { newEffect in
+                        store.setEffect(newEffect, for: event)
+                        environment.sounds.preview(newEffect)
                     }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Text(effectLabel(chosen, for: event))
-                        .font(AinkradFont.display(11))
-                        .lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
-                }
-                .foregroundStyle(tokens.foreground.opacity(isOn ? 0.75 : 0.4))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(tokens.surfaceElevated.opacity(0.9)))
-                .overlay(Capsule().strokeBorder(tokens.accentPrimary.opacity(0.2), lineWidth: 1))
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
+                ),
+                label: { effectLabel($0, for: event) }
+            )
             .fixedSize()
+            .opacity(isOn ? 1 : 0.55)
 
             Button {
                 environment.sounds.preview(chosen)
@@ -100,12 +87,12 @@ struct SoundSettingsView: View {
             .buttonStyle(.plain)
             .help("Preview")
 
-            NeonToggle(isOn: Binding(get: { isOn }, set: { store.setEventEnabled($0, for: event) }), tokens: tokens)
+            AinkradToggle(isOn: Binding(get: { isOn }, set: { store.setEventEnabled($0, for: event) }))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }
 
     /// Chooser labels: the event's own sound reads as "Default (name)" so the
@@ -123,22 +110,21 @@ struct SoundSettingsView: View {
                 Image(systemName: "speaker.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(tokens.foreground.opacity(0.5))
-                Slider(
+                AinkradSlider(
                     value: Binding(
                         get: { store.soundVolume },
                         set: { store.setSoundVolume($0) }
                     ),
                     in: 0...1
                 )
-                .tint(tokens.accentPrimary)
                 Image(systemName: "speaker.wave.3.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(tokens.foreground.opacity(0.5))
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }
 
     private func row(tokens: DesignTokens, title: String, subtitle: String,
@@ -153,10 +139,10 @@ struct SoundSettingsView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.5))
             }
             Spacer(minLength: 12)
-            NeonToggle(isOn: Binding(get: { isOn }, set: action), tokens: tokens)
+            AinkradToggle(isOn: Binding(get: { isOn }, set: action))
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }
 }

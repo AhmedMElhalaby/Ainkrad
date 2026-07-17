@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Settings → General: the full-screen status bar toggle (AIN-109). Sound
 /// effects now live in their own `SoundSettingsView` section. Bound to
@@ -38,10 +39,10 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.5))
             }
             Spacer(minLength: 12)
-            NeonToggle(isOn: Binding(get: { isOn }, set: action), tokens: tokens)
+            AinkradToggle(isOn: Binding(get: { isOn }, set: action))
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }
 }

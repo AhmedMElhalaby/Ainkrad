@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The Settings overlay — the third summonable panel (⌘, or the Launcher's
 /// Settings entry), in the same HUD language as the Launcher and Workspace
@@ -7,6 +8,7 @@ import SwiftUI
 /// — Direction.md.
 struct SettingsOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let onDismiss: () -> Void
 
     @State private var selection: SettingsSection
@@ -198,7 +200,7 @@ struct SettingsOverlayView: View {
             .padding(.horizontal, 8)
             .frame(height: 38)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                ChamferShape(cut: AinkradRadius.md)
                     .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
             )
             .overlay(
@@ -209,7 +211,7 @@ struct SettingsOverlayView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
     }
 
     /// App rows use the neon tile artwork (Launcher-matching); fixed sections
@@ -297,14 +299,13 @@ struct SettingsOverlayView: View {
                     }
                     Spacer(minLength: 12)
                     HStack(spacing: 10) {
-                        Slider(
+                        AinkradSlider(
                             value: Binding(
                                 get: { appearance.surfaceOpacity(appID) },
                                 set: { appearance.setSurfaceOpacity(appID, $0) }
                             ),
                             in: 0.3...1.0
                         )
-                        .tint(tokens.accentPrimary)
                         .frame(width: 130)
                         Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
                             .font(AinkradFont.display(11))
@@ -313,7 +314,7 @@ struct SettingsOverlayView: View {
                     }
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
             }
 
             HStack(alignment: .top, spacing: 12) {
@@ -327,16 +328,15 @@ struct SettingsOverlayView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
-                NeonToggle(
+                AinkradToggle(
                     isOn: Binding(
                         get: { appearance.blurEnabled(appID) },
                         set: { appearance.setBlurEnabled(appID, $0) }
-                    ),
-                    tokens: tokens
+                    )
                 )
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         }
     }
 

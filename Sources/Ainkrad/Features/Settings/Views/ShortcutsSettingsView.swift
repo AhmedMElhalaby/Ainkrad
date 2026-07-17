@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 /// Settings → Keyboard: view + rebind the six named shortcuts, with conflict
 /// detection and reset-to-defaults (AIN-144). The positional/structural
@@ -80,7 +81,7 @@ struct ShortcutsSettingsView: View {
                 Text(isRecording ? "Cancel" : "Record")
                     .font(AinkradFont.display(11, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(tokens.surfaceElevated.opacity(0.6)))
+                    .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.6)))
             }
             .buttonStyle(.plain)
             .foregroundStyle(tokens.foreground.opacity(0.75))
@@ -97,9 +98,9 @@ struct ShortcutsSettingsView: View {
             .disabled(!isCustom)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(tokens.surfaceElevated.opacity(isRecording ? 0.5 : 0.3)))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(isRecording ? 0.5 : 0.3)))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            ChamferShape(cut: AinkradRadius.sm)
                 .strokeBorder(isRecording ? tokens.accentSecondary.opacity(0.7) : .clear, lineWidth: 1.2)
         )
     }

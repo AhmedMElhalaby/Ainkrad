@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Inline transcript card for a tool call. In `.awaitingApproval` it shows the
 /// preview (with a diff for edits) and Approve/Deny; committed calls render as a
@@ -52,7 +53,7 @@ struct ToolCallCardView: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.45)))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         .shadow(color: tokens.accentSecondary.opacity(0.14), radius: 7)
     }
 
@@ -79,6 +80,7 @@ private struct ToolCardButton: View {
     let tokens: DesignTokens
     let action: () -> Void
     @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -87,13 +89,13 @@ private struct ToolCardButton: View {
                 .foregroundStyle(filled ? tint.contrastingText : tint.opacity(isHovering ? 1 : 0.85))
                 .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(
-                    RoundedRectangle(cornerRadius: 7)
+                    ChamferShape(cut: AinkradRadius.sm)
                         .fill(filled ? tint.opacity(0.9) : tint.opacity(isHovering ? 0.18 : 0))
                 )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
     }
 }

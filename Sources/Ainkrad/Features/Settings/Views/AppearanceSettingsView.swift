@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The Ainkrad → Appearance section: a theme picker bound to `ThemeManager`.
 /// Selecting a theme applies tokens immediately, with no Save button. The
@@ -8,6 +9,7 @@ import SwiftUI
 /// ramp inside targeting brackets.
 struct AppearanceSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     private let columns = [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 10)]
 
@@ -66,14 +68,13 @@ struct AppearanceSettingsView: View {
 
             labeled("BACKGROUND OPACITY", tokens: tokens) {
                 HStack(spacing: 12) {
-                    Slider(
+                    AinkradSlider(
                         value: Binding(
                             get: { store.overlayBackgroundOpacity },
                             set: { store.setOverlayBackgroundOpacity($0) }
                         ),
                         in: 0.3...1.0
                     )
-                    .tint(tokens.accentPrimary)
                     Text("\(Int(store.overlayBackgroundOpacity * 100))%")
                         .font(AinkradFont.display(11))
                         .foregroundStyle(tokens.foreground.opacity(0.55))
@@ -103,23 +104,15 @@ struct AppearanceSettingsView: View {
 
     private func segmented<T: Hashable>(_ items: [T], selected: T, tokens: DesignTokens,
                                         title: @escaping (T) -> String, action: @escaping (T) -> Void) -> some View {
-        HStack(spacing: 6) {
-            ForEach(items, id: \.self) { item in
-                let isSel = item == selected
-                Button { action(item) } label: {
-                    Text(title(item))
-                        .font(AinkradFont.display(12, weight: isSel ? .medium : .regular))
-                        .foregroundStyle(isSel ? tokens.accentPrimary.contrastingText : tokens.foreground.opacity(0.75))
-                        .padding(.horizontal, 14).padding(.vertical, 6)
-                        .frame(maxWidth: .infinity)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(isSel ? tokens.accentPrimary.opacity(0.9) : tokens.surfaceElevated.opacity(0.5)))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tokens.accentPrimary.opacity(isSel ? 0 : 0.15), lineWidth: 1))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .animation(.easeOut(duration: 0.14), value: selected)
+        // Delegates to the kit segmented control; the imperative `action`
+        // write-back rides in the binding's setter. `AinkradSegmentedPicker`
+        // self-gates its selection motion, so the former host `.animation`
+        // (folded from W7) lives inside the kit now.
+        AinkradSegmentedPicker(
+            items: items,
+            selection: Binding(get: { selected }, set: { action($0) }),
+            label: title
+        )
     }
 
     private func fontScaleTitle(_ scale: UIFontScale) -> String {
@@ -134,8 +127,9 @@ struct AppearanceSettingsView: View {
         }
     }
 
-    /// A row of preset accent swatches (one per theme's accent), a native
-    /// `ColorPicker` for anything else, and a "Theme default" toggle that
+    /// A row of preset accent swatches (one per theme's accent), an
+    /// `AinkradColorPicker` HUD well for anything else, and a "Theme default"
+    /// toggle that
     /// clears the override so the theme's own accent shows again.
     private func accentColorRow(tokens: DesignTokens, manager: ThemeManager) -> some View {
         let presets = Theme.allCases.map(\.tokens.accentPrimary)
@@ -145,14 +139,12 @@ struct AppearanceSettingsView: View {
                 ForEach(Array(presets.enumerated()), id: \.offset) { _, color in
                     accentSwatch(color, tokens: tokens, manager: manager)
                 }
-                ColorPicker(
-                    "",
+                AinkradColorPicker(
                     selection: Binding(
                         get: { manager.accentColorHex.map { Color(hex: $0) } ?? tokens.accentPrimary },
                         set: { manager.setAccentColorHex($0.hexString) }
                     )
                 )
-                .labelsHidden()
                 .frame(width: 26, height: 26)
             }
 
@@ -198,7 +190,7 @@ struct AppearanceSettingsView: View {
         } label: {
             HStack(spacing: 11) {
                 // Live preview of this theme's accent ramp.
-                RoundedRectangle(cornerRadius: 7)
+                ChamferShape(cut: 7)
                     .fill(
                         LinearGradient(
                             colors: [themeTokens.accentPrimary, themeTokens.accentSecondary],
@@ -208,7 +200,7 @@ struct AppearanceSettingsView: View {
                     )
                     .frame(width: 30, height: 30)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 7)
+                        ChamferShape(cut: 7)
                             .strokeBorder(.white.opacity(0.18), lineWidth: 1)
                     )
                     .shadow(color: themeTokens.accentPrimary.opacity(isSelected ? 0.6 : 0), radius: 8)
@@ -226,11 +218,11 @@ struct AppearanceSettingsView: View {
             .padding(12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                ChamferShape(cut: AinkradRadius.md)
                     .fill(isSelected ? tokens.accentPrimary.opacity(0.13) : tokens.surfaceElevated.opacity(0.5))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                ChamferShape(cut: AinkradRadius.md)
                     .strokeBorder(tokens.accentPrimary.opacity(isSelected ? 0.4 : 0.15), lineWidth: 1)
             )
             .overlay(
@@ -241,26 +233,22 @@ struct AppearanceSettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.14), value: isSelected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
     }
 }
 
 /// A section label in the HUD language: a small accent tick and an uppercase,
-/// letter-spaced title. Shared across the Settings sections.
+/// letter-spaced title. Shared across the Settings sections. Thin adapter that
+/// delegates to the kit's `AinkradSectionHeader` — which renders its own accent
+/// tick + uppercased tracked title from the injected theme/typography — so the
+/// `(title:tokens:)` call sites (this file, SettingsOverlayView,
+/// AssistantSettingsView) cascade unchanged. `tokens` is now unused: the kit
+/// reads its palette from the environment.
 struct SettingsSectionHeader: View {
     let title: String
     let tokens: DesignTokens
 
     var body: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 1)
-                .fill(tokens.accentSecondary)
-                .frame(width: 3, height: 12)
-                .shadow(color: tokens.accentSecondary.opacity(0.8), radius: 4)
-            Text(title)
-                .font(AinkradFont.display(11, weight: .semibold))
-                .kerning(3)
-                .foregroundStyle(tokens.foreground.opacity(0.55))
-        }
+        AinkradSectionHeader(title: title)
     }
 }
