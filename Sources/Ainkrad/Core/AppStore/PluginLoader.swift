@@ -38,7 +38,20 @@ final class PluginLoader {
                 }
             }
         }
-        return (apps, failures)
+        // Dedup by appID, keeping the LAST directory's bundle — so a sideloaded
+        // `DevPlugins` build overrides an installed release of the same app in
+        // `Plugins` (directories are passed [Plugins, DevPlugins], dev last).
+        // Without this both load and the registry keeps the installed one,
+        // shadowing the dev build. In production there is no `DevPlugins`, so
+        // this is a no-op.
+        var byID: [String: RegisteredApp] = [:]
+        var order: [String] = []
+        for app in apps {
+            if byID[app.id] == nil { order.append(app.id) }
+            byID[app.id] = app
+        }
+        let deduped = order.compactMap { byID[$0] }
+        return (deduped, failures)
     }
 
     /// Loads and validates a single bundle into a `RegisteredApp`. Public so the
