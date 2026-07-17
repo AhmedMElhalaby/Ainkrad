@@ -24,7 +24,9 @@ struct AppStoreActionControls: View {
         var spinnerSize: CGFloat { self == .detail ? 18 : 14 }
         var spacing: CGFloat { self == .detail ? 10 : 8 }
         var showsUninstall: Bool { self == .detail }
-        var showsEnableLabel: Bool { self == .detail }
+        /// Enable/disable + Uninstall live on the detail page only; grid cards
+        /// carry just the install/update action (or the Installed label).
+        var showsEnableToggle: Bool { self == .detail }
     }
 
     let row: AppStoreRow
@@ -47,8 +49,10 @@ struct AppStoreActionControls: View {
             case .updateAvailable:
                 actionButton("Update", style: .primary, morphsBusy: true, action: onUpdate)
                     .transition(rowTransition)
-                enableToggle
-                    .transition(rowTransition)
+                if style.showsEnableToggle {
+                    enableToggle
+                        .transition(rowTransition)
+                }
                 if style.showsUninstall && row.isManaged {
                     actionButton("Uninstall", style: .danger, morphsBusy: false, action: onUninstall)
                         .transition(rowTransition)
@@ -56,8 +60,10 @@ struct AppStoreActionControls: View {
             case .installed:
                 installedLabel
                     .transition(rowTransition)
-                enableToggle
-                    .transition(rowTransition)
+                if style.showsEnableToggle {
+                    enableToggle
+                        .transition(rowTransition)
+                }
                 if style.showsUninstall && row.isManaged {
                     actionButton("Uninstall", style: .danger, morphsBusy: false, action: onUninstall)
                         .transition(rowTransition)
@@ -84,11 +90,9 @@ struct AppStoreActionControls: View {
     private var enableToggle: some View {
         HStack(spacing: 6) {
             AinkradToggle(isOn: Binding(get: { row.isEnabled }, set: onToggleEnabled))
-            if style.showsEnableLabel {
-                Text(row.isEnabled ? "Enabled" : "Disabled")
-                    .font(.system(size: style.fontSize, weight: .medium))
-                    .foregroundStyle(row.isEnabled ? tokens.accentTertiary : tokens.foreground.opacity(0.55))
-            }
+            Text(row.isEnabled ? "Enabled" : "Disabled")
+                .font(.system(size: style.fontSize, weight: .medium))
+                .foregroundStyle(row.isEnabled ? tokens.accentTertiary : tokens.foreground.opacity(0.55))
         }
         .help(row.isEnabled ? "Disable" : "Enable")
     }
