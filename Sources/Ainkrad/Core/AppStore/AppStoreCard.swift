@@ -24,10 +24,10 @@ struct AppStoreCard: View {
 
     var body: some View {
         AinkradCard {
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        NeonAppTile(symbol: row.icon, tokens: tokens, size: 30)
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        NeonAppTile(symbol: row.icon, tokens: tokens, size: 42)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(row.displayName)
                                 .font(AinkradFont.display(13, weight: .medium))
@@ -37,8 +37,8 @@ struct AppStoreCard: View {
                                 .foregroundStyle(tokens.foreground.opacity(0.5))
                         }
                         Spacer()
-                        if row.status == .updateAvailable { badge("UPDATE") }
-                        else if isDevPlugin { badge("DEV") }
+                        if row.status == .updateAvailable { AinkradBadge(text: "UPDATE", status: .warning) }
+                        else if isDevPlugin { AinkradBadge(text: "DEV", status: .neutral) }
                     }
 
                     Text(row.description.isEmpty ? " " : row.description)
@@ -61,13 +61,5 @@ struct AppStoreCard: View {
     /// DevPlugins) — present and toggleable, but not uninstallable here.
     private var isDevPlugin: Bool {
         row.kind == .plugin && row.status != .available && !row.isManaged
-    }
-
-    private func badge(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 8, weight: .bold)).kerning(0.5)
-            .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(Capsule().fill(tokens.accentSecondary.opacity(0.25)))
-            .foregroundStyle(tokens.accentSecondary)
     }
 }
