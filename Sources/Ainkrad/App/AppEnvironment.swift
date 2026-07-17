@@ -265,6 +265,7 @@ final class AppEnvironment {
             builtIn: [
                 RegisteredApp.builtIn(
                     AssistantApp.self,
+                    summary: "Your in-workspace AI assistant — chat about your code, run gated tools, and drive the terminal and git without leaving Ainkrad.",
                     host: assistantHost,
                     // Reading `surfaceOpacity` inside this closure — invoked
                     // synchronously from `TileLayoutView.hasTranslucentPane`

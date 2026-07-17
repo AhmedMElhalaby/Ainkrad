@@ -41,21 +41,32 @@ struct AppStoreCard: View {
                         else if isDevPlugin { AinkradBadge(text: "DEV", status: .neutral) }
                     }
 
+                    // Reserve two lines so every card is the same height
+                    // regardless of description length (uniform grid).
                     Text(row.description.isEmpty ? " " : row.description)
                         .font(.system(size: 11))
                         .foregroundStyle(tokens.foreground.opacity(0.7))
-                        .lineLimit(2)
+                        .lineLimit(2, reservesSpace: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onOpen)
 
+                Spacer(minLength: 0)   // pin the action row to the card bottom
+
                 AppStoreActionControls(
                     row: row, tokens: tokens, isBusy: isBusy,
                     onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(height: AppStoreCard.cardHeight)
     }
+
+    /// Fixed card height so the grid reads as a uniform matrix — content that
+    /// varies (short vs 2-line descriptions, button vs "Installed" label) no
+    /// longer changes a card's size.
+    static let cardHeight: CGFloat = 150
 
     /// A registered plugin that the App Store didn't install (loaded from
     /// DevPlugins) — present and toggleable, but not uninstallable here.
