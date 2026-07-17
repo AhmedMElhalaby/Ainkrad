@@ -6,7 +6,7 @@ import Observation
 @MainActor
 @Observable
 final class AppStoreStore {
-    enum Filter: Equatable { case all, installed, updates }
+    enum Filter: CaseIterable, Hashable { case all, installed, updates }
 
     var filter: Filter = .all
     /// Live search over `rows`, composed with `filter` (AIN-148). Client-side
@@ -92,7 +92,9 @@ final class AppStoreStore {
                 id: id,
                 displayName: reg?.displayName ?? entry?.displayName ?? id,
                 icon: reg?.icon ?? entry?.icon ?? "app",
-                description: entry?.description ?? "",
+                // Built-ins (no catalog entry) carry their own registered
+                // summary; plugins fall back to the catalog description.
+                description: (reg?.summary).flatMap { $0.isEmpty ? nil : $0 } ?? entry?.description ?? "",
                 catalogVersion: entry?.version,
                 installedVersion: installedDoc[id]?.version,
                 status: updates.contains(id) ? .updateAvailable : .installed,

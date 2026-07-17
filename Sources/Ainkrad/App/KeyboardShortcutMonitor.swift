@@ -258,6 +258,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
                 environment.isAppStorePresented = false
+                environment.isQuickAskPresented = false
                 if environment.isLauncherPresented {
                     environment.launcherStore.query = ""
                     environment.isLauncherPresented = false
@@ -270,6 +271,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
                 environment.isAppStorePresented = false
+                environment.isQuickAskPresented = false
                 environment.isSettingsPresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
@@ -278,6 +280,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
+                environment.isQuickAskPresented = false
                 environment.isAppStorePresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
@@ -291,7 +294,19 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isLauncherPresented = false
                 environment.isSettingsPresented = false
                 environment.isAppStorePresented = false
+                environment.isQuickAskPresented = false
                 environment.isWorkspaceOverviewPresented.toggle()
+                return true
+            case .openQuickAsk:
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
+                environment.isAppStorePresented = false
+                if environment.isQuickAskPresented {
+                    environment.isQuickAskPresented = false
+                } else {
+                    environment.isLauncherPresented = false
+                    environment.isQuickAskPresented = true
+                }
                 return true
             case .closeBlock:
                 let layout = environment.workspaceManager.activeWorkspace.tileLayout

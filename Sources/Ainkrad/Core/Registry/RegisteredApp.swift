@@ -15,11 +15,19 @@ struct RegisteredApp: Identifiable {
     let id: String
     let displayName: String
     let icon: String
+    /// Short App Store description for built-ins (which have no catalog entry).
+    /// Empty for plugins — their description comes from the catalog. Defaulted
+    /// so existing construction sites are unaffected.
+    var summary: String = ""
     let isEnabledByDefault: Bool
     let source: AppSource
     let makeRootView: @MainActor () -> AnyView
     let makeSettingsView: @MainActor () -> AnyView
     let chromeFill: @MainActor () -> Color?
+    /// How the app's window should be presented (Slice 3): tiled into the
+    /// workspace layout (`.pane`, the default) or summoned as a floating
+    /// host overlay (`.overlay`) that auto-dismisses when any app opens.
+    var presentation: PluginPresentation = .pane
 }
 
 /// A bundle the loader skipped, surfaced for the later App Store UI.
@@ -33,16 +41,27 @@ extension RegisteredApp {
     /// binding it to its scoped host services. `source == .builtIn`, so the
     /// registry gives it priority over any same-id plugin.
     @MainActor
-    static func builtIn(_ app: any AinkradApp.Type, isEnabledByDefault: Bool = true, host: HostServices) -> RegisteredApp {
+    static func builtIn(
+        _ app: any AinkradApp.Type,
+        isEnabledByDefault: Bool = true,
+        summary: String = "",
+        host: HostServices,
+        chromeFillOverride: (@MainActor () -> Color?)? = nil
+    ) -> RegisteredApp {
         RegisteredApp(
             id: app.id,
             displayName: app.displayName,
             icon: app.icon,
+            summary: summary,
             isEnabledByDefault: isEnabledByDefault,
             source: .builtIn,
             makeRootView: { app.makeRootView(host: host) },
             makeSettingsView: { app.makeSettingsView(host: host) },
-            chromeFill: { app.chromeFill(host: host) }
+            // A built-in whose fill depends on host-side state the SDK
+            // `chromeFill(host:)` can't see (e.g. the Assistant's appearance
+            // store) supplies it here; otherwise fall back to the SDK path.
+            chromeFill: chromeFillOverride ?? { app.chromeFill(host: host) },
+            presentation: .pane
         )
     }
 }

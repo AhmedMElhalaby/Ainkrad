@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AinkradAppKit
 
 /// One pane: a floating, rounded panel over the sky — HUD header (neon
 /// tile art, Exo 2 title, magnify, styled ×) above the hosted app content.
@@ -11,7 +12,7 @@ import UniformTypeIdentifiers
 /// this pane to the full canvas.
 struct BlockView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let block: Block
     let tileLayout: TileLayout
     let registry: BuiltInAppRegistry
@@ -34,6 +35,20 @@ struct BlockView: View {
 
     private var isFocused: Bool {
         tileLayout.focusedBlockID == block.id
+    }
+
+    /// The pane is translucent when its app declares a sub-opaque window fill
+    /// (Assistant opacity slider, Terminal scheme opacity, Git Mage transparency).
+    private var isTranslucentPane: Bool {
+        guard let fill = app?.chromeFill() else { return false }
+        return NSColor(fill).alphaComponent < 1
+    }
+
+    /// Render the host's blurred sky+island behind this pane only when the app's
+    /// blur is enabled AND the pane is translucent (otherwise the pane content
+    /// covers it — rendering would be wasted, and there'd be nothing to reveal).
+    private var glassBlur: Bool {
+        environment.appAppearanceStore.blurEnabled(block.appID) && isTranslucentPane
     }
 
     private var isInFocusMode: Bool {
@@ -71,11 +86,26 @@ struct BlockView: View {
 
             content(tokens: tokens)
         }
-        // The body is clear so a translucent terminal reveals the blurred
-        // island/sky behind the pane; an opaque terminal fills it solidly.
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        // The pane body is clear, so a translucent app (Terminal scheme
+        // opacity, Git Mage transparency, Assistant opacity) reveals whatever
+        // sits behind it: the shared sharp workspace backdrop by default, or —
+        // when this app's blur is enabled — the host-rendered Gaussian blur
+        // below. A view can't blur the layers behind it, so the host draws its
+        // own sky+island copy here and blurs that. It sits behind the WHOLE
+        // pane (header + content), so the two frost continuously (no seam).
+        .background {
+            if glassBlur {
+                ZStack {
+                    AmbientSkyView()
+                    FloatingIslandView()
+                        .frame(maxWidth: 860, maxHeight: 574)
+                }
+                .blur(radius: 26)
+            }
+        }
+        .clipShape(ChamferShape(cut: AinkradRadius.md))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            ChamferShape(cut: AinkradRadius.md)
                 .strokeBorder(
                     isFocused ? tokens.accentPrimary.opacity(0.55) : tokens.foreground.opacity(0.1),
                     lineWidth: 1
@@ -126,10 +156,10 @@ struct BlockView: View {
         // if a stale `dropEdge` lingers from a pane the drag passed over.
         if let dropEdge, tileLayout.draggingBlockID != nil {
             let isHorizontal = dropEdge == .leading || dropEdge == .trailing
-            let zone = RoundedRectangle(cornerRadius: 10)
+            let zone = ChamferShape(cut: AinkradRadius.sm)
                 .fill(tokens.accentPrimary.opacity(0.16))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    ChamferShape(cut: AinkradRadius.sm)
                         .strokeBorder(tokens.accentSecondary.opacity(0.65), lineWidth: 1)
                 )
                 .overlay(
@@ -273,28 +303,11 @@ struct BlockView: View {
         }
     }
 
-    /// The app's neon tile artwork at HUD size, matching the Launcher rows;
-    /// falls back to the themed SF Symbol mini-tile.
-    @ViewBuilder
+    /// The app's neon tile at HUD size, drawn live from the active theme and
+    /// matching the Launcher rows; dims when the block is unfocused.
     private func headerTile(tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(block.appID)-\(environment.themeManager.currentTheme.rawValue)"
-
-        if NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .opacity(isFocused ? 1 : 0.65)
-        } else {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 18, height: 18)
-                .overlay(
-                    Image(systemName: app?.icon ?? "app")
-                        .font(.system(size: 9))
-                        .foregroundStyle(tokens.accentSecondary.opacity(isFocused ? 1 : 0.65))
-                )
-        }
+        NeonAppTile(symbol: app?.icon ?? "app", tokens: tokens, size: 18)
+            .opacity(isFocused ? 1 : 0.65)
     }
 
     // MARK: - Content

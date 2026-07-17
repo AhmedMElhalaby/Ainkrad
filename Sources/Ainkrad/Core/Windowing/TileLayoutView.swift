@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 private struct PaneResizesImmediatelyKey: EnvironmentKey {
     static let defaultValue = false
@@ -58,7 +59,7 @@ struct TileLayoutView: View {
 
                 if workspace.viewMode == .focus, tileLayout.blocks.count > 1 {
                     FocusSwitcherRail(workspace: workspace)
-                        .padding(.leading, 8)
+                        .padding(.leading, AinkradSpacing.sm)
                         // Only the rail fades in/out; the panes must NOT
                         // animate their size on a Focus toggle (that flood of
                         // intermediate resizes duplicates terminal output).
@@ -66,8 +67,8 @@ struct TileLayoutView: View {
                         .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
                 }
             }
-            .padding([.horizontal, .bottom], 10)
-            .padding(.top, 4)
+            .padding([.horizontal, .bottom], AinkradSpacing.sm)
+            .padding(.top, AinkradSpacing.xs)
         }
     }
 
@@ -76,7 +77,7 @@ struct TileLayoutView: View {
             // Always compute the normal split geometry. Focus Mode is handled
             // in the view (below) WITHOUT collapsing panes to zero size —
             // zero-resizing a terminal corrupts/duplicates its output.
-            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: 8, collapseTo: nil)
+            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: AinkradSpacing.sm, collapseTo: nil)
             let inFocus = workspace.viewMode == .focus && tileLayout.blocks.count > 1
             let focusedID = tileLayout.focusedBlockID
             let fullRect = CGRect(origin: .zero, size: proxy.size)
@@ -165,27 +166,35 @@ struct TileLayoutView: View {
         }
     }
 
-    /// The single blurred floating island shared by the whole workspace —
-    /// revealed through translucent terminals (all panes see the same image,
-    /// so it reads as one background with the windows floating on top).
+    /// The backdrop revealed through any translucent pane. It deliberately does
+    /// NOT paint an opaque base: the global `AmbientSkyView` (sky + live motion)
+    /// is already mounted behind the whole carousel, so leaving this layer
+    /// transparent lets that living scene show through. In front of the sky it
+    /// renders the real `FloatingIslandView` — framed exactly like the empty
+    /// workspace — so a translucent pane reveals the SAME island a user sees on
+    /// an empty workspace, not a static blurred stand-in. A single faint scrim
+    /// keeps pane content legible over a busy sky.
     private var workspaceBackdrop: some View {
         let tokens = environment.themeManager.tokens
         return ZStack {
-            tokens.background
-            Image(islandAsset)
-                .resizable()
-                .scaledToFit()
-                .blur(radius: 30)
-                .padding(40)
+            // Match the empty workspace's island placement. There the island is
+            // the top child of a centered stack that also holds the shortcut
+            // hints below it, so the island sits ABOVE the geometric center.
+            // Centering the island alone would drop it lower, making it appear
+            // to "slide down" when a pane opens — so reserve the same hint
+            // footprint (~two hint rows + their top padding) beneath it, keeping
+            // the revealed island at the exact height it has on the main screen.
+            VStack(spacing: 0) {
+                FloatingIslandView()
+                    .frame(maxWidth: 860, maxHeight: 574)
+                Color.clear.frame(height: 72)
+            }
+            // Legibility scrim only — low enough that motion clearly shows
+            // through, high enough that text over a busy sky stays readable.
+            // Tuned during screenshot review.
+            tokens.background.opacity(0.12)
         }
-    }
-
-    /// Island art ships in two accents; new themes use the nearer one.
-    private var islandAsset: String {
-        switch environment.themeManager.currentTheme {
-        case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
-        default: return "Island-NeonBlue"
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
 }
@@ -211,11 +220,11 @@ private struct FocusSwitcherRail: View {
                     chipContent(block, tokens: tokens)
                         .frame(width: 36, height: 36)
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
+                            ChamferShape(cut: AinkradRadius.sm)
                                 .fill(isFocused ? tokens.accentPrimary.opacity(0.16) : tokens.surface.opacity(0.6))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            ChamferShape(cut: AinkradRadius.sm)
                                 .strokeBorder(isFocused ? tokens.accentPrimary.opacity(0.5) : tokens.foreground.opacity(0.1), lineWidth: 1)
                         )
                         .overlay(
@@ -248,20 +257,9 @@ private struct FocusSwitcherRail: View {
         .padding(.vertical, 2)
     }
 
-    @ViewBuilder
     private func chipContent(_ block: Block, tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(block.appID)-\(environment.themeManager.currentTheme.rawValue)"
-
-        if NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 26, height: 26)
-        } else {
-            Image(systemName: environment.registry.allApps.first(where: { $0.id == block.appID })?.icon ?? "app")
-                .font(.system(size: 12))
-                .foregroundStyle(tokens.accentSecondary)
-        }
+        let symbol = environment.registry.allApps.first(where: { $0.id == block.appID })?.icon ?? "app"
+        return NeonAppTile(symbol: symbol, tokens: tokens, size: 26)
     }
 }
 

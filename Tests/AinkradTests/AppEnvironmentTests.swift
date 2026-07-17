@@ -19,7 +19,8 @@ final class AppEnvironmentTests {
         let registry = BuiltInAppRegistry(persistence: persistence)
         let themeManager = ThemeManager(persistence: persistence)
         let workspaceManager = WorkspaceManager()
-        let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager)
+        let appAppearanceStore = AppAppearanceStore(persistence: persistence)
+        let launcherStore = LauncherStore(registry: registry, workspaceManager: workspaceManager, appAppearanceStore: appAppearanceStore)
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
         let catalogService = CatalogService(
             source: NoOpCatalogSource(), persistence: persistence)
@@ -35,6 +36,26 @@ final class AppEnvironmentTests {
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
         let generalSettingsStore = GeneralSettingsStore(persistence: persistence)
         let sounds = SoundEngine(settings: generalSettingsStore)
+        let agentContextHub = AgentContextRegistryHub()
+        let agentActionHub = AgentActionRegistryHub()
+        let agentConfigStore = AgentConfigStore(persistence: persistence)
+        let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
+        let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
+        let agentPermissionStore = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
+        let agentSession = AgentSession(
+            providerFor: { (connection: Connection) -> LLMProvider in
+                switch connection.kind {
+                case .claude: return ClaudeProvider(http: URLSessionStreamingHTTPClient())
+                case .openAICompatible: return OpenAICompatibleProvider(http: URLSessionStreamingHTTPClient(), baseURL: connection.baseURL)
+                case .gemini: return GeminiProvider(http: URLSessionStreamingHTTPClient(), baseURL: connection.baseURL)
+                }
+            },
+            connections: connectionStore,
+            config: agentConfigStore,
+            context: agentContextService,
+            registry: AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()]),
+            permissions: agentPermissionStore
+        )
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -50,11 +71,22 @@ final class AppEnvironmentTests {
             shortcutStore: shortcutStore,
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
+            appAppearanceStore: appAppearanceStore,
             skySettingsStore: SkySettingsStore(persistence: persistence),
-            sounds: sounds
+            sounds: sounds,
+            agentContextHub: agentContextHub,
+            agentActionHub: agentActionHub,
+            agentConfigStore: agentConfigStore,
+            agentPermissionStore: agentPermissionStore,
+            agentContextSettingsStore: agentContextSettingsStore,
+            agentContextService: agentContextService,
+            agentSession: agentSession,
+            modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient())
         )
 
         #expect(environment.registry === registry)
+        #expect(environment.agentPermissionStore === agentPermissionStore)
+        #expect(environment.agentPermissionStore.mode == .ask)
         #expect(environment.themeManager === themeManager)
         #expect(environment.workspaceManager === workspaceManager)
         #expect(environment.launcherStore === launcherStore)
@@ -79,7 +111,9 @@ final class AppEnvironmentTests {
         defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
         let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        #expect(environment.registry.allApps.isEmpty)   // Terminal is now an App Store plugin, not built-in
+        // Terminal is an App Store plugin, not built-in; Assistant is the one
+        // compiled-in built-in the host registers itself (M5 Phase B).
+        #expect(environment.registry.allApps.map(\.id) == ["assistant"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)

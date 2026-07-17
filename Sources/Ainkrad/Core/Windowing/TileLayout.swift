@@ -81,7 +81,24 @@ final class TileLayout {
     @discardableResult
     func openApp(_ appID: String) -> Block {
         let block = Block(appID: appID)
+        appendColumn(block)
+        focusedBlockID = block.id
+        onStructuralChange?()
+        return block
+    }
 
+    /// Re-homes an existing pane moved from another workspace, preserving its
+    /// block identity. Appended as a new top-level column.
+    @discardableResult
+    func adopt(_ block: Block) -> Block {
+        appendColumn(block)
+        focusedBlockID = block.id
+        onStructuralChange?()
+        return block
+    }
+
+    /// Appends `block` as an equal top-level column (the open-app placement).
+    private func appendColumn(_ block: Block) {
         switch root {
         case nil:
             root = .leaf(block)
@@ -98,10 +115,6 @@ final class TileLayout {
                 fractions: Self.equalFractions(2)
             )
         }
-
-        focusedBlockID = block.id
-        onStructuralChange?()
-        return block
     }
 
     func close(_ id: UUID) {

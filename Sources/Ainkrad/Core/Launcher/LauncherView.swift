@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradAppKit
 
 /// Four corner brackets — the targeting-cursor treatment for the selected
 /// Launcher row.
@@ -53,6 +54,11 @@ struct LauncherView: View {
     /// not a registered app, so it rides in the results as a system action.
     private static let settingsRowID = "settings"
     private static let appStoreRowID = "appStore"
+    #if DEBUG
+    /// DEBUG-only system action — never appears in a release build's
+    /// Launcher (Slice 1b Task 8).
+    private static let galleryRowID = "componentGallery"
+    #endif
 
     private var appRows: [AppRow] {
         var rows = store.appResults.map { AppRow(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
@@ -62,6 +68,11 @@ struct LauncherView: View {
         if store.query.isEmpty || fuzzyMatches(query: store.query, target: "App Store") {
             rows.append(AppRow(id: Self.appStoreRowID, displayName: "App Store", icon: "bag"))
         }
+        #if DEBUG
+        if store.query.isEmpty || fuzzyMatches(query: store.query, target: "Component Gallery") {
+            rows.append(AppRow(id: Self.galleryRowID, displayName: "Component Gallery", icon: "swatchpalette"))
+        }
+        #endif
         return rows
     }
 
@@ -151,26 +162,17 @@ struct LauncherView: View {
     }
 
     private func rowView(_ row: AppRow, isSelected: Bool, tokens: DesignTokens) -> some View {
-        HStack(spacing: 12) {
-            tile(for: row, tokens: tokens)
-
-            Text(row.displayName)
-                .font(AinkradFont.display(14, weight: .medium))
-                .foregroundStyle(tokens.foreground.opacity(isSelected ? 1 : 0.75))
-
-            Spacer()
-
-            if isSelected {
-                Text("↩")
-                    .font(AinkradFont.mono(11))
-                    .foregroundStyle(tokens.accentSecondary.opacity(0.8))
+        AinkradListRow(
+            isSelected: isSelected,
+            leading: { tile(for: row, tokens: tokens) },
+            title: row.displayName,
+            trailing: {
+                if isSelected {
+                    Text("↩")
+                        .font(AinkradFont.mono(11))
+                        .foregroundStyle(tokens.accentSecondary.opacity(0.8))
+                }
             }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 48)
-        .background(
-            RoundedRectangle(cornerRadius: 9)
-                .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
         )
         .overlay(
             TargetingBrackets()
@@ -181,31 +183,9 @@ struct LauncherView: View {
         .animation(.easeOut(duration: 0.12), value: selectedIndex)
     }
 
-    /// The app's neon tile artwork when bundled (Spotlight-style), else a
-    /// themed mini-tile around its SF Symbol.
-    @ViewBuilder
+    /// The app's neon tile, drawn live from the active theme around its SF Symbol.
     private func tile(for row: AppRow, tokens: DesignTokens) -> some View {
-        let assetName = "AppTile-\(row.id)-\(environment.themeManager.currentTheme.rawValue)"
-
-        if NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 32, height: 32)
-        } else {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: row.icon)
-                        .font(.system(size: 14))
-                        .foregroundStyle(tokens.accentSecondary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(tokens.accentPrimary.opacity(0.3), lineWidth: 1)
-                )
-        }
+        NeonAppTile(symbol: row.icon, tokens: tokens, size: 32)
     }
 
     private func footer(tokens: DesignTokens) -> some View {
@@ -240,6 +220,14 @@ struct LauncherView: View {
             dismiss()
             return
         }
+
+        #if DEBUG
+        if row.id == Self.galleryRowID {
+            environment.isComponentGalleryPresented = true
+            dismiss()
+            return
+        }
+        #endif
 
         guard let app = store.appResults.first(where: { $0.id == row.id }) else { return }
         store.selectApp(app)

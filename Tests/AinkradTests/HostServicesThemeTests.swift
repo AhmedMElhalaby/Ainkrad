@@ -12,7 +12,11 @@ struct HostServicesThemeTests {
         let tm = ThemeManager(persistence: persistence)
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let host = HostServicesImpl(appID: "t", dataRootURL: root,
-                                    secretStore: InMemorySecretStore(), themeManager: tm)
+                                    secretStore: InMemorySecretStore(), themeManager: tm,
+                                    hub: AgentContextRegistryHub(), actionHub: AgentActionRegistryHub(),
+                                    launchHub: PluginLaunchHub(),
+                                    declaredPresentation: .pane,
+                                    appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore()))
         return (host, tm)
     }
 
@@ -29,7 +33,7 @@ struct HostServicesThemeTests {
         tm.setTheme(.dracula)
         for _ in 0..<20 where host.theme.tokens.themeID != "dracula" { await Task.yield() }
         #expect(host.theme.tokens.themeID == "dracula")
-        #expect(host.theme.tokens.background == Color(hex: "282A36"))
+        #expect(host.theme.tokens.background == Color(hex: "1A1B23"))
 
         // A second change must also propagate — guards the self-re-arm.
         tm.setTheme(.nord)

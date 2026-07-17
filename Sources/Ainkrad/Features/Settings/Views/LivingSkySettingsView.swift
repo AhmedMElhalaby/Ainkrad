@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// Settings → Living Sky: the master animate switch, a speed control, and a
 /// switch per ambient-sky effect. Bound to `SkySettingsStore`, persisted
@@ -60,34 +61,23 @@ struct LivingSkySettingsView: View {
             Text("Motion speed")
                 .font(AinkradFont.display(13, weight: .medium))
                 .foregroundStyle(tokens.foreground.opacity(0.9))
-            HStack(spacing: 6) {
-                ForEach(Self.speedPresets, id: \.value) { preset in
-                    let isSelected = abs(store.motionSpeed - preset.value) < 0.01
-                    Button {
-                        store.setMotionSpeed(preset.value)
-                    } label: {
-                        Text(preset.title)
-                            .font(AinkradFont.display(12, weight: isSelected ? .medium : .regular))
-                            .foregroundStyle(isSelected ? tokens.background : tokens.foreground.opacity(0.75))
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(isSelected ? tokens.accentPrimary.opacity(0.9) : tokens.surfaceElevated.opacity(0.5))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .strokeBorder(tokens.accentPrimary.opacity(isSelected ? 0 : 0.15), lineWidth: 1)
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+            AinkradSegmentedPicker(
+                items: Self.speedPresets.map(\.value),
+                selection: Binding(
+                    get: {
+                        Self.speedPresets.first { abs(store.motionSpeed - $0.value) < 0.01 }?.value
+                            ?? store.motionSpeed
+                    },
+                    set: { store.setMotionSpeed($0) }
+                ),
+                label: { value in
+                    Self.speedPresets.first { $0.value == value }?.title ?? ""
                 }
-            }
+            )
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }
 
     private func toggleRow(tokens: DesignTokens, title: String, subtitle: String,
@@ -102,10 +92,10 @@ struct LivingSkySettingsView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.5))
             }
             Spacer(minLength: 12)
-            NeonToggle(isOn: Binding(get: { isOn }, set: action), tokens: tokens)
+            AinkradToggle(isOn: Binding(get: { isOn }, set: action))
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated.opacity(0.5)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }
 }
