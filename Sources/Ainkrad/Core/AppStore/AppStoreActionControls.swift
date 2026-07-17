@@ -17,18 +17,22 @@ import AinkradAppKit
 /// state still updates, just without animation.
 struct AppStoreActionControls: View {
     enum Style: Equatable {
-        case compact
-        case prominent
+        case card
+        case detail
 
-        var fontSize: CGFloat { self == .prominent ? 12 : 11 }
-        var spinnerSize: CGFloat { self == .prominent ? 18 : 14 }
-        var spacing: CGFloat { self == .prominent ? 10 : 8 }
+        var fontSize: CGFloat { self == .detail ? 12 : 11 }
+        var spinnerSize: CGFloat { self == .detail ? 18 : 14 }
+        var spacing: CGFloat { self == .detail ? 10 : 8 }
+        var showsUninstall: Bool { self == .detail }
+        /// Enable/disable + Uninstall live on the detail page only; grid cards
+        /// carry just the install/update action (or the Installed label).
+        var showsEnableToggle: Bool { self == .detail }
     }
 
     let row: AppStoreRow
     let tokens: DesignTokens
     let isBusy: Bool
-    var style: Style = .compact
+    var style: Style = .card
     let onInstall: () -> Void
     let onUpdate: () -> Void
     let onUninstall: () -> Void
@@ -45,18 +49,22 @@ struct AppStoreActionControls: View {
             case .updateAvailable:
                 actionButton("Update", style: .primary, morphsBusy: true, action: onUpdate)
                     .transition(rowTransition)
-                enableToggle
-                    .transition(rowTransition)
-                if row.isManaged {
+                if style.showsEnableToggle {
+                    enableToggle
+                        .transition(rowTransition)
+                }
+                if style.showsUninstall && row.isManaged {
                     actionButton("Uninstall", style: .danger, morphsBusy: false, action: onUninstall)
                         .transition(rowTransition)
                 }
             case .installed:
                 installedLabel
                     .transition(rowTransition)
-                enableToggle
-                    .transition(rowTransition)
-                if row.isManaged {
+                if style.showsEnableToggle {
+                    enableToggle
+                        .transition(rowTransition)
+                }
+                if style.showsUninstall && row.isManaged {
                     actionButton("Uninstall", style: .danger, morphsBusy: false, action: onUninstall)
                         .transition(rowTransition)
                 }

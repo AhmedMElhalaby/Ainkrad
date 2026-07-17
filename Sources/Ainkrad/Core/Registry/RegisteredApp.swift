@@ -15,6 +15,10 @@ struct RegisteredApp: Identifiable {
     let id: String
     let displayName: String
     let icon: String
+    /// Short App Store description for built-ins (which have no catalog entry).
+    /// Empty for plugins — their description comes from the catalog. Defaulted
+    /// so existing construction sites are unaffected.
+    var summary: String = ""
     let isEnabledByDefault: Bool
     let source: AppSource
     let makeRootView: @MainActor () -> AnyView
@@ -40,6 +44,7 @@ extension RegisteredApp {
     static func builtIn(
         _ app: any AinkradApp.Type,
         isEnabledByDefault: Bool = true,
+        summary: String = "",
         host: HostServices,
         chromeFillOverride: (@MainActor () -> Color?)? = nil
     ) -> RegisteredApp {
@@ -47,6 +52,7 @@ extension RegisteredApp {
             id: app.id,
             displayName: app.displayName,
             icon: app.icon,
+            summary: summary,
             isEnabledByDefault: isEnabledByDefault,
             source: .builtIn,
             makeRootView: { app.makeRootView(host: host) },

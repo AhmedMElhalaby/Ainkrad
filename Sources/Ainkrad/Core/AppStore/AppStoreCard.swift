@@ -24,58 +24,53 @@ struct AppStoreCard: View {
 
     var body: some View {
         AinkradCard {
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        NeonAppTile(symbol: row.icon, tokens: tokens, size: 30)
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        NeonAppTile(symbol: row.icon, tokens: tokens, size: 42)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(row.displayName)
                                 .font(AinkradFont.display(13, weight: .medium))
                                 .foregroundStyle(tokens.foreground)
-                            Text(versionLine)
+                            Text(row.versionLine)
                                 .font(.system(size: 10))
                                 .foregroundStyle(tokens.foreground.opacity(0.5))
                         }
                         Spacer()
-                        if row.status == .updateAvailable { badge("UPDATE") }
-                        else if isDevPlugin { badge("DEV") }
+                        if row.status == .updateAvailable { AinkradBadge(text: "UPDATE", status: .warning) }
+                        else if isDevPlugin { AinkradBadge(text: "DEV", status: .neutral) }
                     }
 
+                    // Reserve two lines so every card is the same height
+                    // regardless of description length (uniform grid).
                     Text(row.description.isEmpty ? " " : row.description)
                         .font(.system(size: 11))
                         .foregroundStyle(tokens.foreground.opacity(0.7))
-                        .lineLimit(2)
+                        .lineLimit(2, reservesSpace: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onOpen)
 
+                Spacer(minLength: 0)   // pin the action row to the card bottom
+
                 AppStoreActionControls(
                     row: row, tokens: tokens, isBusy: isBusy,
                     onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(height: AppStoreCard.cardHeight)
     }
+
+    /// Fixed card height so the grid reads as a uniform matrix — content that
+    /// varies (short vs 2-line descriptions, button vs "Installed" label) no
+    /// longer changes a card's size.
+    static let cardHeight: CGFloat = 150
 
     /// A registered plugin that the App Store didn't install (loaded from
     /// DevPlugins) — present and toggleable, but not uninstallable here.
     private var isDevPlugin: Bool {
         row.kind == .plugin && row.status != .available && !row.isManaged
-    }
-
-    private var versionLine: String {
-        switch row.status {
-        case .available: return "v\(row.catalogVersion ?? "—")"
-        case .installed: return row.installedVersion.map { "v\($0) · installed" } ?? "installed"
-        case .updateAvailable: return "v\(row.installedVersion ?? "—") → v\(row.catalogVersion ?? "—")"
-        }
-    }
-
-    private func badge(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 8, weight: .bold)).kerning(0.5)
-            .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(Capsule().fill(tokens.accentSecondary.opacity(0.25)))
-            .foregroundStyle(tokens.accentSecondary)
     }
 }
