@@ -27,15 +27,27 @@ struct AppStoreDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 backButton
                 header
-                Text(longDescriptionText)
-                    .font(.system(size: 13))
-                    .foregroundStyle(tokens.foreground.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    AinkradSectionHeader(title: "Description")
+                    Text(longDescriptionText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(tokens.foreground.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(informationLine)
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                }
                 if let screenshots = entry?.screenshots, !screenshots.isEmpty {
-                    screenshotGallery(screenshots)
+                    VStack(alignment: .leading, spacing: 8) {
+                        AinkradSectionHeader(title: "Screenshots")
+                        screenshotGallery(screenshots)
+                    }
                 }
                 if let links = entry?.links, !links.isEmpty {
-                    linksRow(links)
+                    VStack(alignment: .leading, spacing: 8) {
+                        AinkradSectionHeader(title: "Links")
+                        linksRow(links)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -45,21 +57,18 @@ struct AppStoreDetailView: View {
     }
 
     private var backButton: some View {
-        Button(action: onBack) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
-                Text("Back")
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(tokens.foreground.opacity(0.7))
+        HStack(spacing: 8) {
+            AinkradIconButton(systemName: "chevron.left", action: onBack)
+            Text("Back")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.7))
         }
-        .buttonStyle(.plain)
         .help("Back to catalog")
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 18) {
-            NeonAppTile(symbol: row.icon, tokens: tokens, size: 76)
+            NeonAppTile(symbol: row.icon, tokens: tokens, size: 88)
             VStack(alignment: .leading, spacing: 5) {
                 Text(row.displayName)
                     .font(AinkradFont.display(20, weight: .semibold))
@@ -81,6 +90,22 @@ struct AppStoreDetailView: View {
     private var longDescriptionText: String {
         let text = entry?.longDescription ?? row.description
         return text.isEmpty ? " " : text
+    }
+
+    /// A readable label for the row's provenance.
+    private var kindLabel: String {
+        switch row.kind {
+        case .builtIn: return "Built-in"
+        case .plugin: return "Plugin"
+        }
+    }
+
+    /// `version · author · kind` — author omitted when nil/empty.
+    private var informationLine: String {
+        var parts = [row.versionLine]
+        if let author = entry?.author, !author.isEmpty { parts.append(author) }
+        parts.append(kindLabel)
+        return parts.joined(separator: " · ")
     }
 
     /// The shared Install/Update/Enable/Disable/Uninstall controls (AIN-149)
@@ -105,24 +130,21 @@ struct AppStoreDetailView: View {
     }
 
     private func screenshot(_ url: URL, in urls: [URL], at index: Int) -> some View {
-        Button {
-            onOpenScreenshot(urls, index)
-        } label: {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .failure:
-                    screenshotBox(systemImage: "exclamationmark.triangle", tint: tokens.accentTertiary)
-                default:
-                    screenshotBox(systemImage: nil, tint: tokens.foreground)
-                }
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().aspectRatio(contentMode: .fill)
+            case .failure:
+                screenshotBox(systemImage: "exclamationmark.triangle", tint: tokens.accentTertiary)
+            default:
+                screenshotBox(systemImage: nil, tint: tokens.foreground)
             }
-            .frame(width: 220, height: 140)
-            .clipShape(ChamferShape(cut: AinkradRadius.md))
-            .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .frame(width: 260, height: 164)
+        .clipShape(ChamferShape(cut: AinkradRadius.md))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+        .contentShape(ChamferShape(cut: AinkradRadius.md))
+        .onTapGesture { onOpenScreenshot(urls, index) }
         .help("View full size")
     }
 
@@ -143,12 +165,7 @@ struct AppStoreDetailView: View {
         HStack(spacing: 16) {
             ForEach(links, id: \.url) { link in
                 Link(destination: link.url) {
-                    HStack(spacing: 4) {
-                        Text(link.title)
-                        Image(systemName: "arrow.up.right")
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tokens.accentSecondary)
+                    AinkradChip(label: link.title, systemName: "arrow.up.right")
                 }
             }
         }
