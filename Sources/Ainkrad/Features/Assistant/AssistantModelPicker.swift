@@ -104,11 +104,11 @@ struct AssistantConnectionModelPicker: View {
         }
         options.append(.manage)
 
-        return AinkradSearchableSelect(
+        return AinkradSelect(
             items: options,
             selection: selectionBinding(active: active),
             label: label,
-            placeholder: "Search connections & models…"
+            searchPlaceholder: "Search connections & models…"
         )
         .fixedSize()
         .onAppear { if let c = active { model.refreshModels(for: c, environment) } }
