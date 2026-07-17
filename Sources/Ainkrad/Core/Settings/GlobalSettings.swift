@@ -1,3 +1,11 @@
+/// How the Launcher (⌘K) lays out apps — a vertical list (spotlight-style,
+/// the default) or a grid of icon tiles. Toggled in Settings → General.
+enum LauncherViewMode: String, Codable, CaseIterable, Sendable {
+    case list
+    case grid
+    var label: String { self == .list ? "List" : "Grid" }
+}
+
 /// App-wide settings persisted through `SettingsStore`. `theme` defaults to
 /// `.neonBlue` on first launch (see ADR-0006 Theming Approach). Decoding
 /// tolerates payloads written before/after fields changed — a missing `theme`
@@ -7,6 +15,7 @@ struct GlobalSettings: PersistableDocument {
     var theme: Theme = .neonBlue
     var appIconChoice: AppIconChoice = .auto
     var appIconAppearance: AppIconAppearance = .system
+    var launcherViewMode: LauncherViewMode = .list
     var confirmBeforeQuit: Bool = true
     var uiFontScale: UIFontScale = .medium
     var uiFontFamily: UIFontFamily = .exo2
@@ -54,6 +63,7 @@ struct GlobalSettings: PersistableDocument {
     init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
          appIconAppearance: AppIconAppearance = .system,
+         launcherViewMode: LauncherViewMode = .list,
          confirmBeforeQuit: Bool = true,
          uiFontScale: UIFontScale = .medium,
          uiFontFamily: UIFontFamily = .exo2,
@@ -72,6 +82,7 @@ struct GlobalSettings: PersistableDocument {
         self.theme = theme
         self.appIconChoice = appIconChoice
         self.appIconAppearance = appIconAppearance
+        self.launcherViewMode = launcherViewMode
         self.confirmBeforeQuit = confirmBeforeQuit
         self.uiFontScale = uiFontScale
         self.uiFontFamily = uiFontFamily
@@ -94,6 +105,7 @@ struct GlobalSettings: PersistableDocument {
         theme = try container.decodeIfPresent(Theme.self, forKey: .theme) ?? .neonBlue
         appIconChoice = try container.decodeIfPresent(AppIconChoice.self, forKey: .appIconChoice) ?? .auto
         appIconAppearance = try container.decodeIfPresent(AppIconAppearance.self, forKey: .appIconAppearance) ?? .system
+        launcherViewMode = try container.decodeIfPresent(LauncherViewMode.self, forKey: .launcherViewMode) ?? .list
         confirmBeforeQuit = try container.decodeIfPresent(Bool.self, forKey: .confirmBeforeQuit) ?? true
         uiFontScale = try container.decodeIfPresent(UIFontScale.self, forKey: .uiFontScale) ?? .medium
         uiFontFamily = try container.decodeIfPresent(UIFontFamily.self, forKey: .uiFontFamily) ?? .exo2

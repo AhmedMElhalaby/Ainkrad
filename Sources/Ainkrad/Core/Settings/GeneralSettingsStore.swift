@@ -20,6 +20,8 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     /// Overlay panel background opacity + blur (Settings → Appearance).
     private(set) var overlayBackgroundOpacity: Double
     private(set) var overlayBlurEnabled: Bool
+    /// Launcher (⌘K) layout — list or grid (Settings → General).
+    private(set) var launcherViewMode: LauncherViewMode
     /// AINKRAD-controlled motion preference (independent of the macOS
     /// system-level Reduce Motion toggle), injected into `\.ainkradReduceMotion`
     /// at the host root. No settings UI yet — default false = motion on.
@@ -36,7 +38,15 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         self.soundEventEffects = settings.soundEventEffects
         self.overlayBackgroundOpacity = settings.overlayBackgroundOpacity
         self.overlayBlurEnabled = settings.overlayBlurEnabled
+        self.launcherViewMode = settings.launcherViewMode
         self.uiReduceMotion = settings.uiReduceMotion
+    }
+
+    func setLauncherViewMode(_ mode: LauncherViewMode) {
+        launcherViewMode = mode
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.launcherViewMode = mode
+        persistence.save(settings)
     }
 
     func setOverlayBackgroundOpacity(_ value: Double) {
