@@ -17,18 +17,20 @@ import AinkradAppKit
 /// state still updates, just without animation.
 struct AppStoreActionControls: View {
     enum Style: Equatable {
-        case compact
-        case prominent
+        case card
+        case detail
 
-        var fontSize: CGFloat { self == .prominent ? 12 : 11 }
-        var spinnerSize: CGFloat { self == .prominent ? 18 : 14 }
-        var spacing: CGFloat { self == .prominent ? 10 : 8 }
+        var fontSize: CGFloat { self == .detail ? 12 : 11 }
+        var spinnerSize: CGFloat { self == .detail ? 18 : 14 }
+        var spacing: CGFloat { self == .detail ? 10 : 8 }
+        var showsUninstall: Bool { self == .detail }
+        var showsEnableLabel: Bool { self == .detail }
     }
 
     let row: AppStoreRow
     let tokens: DesignTokens
     let isBusy: Bool
-    var style: Style = .compact
+    var style: Style = .card
     let onInstall: () -> Void
     let onUpdate: () -> Void
     let onUninstall: () -> Void
@@ -47,7 +49,7 @@ struct AppStoreActionControls: View {
                     .transition(rowTransition)
                 enableToggle
                     .transition(rowTransition)
-                if row.isManaged {
+                if style.showsUninstall && row.isManaged {
                     actionButton("Uninstall", style: .danger, morphsBusy: false, action: onUninstall)
                         .transition(rowTransition)
                 }
@@ -56,7 +58,7 @@ struct AppStoreActionControls: View {
                     .transition(rowTransition)
                 enableToggle
                     .transition(rowTransition)
-                if row.isManaged {
+                if style.showsUninstall && row.isManaged {
                     actionButton("Uninstall", style: .danger, morphsBusy: false, action: onUninstall)
                         .transition(rowTransition)
                 }
@@ -82,9 +84,11 @@ struct AppStoreActionControls: View {
     private var enableToggle: some View {
         HStack(spacing: 6) {
             AinkradToggle(isOn: Binding(get: { row.isEnabled }, set: onToggleEnabled))
-            Text(row.isEnabled ? "Enabled" : "Disabled")
-                .font(.system(size: style.fontSize, weight: .medium))
-                .foregroundStyle(row.isEnabled ? tokens.accentTertiary : tokens.foreground.opacity(0.55))
+            if style.showsEnableLabel {
+                Text(row.isEnabled ? "Enabled" : "Disabled")
+                    .font(.system(size: style.fontSize, weight: .medium))
+                    .foregroundStyle(row.isEnabled ? tokens.accentTertiary : tokens.foreground.opacity(0.55))
+            }
         }
         .help(row.isEnabled ? "Disable" : "Enable")
     }

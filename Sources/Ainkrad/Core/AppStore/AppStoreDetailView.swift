@@ -69,7 +69,7 @@ struct AppStoreDetailView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(tokens.foreground.opacity(0.6))
                 }
-                Text(versionLine)
+                Text(row.versionLine)
                     .font(.system(size: 11))
                     .foregroundStyle(tokens.foreground.opacity(0.5))
                 actions.padding(.top, 4)
@@ -83,20 +83,12 @@ struct AppStoreDetailView: View {
         return text.isEmpty ? " " : text
     }
 
-    private var versionLine: String {
-        switch row.status {
-        case .available: return "v\(row.catalogVersion ?? "—")"
-        case .installed: return row.installedVersion.map { "v\($0) · installed" } ?? "installed"
-        case .updateAvailable: return "v\(row.installedVersion ?? "—") → v\(row.catalogVersion ?? "—")"
-        }
-    }
-
     /// The shared Install/Update/Enable/Disable/Uninstall controls (AIN-149)
-    /// — identical to `AppStoreCard`'s, just rendered at the `.prominent`
+    /// — identical to `AppStoreCard`'s, just rendered at the `.detail`
     /// size that fits the detail header.
     private var actions: some View {
         AppStoreActionControls(
-            row: row, tokens: tokens, isBusy: isBusy, style: .prominent,
+            row: row, tokens: tokens, isBusy: isBusy, style: .detail,
             onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
     }
 

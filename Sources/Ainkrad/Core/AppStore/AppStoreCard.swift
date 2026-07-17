@@ -32,7 +32,7 @@ struct AppStoreCard: View {
                             Text(row.displayName)
                                 .font(AinkradFont.display(13, weight: .medium))
                                 .foregroundStyle(tokens.foreground)
-                            Text(versionLine)
+                            Text(row.versionLine)
                                 .font(.system(size: 10))
                                 .foregroundStyle(tokens.foreground.opacity(0.5))
                         }
@@ -61,14 +61,6 @@ struct AppStoreCard: View {
     /// DevPlugins) — present and toggleable, but not uninstallable here.
     private var isDevPlugin: Bool {
         row.kind == .plugin && row.status != .available && !row.isManaged
-    }
-
-    private var versionLine: String {
-        switch row.status {
-        case .available: return "v\(row.catalogVersion ?? "—")"
-        case .installed: return row.installedVersion.map { "v\($0) · installed" } ?? "installed"
-        case .updateAvailable: return "v\(row.installedVersion ?? "—") → v\(row.catalogVersion ?? "—")"
-        }
     }
 
     private func badge(_ text: String) -> some View {
