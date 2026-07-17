@@ -50,6 +50,12 @@ struct LauncherView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var selectedIndex = 0
 
+    /// Apps-per-row in grid mode; also the up/down arrow step.
+    private static let gridColumns = 4
+
+    private var viewMode: LauncherViewMode { environment.generalSettingsStore.launcherViewMode }
+    private var isGrid: Bool { viewMode == .grid }
+
     /// Sentinel id for the Settings entry — Settings is a summonable overlay,
     /// not a registered app, so it rides in the results as a system action.
     private static let settingsRowID = "settings"
@@ -119,6 +125,8 @@ struct LauncherView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.35))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
+            } else if isGrid {
+                gridView(results: results, tokens: tokens)
             } else {
                 VStack(spacing: 2) {
                     ForEach(Array(results.enumerated()), id: \.element.id) { index, row in
@@ -153,8 +161,10 @@ struct LauncherView: View {
                 .tint(tokens.accentSecondary)
                 .focused($isSearchFocused)
                 .onKeyPress(.escape) { dismiss(); return .handled }
-                .onKeyPress(.downArrow) { move(by: 1, count: results.count); return .handled }
-                .onKeyPress(.upArrow) { move(by: -1, count: results.count); return .handled }
+                .onKeyPress(.downArrow) { move(by: isGrid ? Self.gridColumns : 1, count: results.count); return .handled }
+                .onKeyPress(.upArrow) { move(by: isGrid ? -Self.gridColumns : -1, count: results.count); return .handled }
+                .onKeyPress(.leftArrow) { if isGrid { move(by: -1, count: results.count); return .handled }; return .ignored }
+                .onKeyPress(.rightArrow) { if isGrid { move(by: 1, count: results.count); return .handled }; return .ignored }
                 .onKeyPress(.return) { select(results); return .handled }
         }
         .padding(.horizontal, 18)
@@ -186,6 +196,43 @@ struct LauncherView: View {
     /// The app's neon tile, drawn live from the active theme around its SF Symbol.
     private func tile(for row: AppRow, tokens: DesignTokens) -> some View {
         NeonAppTile(symbol: row.icon, tokens: tokens, size: 32)
+    }
+
+    // MARK: - Grid mode
+
+    private func gridView(results: [AppRow], tokens: DesignTokens) -> some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: Self.gridColumns)
+        return LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(Array(results.enumerated()), id: \.element.id) { index, row in
+                gridCell(row, isSelected: index == selectedIndex, tokens: tokens)
+                    .onTapGesture {
+                        selectedIndex = index
+                        select(results)
+                    }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 12)
+    }
+
+    private func gridCell(_ row: AppRow, isSelected: Bool, tokens: DesignTokens) -> some View {
+        VStack(spacing: 8) {
+            NeonAppTile(symbol: row.icon, tokens: tokens, size: 46)
+            Text(row.displayName)
+                .font(AinkradFont.display(11, weight: isSelected ? .medium : .regular))
+                .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentSecondary.opacity(isSelected ? 0.12 : 0)))
+        .overlay(
+            TargetingBrackets(length: 10)
+                .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.5)
+                .padding(2)
+        )
+        .contentShape(Rectangle())
+        .animation(.easeOut(duration: 0.12), value: selectedIndex)
     }
 
     private func footer(tokens: DesignTokens) -> some View {

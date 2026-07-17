@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The in-app HUD shown before Ainkrad actually quits — summoned by
 /// `QuitCoordinator.isConfirming` from ⌘Q, the app menu's Quit, or the
@@ -43,65 +44,24 @@ struct QuitConfirmationView: View {
             .padding(.horizontal, 26)
             .padding(.bottom, 18)
 
-            Toggle("Don't ask again", isOn: $dontAskAgain)
-                .toggleStyle(.switch)
-                .tint(tokens.accentPrimary)
-                .font(AinkradFont.display(12, weight: .medium))
-                .foregroundStyle(tokens.foreground.opacity(0.8))
+            AinkradCheckbox(isOn: $dontAskAgain, label: "Don't ask again")
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 26)
                 .padding(.bottom, 20)
 
-            LinearGradient(
-                colors: [.clear, tokens.accentPrimary.opacity(0.4), .clear],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(height: 1)
-            .padding(.horizontal, 22)
-
-            HStack(spacing: 10) {
-                cancelButton(tokens: tokens, coordinator: coordinator)
-                quitButton(tokens: tokens, coordinator: coordinator)
+            HStack(spacing: AinkradSpacing.sm) {
+                Spacer(minLength: 0)
+                AinkradButton(title: "Cancel", style: .ghost) { coordinator.cancel() }
+                    .keyboardShortcut(.cancelAction)
+                AinkradButton(title: "Quit", style: .danger) {
+                    environment.sounds.play(.appQuit)
+                    coordinator.confirm(dontAskAgain: dontAskAgain)
+                }
+                .keyboardShortcut(.defaultAction)
             }
             .padding(20)
         }
         .hudPanelChrome(tokens: tokens)
         .onKeyPress(.escape) { coordinator.cancel(); return .handled }
-    }
-
-    private func cancelButton(tokens: DesignTokens, coordinator: QuitCoordinator) -> some View {
-        Button { coordinator.cancel() } label: {
-            Text("Cancel")
-                .font(AinkradFont.display(12, weight: .medium))
-                .foregroundStyle(tokens.foreground.opacity(0.8))
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .background(tokens.surfaceElevated.opacity(0.75))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(tokens.accentPrimary.opacity(0.28), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut(.cancelAction)
-    }
-
-    private func quitButton(tokens: DesignTokens, coordinator: QuitCoordinator) -> some View {
-        Button {
-            environment.sounds.play(.appQuit)
-            coordinator.confirm(dontAskAgain: dontAskAgain)
-        } label: {
-            Text("Quit")
-                .font(AinkradFont.display(12, weight: .semibold))
-                .foregroundStyle(tokens.accentPrimary.contrastingText)
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .background(tokens.accentPrimary)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .shadow(color: tokens.accentPrimary.opacity(0.5), radius: 10)
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut(.defaultAction)
     }
 }
