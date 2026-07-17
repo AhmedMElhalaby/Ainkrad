@@ -9,7 +9,7 @@ struct AppStoreOverlayView: View {
     @Bindable var store: AppStoreStore
     let onDismiss: () -> Void
 
-    private let columns = [GridItem(.adaptive(minimum: 220), spacing: 12)]
+    private let columns = [GridItem(.adaptive(minimum: 248), spacing: 16)]
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -93,8 +93,6 @@ struct AppStoreOverlayView: View {
                     })
             } else {
                 header(tokens: tokens)
-                LinearGradient(colors: [.clear, tokens.accentPrimary.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(height: 1)
                 filterBar(tokens: tokens)
                 content(tokens: tokens)
             }
@@ -156,24 +154,17 @@ struct AppStoreOverlayView: View {
                 }
             }
             .padding(48)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(ChamferShape(cut: AinkradRadius.md))
             .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
             .allowsHitTesting(false)   // clicks on the image fall through to nothing (backdrop closes)
 
             VStack {
                 HStack {
                     Spacer()
-                    Button {
+                    AinkradIconButton(systemName: "xmark") {
                         environment.sounds.play(.overlayClose)
                         store.closeLightbox()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(tokens.foreground.opacity(0.75))
-                            .frame(width: 34, height: 34)
-                            .background(Circle().fill(tokens.surfaceElevated.opacity(0.85)))
                     }
-                    .buttonStyle(.plain)
                     .help("Close (esc)")
                 }
                 Spacer()
@@ -199,16 +190,8 @@ struct AppStoreOverlayView: View {
     }
 
     private func lightboxArrow(_ systemImage: String, tokens: DesignTokens, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tokens.foreground.opacity(0.85))
-                .frame(width: 42, height: 42)
-                .background(Circle().fill(tokens.surfaceElevated.opacity(0.85)))
-                .overlay(Circle().strokeBorder(tokens.accentPrimary.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .help(help)
+        AinkradIconButton(systemName: systemImage, action: action)
+            .help(help)
     }
 
     private func header(tokens: DesignTokens) -> some View {
@@ -216,14 +199,19 @@ struct AppStoreOverlayView: View {
             Text("APP STORE").font(AinkradFont.display(14, weight: .semibold)).kerning(1)
                 .foregroundStyle(tokens.foreground)
             Spacer()
-            Button { Task { await store.refresh() } } label: {
-                Image(systemName: "arrow.clockwise")
-                    .foregroundStyle(tokens.foreground.opacity(0.7))
-                    .rotationEffect(.degrees(store.isRefreshing ? 360 : 0))
-                    .animation(store.isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: store.isRefreshing)
-            }.buttonStyle(.plain).help("Refresh catalog")
-            Button { onDismiss() } label: { Image(systemName: "xmark").foregroundStyle(tokens.foreground.opacity(0.6)) }
-                .buttonStyle(.plain).help("Close")
+            // Refresh morphs to a spinner in place while refreshing — both
+            // views stay mounted, only `.opacity` toggles, mirroring
+            // AppStoreActionControls.actionButton's busy-morph.
+            ZStack {
+                AinkradIconButton(systemName: "arrow.clockwise") { Task { await store.refresh() } }
+                    .opacity(store.isRefreshing ? 0 : 1)
+                AinkradSpinner(size: 16)
+                    .opacity(store.isRefreshing ? 1 : 0)
+            }
+            .help("Refresh catalog")
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.isRefreshing)
+            AinkradIconButton(systemName: "xmark") { onDismiss() }
+                .help("Close")
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
     }
@@ -234,42 +222,16 @@ struct AppStoreOverlayView: View {
             AinkradSegmentedPicker(items: AppStoreStore.Filter.allCases, selection: $store.filter) { filter in
                 filterLabel(filter, updateCount: updateCount)
             }
-            searchField(tokens: tokens)
+            AinkradSearchField(text: $store.searchQuery, placeholder: "Search apps…")
+                .frame(width: 220)
             Spacer()
             if let error = store.error {
                 Text(errorText(error)).font(.system(size: 10)).foregroundStyle(tokens.accentTertiary)
                     .lineLimit(1)
-                Button { store.error = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(tokens.foreground.opacity(0.4)) }
-                    .buttonStyle(.plain)
+                AinkradIconButton(systemName: "xmark.circle") { store.error = nil }
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 10)
-    }
-
-    /// Live search over the visible rows (AIN-148) — name/description/author,
-    /// case-insensitive, client-side. Composes with the filter chips above.
-    private func searchField(tokens: DesignTokens) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            TextField("Search apps…", text: $store.searchQuery)
-                .textFieldStyle(.plain)
-                .font(AinkradFont.display(12))
-                .foregroundStyle(tokens.foreground)
-                .tint(tokens.accentPrimary)
-            if !store.searchQuery.isEmpty {
-                Button { store.searchQuery = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(tokens.foreground.opacity(0.4))
-                }.buttonStyle(.plain).help("Clear search")
-            }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 5)
-        .frame(width: 200)
-        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surface.opacity(0.6)))
-        .overlay(ChamferShape(cut: AinkradRadius.sm).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
     }
 
     private func filterLabel(_ filter: AppStoreStore.Filter, updateCount: Int) -> String {
@@ -283,10 +245,16 @@ struct AppStoreOverlayView: View {
     @ViewBuilder private func content(tokens: DesignTokens) -> some View {
         let rows = store.visibleRows
         if rows.isEmpty {
-            AinkradEmptyState(icon: emptyIcon, title: emptyTitle, message: emptyText)
+            if store.isRefreshing && store.rows.isEmpty {
+                // First load, no data yet — centered spinner, not an empty state.
+                AinkradSpinner(size: 36)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                AinkradEmptyState(icon: emptyIcon, title: emptyTitle, message: emptyText)
+            }
         } else {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
+                LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(rows) { row in
                         AppStoreCard(
                             row: row, tokens: tokens, isBusy: store.busy.contains(row.id),
