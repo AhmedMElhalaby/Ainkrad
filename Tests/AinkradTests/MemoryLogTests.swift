@@ -28,4 +28,15 @@ struct MemoryLogTests {
         #expect(mem.read(.memory) == "old")
         #expect(log.entries().isEmpty)
     }
+
+    @Test func undoOfFirstWriteRestoresEmpty() {
+        let (log, mem, root) = make(); defer { try? FileManager.default.removeItem(at: root) }
+        let priorSnapshot = mem.read(.memory)
+        #expect(priorSnapshot == "")
+        mem.write("first content", to: .memory)
+        log.record(file: .memory, provenance: .agent, addedText: "first content", priorSnapshot: priorSnapshot)
+        let id = log.entries().first!.id
+        log.undo(id)
+        #expect(mem.read(.memory) == "")
+    }
 }
