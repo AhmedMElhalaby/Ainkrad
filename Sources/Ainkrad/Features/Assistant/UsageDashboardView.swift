@@ -4,9 +4,10 @@ import AinkradAppKit
 /// "$x.xxxx" when `cost` is a genuine, known figure; "cost unknown" when it's
 /// non-positive — `UsageTracker.record` only accumulates cost when
 /// `ModelPriceTable` actually knows the model's price, so a `0` here means
-/// "never priced", NEVER a real zero-dollar turn. Mirrors
-/// `BuiltinCommands.usage`'s own `cost > 0` convention (`CommandRegistry.swift`)
-/// so the `/usage` text note and this dashboard never disagree. Pure.
+/// "never priced", NEVER a real zero-dollar turn. `BuiltinCommands.usage`
+/// (`CommandRegistry.swift`) gates its own dollar figures on the same
+/// `cost > 0` convention, so the `/usage` text note and this dashboard never
+/// disagree. Pure.
 func formattedUsageCost(_ cost: Double) -> String {
     cost > 0 ? "$" + String(format: "%.4f", cost) : "cost unknown"
 }

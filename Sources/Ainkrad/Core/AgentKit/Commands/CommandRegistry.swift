@@ -105,9 +105,16 @@ enum BuiltinCommands {
             SlashCommand(name: "usage", summary: "Show token/cost usage", usage: "/usage") { _, _ in
                 guard let usage else { return .handled(note: "Usage tracking is unavailable right now.") }
                 let (cumulative, costUSD, savingsUSD) = usage.cumulative()
+                // Gate each dollar figure on `> 0` — `UsageTracker` only accumulates
+                // cost when `ModelPriceTable` knows the model's price, so a `0` here
+                // means "never priced", NEVER a real zero-dollar turn. Mirrors
+                // `formattedUsageCost`'s `cost > 0` convention (`UsageDashboardView.swift`)
+                // so the text note and the dashboard never disagree.
+                let sessionCost = usage.sessionCostUSD > 0 ? "$" + String(format: "%.4f", usage.sessionCostUSD) : "cost unknown"
+                let lifeCost = costUSD > 0 ? "$" + String(format: "%.2f", costUSD) : "cost unknown"
                 let note = """
-                Session: \(usage.session.input) in / \(usage.session.output) out · $\(String(format: "%.4f", usage.sessionCostUSD))
-                Lifetime: \(cumulative.input) in / \(cumulative.output) out · $\(String(format: "%.2f", costUSD)) (saved $\(String(format: "%.2f", savingsUSD)))
+                Session: \(usage.session.input) in / \(usage.session.output) out · \(sessionCost)
+                Lifetime: \(cumulative.input) in / \(cumulative.output) out · \(lifeCost) (saved $\(String(format: "%.2f", savingsUSD)))
                 """
                 return .handled(note: note)
             },

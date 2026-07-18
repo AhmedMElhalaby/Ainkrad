@@ -106,4 +106,30 @@ struct CommandRegistryTests {
         #expect(session.messages.isEmpty)
         #expect(runtime.options.pinnedModel == nil)
     }
+
+    // Regression: an UNPRICED session (no `ModelPriceTable` entry for the
+    // model, so cost stays 0 — "never priced", not a real zero-dollar turn)
+    // must show "cost unknown", never a fabricated "$0.0000"/"$0.00". Mirrors
+    // `formattedUsageCost`'s `cost > 0` convention in `UsageDashboardView.swift`
+    // so the two surfaces agree. Fails against the old unconditional-format code.
+    @Test func usageBuiltinShowsCostUnknownForUnpricedSession() {
+        let usage = UsageTracker(persistence: InMemoryPersistenceStore(), prices: ModelPriceTable())
+        usage.record(model: "unknown-xyz", usage: TokenUsage(input: 500, output: 500), baselineModel: nil)
+        let reg = CommandRegistry(builtins: BuiltinCommands.make(runtime: nil, usage: usage, router: nil, catalog: nil))
+        let result = reg.run("/usage", on: TestSessionFactory.make())
+        guard case .handled(let note) = result, let note else { Issue.record("expected handled note"); return }
+        #expect(note.contains("cost unknown"))
+        #expect(!note.contains("$0.0000"))
+        #expect(!note.contains("$0.00 "))
+    }
+
+    @Test func usageBuiltinShowsRealDollarFigureForPricedSession() {
+        let usage = UsageTracker(persistence: InMemoryPersistenceStore(), prices: ModelPriceTable())
+        usage.record(model: "gpt-5-mini", usage: TokenUsage(input: 1_000_000, output: 1_000_000), baselineModel: nil)
+        let reg = CommandRegistry(builtins: BuiltinCommands.make(runtime: nil, usage: usage, router: nil, catalog: nil))
+        let result = reg.run("/usage", on: TestSessionFactory.make())
+        guard case .handled(let note) = result, let note else { Issue.record("expected handled note"); return }
+        #expect(note.contains("$"))
+        #expect(!note.contains("cost unknown"))
+    }
 }
