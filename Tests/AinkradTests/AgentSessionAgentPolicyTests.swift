@@ -26,6 +26,16 @@ struct AgentSessionAgentPolicyTests {
         #expect(schemas.contains { $0.name == "edit_file" })
     }
 
+    @Test func planAgentSchemasExcludeWriteTool() async throws {
+        let agents = AgentStore(persistence: InMemoryPersistenceStore())
+        agents.setActive(BuiltInAgents.planID)
+        let session = TestSessionFactory.make(agents: agents)
+        // edit_file is present in the full registry (see buildAgentAllowsWriteToolThroughToGate),
+        // so a non-empty absence here proves filtering, not an empty registry.
+        let schemas = session.allowedSchemasForTesting()
+        #expect(!schemas.contains { $0.name == "edit_file" })
+    }
+
     @Test func postureComposesMostRestrictiveWins() {
         // Workspace fullAuto + a custom agent with posture .ask → effective .ask.
         let agents = AgentStore(persistence: InMemoryPersistenceStore())
