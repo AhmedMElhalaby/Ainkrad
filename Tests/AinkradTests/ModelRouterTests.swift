@@ -85,10 +85,9 @@ struct ModelRouterTests {
         #expect(d.candidate.descriptor.tier <= .cheapPaid)
     }
 
-    @Test func capabilityFilterIsHardEvenForThePinnedModel() async {
-        // A vision-requiring signal cannot be routed to a text-only candidate, even when
-        // the router is asked for one specifically via a candidate list that omits any
-        // vision-capable model — the facade must never fabricate a bypass.
+    @Test func capabilityFilterIsHardOnTheAutoPath() async {
+        // A vision-requiring signal cannot be routed to a text-only candidate on the auto
+        // (unpinned) path — the facade must never fabricate a bypass.
         let r = router()
         let d = await r.route(RouterRequest(
             signal: TaskSignal(estimatedInputTokens: 50, needsVision: true, needsTools: false, reasoningHeavy: false),
@@ -97,6 +96,37 @@ struct ModelRouterTests {
             candidates: [cand("local", .local, 128_000, [.toolUse])],   // no vision capability anywhere
             userPinnedModel: nil, attempt: 0))
         #expect(d.reason.contains("no capable model") || d.reason.contains("No capable model"))
+        #expect(!d.pinnedButIncapable)
+    }
+
+    @Test func pinnedModelIncapableOfVisionIsHonoredButFlagged() async {
+        // A user pin still wins outright even when the pinned model lacks a capability the
+        // task requires (here: vision) — but the router must surface that incapability via
+        // `pinnedButIncapable` so callers (session wiring / UI) can warn the user instead of
+        // silently sending a model that can't do the job.
+        let r = router()
+        let d = await r.route(RouterRequest(
+            signal: TaskSignal(estimatedInputTokens: 50, needsVision: true, needsTools: false, reasoningHeavy: false),
+            lastMessage: "what's in this image",
+            routing: AgentRouting(),
+            candidates: [cand("local", .local, 128_000, [.toolUse])],   // no vision capability anywhere
+            userPinnedModel: "local", attempt: 0))
+        #expect(d.candidate.model == "local")   // pin still wins
+        #expect(d.pinnedButIncapable)
+    }
+
+    @Test func pinnedModelCapableIsNotFlagged() async {
+        // Sanity check: a pinned model that DOES satisfy the task's capabilities is not
+        // flagged incapable.
+        let r = router()
+        let d = await r.route(RouterRequest(
+            signal: TaskSignal(estimatedInputTokens: 50, needsVision: true, needsTools: false, reasoningHeavy: false),
+            lastMessage: "what's in this image",
+            routing: AgentRouting(),
+            candidates: [cand("vision-model", .local, 128_000, [.vision])],
+            userPinnedModel: "vision-model", attempt: 0))
+        #expect(d.candidate.model == "vision-model")
+        #expect(!d.pinnedButIncapable)
     }
 
     @Test func routerDisabledReturnsDefaultNotAutoPicked() async {

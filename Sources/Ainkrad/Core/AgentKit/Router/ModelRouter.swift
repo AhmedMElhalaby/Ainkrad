@@ -20,6 +20,13 @@ struct RouterDecision: Equatable, Sendable {
     let reason: String
     let escalated: Bool
     let baselineModel: String?
+    /// True when a user pin (or Agent default, honored via the "router disabled" path) was
+    /// returned even though its `ModelDescriptor` fails the task's capability/context-window
+    /// check (the same `RouterOrdering.capable` predicate the auto path enforces). The pin
+    /// still wins — this only makes the incapability visible to callers (session wiring, UI)
+    /// so they can warn the user instead of silently sending an incapable model. Always
+    /// `false` outside the pin/disabled-router paths.
+    var pinnedButIncapable: Bool = false
 }
 
 /// A subagent spawn request: a budget/class from `spawn_subagent`, resolved to a concrete
@@ -65,8 +72,13 @@ final class ModelRouter {
         // 1. User pin wins over everything, including a disabled router.
         if let pinned = request.userPinnedModel,
            let match = request.candidates.first(where: { $0.model == pinned }) {
+            // Reuse the SAME hard capability check the auto path enforces (Task 10's
+            // `RouterOrdering.capable`) — the pin still wins even if it fails, but we
+            // surface that failure instead of hiding it.
+            let incapable = RouterOrdering.capable([match], for: request.signal).isEmpty
             return RouterDecision(candidate: match, tier: match.descriptor.tier,
-                                  reason: "User pinned \(pinned).", escalated: false, baselineModel: nil)
+                                  reason: "User pinned \(pinned).", escalated: false, baselineModel: nil,
+                                  pinnedButIncapable: incapable)
         }
 
         // 2. Router disabled (and no pin matched above): use the caller-supplied default —
