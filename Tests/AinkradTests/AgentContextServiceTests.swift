@@ -45,6 +45,28 @@ struct AgentContextServiceTests {
         #expect(!result.contains("buf"))
     }
 
+    @Test("assistant-memory disabled: assembled context excludes the memory snapshot but keeps git")
+    func assistantMemoryDisabled() throws {
+        let hub = AgentContextRegistryHub()
+        let git = HostContextRegistry(appID: "gitmage", hub: hub)
+        _ = git.register { AgentContextSnapshot(kind: "git", title: "Git — main", text: "clean") }
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ctx-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let memory = try MemoryService(paths: MemoryPaths(root: root), persistence: InMemoryPersistenceStore())
+        memory.write("hi", to: .user, provenance: .remember)
+        _ = hub.register(appID: "host.memory") { MemoryContextSource.snapshot(from: memory) }
+
+        let settings = AgentContextSettingsStore(persistence: InMemoryPersistenceStore())
+        settings.setEnabled(false, for: "assistant-memory")
+        let service = AgentContextService(hub: hub, settings: settings)
+        let result = service.assembleContext()
+
+        #expect(result.contains("Git — main"))
+        #expect(result.contains("clean"))
+        #expect(!result.contains("Assistant Memory"))
+    }
+
     @Test("oversized snapshot text is truncated with marker")
     func truncatesOversizedText() {
         let hub = AgentContextRegistryHub()

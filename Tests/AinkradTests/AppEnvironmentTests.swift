@@ -81,7 +81,8 @@ final class AppEnvironmentTests {
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
             agentSession: agentSession,
-            modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient())
+            modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
+            memoryService: nil
         )
 
         #expect(environment.registry === registry)
