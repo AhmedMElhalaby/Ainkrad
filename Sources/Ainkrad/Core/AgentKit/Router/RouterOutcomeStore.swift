@@ -71,9 +71,17 @@ final class RouterOutcomeStore {
 
     /// The highest success-rate model with >= 3 samples, or — if any overrides exist for
     /// this difficulty — the most-overridden-to model (explicit user choice wins).
+    ///
+    /// `Dictionary` iteration order is nondeterministic, so on an EQUAL override count or
+    /// success rate, `.max(by:)` alone would nondeterministically pick whichever entry the
+    /// dictionary happened to enumerate first. To make ties deterministic, the candidate
+    /// entries are sorted by model id (ascending) before the `.max(by:)` scan — `max(by:)`
+    /// keeps the first-seen element on a tie (its comparator only replaces on strict `<`),
+    /// so sorting ascending first means the LOWEST model id wins a tie.
     func preferredModel(for difficulty: Difficulty) -> String? {
         let prefix = "\(difficulty.rawValue)|"
         let entries = doc.stats.filter { $0.key.hasPrefix(prefix) }
+            .sorted { model(from: $0.key) < model(from: $1.key) }
         guard !entries.isEmpty else { return nil }
 
         if let override = entries

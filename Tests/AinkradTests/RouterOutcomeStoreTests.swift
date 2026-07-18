@@ -53,4 +53,25 @@ struct RouterOutcomeStoreTests {
         // Only 1 sample, below the 3-sample qualification threshold, no overrides.
         #expect(s.preferredModel(for: .trivial) == nil)
     }
+
+    @Test func equalOverrideCountsBreakTieByLowestModelIdDeterministically() {
+        // Two models tied on override count for the same difficulty — the tiebreak must
+        // be deterministic (lowest model id wins), not dependent on Dictionary iteration
+        // order. Run it several times to catch any nondeterminism.
+        for _ in 0..<20 {
+            let s = RouterOutcomeStore(persistence: InMemoryPersistenceStore())
+            s.recordOverride(difficulty: .moderate, model: "zeta-model")
+            s.recordOverride(difficulty: .moderate, model: "alpha-model")
+            #expect(s.preferredModel(for: .moderate) == "alpha-model")
+        }
+    }
+
+    @Test func equalSuccessRatesBreakTieByLowestModelIdDeterministically() {
+        for _ in 0..<20 {
+            let s = RouterOutcomeStore(persistence: InMemoryPersistenceStore())
+            for _ in 0..<3 { s.recordSuccess(difficulty: .hard, model: "zeta-model") }
+            for _ in 0..<3 { s.recordSuccess(difficulty: .hard, model: "alpha-model") }
+            #expect(s.preferredModel(for: .hard) == "alpha-model")
+        }
+    }
 }
