@@ -32,6 +32,11 @@ final class AgentSession {
     private(set) var streamingText: String = ""
     private(set) var streamingThinking: String = ""
 
+    /// Fired whenever a turn settles (the tool loop returns to `.idle` inside
+    /// `runConversation`) — every-settle is the host's only reliable trigger,
+    /// since there is no session-end signal. NOT fired by `reset()`'s `.idle`.
+    var onSettled: (() -> Void)?
+
     /// The in-flight turn's task, exposed so tests can await settlement.
     /// Not part of the UI-facing contract.
     private(set) var currentTask: Task<Void, Never>?
@@ -44,6 +49,7 @@ final class AgentSession {
     private let permissions: AgentPermissionStore
     private let basePrompt: String
     private let maxToolIterations: Int
+    private let memory: MemoryService?
 
     private enum ApprovalOutcome { case approved, denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
@@ -56,7 +62,8 @@ final class AgentSession {
         registry: AgentToolRegistry,
         permissions: AgentPermissionStore,
         basePrompt: String = AgentSession.defaultPrompt,
-        maxToolIterations: Int = 25
+        maxToolIterations: Int = 25,
+        memory: MemoryService? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -66,9 +73,16 @@ final class AgentSession {
         self.permissions = permissions
         self.basePrompt = basePrompt
         self.maxToolIterations = maxToolIterations
+        self.memory = memory
     }
 
     func send(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("/remember ") {
+            remember(String(trimmed.dropFirst("/remember ".count)))
+            return
+        }
+
         // Re-entrancy guard: a turn is single-flight. If one is already in
         // progress (thinking/streaming/tool/awaiting-approval), ignore the new
         // call so the in-flight Task keeps exclusive ownership of the streaming
@@ -128,6 +142,12 @@ final class AgentSession {
         cont.resume(returning: .denied(reason))
     }
 
+    /// Persists a user-supplied fact to memory with `.remember` provenance.
+    /// Backs the `/remember <text>` command intercepted at the top of `send`.
+    func remember(_ fact: String) {
+        memory?.write(fact, to: .memory, provenance: .remember)
+    }
+
     func reset() {
         currentTask?.cancel()
         currentTask = nil
@@ -163,6 +183,7 @@ final class AgentSession {
                 streamingText = ""
                 streamingThinking = ""
                 state = .idle
+                settled()
                 return
             case .toolCalls(let calls, let assistantText):
                 iterations += 1
@@ -171,6 +192,7 @@ final class AgentSession {
                         text: (assistantText.isEmpty ? "" : assistantText + "\n\n") +
                               "Stopped: reached the \(maxToolIterations)-step tool limit."))
                     state = .idle
+                    settled()
                     return
                 }
                 // Commit the assistant turn (text + tool_use blocks).
@@ -267,6 +289,14 @@ final class AgentSession {
 
         state = .callingTool(call.name)
         return await registry.run(call)
+    }
+
+    /// Runs the cheap rule-based consolidation pass and notifies observers
+    /// whenever a turn settles to `.idle` (both terminal points inside
+    /// `runConversation` — not `reset()`, which is a discard, not a settle).
+    private func settled() {
+        if let memory { MemoryConsolidator.consolidate(memory) }
+        onSettled?()
     }
 
     /// The active connection: the configured one, else the first connection.
