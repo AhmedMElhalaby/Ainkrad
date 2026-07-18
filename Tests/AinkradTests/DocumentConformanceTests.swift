@@ -11,6 +11,7 @@ struct DocumentConformanceTests {
         #expect(RegistryStateDocument.documentID == "registry-enabled-state")
         #expect(AgentsDocument.documentID == "agents")
         #expect(UsageLedgerDocument.documentID == "usage-ledger")
+        #expect(RouterOutcomeDocument.documentID == "router-outcomes")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
