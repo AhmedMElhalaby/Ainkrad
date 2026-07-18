@@ -25,6 +25,7 @@ enum AgentPermissionPolicy {
         isIrreversible: Bool
     ) -> PermissionDecision {
         if isIrreversible { return .requireApproval }
+        if toolPermission == .memory { return .autoApprove }   // memory-only writes are exempt
         switch mode {
         case .fullAuto:
             return .autoApprove
