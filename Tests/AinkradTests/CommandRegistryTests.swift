@@ -58,6 +58,20 @@ struct CommandRegistryTests {
         if case .handled(let note) = result { #expect(note?.contains("gpt-5") == true) } else { Issue.record("expected handled") }
     }
 
+    @Test func usageModelAutoClearsPin() {
+        let persistence = InMemoryPersistenceStore()
+        let runtime = RuntimeOptionsStore(persistence: persistence)
+        let reg = CommandRegistry(builtins: BuiltinCommands.make(runtime: runtime, usage: nil, router: nil, catalog: nil))
+
+        let pinResult = reg.run("/model gpt-5", on: TestSessionFactory.make())
+        #expect(runtime.options.pinnedModel == "gpt-5")
+        if case .handled(let note) = pinResult { #expect(note?.contains("gpt-5") == true) } else { Issue.record("expected handled") }
+
+        let autoResult = reg.run("/model auto", on: TestSessionFactory.make())
+        #expect(runtime.options.pinnedModel == nil)
+        if case .handled(let note) = autoResult { #expect(note?.contains("Auto") == true) } else { Issue.record("expected handled") }
+    }
+
     @Test func thinkBuiltinRejectsUnknownLevels() {
         let persistence = InMemoryPersistenceStore()
         let runtime = RuntimeOptionsStore(persistence: persistence)

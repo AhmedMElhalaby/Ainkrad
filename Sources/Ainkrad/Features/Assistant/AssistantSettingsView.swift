@@ -191,9 +191,10 @@ struct AssistantSettingsView: View {
     private func addConnection() {
         guard canAddConnection else { return }
         let name = newDisplayName.isEmpty ? newPreset.displayName : newDisplayName
-        environment.connectionStore.addConnection(
+        let created = environment.connectionStore.addConnection(
             preset: newPreset, displayName: name, baseURL: newBaseURL, token: newConnectionToken)
         newConnectionToken = ""; newDisplayName = ""
+        modelPicker.refreshModels(for: created, environment)
     }
 
     // MARK: - Model

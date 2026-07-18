@@ -68,6 +68,10 @@ enum BuiltinCommands {
                 let id = args.trimmingCharacters(in: .whitespaces)
                 guard !id.isEmpty else { return .handled(note: "Usage: /model <id>") }
                 guard let runtime else { return .handled(note: "Model pinning is unavailable right now.") }
+                if ["auto", "off", "none"].contains(id.lowercased()) {
+                    runtime.pinModel(nil)
+                    return .handled(note: "Router is now choosing the model each turn (Auto).")
+                }
                 runtime.pinModel(id)
                 return .handled(note: "Pinned model to \(id) for this session.")
             },

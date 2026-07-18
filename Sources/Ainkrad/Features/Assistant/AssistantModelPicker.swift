@@ -9,6 +9,15 @@ func modelPillShowsAutoBadge(pinnedModel: String?, routerEnabled: Bool) -> Bool 
     pinnedModel == nil && routerEnabled
 }
 
+/// Whether the composer model pill's SELECTION should sit on the "Auto" row
+/// rather than a specific connection·model pair. Currently the exact same
+/// rule as `modelPillShowsAutoBadge` — a separate name documents that this
+/// drives the picker's selection sentinel, not just the badge glyph, so the
+/// two can diverge later without silently breaking either call site.
+func modelPillSelectionIsAuto(pinnedModel: String?, routerEnabled: Bool) -> Bool {
+    modelPillShowsAutoBadge(pinnedModel: pinnedModel, routerEnabled: routerEnabled)
+}
+
 /// The model the pill DISPLAYS: an explicit pin always wins (matches
 /// `ModelRouter.route`'s pin precedence); absent a pin, an enabled router
 /// shows the model it last actually resolved to, falling back to the
@@ -83,6 +92,12 @@ final class AssistantModelPickerModel {
         environment.runtimeOptionsStore.pinModel(model)
     }
 
+    /// Return the pill to "Auto": clears any explicit pin so the router picks
+    /// the model each turn again — the pill-side counterpart to `/model auto`.
+    func clearPin(_ environment: AppEnvironment) {
+        environment.runtimeOptionsStore.pinModel(nil)
+    }
+
     func refreshModels(for connection: Connection, _ environment: AppEnvironment) {
         let store = environment.connectionStore
         let svc = environment.modelCatalogService
@@ -127,6 +142,7 @@ struct AssistantConnectionModelPicker: View {
     /// The flattened option space: a real connection+model pair, the "Manage
     /// connections…" sentinel, or an empty placeholder when no connection exists.
     private enum Option: Hashable {
+        case auto
         case pair(connection: UUID, model: String)
         case manage
         case empty
@@ -138,7 +154,8 @@ struct AssistantConnectionModelPicker: View {
         let connections = environment.connectionStore.connections
         let active = model.activeConnection(environment)
 
-        var options: [Option] = connections.flatMap { connection in
+        var options: [Option] = [.auto]
+        options += connections.flatMap { connection in
             model.modelOptions(for: connection).map { Option.pair(connection: connection.id, model: $0) }
         }
         options.append(.manage)
@@ -189,15 +206,22 @@ struct AssistantConnectionModelPicker: View {
         Binding(
             get: {
                 guard let active else { return .empty }
+                let pinned = environment.runtimeOptionsStore.options.pinnedModel
+                let routerEnabled = environment.agentStore.active.routing.routerEnabled
+                if modelPillSelectionIsAuto(pinnedModel: pinned, routerEnabled: routerEnabled) {
+                    return .auto
+                }
                 let displayModel = modelPillDisplayModel(
-                    pinnedModel: environment.runtimeOptionsStore.options.pinnedModel,
-                    routerEnabled: environment.agentStore.active.routing.routerEnabled,
+                    pinnedModel: pinned,
+                    routerEnabled: routerEnabled,
                     lastResolvedModel: environment.agentSession.lastUsageAttributedModel,
                     standingDefault: environment.agentConfigStore.current.model)
                 return .pair(connection: active.id, model: displayModel)
             },
             set: { option in
                 switch option {
+                case .auto:
+                    model.clearPin(environment)
                 case .pair(let connectionID, let modelName):
                     if let connection = environment.connectionStore.connections.first(where: { $0.id == connectionID }) {
                         model.selectConnectionModel(connection, model: modelName, environment)
@@ -213,6 +237,8 @@ struct AssistantConnectionModelPicker: View {
 
     private func label(_ option: Option) -> String {
         switch option {
+        case .auto:
+            return "↺ Auto — router picks each turn"
         case .empty:
             return "No connection"
         case .manage:

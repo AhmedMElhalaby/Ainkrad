@@ -25,6 +25,13 @@ struct AssistantModelDashboardTests {
         #expect(modelPillShowsAutoBadge(pinnedModel: nil, routerEnabled: false) == false)
     }
 
+    @Test("The pill's selection sits on the Auto row exactly when the Auto badge would show")
+    func selectionIsAutoMirrorsAutoBadge() {
+        #expect(modelPillSelectionIsAuto(pinnedModel: nil, routerEnabled: true) == true)
+        #expect(modelPillSelectionIsAuto(pinnedModel: "claude-opus-4-8", routerEnabled: true) == false)
+        #expect(modelPillSelectionIsAuto(pinnedModel: nil, routerEnabled: false) == false)
+    }
+
     // MARK: - Display model resolution
 
     @Test("A pin always wins the pill's displayed model")
