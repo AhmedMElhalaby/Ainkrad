@@ -1,6 +1,42 @@
 import SwiftUI
 import AinkradAppKit
 
+/// Whether the composer's model pill should show the "Auto" badge — i.e. the
+/// router is resolving the model each turn rather than a user pin winning
+/// outright (mirrors `ModelRouter.route`'s own "pin wins over everything"
+/// rule). Pure — unit tested without SwiftUI/AppEnvironment.
+func modelPillShowsAutoBadge(pinnedModel: String?, routerEnabled: Bool) -> Bool {
+    pinnedModel == nil && routerEnabled
+}
+
+/// The model the pill DISPLAYS: an explicit pin always wins (matches
+/// `ModelRouter.route`'s pin precedence); absent a pin, an enabled router
+/// shows the model it last actually resolved to, falling back to the
+/// standing default before any turn has settled; a disabled router with no
+/// pin shows the standing default. Pure.
+func modelPillDisplayModel(pinnedModel: String?, routerEnabled: Bool,
+                            lastResolvedModel: String?, standingDefault: String) -> String {
+    if let pinnedModel { return pinnedModel }
+    if routerEnabled { return lastResolvedModel ?? standingDefault }
+    return standingDefault
+}
+
+/// True when `model` is one of `curatedModels` (`ProviderPreset.curatedModels`
+/// for the owning connection) — drives the verified/curated glyph in the
+/// model picker's option rows. Pure.
+func isCuratedModel(_ model: String, curatedModels: [String]) -> Bool {
+    curatedModels.contains(model)
+}
+
+/// Option-row label for a (connection, model) pair: "Connection · Model",
+/// prefixed with a verified/curated glyph when the model is one of the
+/// connection's curated presets. Pure — the exact string
+/// `AssistantConnectionModelPicker`'s row label renders.
+func modelOptionRowLabel(connectionName: String, model: String, isCurated: Bool) -> String {
+    let prefix = isCurated ? "✓ " : ""
+    return "\(prefix)\(connectionName) · \(model)"
+}
+
 /// The ONE home for the Assistant's connection+model selection logic, previously
 /// duplicated in `AssistantRootView` and `AssistantSettingsView`. Consumers hold
 /// it as `@State`; methods take the `AppEnvironment` so it stays decoupled.
@@ -37,11 +73,14 @@ final class AssistantModelPickerModel {
     }
 
     /// Switch to a specific connection + model together (used by the grouped
-    /// pill, which lists a model under its owning connection).
+    /// pill, which lists a model under its owning connection). Also pins the
+    /// model for the session (`RuntimeOptionsStore.pinModel`) — an explicit
+    /// pick from the pill is an explicit pin, same as `/model <id>`.
     func selectConnectionModel(_ connection: Connection, model: String, _ environment: AppEnvironment) {
         let configStore = environment.agentConfigStore
         configStore.setActiveConnectionID(connection.id)
         configStore.setModel(model)
+        environment.runtimeOptionsStore.pinModel(model)
     }
 
     func refreshModels(for connection: Connection, _ environment: AppEnvironment) {
@@ -104,15 +143,35 @@ struct AssistantConnectionModelPicker: View {
         }
         options.append(.manage)
 
-        return AinkradSelect(
-            items: options,
-            selection: selectionBinding(active: active),
-            label: label,
-            searchPlaceholder: "Search connections & models…"
-        )
-        .fixedSize()
-        .onAppear { if let c = active { model.refreshModels(for: c, environment) } }
-        .onChange(of: active?.id) { _, _ in if let c = active { model.refreshModels(for: c, environment) } }
+        return HStack(spacing: AinkradSpacing.xs) {
+            AinkradSelect(
+                items: options,
+                selection: selectionBinding(active: active),
+                label: label,
+                searchPlaceholder: "Search connections & models…"
+            )
+            .fixedSize()
+            .onAppear { if let c = active { model.refreshModels(for: c, environment) } }
+            .onChange(of: active?.id) { _, _ in if let c = active { model.refreshModels(for: c, environment) } }
+
+            routingBadge
+        }
+    }
+
+    /// "AUTO" when the router is resolving the model each turn, "PINNED" when
+    /// the user has pinned one — mirrors `AgentSwitcherView`'s neighboring
+    /// pill in NOT using any native control, just a themed `AinkradBadge`.
+    /// No badge at all when the router is disabled and nothing is pinned
+    /// (today's plain default-model behavior, unchanged).
+    @ViewBuilder
+    private var routingBadge: some View {
+        let pinned = environment.runtimeOptionsStore.options.pinnedModel
+        let routerEnabled = environment.agentStore.active.routing.routerEnabled
+        if modelPillShowsAutoBadge(pinnedModel: pinned, routerEnabled: routerEnabled) {
+            AinkradBadge(text: "Auto", tint: tokens.accentSecondary)
+        } else if pinned != nil {
+            AinkradBadge(text: "Pinned", tint: tokens.accentPrimary)
+        }
     }
 
     /// Maps the store's live selection to the matching pair (or `.empty`) for the
@@ -121,11 +180,21 @@ struct AssistantConnectionModelPicker: View {
     /// getter re-reads the unchanged store, so the trigger label reverts on its
     /// own). The getter never crashes when the current model isn't yet in the
     /// discovered list — it still resolves a "Connection · Model" label.
+    ///
+    /// The displayed model is resolved via `modelPillDisplayModel`: a pin always
+    /// wins; absent a pin, an enabled router shows the model it last actually
+    /// resolved to (`AgentSession.lastUsageAttributedModel`) rather than the
+    /// standing config default, so "Auto" reflects what really ran.
     private func selectionBinding(active: Connection?) -> Binding<Option> {
         Binding(
             get: {
                 guard let active else { return .empty }
-                return .pair(connection: active.id, model: environment.agentConfigStore.current.model)
+                let displayModel = modelPillDisplayModel(
+                    pinnedModel: environment.runtimeOptionsStore.options.pinnedModel,
+                    routerEnabled: environment.agentStore.active.routing.routerEnabled,
+                    lastResolvedModel: environment.agentSession.lastUsageAttributedModel,
+                    standingDefault: environment.agentConfigStore.current.model)
+                return .pair(connection: active.id, model: displayModel)
             },
             set: { option in
                 switch option {
@@ -149,9 +218,11 @@ struct AssistantConnectionModelPicker: View {
         case .manage:
             return AssistantConnectionModelPicker.manageLabel
         case .pair(let connectionID, let modelName):
-            let name = environment.connectionStore.connections
-                .first(where: { $0.id == connectionID })?.displayName ?? "Connection"
-            return "\(name) · \(modelName)"
+            guard let connection = environment.connectionStore.connections.first(where: { $0.id == connectionID }) else {
+                return "Connection · \(modelName)"
+            }
+            let curated = isCuratedModel(modelName, curatedModels: ProviderPreset.preset(id: connection.presetID).curatedModels)
+            return modelOptionRowLabel(connectionName: connection.displayName, model: modelName, isCurated: curated)
         }
     }
 }
