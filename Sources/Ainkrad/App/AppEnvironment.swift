@@ -30,6 +30,10 @@ final class AppEnvironment {
     let agentContextService: AgentContextService
     let agentSession: AgentSession
     let modelCatalogService: ModelCatalogService
+    /// The assistant memory subsystem (M7 Slice 1). `nil` when the FTS index
+    /// couldn't be opened at launch — the app degrades to memory-less rather
+    /// than crashing (see `bootstrap()`).
+    let memoryService: MemoryService?
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -80,7 +84,8 @@ final class AppEnvironment {
         agentContextSettingsStore: AgentContextSettingsStore,
         agentContextService: AgentContextService,
         agentSession: AgentSession,
-        modelCatalogService: ModelCatalogService
+        modelCatalogService: ModelCatalogService,
+        memoryService: MemoryService?
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -106,6 +111,7 @@ final class AppEnvironment {
         self.agentContextService = agentContextService
         self.agentSession = agentSession
         self.modelCatalogService = modelCatalogService
+        self.memoryService = memoryService
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -193,12 +199,34 @@ final class AppEnvironment {
             currentWorkspaceID: { [weak workspaceManager] in
                 workspaceManager?.activeWorkspaceID ?? UUID()
             })
-        let agentToolRegistry = AgentToolRegistry(tools: [
+        // Assistant memory (M7 Slice 1). Degrade-don't-crash: if the FTS index can't
+        // open, the assistant runs memory-less this launch (mirrors FileDocumentStore's
+        // corrupt-file quarantine posture) rather than taking the app down.
+        // Mirrors `pluginDataRoot`/`retainedDataRoot` above: when a test injects
+        // `rootURL`, the memory subdir is derived from that same isolated root
+        // rather than the real Application Support path, so `make test` never
+        // touches (or reindexes) the real on-disk memory store.
+        let memoryRoot = rootURL != nil
+            ? documentsRoot.appendingPathComponent("Memory", isDirectory: true)
+            : MemoryPaths.defaultRoot()
+        let memoryService = try? MemoryService(
+            paths: MemoryPaths(root: memoryRoot),
+            persistence: persistence)
+
+        var agentTools: [any AgentTool] = [
             ReadFileTool(), EditFileTool(),
             WorkspaceControlTool(workspaces: workspaceManager),
             RunTerminalTool(actionHub: agentActionHub),
             GitOpTool(actionHub: agentActionHub),
-        ])
+        ]
+        if let memoryService {
+            _ = agentContextHub.register(appID: "host.memory") {
+                MemoryContextSource.snapshot(from: memoryService)
+            }
+            agentTools.append(MemoryWriteTool(service: memoryService))
+            agentTools.append(MemorySearchTool(service: memoryService))
+        }
+        let agentToolRegistry = AgentToolRegistry(tools: agentTools)
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
@@ -212,7 +240,8 @@ final class AppEnvironment {
             config: agentConfigStore,
             context: agentContextService,
             registry: agentToolRegistry,
-            permissions: agentPermissionStore
+            permissions: agentPermissionStore,
+            memory: memoryService
         )
 
         let environment = AppEnvironment(
@@ -239,7 +268,8 @@ final class AppEnvironment {
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
             agentSession: agentSession,
-            modelCatalogService: modelCatalogService
+            modelCatalogService: modelCatalogService,
+            memoryService: memoryService
         )
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.

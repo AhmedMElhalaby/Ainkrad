@@ -76,4 +76,25 @@ struct AgentPermissionModelTests {
     func autoApproveAllowlistedReversibleUnchanged() {
         #expect(decide(.write, .autoApprove, name: "edit_file", allow: ["edit_file"], gateReads: false, isIrreversible: false) == .autoApprove)
     }
+
+    @Test func memoryToolIsExemptInAskMode() {
+        let d = AgentPermissionPolicy.decide(
+            toolPermission: .memory, toolName: "memory_write",
+            mode: .ask, allowlist: [], gateReads: true, isIrreversible: false)
+        #expect(d == .autoApprove)
+    }
+
+    @Test func memoryToolExemptEvenWhenGateReadsOn() {
+        let d = AgentPermissionPolicy.decide(
+            toolPermission: .memory, toolName: "memory_write",
+            mode: .autoApprove, allowlist: [], gateReads: true, isIrreversible: false)
+        #expect(d == .autoApprove)
+    }
+
+    @Test func memoryToolStillGatedIfMarkedIrreversible() {
+        let d = AgentPermissionPolicy.decide(
+            toolPermission: .memory, toolName: "memory_write",
+            mode: .ask, allowlist: [], gateReads: true, isIrreversible: true)
+        #expect(d == .requireApproval)
+    }
 }

@@ -39,6 +39,7 @@ struct SettingsOverlayView: View {
         case livingSky
         case appIcon
         case shortcuts
+        case memory
         case app(String)
     }
 
@@ -132,6 +133,7 @@ struct SettingsOverlayView: View {
                 sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
                 sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
                 sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
+                sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
 
                 groupLabel("APPEARANCE", tokens: tokens)
                     .padding(.top, 12)
@@ -255,6 +257,16 @@ struct SettingsOverlayView: View {
             AppIconSettingsView()
         case .shortcuts:
             ShortcutsSettingsView()
+        case .memory:
+            if let memoryService = environment.memoryService {
+                MemoryUIView(service: memoryService)
+            } else {
+                AinkradEmptyState(
+                    icon: "brain",
+                    title: "Memory unavailable",
+                    message: "The assistant's memory index couldn't be opened this launch, so it's running memory-less for now. Restart Ainkrad to try again."
+                )
+            }
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is

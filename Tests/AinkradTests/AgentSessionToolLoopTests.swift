@@ -168,4 +168,43 @@ struct AgentSessionToolLoopTests {
         #expect(session.state == .idle)
         #expect(session.messages.last?.text == "second")
     }
+
+    @Test func onSettledFiresExactlyOnceAfterCompletedTurn() async {
+        let provider = ScriptedProvider([
+            [.textDelta("done"), .done(stopReason: "end_turn")],
+        ])
+        let session = makeSession(provider: provider, tool: OKTool(permission: .read), mode: .ask, gateReads: false)
+        var settledCount = 0
+        var stateAtFire: AgentSession.State?
+        session.onSettled = {
+            settledCount += 1
+            stateAtFire = session.state
+        }
+        session.send("go")
+        // Not fired while the turn is still in flight (streaming/thinking).
+        #expect(settledCount == 0)
+        await session.currentTask?.value
+        #expect(settledCount == 1)
+        #expect(stateAtFire == .idle)
+        #expect(session.state == .idle)
+    }
+
+    @Test func onSettledDoesNotFireAtApprovalPauseOnlyAfterCompletion() async {
+        let provider = ScriptedProvider([
+            [.toolUseComplete(id: "1", name: "ok_tool", input: .object([:])), .done(stopReason: "tool_use")],
+            [.textDelta("applied"), .done(stopReason: "end_turn")],
+        ])
+        let session = makeSession(provider: provider, tool: OKTool(permission: .write), mode: .ask)
+        var settledCount = 0
+        session.onSettled = { settledCount += 1 }
+        session.send("edit")
+        guard await waitForApproval(session) else { Issue.record("expected awaitingApproval"); return }
+        // Parked on the approval gate: settled() must not have fired yet.
+        #expect(settledCount == 0)
+        session.approve()
+        await session.currentTask?.value
+        #expect(settledCount == 1)
+        #expect(session.state == .idle)
+        #expect(session.messages.last?.text == "applied")
+    }
 }
