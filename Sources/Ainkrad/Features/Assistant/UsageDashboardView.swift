@@ -1,0 +1,93 @@
+import SwiftUI
+import AinkradAppKit
+
+/// "$x.xxxx" when `cost` is a genuine, known figure; "cost unknown" when it's
+/// non-positive — `UsageTracker.record` only accumulates cost when
+/// `ModelPriceTable` actually knows the model's price, so a `0` here means
+/// "never priced", NEVER a real zero-dollar turn. `BuiltinCommands.usage`
+/// (`CommandRegistry.swift`) gates its own dollar figures on the same
+/// `cost > 0` convention, so the `/usage` text note and this dashboard never
+/// disagree. Pure.
+func formattedUsageCost(_ cost: Double) -> String {
+    cost > 0 ? "$" + String(format: "%.4f", cost) : "cost unknown"
+}
+
+/// "Saved $x.xxxx" for a genuine positive router saving; `nil` (render
+/// nothing) for a `nil` or non-positive figure — there's no "$0.0000 saved"
+/// line to show when the router either didn't run or had nothing to avoid.
+/// Pure.
+func formattedRouterSavings(_ savings: Double?) -> String? {
+    guard let savings, savings > 0 else { return nil }
+    return "Saved $" + String(format: "%.4f", savings)
+}
+
+/// The `/usage` dashboard: session + all-time token/cost/savings, plus
+/// today's token breakdown. Built entirely from Cardinal-HUD kit components
+/// (`AinkradStatRow`, `AinkradListRow`, `AinkradIconGlyph`) — no raw
+/// `Text`/`.font(.headline)`/`.foregroundStyle(.secondary)` styling. Presented
+/// via `.ainkradModal` from the composer (see `AssistantComposerBar`'s usage
+/// trigger beside the model pill).
+struct UsageDashboardView: View {
+    let tracker: UsageTracker
+    let tokens: DesignTokens
+
+    var body: some View {
+        let cumulative = tracker.cumulative()
+        let today = tracker.today()
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+                header
+                sectionPanel(title: "This session") {
+                    AinkradStatRow(label: "Input tokens", value: "\(tracker.session.input)")
+                    AinkradStatRow(label: "Output tokens", value: "\(tracker.session.output)")
+                    AinkradStatRow(label: "Cache read", value: "\(tracker.session.cacheRead)")
+                    AinkradStatRow(label: "Cost", value: formattedUsageCost(tracker.sessionCostUSD),
+                                  status: tracker.sessionCostUSD > 0 ? .neutral : .warning)
+                }
+                sectionPanel(title: "All time") {
+                    AinkradStatRow(label: "Input tokens", value: "\(cumulative.0.input)")
+                    AinkradStatRow(label: "Output tokens", value: "\(cumulative.0.output)")
+                    AinkradStatRow(label: "Cache read", value: "\(cumulative.0.cacheRead)")
+                    AinkradStatRow(label: "Cost", value: formattedUsageCost(cumulative.costUSD),
+                                  status: cumulative.costUSD > 0 ? .neutral : .warning)
+                    if let savings = formattedRouterSavings(cumulative.savingsUSD) {
+                        AinkradStatRow(label: "Router savings", value: savings, status: .success)
+                    }
+                }
+                sectionPanel(title: "Today") {
+                    AinkradListRow(
+                        leading: { AinkradIconGlyph(systemName: "calendar", size: 22) },
+                        title: "In \(today.input) · Out \(today.output)",
+                        subtitle: today.cacheRead > 0 ? "Cache read \(today.cacheRead)" : nil,
+                        trailing: { EmptyView() }
+                    )
+                }
+            }
+            .padding(AinkradSpacing.lg)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: AinkradSpacing.sm) {
+            AinkradIconGlyph(systemName: "gauge.with.dots.needle.67percent", filled: true)
+            Text("Usage")
+                .font(AinkradFont.display(15, weight: .semibold))
+                .foregroundStyle(tokens.foreground)
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func sectionPanel<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            Text(title.uppercased())
+                .font(AinkradFont.display(11, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+            VStack(alignment: .leading, spacing: 2) { content() }
+                .padding(AinkradSpacing.md)
+                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.4)))
+        }
+    }
+}

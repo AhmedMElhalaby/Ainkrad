@@ -33,7 +33,7 @@ struct ClaudeProviderTests {
                                          system: "sys", tools: [],
                                          model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
                                          apiKey: "sk-x") { out.append(e) }
-        #expect(out == [.thinkingDelta("hmm"), .textDelta("Hello"), .textDelta(" world"), .done(stopReason: "end_turn")])
+        #expect(out == [.thinkingDelta("hmm"), .textDelta("Hello"), .textDelta(" world"), .usage(.zero), .done(stopReason: "end_turn")])
     }
 
     @Test("sends required headers and streaming body")

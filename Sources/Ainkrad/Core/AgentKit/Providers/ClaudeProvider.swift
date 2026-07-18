@@ -23,12 +23,17 @@ struct ClaudeProvider: LLMProvider {
 
                     var stopReason: String?
                     var toolBlocks: [Int: (id: String, name: String, buffer: String)] = [:]
+                    var turnUsage = TokenUsage.zero
 
                     for try await payload in SSEParser.events(from: bytes) {
                         guard let data = payload.data(using: .utf8) else { continue }
                         guard let envelope = try? JSONDecoder().decode(SSEEnvelope.self, from: data) else { continue }
 
                         switch envelope.type {
+                        case "message_start":
+                            if let json = JSONValue.parse(payload) {
+                                turnUsage = turnUsage + Self.usageInput(from: json)
+                            }
                         case "content_block_start":
                             if envelope.contentBlock?.type == "tool_use",
                                let index = envelope.index,
@@ -69,7 +74,15 @@ struct ClaudeProvider: LLMProvider {
                             if let reason = envelope.delta?.stopReason {
                                 stopReason = reason
                             }
+                            if let json = JSONValue.parse(payload) {
+                                let output = Self.usageOutput(from: json)
+                                if output > 0 {
+                                    turnUsage = TokenUsage(input: turnUsage.input, output: output,
+                                                           cacheRead: turnUsage.cacheRead, cacheWrite: turnUsage.cacheWrite)
+                                }
+                            }
                         case "message_stop":
+                            continuation.yield(.usage(turnUsage))
                             continuation.yield(.done(stopReason: stopReason))
                         case "error":
                             let message = envelope.error?.message ?? "Anthropic API error"
@@ -89,6 +102,23 @@ struct ClaudeProvider: LLMProvider {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    // MARK: - Usage parsing
+
+    /// `message_delta` usage: `{"usage":{"output_tokens":N}}`.
+    nonisolated static func usageOutput(from json: JSONValue) -> Int {
+        if case .number(let n)? = json["usage"]?["output_tokens"] { return Int(n) }
+        return 0
+    }
+
+    /// `message_start` usage: nested under `"message":{"usage":{...}}`; falls back to
+    /// a top-level `"usage"` key for direct/test payloads.
+    nonisolated static func usageInput(from json: JSONValue) -> TokenUsage {
+        let usage = json["message"]?["usage"] ?? json["usage"]
+        func int(_ k: String) -> Int { if case .number(let n)? = usage?[k] { return Int(n) }; return 0 }
+        return TokenUsage(input: int("input_tokens"), output: 0,
+                          cacheRead: int("cache_read_input_tokens"), cacheWrite: int("cache_creation_input_tokens"))
     }
 
     // MARK: - Request building

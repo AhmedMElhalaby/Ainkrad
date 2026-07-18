@@ -85,6 +85,16 @@ final class AppEnvironmentTests {
             agentStore: agentStore,
             agentSession: agentSession,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
+            modelCatalog: ModelCatalog(),
+            modelPriceTable: ModelPriceTable(),
+            usageTracker: UsageTracker(persistence: persistence, prices: ModelPriceTable()),
+            routerOutcomeStore: RouterOutcomeStore(persistence: persistence),
+            modelRouter: ModelRouter(catalog: ModelCatalog(), outcomes: RouterOutcomeStore(persistence: persistence)),
+            runtimeOptionsStore: RuntimeOptionsStore(persistence: persistence),
+            localModelProbe: LocalModelProbe(catalog: ModelCatalogService(http: URLSessionDataHTTPClient())),
+            localModelAvailability: LocalModelAvailability(),
+            authProfileStore: AuthProfileStore(persistence: persistence, secrets: secrets),
+            commandRegistry: CommandRegistry(builtins: []),
             memoryService: nil
         )
 

@@ -37,6 +37,13 @@ struct OpenAICompatibleProvider: LLMProvider {
                             continue
                         }
 
+                        // The usage chunk (when the endpoint honors `stream_options.include_usage`)
+                        // arrives LAST with an empty `choices` array — parse it before the
+                        // `choices.first` guard below, or it would be silently skipped.
+                        if let json = JSONValue.parse(payload), let usage = Self.usage(from: json) {
+                            continuation.yield(.usage(usage))
+                        }
+
                         guard let choice = chunk.choices?.first else { continue }
                         if let content = choice.delta?.content, !content.isEmpty {
                             continuation.yield(.textDelta(content))
@@ -80,6 +87,19 @@ struct OpenAICompatibleProvider: LLMProvider {
         }
     }
 
+    // MARK: - Usage parsing
+
+    /// The final streamed chunk's `usage` object, when the endpoint honors
+    /// `stream_options.include_usage`. Returns nil when absent — that chunk simply
+    /// never arrives for endpoints that don't support it, which must never be an error.
+    nonisolated static func usage(from json: JSONValue) -> TokenUsage? {
+        guard let u = json["usage"] else { return nil }
+        func int(_ k: String) -> Int { if case .number(let n)? = u[k] { return Int(n) }; return 0 }
+        var cacheRead = 0
+        if case .number(let n)? = u["prompt_tokens_details"]?["cached_tokens"] { cacheRead = Int(n) }
+        return TokenUsage(input: int("prompt_tokens"), output: int("completion_tokens"), cacheRead: cacheRead, cacheWrite: 0)
+    }
+
     // MARK: - Request building
 
     private static func makeRequest(
@@ -106,6 +126,9 @@ struct OpenAICompatibleProvider: LLMProvider {
             "model": model.model,
             "stream": true,
             "messages": wireMessages,
+            // Best-effort: not every OpenAI-compatible endpoint (OpenRouter/Groq/
+            // DeepSeek/Ollama/LM Studio) honors this — absent usage is never an error.
+            "stream_options": ["include_usage": true],
         ]
         if !tools.isEmpty {
             body["tools"] = tools.map {

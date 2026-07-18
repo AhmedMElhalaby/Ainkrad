@@ -49,3 +49,62 @@ final class AgentConfigStore {
             activeConnectionID: activeConnectionID, model: current.model, effort: current.effort))
     }
 }
+
+/// Per-session assistant runtime toggles: verbose/trace display flags, the `/think`
+/// reasoning-effort level, a session-scoped model pin (`/model`, cleared on `/new`),
+/// and the router's cost/quality policy. Distinct from `AgentConfigDocument` (the
+/// standing default model/effort) — this is the ephemeral layer `resolveTurn()`
+/// consults FIRST, before falling back to the Agent's default or the config.
+struct AssistantRuntimeOptions: PersistableDocument {
+    static let documentID = "assistant-runtime"
+    var verbose = false
+    var trace = false
+    var thinkLevel = "medium"
+    var pinnedModel: String? = nil
+    var routerPolicy: RouterPolicy = .saveMoney
+
+    init(verbose: Bool = false, trace: Bool = false, thinkLevel: String = "medium",
+         pinnedModel: String? = nil, routerPolicy: RouterPolicy = .saveMoney) {
+        self.verbose = verbose
+        self.trace = trace
+        self.thinkLevel = thinkLevel
+        self.pinnedModel = pinnedModel
+        self.routerPolicy = routerPolicy
+    }
+
+    // Host idiom: forward-compatible decoding (decodeIfPresent + defaults) so a
+    // payload missing newer keys never throws. See RouterOutcomeDocument / UsageLedgerDocument.
+    private enum CodingKeys: String, CodingKey { case verbose, trace, thinkLevel, pinnedModel, routerPolicy }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        verbose = try c.decodeIfPresent(Bool.self, forKey: .verbose) ?? false
+        trace = try c.decodeIfPresent(Bool.self, forKey: .trace) ?? false
+        thinkLevel = try c.decodeIfPresent(String.self, forKey: .thinkLevel) ?? "medium"
+        pinnedModel = try c.decodeIfPresent(String.self, forKey: .pinnedModel)
+        routerPolicy = try c.decodeIfPresent(RouterPolicy.self, forKey: .routerPolicy) ?? .saveMoney
+    }
+}
+
+@MainActor
+@Observable
+final class RuntimeOptionsStore {
+    private(set) var options: AssistantRuntimeOptions
+    private let persistence: PersistenceStore
+
+    init(persistence: PersistenceStore) {
+        self.persistence = persistence
+        self.options = persistence.load(AssistantRuntimeOptions.self) ?? AssistantRuntimeOptions()
+    }
+
+    func setVerbose(_ v: Bool) { options.verbose = v; save() }
+    func setTrace(_ v: Bool) { options.trace = v; save() }
+    func setThinkLevel(_ v: String) { options.thinkLevel = v; save() }
+    func pinModel(_ id: String?) { options.pinnedModel = id; save() }
+    func setPolicy(_ p: RouterPolicy) { options.routerPolicy = p; save() }
+
+    /// `/new` / `/reset` clears only the session-scoped model pin — verbose/trace/
+    /// thinkLevel/routerPolicy are standing preferences, not per-session state.
+    func resetForNewSession() { options.pinnedModel = nil; save() }
+
+    private func save() { persistence.save(options) }
+}

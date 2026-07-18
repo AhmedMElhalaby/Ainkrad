@@ -14,6 +14,7 @@ struct AssistantComposerBar: View {
     let modelPicker: AssistantModelPickerModel
     @Binding var draft: String
     var autoFocusOnAppear: Bool = false
+    @State private var isUsageDashboardPresented = false
 
     var body: some View {
         let isBusy = AssistantComposerBar.isBusy(session.state)
@@ -37,6 +38,8 @@ struct AssistantComposerBar: View {
 
                 Spacer(minLength: 8)
 
+                usageDashboardTrigger
+
                 Button { send() } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 22))
@@ -48,6 +51,9 @@ struct AssistantComposerBar: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .ainkradModal(isPresented: $isUsageDashboardPresented) {
+            UsageDashboardView(tracker: environment.usageTracker, tokens: tokens)
+        }
         .background(
             // Tab-cycle affordance (M7 Slice 5a Task 5): swallows a plain Tab
             // keyDown to advance the active agent, but ONLY when the draft is
@@ -73,6 +79,20 @@ struct AssistantComposerBar: View {
             label: { AssistantComposerBar.title($0) }
         )
         .fixedSize()
+    }
+
+    /// Opens the `/usage` dashboard (session + cumulative tokens/cost/savings)
+    /// in a scoped `.ainkradModal` — the same "gauge" glyph `/usage`'s text
+    /// note already reports on, just visualized. A themed icon button, not a
+    /// native control.
+    private var usageDashboardTrigger: some View {
+        Button { isUsageDashboardPresented = true } label: {
+            Image(systemName: "gauge.with.dots.needle.67percent")
+                .font(.system(size: 14))
+                .foregroundStyle(tokens.foreground.opacity(0.55))
+        }
+        .buttonStyle(.plain)
+        .help("Usage & cost")
     }
 
     private func canSend(isBusy: Bool) -> Bool {

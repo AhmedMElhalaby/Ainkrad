@@ -1,0 +1,65 @@
+[
+  {
+    "id": "claude-opus-4-8",
+    "tier": 3,
+    "contextWindow": 200000,
+    "capabilities": { "rawValue": 7 },
+    "matchPrefixes": ["claude-opus"]
+  },
+  {
+    "id": "claude-sonnet-4-8",
+    "tier": 2,
+    "contextWindow": 200000,
+    "capabilities": { "rawValue": 7 },
+    "matchPrefixes": ["claude-sonnet"]
+  },
+  {
+    "id": "claude-haiku-4-8",
+    "tier": 2,
+    "contextWindow": 200000,
+    "capabilities": { "rawValue": 3 },
+    "matchPrefixes": ["claude-haiku"]
+  },
+  {
+    "id": "gpt-5",
+    "tier": 3,
+    "contextWindow": 400000,
+    "capabilities": { "rawValue": 7 },
+    "matchPrefixes": ["gpt-5"]
+  },
+  {
+    "id": "gpt-5-mini",
+    "tier": 2,
+    "contextWindow": 400000,
+    "capabilities": { "rawValue": 3 },
+    "matchPrefixes": ["gpt-5-mini"]
+  },
+  {
+    "id": "gemini-2.5-flash",
+    "tier": 2,
+    "contextWindow": 1000000,
+    "capabilities": { "rawValue": 3 },
+    "matchPrefixes": ["gemini-2.5-flash"]
+  },
+  {
+    "id": "deepseek-chat",
+    "tier": 1,
+    "contextWindow": 64000,
+    "capabilities": { "rawValue": 2 },
+    "matchPrefixes": ["deepseek"]
+  },
+  {
+    "id": "llama3.2",
+    "tier": 0,
+    "contextWindow": 128000,
+    "capabilities": { "rawValue": 2 },
+    "matchPrefixes": ["llama"]
+  },
+  {
+    "id": "qwen2.5-coder",
+    "tier": 0,
+    "contextWindow": 32000,
+    "capabilities": { "rawValue": 2 },
+    "matchPrefixes": ["qwen"]
+  }
+]
