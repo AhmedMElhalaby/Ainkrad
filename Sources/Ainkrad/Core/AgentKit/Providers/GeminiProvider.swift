@@ -28,6 +28,7 @@ struct GeminiProvider: LLMProvider {
                                                    tools: tools, model: model, apiKey: apiKey)
                     let bytes = try await http.post(request)
                     var finishReason: String?
+                    var latestUsage: TokenUsage?
 
                     for try await payload in SSEParser.events(from: bytes) {
                         guard let data = payload.data(using: .utf8) else { continue }
@@ -36,6 +37,13 @@ struct GeminiProvider: LLMProvider {
                         if let message = chunk.error?.message {
                             continuation.yield(.failed(message))
                             continue
+                        }
+                        // usageMetadata is cumulative-so-far and may arrive on a final chunk with
+                        // empty `candidates` — parse it independent of the candidates guard below
+                        // so that chunk isn't dropped, and keep only the latest (last-wins) value
+                        // instead of summing per chunk (AgentSession sums `.usage` events).
+                        if let json = JSONValue.parse(payload), let usage = Self.usage(from: json) {
+                            latestUsage = usage
                         }
                         guard let candidate = chunk.candidates?.first else { continue }
                         for part in candidate.content?.parts ?? [] {
@@ -50,9 +58,9 @@ struct GeminiProvider: LLMProvider {
                             }
                         }
                         if let reason = candidate.finishReason { finishReason = reason }
-                        if let json = JSONValue.parse(payload), let usage = Self.usage(from: json) {
-                            continuation.yield(.usage(usage))
-                        }
+                    }
+                    if let usage = latestUsage {
+                        continuation.yield(.usage(usage))
                     }
                     continuation.yield(.done(stopReason: finishReason))
                     continuation.finish()
