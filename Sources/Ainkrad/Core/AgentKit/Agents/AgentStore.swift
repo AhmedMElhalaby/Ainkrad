@@ -48,6 +48,14 @@ final class AgentStore {
         save()
     }
 
+    /// Advances the active agent to the next one in `agents` (wrapping around).
+    /// Backs the composer's Tab-cycle affordance (M7 Slice 5a).
+    func cycleActive() {
+        guard !agents.isEmpty else { return }
+        let i = agents.firstIndex { $0.id == active.id } ?? 0
+        setActive(agents[(i + 1) % agents.count].id)
+    }
+
     @discardableResult
     func add(_ profile: AgentProfile) -> AgentProfile {
         document.custom.append(profile)
