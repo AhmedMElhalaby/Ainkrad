@@ -50,6 +50,9 @@ struct GeminiProvider: LLMProvider {
                             }
                         }
                         if let reason = candidate.finishReason { finishReason = reason }
+                        if let json = JSONValue.parse(payload), let usage = Self.usage(from: json) {
+                            continuation.yield(.usage(usage))
+                        }
                     }
                     continuation.yield(.done(stopReason: finishReason))
                     continuation.finish()
@@ -63,6 +66,17 @@ struct GeminiProvider: LLMProvider {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    // MARK: - Usage parsing
+
+    /// `usageMetadata.promptTokenCount`/`candidatesTokenCount` (+ `cachedContentTokenCount`).
+    /// The `GenerateContentChunk` Decodable has no usage field, so this reads the raw JSON.
+    nonisolated static func usage(from json: JSONValue) -> TokenUsage? {
+        guard let meta = json["usageMetadata"] else { return nil }
+        func int(_ k: String) -> Int { if case .number(let n)? = meta[k] { return Int(n) }; return 0 }
+        return TokenUsage(input: int("promptTokenCount"), output: int("candidatesTokenCount"),
+                          cacheRead: int("cachedContentTokenCount"), cacheWrite: 0)
     }
 
     // MARK: - Request building

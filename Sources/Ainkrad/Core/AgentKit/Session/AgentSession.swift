@@ -32,6 +32,10 @@ final class AgentSession {
     private(set) var streamingText: String = ""
     private(set) var streamingThinking: String = ""
 
+    /// Token usage accumulated from the most recently completed turn's `.usage`
+    /// events. Consumed by `UsageTracker` (Task 9) to compute per-turn cost.
+    private(set) var lastTurnUsage: TokenUsage = .zero
+
     /// Fired whenever a turn settles (the tool loop returns to `.idle` inside
     /// `runConversation`) — every-settle is the host's only reliable trigger,
     /// since there is no session-end signal. NOT fired by `reset()`'s `.idle`.
@@ -237,6 +241,7 @@ final class AgentSession {
         var pendingCalls: [ToolCall] = []
         var failure: String?
         var sawDone = false
+        var turnUsage = TokenUsage.zero
 
         let stream = provider.send(messages: messages, system: system,
                                    tools: allowedSchemas(), model: model, apiKey: apiKey)
@@ -250,12 +255,14 @@ final class AgentSession {
                 case .toolUseComplete(let id, let name, let input):
                     pendingCalls.append(ToolCall(id: id, name: name, input: input))
                 case .done: sawDone = true
+                case .usage(let u): turnUsage = turnUsage + u
                 case .failed(let m): failure = m
                 }
             }
         } catch {
             return .failed(error.localizedDescription)
         }
+        lastTurnUsage = turnUsage
 
         if let failure { return .failed(failure) }
         if !pendingCalls.isEmpty {

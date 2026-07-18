@@ -12,5 +12,6 @@ enum AgentEvent: Equatable, Sendable {
     case toolInputDelta(id: String, partialJSON: String)
     case toolUseComplete(id: String, name: String, input: JSONValue)
     case done(stopReason: String?)
+    case usage(TokenUsage)
     case failed(String)
 }
