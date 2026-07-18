@@ -28,6 +28,7 @@ final class AppEnvironment {
     let agentPermissionStore: AgentPermissionStore
     let agentContextSettingsStore: AgentContextSettingsStore
     let agentContextService: AgentContextService
+    let agentStore: AgentStore
     let agentSession: AgentSession
     let modelCatalogService: ModelCatalogService
     /// The assistant memory subsystem (M7 Slice 1). `nil` when the FTS index
@@ -83,6 +84,7 @@ final class AppEnvironment {
         agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
         agentContextService: AgentContextService,
+        agentStore: AgentStore,
         agentSession: AgentSession,
         modelCatalogService: ModelCatalogService,
         memoryService: MemoryService?
@@ -109,6 +111,7 @@ final class AppEnvironment {
         self.agentPermissionStore = agentPermissionStore
         self.agentContextSettingsStore = agentContextSettingsStore
         self.agentContextService = agentContextService
+        self.agentStore = agentStore
         self.agentSession = agentSession
         self.modelCatalogService = modelCatalogService
         self.memoryService = memoryService
@@ -228,6 +231,7 @@ final class AppEnvironment {
         }
         let agentToolRegistry = AgentToolRegistry(tools: agentTools)
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
+        let agentStore = AgentStore(persistence: persistence)
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -241,7 +245,8 @@ final class AppEnvironment {
             context: agentContextService,
             registry: agentToolRegistry,
             permissions: agentPermissionStore,
-            memory: memoryService
+            memory: memoryService,
+            agents: agentStore
         )
 
         let environment = AppEnvironment(
@@ -267,6 +272,7 @@ final class AppEnvironment {
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
+            agentStore: agentStore,
             agentSession: agentSession,
             modelCatalogService: modelCatalogService,
             memoryService: memoryService

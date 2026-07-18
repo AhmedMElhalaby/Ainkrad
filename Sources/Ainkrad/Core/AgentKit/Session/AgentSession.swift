@@ -50,6 +50,7 @@ final class AgentSession {
     private let basePrompt: String
     private let maxToolIterations: Int
     private let memory: MemoryService?
+    private let agents: AgentStore?
 
     private enum ApprovalOutcome { case approved, denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
@@ -63,7 +64,8 @@ final class AgentSession {
         permissions: AgentPermissionStore,
         basePrompt: String = AgentSession.defaultPrompt,
         maxToolIterations: Int = 25,
-        memory: MemoryService? = nil
+        memory: MemoryService? = nil,
+        agents: AgentStore? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -74,6 +76,7 @@ final class AgentSession {
         self.basePrompt = basePrompt
         self.maxToolIterations = maxToolIterations
         self.memory = memory
+        self.agents = agents
     }
 
     func send(_ text: String) {
@@ -108,7 +111,9 @@ final class AgentSession {
         }
 
         let contextBlock = context.assembleContext()
-        let system = contextBlock.isEmpty ? basePrompt : basePrompt + "\n\n" + contextBlock
+        let agentInstructions = agents?.active.instructions ?? ""
+        let promptHead = agentInstructions.isEmpty ? basePrompt : basePrompt + "\n\n" + agentInstructions
+        let system = contextBlock.isEmpty ? promptHead : promptHead + "\n\n" + contextBlock
         let provider = providerFor(connection)
 
         state = .thinking
@@ -234,7 +239,7 @@ final class AgentSession {
         var sawDone = false
 
         let stream = provider.send(messages: messages, system: system,
-                                   tools: registry.schemas, model: model, apiKey: apiKey)
+                                   tools: allowedSchemas(), model: model, apiKey: apiKey)
         do {
             for try await event in stream {
                 switch event {
@@ -271,9 +276,20 @@ final class AgentSession {
         guard let tool = registry.tool(named: call.name) else {
             return ToolResult(content: "Unknown tool: \(call.name)", isError: true)
         }
+
+        // Agent tool-policy pre-check, BEFORE the permission gate: this only
+        // ever narrows — it can reject a call the gate would have allowed, but
+        // can never approve one the gate would have blocked.
+        if let policy = agents?.active.toolPolicy,
+           !policy.allows(toolName: tool.name, permission: tool.permission) {
+            return ToolResult(
+                content: "The active agent (\(agents?.active.name ?? "")) is not permitted to use \(tool.name).",
+                isError: true)
+        }
+
         let decision = AgentPermissionPolicy.decide(
             toolPermission: tool.permission, toolName: tool.name,
-            mode: permissions.mode, allowlist: permissions.allowlist,
+            mode: effectiveMode(), allowlist: permissions.allowlist,
             gateReads: permissions.gateReads, isIrreversible: tool.isIrreversible(call.input))
 
         if decision == .requireApproval {
@@ -307,4 +323,41 @@ final class AgentSession {
         }
         return connections.connections.first
     }
+
+    /// Tool schemas presented to the provider, filtered to the active Agent's
+    /// tool policy — a Plan Agent must not even SEE `edit_file` in its tool
+    /// list. Narrows only: with no active `agents` store, every registry
+    /// schema is presented, unchanged from pre-Task-4 behavior.
+    private func allowedSchemas() -> [AgentToolSchema] {
+        guard let policy = agents?.active.toolPolicy else { return registry.schemas }
+        return registry.schemas.filter { schema in
+            guard let tool = registry.tool(named: schema.name) else { return false }
+            return policy.allows(toolName: tool.name, permission: tool.permission)
+        }
+    }
+
+    /// Restrictiveness order for `AgentPermissionMode`, used by `effectiveMode()`
+    /// to compute the most-restrictive-wins composition. Higher = more permissive.
+    private static func rank(_ mode: AgentPermissionMode) -> Int {
+        switch mode {
+        case .ask: return 0
+        case .autoApprove: return 1
+        case .fullAuto: return 2
+        }
+    }
+
+    /// The permission mode actually passed to `AgentPermissionPolicy.decide`:
+    /// the MORE restrictive of the workspace mode and the active Agent's
+    /// `permissionPosture` (when set). A profile can tighten the gate but can
+    /// never loosen it beyond the workspace's own mode.
+    private func effectiveMode() -> AgentPermissionMode {
+        guard let posture = agents?.active.permissionPosture else { return permissions.mode }
+        return Self.rank(posture) < Self.rank(permissions.mode) ? posture : permissions.mode
+    }
+
+    // MARK: - Test hooks (internal; exercised via @testable import in AinkradTests)
+
+    func executeForTesting(_ call: ToolCall) async -> ToolResult { await execute(call) }
+    func allowedSchemasForTesting() -> [AgentToolSchema] { allowedSchemas() }
+    func effectiveModeForTesting() -> AgentPermissionMode { effectiveMode() }
 }

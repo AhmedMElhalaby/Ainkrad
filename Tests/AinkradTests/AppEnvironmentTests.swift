@@ -42,6 +42,7 @@ final class AppEnvironmentTests {
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
         let agentPermissionStore = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
+        let agentStore = AgentStore(persistence: persistence)
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -54,7 +55,8 @@ final class AppEnvironmentTests {
             config: agentConfigStore,
             context: agentContextService,
             registry: AgentToolRegistry(tools: [ReadFileTool(), EditFileTool()]),
-            permissions: agentPermissionStore
+            permissions: agentPermissionStore,
+            agents: agentStore
         )
 
         let environment = AppEnvironment(
@@ -80,12 +82,14 @@ final class AppEnvironmentTests {
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
+            agentStore: agentStore,
             agentSession: agentSession,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
             memoryService: nil
         )
 
         #expect(environment.registry === registry)
+        #expect(environment.agentStore === agentStore)
         #expect(environment.agentPermissionStore === agentPermissionStore)
         #expect(environment.agentPermissionStore.mode == .ask)
         #expect(environment.themeManager === themeManager)

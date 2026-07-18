@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import AinkradAppKit
 
@@ -24,6 +25,8 @@ struct AssistantComposerBar: View {
                 .disabled(isBusy)
 
             HStack(spacing: 8) {
+                AgentSwitcherView(store: environment.agentStore, tokens: tokens)
+
                 AssistantConnectionModelPicker(
                     model: modelPicker,
                     tokens: tokens,
@@ -45,6 +48,18 @@ struct AssistantComposerBar: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .background(
+            // Tab-cycle affordance (M7 Slice 5a Task 5): swallows a plain Tab
+            // keyDown to advance the active agent, but ONLY when the draft is
+            // empty — otherwise Tab still moves keyboard focus as normal. A
+            // remappable `ShortcutAction` binding is explicitly deferred; this
+            // is a local (app-scoped, not global) monitor, same pattern as
+            // `KeyboardShortcutMonitor`.
+            ComposerTabCycleMonitor(
+                isDraftEmpty: { draft.isEmpty },
+                onCycle: { environment.agentStore.cycleActive() }
+            )
+        )
         .padding(14)
     }
 
@@ -83,6 +98,57 @@ struct AssistantComposerBar: View {
         case .ask: return "Ask"
         case .autoApprove: return "Auto"
         case .fullAuto: return "Full-auto"
+        }
+    }
+}
+
+/// Installs a local `keyDown` monitor (app-scoped, not global — mirrors
+/// `KeyboardShortcutMonitor`'s established pattern) that swallows a plain Tab
+/// keystroke to cycle the active agent, ONLY while the composer's draft is
+/// empty — otherwise Tab is returned untouched so it keeps moving keyboard
+/// focus everywhere else (M7 Slice 5a Task 5). Zero-size, invisible; attached
+/// via `.background(...)` so it rides the composer's lifetime.
+private struct ComposerTabCycleMonitor: NSViewRepresentable {
+    let isDraftEmpty: () -> Bool
+    let onCycle: () -> Void
+
+    func makeNSView(context: Context) -> MonitoringView {
+        let view = MonitoringView()
+        view.isDraftEmpty = isDraftEmpty
+        view.onCycle = onCycle
+        return view
+    }
+
+    func updateNSView(_ nsView: MonitoringView, context: Context) {
+        nsView.isDraftEmpty = isDraftEmpty
+        nsView.onCycle = onCycle
+    }
+
+    final class MonitoringView: NSView {
+        var isDraftEmpty: (() -> Bool)?
+        var onCycle: (() -> Void)?
+        private var monitor: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window != nil {
+                guard monitor == nil else { return }
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    guard let self else { return event }
+                    // Tab, no modifiers (keyCode 48) — Shift-Tab and any
+                    // Tab+modifier combo pass through untouched.
+                    let isPlainTab = event.keyCode == 48
+                        && event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty
+                    if isPlainTab, self.isDraftEmpty?() == true {
+                        self.onCycle?()
+                        return nil
+                    }
+                    return event
+                }
+            } else if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
         }
     }
 }
