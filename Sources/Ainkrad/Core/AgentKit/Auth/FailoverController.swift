@@ -96,4 +96,45 @@ struct FailoverController {
         }
         return .exhausted(lastMessage: lastMessage)
     }
+
+    /// Classifies a provider send failure into a `FailoverErrorKind`, or `nil` when the
+    /// error is a genuine content/user error that would fail identically against every
+    /// candidate (e.g. a 400 bad request) — those must NEVER be retried, so this is the
+    /// one place upstream callers (Task 16's `AgentSession`) consult before feeding a
+    /// failure into `run`/`nextAttempt`.
+    ///
+    /// Host providers currently surface only a best-effort message string (no threaded
+    /// HTTP status code — see Task 16's report for that follow-up), so classification is
+    /// substring-based over the provider's error message. Order matters: rate-limit/quota/
+    /// auth phrasing is checked before the generic 5xx/transient bucket, and an explicit
+    /// 400/404/"bad request"/"invalid request" match short-circuits to `nil` even if some
+    /// other retryable-sounding word also appears.
+    static func classify(_ message: String) -> FailoverErrorKind? {
+        let m = message.lowercased()
+
+        // Genuine content/user errors — never retryable.
+        if m.contains("400") || m.contains("404") || m.contains("bad request")
+            || m.contains("invalid request") || m.contains("invalid_request_error")
+            || m.contains("not found") { return nil }
+
+        if m.contains("429") || m.contains("rate limit") || m.contains("rate_limit")
+            || m.contains("too many requests") { return .rateLimit }
+
+        if m.contains("quota") || m.contains("insufficient_quota") || m.contains("billing")
+            || m.contains("payment required") || m.contains("402") { return .quota }
+
+        if m.contains("401") || m.contains("403") || m.contains("unauthorized")
+            || m.contains("authentication") || m.contains("invalid api key")
+            || m.contains("invalid_api_key") || m.contains("forbidden") { return .auth }
+
+        if m.contains("500") || m.contains("502") || m.contains("503") || m.contains("504")
+            || m.contains("529") || m.contains("overloaded") || m.contains("timed out")
+            || m.contains("timeout") || m.contains("bad gateway") || m.contains("service unavailable")
+            || m.contains("gateway timeout") || m.contains("internal server error")
+            || m.contains("could not reach") || m.contains("connection") { return .providerError }
+
+        // Unknown shape: conservative default is non-retryable rather than risk looping
+        // through every candidate for an error nobody has recognized as transient.
+        return nil
+    }
 }

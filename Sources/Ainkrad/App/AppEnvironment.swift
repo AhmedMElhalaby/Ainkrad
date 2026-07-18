@@ -31,6 +31,16 @@ final class AppEnvironment {
     let agentStore: AgentStore
     let agentSession: AgentSession
     let modelCatalogService: ModelCatalogService
+    /// M7 Slice 5b (Model Router / Usage / Failover) runtime wiring.
+    let modelCatalog: ModelCatalog
+    let modelPriceTable: ModelPriceTable
+    let usageTracker: UsageTracker
+    let routerOutcomeStore: RouterOutcomeStore
+    let modelRouter: ModelRouter
+    let runtimeOptionsStore: RuntimeOptionsStore
+    let localModelProbe: LocalModelProbe
+    let authProfileStore: AuthProfileStore
+    let commandRegistry: CommandRegistry
     /// The assistant memory subsystem (M7 Slice 1). `nil` when the FTS index
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
@@ -87,6 +97,15 @@ final class AppEnvironment {
         agentStore: AgentStore,
         agentSession: AgentSession,
         modelCatalogService: ModelCatalogService,
+        modelCatalog: ModelCatalog,
+        modelPriceTable: ModelPriceTable,
+        usageTracker: UsageTracker,
+        routerOutcomeStore: RouterOutcomeStore,
+        modelRouter: ModelRouter,
+        runtimeOptionsStore: RuntimeOptionsStore,
+        localModelProbe: LocalModelProbe,
+        authProfileStore: AuthProfileStore,
+        commandRegistry: CommandRegistry,
         memoryService: MemoryService?
     ) {
         self.persistence = persistence
@@ -114,6 +133,15 @@ final class AppEnvironment {
         self.agentStore = agentStore
         self.agentSession = agentSession
         self.modelCatalogService = modelCatalogService
+        self.modelCatalog = modelCatalog
+        self.modelPriceTable = modelPriceTable
+        self.usageTracker = usageTracker
+        self.routerOutcomeStore = routerOutcomeStore
+        self.modelRouter = modelRouter
+        self.runtimeOptionsStore = runtimeOptionsStore
+        self.localModelProbe = localModelProbe
+        self.authProfileStore = authProfileStore
+        self.commandRegistry = commandRegistry
         self.memoryService = memoryService
     }
 
@@ -232,6 +260,41 @@ final class AppEnvironment {
         let agentToolRegistry = AgentToolRegistry(tools: agentTools)
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentStore = AgentStore(persistence: persistence)
+
+        // Model Router / Usage / Failover wiring (M7 Slice 5b). Every one of these is
+        // degrade-don't-crash: `AgentSession` treats them as optional and falls back to
+        // pre-Slice-5b behavior (config.current model, single connection, no command
+        // interception) if any were nil, mirroring the Slice 1 pattern.
+        let modelCatalog = ModelCatalog()
+        let modelPriceTable = ModelPriceTable()
+        let routerOutcomeStore = RouterOutcomeStore(persistence: persistence)
+        let modelRouter = ModelRouter(catalog: modelCatalog, outcomes: routerOutcomeStore)
+        let usageTracker = UsageTracker(persistence: persistence, prices: modelPriceTable)
+        let runtimeOptionsStore = RuntimeOptionsStore(persistence: persistence)
+        let localModelProbe = LocalModelProbe(catalog: modelCatalogService)
+        let authProfileStore = AuthProfileStore(persistence: persistence, secrets: secrets)
+
+        // Candidates = every configured connection's curated model list, resolved
+        // against the bundled `ModelCatalog` for tier/capability metadata (falling back
+        // to a conservative cheap-paid/tool-use-only descriptor for a model the catalog
+        // doesn't recognize yet). Synchronous by design (`candidatesProvider` is called
+        // once per turn from `resolveTurn`) — live discovery (`localModelProbe`,
+        // `modelCatalogService`) is async and is not woven into this closure; it stays
+        // available for Settings/discovery UI to refresh the curated list over time.
+        let candidatesProvider: @MainActor () -> [RouterCandidate] = { [connectionStore, modelCatalog] in
+            connectionStore.connections.flatMap { connection -> [RouterCandidate] in
+                ProviderPreset.preset(id: connection.presetID).curatedModels.map { modelID in
+                    RouterCandidate(
+                        connectionID: connection.id, model: modelID,
+                        descriptor: modelCatalog.descriptor(for: modelID)
+                            ?? ModelDescriptor(id: modelID, tier: .cheapPaid, contextWindow: 128_000, capabilities: [.toolUse]))
+                }
+            }
+        }
+
+        let commandRegistry = CommandRegistry(builtins: BuiltinCommands.make(
+            runtime: runtimeOptionsStore, usage: usageTracker, router: modelRouter, catalog: modelCatalog))
+
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -246,7 +309,13 @@ final class AppEnvironment {
             registry: agentToolRegistry,
             permissions: agentPermissionStore,
             memory: memoryService,
-            agents: agentStore
+            agents: agentStore,
+            router: modelRouter,
+            usage: usageTracker,
+            runtime: runtimeOptionsStore,
+            commands: commandRegistry,
+            authProfiles: authProfileStore,
+            candidatesProvider: candidatesProvider
         )
 
         let environment = AppEnvironment(
@@ -275,6 +344,15 @@ final class AppEnvironment {
             agentStore: agentStore,
             agentSession: agentSession,
             modelCatalogService: modelCatalogService,
+            modelCatalog: modelCatalog,
+            modelPriceTable: modelPriceTable,
+            usageTracker: usageTracker,
+            routerOutcomeStore: routerOutcomeStore,
+            modelRouter: modelRouter,
+            runtimeOptionsStore: runtimeOptionsStore,
+            localModelProbe: localModelProbe,
+            authProfileStore: authProfileStore,
+            commandRegistry: commandRegistry,
             memoryService: memoryService
         )
 

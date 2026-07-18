@@ -26,7 +26,8 @@ struct AgentSessionMemoryHookTests {
                                          settings: AgentContextSettingsStore(persistence: persistence)),
             registry: AgentToolRegistry(tools: []),
             permissions: AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() }),
-            memory: svc)
+            memory: svc,
+            commands: CommandRegistry(builtins: BuiltinCommands.make(runtime: nil, usage: nil, router: nil, catalog: nil)))
         session.send("/remember call me Ahmed")
         #expect(session.messages.isEmpty)      // intercepted — no user turn appended
         #expect(session.state == .idle)        // no provider/connection path entered
