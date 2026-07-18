@@ -121,5 +121,13 @@ final class AppEnvironmentTests {
         #expect(environment.quitCoordinator.isConfirming == false)
         #expect(environment.isFullScreen == false)
         #expect(environment.generalSettingsStore.showFullScreenStatusBar == true)
+        // Regression guard for the test-isolation leak: the memory subsystem
+        // must be constructed under the injected `root`, never the real
+        // `~/Library/Application Support/<bundle-id>/Memory` — otherwise every
+        // `make test` run reindexes the developer's real memory store.
+        #expect(environment.memoryService != nil)
+        let isolatedMemoryIndex = root.appendingPathComponent("Memory", isDirectory: true)
+            .appendingPathComponent("index.sqlite")
+        #expect(FileManager.default.fileExists(atPath: isolatedMemoryIndex.path))
     }
 }

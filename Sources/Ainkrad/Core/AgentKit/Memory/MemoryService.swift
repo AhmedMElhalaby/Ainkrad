@@ -10,10 +10,8 @@ final class MemoryService {
     let store: MemoryStore
     let log: MemoryLogStore
     private let index: MemoryIndex
-    private let paths: MemoryPaths
 
     init(paths: MemoryPaths, persistence: PersistenceStore) throws {
-        self.paths = paths
         self.store = MemoryStore(paths: paths)
         self.index = try MemoryIndex(url: paths.indexURL)
         self.log = MemoryLogStore(persistence: persistence, memory: store)

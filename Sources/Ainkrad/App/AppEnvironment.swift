@@ -202,8 +202,15 @@ final class AppEnvironment {
         // Assistant memory (M7 Slice 1). Degrade-don't-crash: if the FTS index can't
         // open, the assistant runs memory-less this launch (mirrors FileDocumentStore's
         // corrupt-file quarantine posture) rather than taking the app down.
+        // Mirrors `pluginDataRoot`/`retainedDataRoot` above: when a test injects
+        // `rootURL`, the memory subdir is derived from that same isolated root
+        // rather than the real Application Support path, so `make test` never
+        // touches (or reindexes) the real on-disk memory store.
+        let memoryRoot = rootURL != nil
+            ? documentsRoot.appendingPathComponent("Memory", isDirectory: true)
+            : MemoryPaths.defaultRoot()
         let memoryService = try? MemoryService(
-            paths: MemoryPaths(root: MemoryPaths.defaultRoot()),
+            paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
 
         var agentTools: [any AgentTool] = [
