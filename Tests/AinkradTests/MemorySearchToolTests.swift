@@ -40,4 +40,26 @@ struct MemorySearchToolTests {
         ]))
         #expect(r.content.split(separator: "\n").count == 1)
     }
+
+    @Test func nonFiniteLimitDoesNotTrap() async throws {
+        let (tool, svc, root) = try make(); defer { try? FileManager.default.removeItem(at: root) }
+        svc.write("shared token beta one", to: .memory, provenance: .agent)
+        await #expect(throws: Never.self) {
+            let r = try await tool.execute(.object([
+                "query": .string("beta"), "limit": .number(Double.nan),
+            ]))
+            #expect(r.content.contains("beta"))
+        }
+    }
+
+    @Test func outOfRangeLimitDoesNotTrap() async throws {
+        let (tool, svc, root) = try make(); defer { try? FileManager.default.removeItem(at: root) }
+        svc.write("shared token gamma one", to: .memory, provenance: .agent)
+        await #expect(throws: Never.self) {
+            let r = try await tool.execute(.object([
+                "query": .string("gamma"), "limit": .number(1e300),
+            ]))
+            #expect(r.content.contains("gamma"))
+        }
+    }
 }

@@ -35,7 +35,7 @@ struct MemorySearchTool: AgentTool {
         }
         // JSONValue has no .int case — all numbers are .number(Double).
         var limit = 20
-        if case .number(let n)? = input["limit"] { limit = min(max(Int(n), 1), 50) }
+        if case .number(let n)? = input["limit"], n.isFinite { limit = Int(min(max(n, 1), 50)) }
         let hits = service.search(query, limit: limit)
         guard !hits.isEmpty else { return ToolResult(content: "No memory found.", isError: false) }
         let body = hits.map { "- [\($0.source)] \($0.snippet)" }.joined(separator: "\n")
