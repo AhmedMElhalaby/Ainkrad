@@ -12,6 +12,7 @@ struct DocumentConformanceTests {
         #expect(AgentsDocument.documentID == "agents")
         #expect(UsageLedgerDocument.documentID == "usage-ledger")
         #expect(RouterOutcomeDocument.documentID == "router-outcomes")
+        #expect(AuthProfilesDocument.documentID == "auth-profiles")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
