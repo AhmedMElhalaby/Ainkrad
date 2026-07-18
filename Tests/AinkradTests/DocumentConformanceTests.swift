@@ -9,6 +9,7 @@ struct DocumentConformanceTests {
         #expect(GlobalSettings.documentID == "global-settings")
         #expect(LayoutStateSnapshot.documentID == "workspace-layout")
         #expect(RegistryStateDocument.documentID == "registry-enabled-state")
+        #expect(AgentsDocument.documentID == "agents")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
