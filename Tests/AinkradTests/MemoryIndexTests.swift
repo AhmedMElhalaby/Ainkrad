@@ -33,6 +33,16 @@ struct MemoryIndexTests {
         #expect(idx.search("findme").isEmpty)
     }
 
+    @Test func throwsWhenOpenTargetIsADirectory() throws {
+        // sqlite3_open cannot open a path that is itself an existing directory; this
+        // reliably forces SQLITE_CANTOPEN without depending on filesystem permissions.
+        let dirURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("memidx-dir-\(UUID().uuidString).sqlite")
+        try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dirURL) }
+        #expect(throws: MemoryIndexError.self) { try MemoryIndex(url: dirURL) }
+    }
+
     @Test func survivesReopen() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("memidx-\(UUID().uuidString).sqlite")

@@ -18,7 +18,9 @@ final class MemoryIndex {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard sqlite3_open(url.path, &db) == SQLITE_OK else {
-            throw MemoryIndexError.open(lastError)
+            let message = lastError
+            if db != nil { sqlite3_close(db) }
+            throw MemoryIndexError.open(message)
         }
         try exec("""
         CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts
@@ -49,7 +51,8 @@ final class MemoryIndex {
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
         bind(stmt, 1, ftsQuery(trimmed))
-        sqlite3_bind_int(stmt, 2, Int32(limit))
+        let clampedLimit = Int32(min(max(limit, 0), Int(Int32.max)))
+        sqlite3_bind_int(stmt, 2, clampedLimit)
         var hits: [MemorySearchHit] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             hits.append(MemorySearchHit(
