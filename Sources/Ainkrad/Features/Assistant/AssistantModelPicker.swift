@@ -113,6 +113,16 @@ final class AssistantModelPickerModel {
                 reconcileModelIfNeeded(for: connection, availableModels: result.models, environment)
             }
         }
+        // Piggyback a reachability refresh on the same user-triggered moment
+        // (connection switch / picker open / manual refresh button) so the
+        // Auto router's local-candidate gate (`AppEnvironment.candidatesProvider`)
+        // reflects "is the local server up right now" without waiting for the
+        // background 30s loop.
+        Task {
+            await environment.localModelAvailability.refresh(
+                connections: store.connections, probe: environment.localModelProbe,
+                tokenFor: { store.token(for: $0) })
+        }
     }
 
     /// If the active connection's model isn't valid for it (e.g. the Claude

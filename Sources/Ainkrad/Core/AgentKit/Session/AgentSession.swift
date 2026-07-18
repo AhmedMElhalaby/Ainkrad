@@ -76,6 +76,11 @@ final class AgentSession {
     /// have already cached/refreshed its candidate list elsewhere; `resolveTurn` only
     /// ever reads it once, synchronously, per turn.
     private let candidatesProvider: (@MainActor () -> [RouterCandidate])?
+    /// `true` when the given connection is a LOCAL server (Ollama/LM Studio/other
+    /// loopback) — same rule `LocalModelProbe.isLocal` uses. Consulted only to make a
+    /// terminal connection-failure message actionable (Fix 3); `nil` (host not wired,
+    /// e.g. older test doubles) falls back to the generic provider message unchanged.
+    private let isLocalConnection: (@MainActor (Connection) -> Bool)?
 
     private enum ApprovalOutcome { case approved, denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
@@ -96,7 +101,8 @@ final class AgentSession {
         runtime: RuntimeOptionsStore? = nil,
         commands: CommandRegistry? = nil,
         authProfiles: AuthProfileStore? = nil,
-        candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil
+        candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil,
+        isLocalConnection: (@MainActor (Connection) -> Bool)? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -114,6 +120,7 @@ final class AgentSession {
         self.commands = commands
         self.authProfiles = authProfiles
         self.candidatesProvider = candidatesProvider
+        self.isLocalConnection = isLocalConnection
     }
 
     func send(_ text: String) {
@@ -353,7 +360,8 @@ final class AgentSession {
             case .failed(let message):
                 streamingText = ""
                 streamingThinking = ""
-                state = .failed(message)
+                let isLocal = isLocalConnection?(connection) ?? false
+                state = .failed(Self.actionableFailureMessage(message, connection: connection, isLocal: isLocal))
                 recordSettlement(success: false, resolved: resolved, usedModel: currentModel.model)
                 return
             case .completed:
@@ -394,6 +402,19 @@ final class AgentSession {
                 // loop: re-send with the appended results
             }
         }
+    }
+
+    /// Turns a generic connection-failure message into an actionable one when the
+    /// failing connection is LOCAL (Ollama/LM Studio/other loopback) — the common
+    /// case being the server just isn't running, which the generic provider message
+    /// ("Streaming failed: Could not connect to the server.") gives the user no way
+    /// to act on. Any other failure (remote provider, or a local-connection failure
+    /// that isn't connectivity-shaped, e.g. an auth error) passes through unchanged.
+    /// Pure/testable: no I/O, no actor isolation required.
+    nonisolated static func actionableFailureMessage(_ message: String, connection: Connection, isLocal: Bool) -> String {
+        guard isLocal, message.lowercased().contains("connect") else { return message }
+        return "Can't reach the local model server at \(connection.baseURL). " +
+               "Start Ollama/LM Studio, or switch models (pick a model in the picker or /model <id>)."
     }
 
     private enum TurnOutcome {

@@ -92,6 +92,7 @@ final class AppEnvironmentTests {
             modelRouter: ModelRouter(catalog: ModelCatalog(), outcomes: RouterOutcomeStore(persistence: persistence)),
             runtimeOptionsStore: RuntimeOptionsStore(persistence: persistence),
             localModelProbe: LocalModelProbe(catalog: ModelCatalogService(http: URLSessionDataHTTPClient())),
+            localModelAvailability: LocalModelAvailability(),
             authProfileStore: AuthProfileStore(persistence: persistence, secrets: secrets),
             commandRegistry: CommandRegistry(builtins: []),
             memoryService: nil

@@ -30,6 +30,22 @@ enum RouterOrdering {
         }
     }
 
+    /// Drops LOCAL candidates (per `isLocalConnection`) whose connection isn't
+    /// in `reachableLocalConnectionIDs` — the fix for the router picking a
+    /// down Ollama/LM Studio server and hanging every turn. Non-local
+    /// candidates are ALWAYS kept; only a candidate that is both local AND
+    /// unreachable is dropped. Pure/testable: no I/O, `reachableLocalConnectionIDs`
+    /// is a pre-computed snapshot (see `LocalModelAvailability`).
+    static func filterReachableCandidates(
+        _ candidates: [RouterCandidate],
+        reachableLocalConnectionIDs: Set<UUID>,
+        isLocalConnection: (UUID) -> Bool
+    ) -> [RouterCandidate] {
+        candidates.filter { c in
+            !isLocalConnection(c.connectionID) || reachableLocalConnectionIDs.contains(c.connectionID)
+        }
+    }
+
     /// Applies an Agent's routing bounds: `allowedModels` (if non-empty)
     /// restricts the candidate set, and `maxTier` is a hard ceiling.
     static func bounded(_ candidates: [RouterCandidate], by routing: AgentRouting) -> [RouterCandidate] {

@@ -107,6 +107,27 @@ struct FailoverControllerTests {
 
     /// A fake send closure that always fails — proves the controller stops with a
     /// terminal error after exhaustion (bounded: exactly models.count * keys.count tries).
+    /// Fix 2 (assistant-unusable root cause): the real NSURLError text for a
+    /// connection-refused/local-server-down failure is "Could not connect to the
+    /// server." — it contains "connect" but NOT "connection" or "could not reach",
+    /// so before this fix `classify` fell through to `nil` (non-retryable) and
+    /// failover never advanced past a dead local endpoint. A genuine content error
+    /// (400) must still classify as non-retryable.
+    @Test func connectionRefusedPhrasingsClassifyAsRetryableProviderError() {
+        #expect(FailoverController.classify("Could not connect to the server.") == .providerError)
+        #expect(FailoverController.classify("Streaming failed: Could not connect to the server.") == .providerError)
+        #expect(FailoverController.classify("cannot connect to host") == .providerError)
+        #expect(FailoverController.classify("Connection refused") == .providerError)
+        #expect(FailoverController.classify("The network connection was lost.") == .providerError)
+        #expect(FailoverController.classify("Error -1001: timed out") == .providerError)
+        #expect(FailoverController.classify("Error -1009: offline") == .providerError)
+    }
+
+    @Test func genuineContentErrorsStayNonRetryableAlongsideConnectionRefusedFix() {
+        #expect(FailoverController.classify("400 bad request") == nil)
+        #expect(FailoverController.classify("404 not found") == nil)
+    }
+
     @Test func runStopsWithTerminalErrorWhenAlwaysFailing() async {
         let models = ["a", "b"]
         let keys = ["k1", "k2"]

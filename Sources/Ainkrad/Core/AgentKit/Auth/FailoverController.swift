@@ -131,7 +131,15 @@ struct FailoverController {
             || m.contains("529") || m.contains("overloaded") || m.contains("timed out")
             || m.contains("timeout") || m.contains("bad gateway") || m.contains("service unavailable")
             || m.contains("gateway timeout") || m.contains("internal server error")
-            || m.contains("could not reach") || m.contains("connection") { return .providerError }
+            || m.contains("could not reach") || m.contains("connection")
+            // Connection-refused / unreachable-endpoint phrasings (e.g. a down local
+            // Ollama/LM Studio server) — the real NSURLError text is "Could not connect
+            // to the server.", which contains "connect" but NOT "connection", so it fell
+            // through to the non-retryable default without these. Without this, failover
+            // never advances past a dead local endpoint to a reachable candidate.
+            || m.contains("could not connect") || m.contains("cannot connect")
+            || m.contains("connection refused") || m.contains("network connection was lost")
+            || m.contains("-1004") || m.contains("-1001") || m.contains("-1009") { return .providerError }
 
         // Unknown shape: conservative default is non-retryable rather than risk looping
         // through every candidate for an error nobody has recognized as transient.

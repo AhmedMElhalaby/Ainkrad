@@ -39,6 +39,9 @@ final class AppEnvironment {
     let modelRouter: ModelRouter
     let runtimeOptionsStore: RuntimeOptionsStore
     let localModelProbe: LocalModelProbe
+    /// Async-refreshed reachability cache gating LOCAL candidates in
+    /// `candidatesProvider` (bootstrap) — see `LocalModelAvailability`.
+    let localModelAvailability: LocalModelAvailability
     let authProfileStore: AuthProfileStore
     let commandRegistry: CommandRegistry
     /// The assistant memory subsystem (M7 Slice 1). `nil` when the FTS index
@@ -104,6 +107,7 @@ final class AppEnvironment {
         modelRouter: ModelRouter,
         runtimeOptionsStore: RuntimeOptionsStore,
         localModelProbe: LocalModelProbe,
+        localModelAvailability: LocalModelAvailability,
         authProfileStore: AuthProfileStore,
         commandRegistry: CommandRegistry,
         memoryService: MemoryService?
@@ -140,6 +144,7 @@ final class AppEnvironment {
         self.modelRouter = modelRouter
         self.runtimeOptionsStore = runtimeOptionsStore
         self.localModelProbe = localModelProbe
+        self.localModelAvailability = localModelAvailability
         self.authProfileStore = authProfileStore
         self.commandRegistry = commandRegistry
         self.memoryService = memoryService
@@ -272,6 +277,9 @@ final class AppEnvironment {
         let usageTracker = UsageTracker(persistence: persistence, prices: modelPriceTable)
         let runtimeOptionsStore = RuntimeOptionsStore(persistence: persistence)
         let localModelProbe = LocalModelProbe(catalog: modelCatalogService)
+        // Async-refreshed reachability cache — see `LocalModelAvailability`. Kicked off
+        // (initial + periodic) below, once `connectionStore`/`localModelProbe` exist.
+        let localModelAvailability = LocalModelAvailability()
         let authProfileStore = AuthProfileStore(persistence: persistence, secrets: secrets)
 
         // Candidates = every configured connection's curated model list, resolved
@@ -279,10 +287,13 @@ final class AppEnvironment {
         // to a conservative cheap-paid/tool-use-only descriptor for a model the catalog
         // doesn't recognize yet). Synchronous by design (`candidatesProvider` is called
         // once per turn from `resolveTurn`) — live discovery (`localModelProbe`,
-        // `modelCatalogService`) is async and is not woven into this closure; it stays
-        // available for Settings/discovery UI to refresh the curated list over time.
-        let candidatesProvider: @MainActor () -> [RouterCandidate] = { [connectionStore, modelCatalog] in
-            connectionStore.connections.flatMap { connection -> [RouterCandidate] in
+        // `modelCatalogService`) is async and is not woven directly into the fetch, but
+        // its OUTPUT (`localModelAvailability.reachableConnectionIDs`, refreshed
+        // out-of-band) IS consulted synchronously here to drop LOCAL candidates whose
+        // server isn't currently reachable — otherwise a down Ollama/LM Studio gets
+        // picked free-first and every turn fails with "Could not connect to the server."
+        let candidatesProvider: @MainActor () -> [RouterCandidate] = { [connectionStore, modelCatalog, localModelProbe, localModelAvailability] in
+            let all = connectionStore.connections.flatMap { connection -> [RouterCandidate] in
                 ProviderPreset.preset(id: connection.presetID).curatedModels.map { modelID in
                     RouterCandidate(
                         connectionID: connection.id, model: modelID,
@@ -290,6 +301,13 @@ final class AppEnvironment {
                             ?? ModelDescriptor(id: modelID, tier: .cheapPaid, contextWindow: 128_000, capabilities: [.toolUse]))
                 }
             }
+            return RouterOrdering.filterReachableCandidates(
+                all,
+                reachableLocalConnectionIDs: localModelAvailability.reachableConnectionIDs,
+                isLocalConnection: { id in
+                    connectionStore.connections.first(where: { $0.id == id }).map(localModelProbe.isLocal) ?? false
+                }
+            )
         }
 
         let commandRegistry = CommandRegistry(builtins: BuiltinCommands.make(
@@ -315,7 +333,8 @@ final class AppEnvironment {
             runtime: runtimeOptionsStore,
             commands: commandRegistry,
             authProfiles: authProfileStore,
-            candidatesProvider: candidatesProvider
+            candidatesProvider: candidatesProvider,
+            isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) }
         )
 
         let environment = AppEnvironment(
@@ -351,10 +370,29 @@ final class AppEnvironment {
             modelRouter: modelRouter,
             runtimeOptionsStore: runtimeOptionsStore,
             localModelProbe: localModelProbe,
+            localModelAvailability: localModelAvailability,
             authProfileStore: authProfileStore,
             commandRegistry: commandRegistry,
             memoryService: memoryService
         )
+
+        // Kick the local-reachability cache: an immediate refresh so the very
+        // first turn already reflects reality (best-effort — a turn started
+        // before this completes just sees the cache's initial empty state,
+        // which is safe: local candidates are dropped, not hung on), then a
+        // 30s repeating loop so a server started/stopped mid-session is
+        // picked up without requiring a model-picker visit. Runs for the
+        // process lifetime of `environment`, mirroring other bootstrap-owned
+        // background loops in this app (e.g. sound/theme observers).
+        Task { [weak connectionStore, weak localModelProbe] in
+            while !Task.isCancelled {
+                guard let connectionStore, let localModelProbe else { return }
+                await localModelAvailability.refresh(
+                    connections: connectionStore.connections, probe: localModelProbe,
+                    tokenFor: { connectionStore.token(for: $0) })
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
         // Still migrate any pre-4a host-global settings into its scoped store so the
