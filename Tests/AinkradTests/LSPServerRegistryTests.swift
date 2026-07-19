@@ -133,6 +133,92 @@ struct LSPServerRegistryTests {
         #expect(configs.isEmpty)
     }
 
+    @Test func upsertAddsAndReplacesConfigsAndPersists() {
+        let persistence = InMemoryPersistenceStore()
+        let registry = LSPServerRegistry(persistence: persistence)
+        #expect(registry.servers().isEmpty)
+
+        registry.upsert(LSPServerConfig(id: "swift", command: "sourcekit-lsp",
+                                         fileGlobs: ["*.swift"], enabled: true))
+        #expect(registry.servers().map(\.id) == ["swift"])
+        #expect(registry.config(id: "swift")?.command == "sourcekit-lsp")
+
+        // Replacing the same id updates in place rather than appending.
+        registry.upsert(LSPServerConfig(id: "swift", command: "/opt/sourcekit-lsp",
+                                         fileGlobs: ["*.swift"], enabled: true))
+        #expect(registry.servers().count == 1)
+        #expect(registry.config(id: "swift")?.command == "/opt/sourcekit-lsp")
+
+        // Persisted, not just held in memory.
+        let reloaded = LSPServerRegistry(persistence: persistence)
+        #expect(reloaded.config(id: "swift")?.command == "/opt/sourcekit-lsp")
+    }
+
+    @Test func setEnabledTogglesAndPersists() {
+        let doc = LSPServersDocument(servers: [
+            LSPServerConfig(id: "swift", command: "sourcekit-lsp", fileGlobs: ["*.swift"], enabled: true)])
+        let persistence = seeded(doc)
+        let registry = LSPServerRegistry(persistence: persistence)
+
+        registry.setEnabled(false, for: "swift")
+        #expect(registry.config(id: "swift")?.enabled == false)
+
+        let reloaded = LSPServerRegistry(persistence: persistence)
+        #expect(reloaded.config(id: "swift")?.enabled == false)
+
+        // Unknown id is a no-op, not a crash.
+        registry.setEnabled(true, for: "does-not-exist")
+        #expect(registry.config(id: "does-not-exist") == nil)
+    }
+
+    @Test func removeDeletesConfigAndPersists() {
+        let doc = LSPServersDocument(servers: [
+            LSPServerConfig(id: "swift", command: "sourcekit-lsp", fileGlobs: ["*.swift"], enabled: true),
+            LSPServerConfig(id: "go", command: "gopls", fileGlobs: ["*.go"], enabled: true),
+        ])
+        let persistence = seeded(doc)
+        let registry = LSPServerRegistry(persistence: persistence)
+
+        registry.remove(id: "swift")
+        #expect(registry.servers().map(\.id) == ["go"])
+
+        let reloaded = LSPServerRegistry(persistence: persistence)
+        #expect(reloaded.servers().map(\.id) == ["go"])
+    }
+
+    @Test func upsertInvalidatesOnlyTheEditedLanguagesLiveClient() async {
+        let doc = LSPServersDocument(servers: [
+            LSPServerConfig(id: "swift", command: "sourcekit-lsp", fileGlobs: ["*.swift"], enabled: true),
+            LSPServerConfig(id: "go", command: "gopls", fileGlobs: ["*.go"], enabled: true),
+        ])
+        var spawnCount: [String: Int] = [:]
+        let registry = LSPServerRegistry(persistence: seeded(doc)) { config in
+            spawnCount[config.id, default: 0] += 1
+            return LSPClient(transport: StubMCPTransport { message in
+                guard let id = message["id"]?.stringValue else { return [] }
+                return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
+                    "result": .object(["capabilities": .object([:])])])]
+            })
+        }
+
+        _ = await registry.client(forFilePath: "/x/A.swift", rootURI: "file:///root")
+        _ = await registry.client(forFilePath: "/x/A.go", rootURI: "file:///root")
+        #expect(spawnCount["swift"] == 1)
+        #expect(spawnCount["go"] == 1)
+        #expect(registry.health["swift::file:///root"] == .connected)
+        #expect(registry.health["go::file:///root"] == .connected)
+
+        // Editing "swift" must drop only its own cached client/health, not "go"'s.
+        registry.upsert(LSPServerConfig(id: "swift", command: "/opt/sourcekit-lsp",
+                                         fileGlobs: ["*.swift"], enabled: true))
+        #expect(registry.health["swift::file:///root"] == nil)
+        #expect(registry.health["go::file:///root"] == .connected)
+
+        _ = await registry.client(forFilePath: "/x/A.swift", rootURI: "file:///root")
+        #expect(spawnCount["swift"] == 2, "edited language must reconnect using the new config")
+        #expect(spawnCount["go"] == 1, "untouched language must not be disturbed by another's edit")
+    }
+
     @Test func lspServerConfigDecodesForwardCompatiblyWithDefaults() throws {
         // Payload missing every key but the required `id` (as an older/newer schema
         // might produce) must decode without throwing, using safe defaults.

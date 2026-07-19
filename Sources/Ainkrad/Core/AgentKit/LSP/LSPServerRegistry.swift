@@ -108,6 +108,75 @@ final class LSPServerRegistry {
         "\(language)::\(rootURI)"
     }
 
+    // MARK: - Config UI (Task 19) accessors
+
+    /// Every configured language server, for the config UI's list. Mirrors
+    /// `MCPServerConfigStore.all()`.
+    func servers() -> [LSPServerConfig] { doc.servers }
+
+    /// One configured server by language id, or `nil` if none. Mirrors
+    /// `MCPServerConfigStore.config(id:)`.
+    func config(id: String) -> LSPServerConfig? {
+        doc.servers.first { $0.id == id }
+    }
+
+    /// Persists `config` (replacing the existing entry with the same `id`, or
+    /// appending a new one) and invalidates any live client(s) for that
+    /// language so the next file resolution picks up the edited
+    /// command/args/globs rather than reusing a client bound to the OLD
+    /// config. Mirrors `MCPServerConfigStore.upsert`, fused with the
+    /// reconnect-after-edit hook `MCPManagerView` uses via
+    /// `MCPServerRegistry.connectEnabled()` — the LSP equivalent is narrower
+    /// (just this one language's cache) since clients are lazy per file
+    /// rather than eagerly connected in a batch.
+    func upsert(_ config: LSPServerConfig) {
+        if let i = doc.servers.firstIndex(where: { $0.id == config.id }) {
+            doc.servers[i] = config
+        } else {
+            doc.servers.append(config)
+        }
+        persistence.save(doc)
+        invalidateClients(forLanguage: config.id)
+    }
+
+    /// Enables/disables a configured server by language id and invalidates
+    /// its live client(s) so the next lookup re-checks `enabled`. Mirrors
+    /// `MCPServerConfigStore.setEnabled(_:for:)`. A no-op if `id` isn't
+    /// configured.
+    func setEnabled(_ value: Bool, for id: String) {
+        guard let i = doc.servers.firstIndex(where: { $0.id == id }) else { return }
+        doc.servers[i].enabled = value
+        persistence.save(doc)
+        invalidateClients(forLanguage: id)
+    }
+
+    /// Removes a configured server (LSP configs carry no secrets, unlike MCP,
+    /// so there's nothing else to clean up) and invalidates its live
+    /// client(s). Mirrors `MCPServerConfigStore.remove(id:)`.
+    func remove(id: String) {
+        doc.servers.removeAll { $0.id == id }
+        persistence.save(doc)
+        invalidateClients(forLanguage: id)
+    }
+
+    /// Drops every cached client/health entry for `language` (across every
+    /// workspace root) so the next `client(forFilePath:rootURI:)` call opens
+    /// a fresh one against the just-persisted config, scoped to this one
+    /// language so editing "python" can never disrupt a live "swift" session.
+    /// Best-effort `shutdown()` of the dropped client(s) is fired off in the
+    /// background (mirroring `disconnectAll()`'s teardown) since this method
+    /// itself is synchronous, matching `MCPServerConfigStore`'s synchronous
+    /// mutators that the config UI calls directly from SwiftUI actions.
+    private func invalidateClients(forLanguage language: String) {
+        let prefix = "\(language)::"
+        for key in clients.keys.filter({ $0.hasPrefix(prefix) }) {
+            if let client = clients.removeValue(forKey: key) {
+                Task { await client.shutdown() }
+            }
+            health.removeValue(forKey: key)
+        }
+    }
+
     /// Supports the one glob shape every built-in/autodetected config uses: a `*`-prefixed
     /// extension suffix (`*.swift`, `*.tsx`, ...). Anything else is matched as a literal
     /// file name.
