@@ -20,11 +20,13 @@ struct AgentSessionSubagentRunnerTests {
         let router = ModelRouter(catalog: ModelCatalog(),
                                  outcomes: RouterOutcomeStore(persistence: InMemoryPersistenceStore()))
         var chosenModel: String?
+        let executionRouter = ExecutionRouter(
+            profiles: SandboxProfileStore(persistence: InMemoryPersistenceStore()), backends: [:])
         let runner = AgentSessionSubagentRunner(
             allTools: [ReadFileTool(), EditFileTool()],
-            agents: agents, router: router,
+            agents: agents, router: router, executionRouter: executionRouter,
             candidatesProvider: candidates,
-            makeSession: { _, registry, model in
+            makeSession: { _, registry, model, _ in
                 chosenModel = model
                 return StubChildSession.make(finalText: "did:\(registry.schemas.count) tools on \(model)")
             })
@@ -38,11 +40,13 @@ struct AgentSessionSubagentRunnerTests {
         let agents = AgentStore(persistence: InMemoryPersistenceStore())
         let router = ModelRouter(catalog: ModelCatalog(),
                                  outcomes: RouterOutcomeStore(persistence: InMemoryPersistenceStore()))
+        let executionRouter = ExecutionRouter(
+            profiles: SandboxProfileStore(persistence: InMemoryPersistenceStore()), backends: [:])
         let runner = AgentSessionSubagentRunner(
             allTools: [ReadFileTool(), EditFileTool()],
-            agents: agents, router: router,
+            agents: agents, router: router, executionRouter: executionRouter,
             candidatesProvider: candidates,
-            makeSession: { _, _, _ in FailingChildSession.make() })
+            makeSession: { _, _, _, _ in FailingChildSession.make() })
         let out = await runner.run(SubagentSpec(prompt: "do it", toolAllowList: [], budgetTier: .premium))
         #expect(out.status == .failed)
         #expect(!out.resultText.isEmpty)

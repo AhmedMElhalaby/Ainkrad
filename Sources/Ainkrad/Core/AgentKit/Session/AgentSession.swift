@@ -67,6 +67,19 @@ final class AgentSession {
     /// edits are tracked to revert), matching pre-Task-10 behavior.
     private let editJournal: EditJournal?
 
+    /// M7 Slice 3b Task 21 — the resolved `SandboxProfile.toolAllowList` for this
+    /// session's trust tier (subagent/background/scheduled), when the sandbox
+    /// compose layer applies. `nil` (the default) means "no sandbox layer" —
+    /// byte-identical to pre-Task-21 behavior; this is the case for the main
+    /// interactive session, which Slice 6 explicitly does NOT enforce here (Slice
+    /// 5 owns the main session's own toolPolicy/effectiveMode composition).
+    private let sandboxAllowList: Set<String>?
+    /// The Agent's own tool allow-list projected for `SandboxPermissionPolicy.compose`'s
+    /// second layer. `nil` when `sandboxAllowList` is also nil, or when there is no
+    /// extra narrowing to contribute beyond the pre-existing `agents?.active.toolPolicy`
+    /// pre-check above (see `execute`'s discrepancy note).
+    private let agentAllowList: Set<String>?
+
     /// One entry per user turn, captured at the top of `send(_:)` (after the
     /// re-entrancy guard, before the user message is appended) so `/undo`/
     /// `/retry` can rewind to exactly this point. Slash-command inputs never
@@ -127,6 +140,8 @@ final class AgentSession {
         agents: AgentStore? = nil,
         editJournal: EditJournal? = nil,
         unattended: Bool = false,
+        sandboxAllowList: Set<String>? = nil,
+        agentAllowList: Set<String>? = nil,
         router: ModelRouter? = nil,
         usage: UsageTracker? = nil,
         runtime: RuntimeOptionsStore? = nil,
@@ -148,6 +163,8 @@ final class AgentSession {
         self.agents = agents
         self.editJournal = editJournal
         self.unattended = unattended
+        self.sandboxAllowList = sandboxAllowList
+        self.agentAllowList = agentAllowList
         self.router = router
         self.usage = usage
         self.runtime = runtime
@@ -685,11 +702,33 @@ final class AgentSession {
                 isError: true)
         }
 
-        let decision = AgentPermissionPolicy.decide(
+        var decision = AgentPermissionPolicy.decide(
             toolPermission: tool.permission, toolName: tool.name,
             mode: effectiveMode(), allowlist: permissions.allowlist,
             gateReads: permissions.gateReads, isIrreversible: tool.isIrreversible(call.input),
             isTrusted: mcpTrust?(tool.name) ?? false)
+
+        // M7 Slice 3b Task 21 — the sandbox compose layer, ONLY for autonomous run
+        // sessions (subagent/background/scheduled — every one that's constructed
+        // with a non-nil `sandboxAllowList`). Narrowing-only: `.denied` short-
+        // circuits before the tool ever runs; `.requireApproval` re-enters the
+        // existing gate below (which auto-denies for an unattended run, Task 8);
+        // `.autoApprove` proceeds. A nil `sandboxAllowList` (every pre-Task-21
+        // call site, and the main interactive session) skips this branch
+        // entirely — byte-identical to before this task.
+        if let sandboxAllowList {
+            let explanation = SandboxPermissionPolicy.compose(
+                gate: decision, agentAllowList: agentAllowList,
+                sandboxAllowList: sandboxAllowList, toolName: tool.name)
+            switch explanation.effective {
+            case .denied:
+                return ToolResult(content: "Blocked by sandbox: \(explanation.reason)", isError: true)
+            case .requireApproval:
+                decision = .requireApproval
+            case .autoApprove:
+                decision = .autoApprove
+            }
+        }
 
         if decision == .requireApproval {
             // Unattended gate (M7 Slice 3): a headless run (subagent/background/

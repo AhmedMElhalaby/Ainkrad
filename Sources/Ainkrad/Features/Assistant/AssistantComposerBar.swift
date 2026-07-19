@@ -23,6 +23,9 @@ struct AssistantComposerBar: View {
     var autoFocusOnAppear: Bool = false
     @State private var isUsageDashboardPresented = false
     @State private var isRunsPanelPresented = false
+    /// M7 Slice 3b (Autonomy: scheduling/triggers) — presents `ScheduleUIView`,
+    /// same `.ainkradModal` pattern as the Runs panel below.
+    @State private var isSchedulesPresented = false
 
     /// Images attached via drag-and-drop, carried into the NEXT `session.send`
     /// call and cleared on send (or on manual removal via its chip's ✕).
@@ -75,6 +78,8 @@ struct AssistantComposerBar: View {
 
                 runsPanelTrigger
 
+                schedulesTrigger
+
                 usageDashboardTrigger
 
                 Button { send() } label: {
@@ -96,6 +101,9 @@ struct AssistantComposerBar: View {
         }
         .ainkradModal(isPresented: $isRunsPanelPresented) {
             RunsPanelView(manager: environment.runManager, tokens: tokens)
+        }
+        .ainkradModal(isPresented: $isSchedulesPresented) {
+            ScheduleUIView(store: environment.scheduleStore)
         }
         .background(
             // Tab-cycle affordance (M7 Slice 5a Task 5): swallows a plain Tab
@@ -381,6 +389,17 @@ struct AssistantComposerBar: View {
         }
         .buttonStyle(.plain)
         .help("Runs")
+    }
+
+    /// Opens the Scheduler (M7 Slice 3b) — create/edit `AgentSchedule`s (time,
+    /// file-change, git-change, webhook triggers) in the same `.ainkradModal`
+    /// pattern as Runs/Usage above. Uses `AinkradIconButton` (rather than the
+    /// bare-`Button` idiom the sibling triggers above use) so this new trigger
+    /// is a proper Cardinal HUD component, not a native control.
+    private var schedulesTrigger: some View {
+        AinkradIconButton(systemName: "clock.badge", size: 22, tooltip: "Schedules") {
+            isSchedulesPresented = true
+        }
     }
 
     private var usageDashboardTrigger: some View {

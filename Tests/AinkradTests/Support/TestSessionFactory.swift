@@ -204,6 +204,38 @@ final class EditOnceStubProvider: LLMProvider {
     }
 }
 
+/// A `LLMProvider` double for the sandbox-compose wiring test (Task 21): its
+/// first turn emits one `read_file` tool call (a `.read`-classified tool), its
+/// second (post tool-result) turn emits a trailing text + `.done` so the loop
+/// settles to `.idle` regardless of whether the call was allowed or blocked by
+/// the sandbox layer. Mirrors `EditOnceStubProvider`'s shape for a read tool.
+@MainActor
+final class ReadOnceStubProvider: LLMProvider {
+    private let path: String
+    private var turnIndex = 0
+
+    init(path: String) {
+        self.path = path
+    }
+
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
+              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+        turnIndex += 1
+        let isFirstTurn = turnIndex == 1
+        let path = path
+        return AsyncThrowingStream { cont in
+            if isFirstTurn {
+                cont.yield(.toolUseComplete(id: "1", name: "read_file", input: .object(["path": .string(path)])))
+                cont.yield(.done(stopReason: "tool_use"))
+            } else {
+                cont.yield(.textDelta("done"))
+                cont.yield(.done(stopReason: "end_turn"))
+            }
+            cont.finish()
+        }
+    }
+}
+
 @MainActor
 enum TestSessionFactory {
     /// Builds a fully-wired `AgentSession` backed by an in-memory persistence
@@ -258,7 +290,9 @@ enum TestSessionFactory {
     /// param) so existing single-arg call sites are unaffected.
     static func make(provider: LLMProvider, mode: AgentPermissionMode = .ask,
                      unattended: Bool = false, editJournal: EditJournal? = nil,
-                     commands: CommandRegistry? = nil) -> AgentSession {
+                     commands: CommandRegistry? = nil,
+                     sandboxAllowList: Set<String>? = nil,
+                     agentAllowList: Set<String>? = nil) -> AgentSession {
         let persistence = InMemoryPersistenceStore()
         let ws = UUID()
         let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
@@ -285,7 +319,9 @@ enum TestSessionFactory {
             providerFor: { _ in provider },
             connections: connections, config: config, context: context,
             registry: registry, permissions: permissions, editJournal: editJournal,
-            unattended: unattended, commands: commands)
+            unattended: unattended,
+            sandboxAllowList: sandboxAllowList, agentAllowList: agentAllowList,
+            commands: commands)
     }
 
     /// A local (free) and a premium candidate on the given connection, for the

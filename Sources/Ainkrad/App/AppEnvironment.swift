@@ -75,6 +75,25 @@ final class AppEnvironment {
     let editJournal: EditJournal
     let subagentCoordinator: SubagentCoordinator
     let runManager: RunManager
+    /// M7 Slice 3b (Autonomy: scheduling/triggers) — the persisted `AgentSchedule`s
+    /// the `ScheduleUIView` create/edit list reads/writes, `scheduleRunner` (time
+    /// triggers) and `fileChangeWatcher`+`triggerDispatcher` (event triggers) fire
+    /// against. Retained here (not just a bootstrap local) for the same reason as
+    /// `runManager` above: `ScheduleUIView` and any future surface must bind to the
+    /// SAME live store a background trigger updates.
+    let scheduleStore: ScheduleStore
+    /// M7 Slice 3b: fires enabled `.time` schedules on a 60s tick against `runManager`.
+    /// Started once in `bootstrap()`; retained here so it isn't deallocated (which
+    /// would invalidate its `Timer`) once `bootstrap()` returns.
+    let scheduleRunner: ScheduleRunner
+    /// M7 Slice 3b: rate-limited fan-in for event-triggered schedules (file/git
+    /// change, webhook) — both `fileChangeWatcher`'s callbacks and (once started)
+    /// `WebhookServer` route through `fire(_:)` here.
+    let triggerDispatcher: TriggerDispatcher
+    /// M7 Slice 3b: FSEvents-backed watcher registered (in `bootstrap()`) for every
+    /// enabled `.fileChange`/`.gitChange` schedule, routing `onChange` into
+    /// `triggerDispatcher.fire`. Retained so its `FSEventStreamRef`s stay alive.
+    let fileChangeWatcher: FileChangeWatcher
     let modelCatalogService: ModelCatalogService
     /// M7 Slice 5b (Model Router / Usage / Failover) runtime wiring.
     let modelCatalog: ModelCatalog
@@ -178,6 +197,10 @@ final class AppEnvironment {
         editJournal: EditJournal,
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
+        scheduleStore: ScheduleStore,
+        scheduleRunner: ScheduleRunner,
+        triggerDispatcher: TriggerDispatcher,
+        fileChangeWatcher: FileChangeWatcher,
         modelCatalogService: ModelCatalogService,
         modelCatalog: ModelCatalog,
         modelPriceTable: ModelPriceTable,
@@ -229,6 +252,10 @@ final class AppEnvironment {
         self.editJournal = editJournal
         self.subagentCoordinator = subagentCoordinator
         self.runManager = runManager
+        self.scheduleStore = scheduleStore
+        self.scheduleRunner = scheduleRunner
+        self.triggerDispatcher = triggerDispatcher
+        self.fileChangeWatcher = fileChangeWatcher
         self.modelCatalogService = modelCatalogService
         self.modelCatalog = modelCatalog
         self.modelPriceTable = modelPriceTable
@@ -587,6 +614,7 @@ final class AppEnvironment {
         // passed to the child, so it never re-routes per tool-loop turn).
         let subagentRunner = AgentSessionSubagentRunner(
             allTools: agentTools, agents: agentStore, router: modelRouter,
+            executionRouter: executionRouter,
             candidatesProvider: candidatesProvider,
             makeSession: AppEnvironment.makeSubagentSession(
                 providerFor: providerFor, connections: connectionStore,
@@ -594,30 +622,100 @@ final class AppEnvironment {
                 agentPermissionStore: agentPermissionStore, agentStore: agentStore))
         let subagentCoordinator = SubagentCoordinator(runner: subagentRunner, maxConcurrent: 4)
         agentTools.append(SpawnSubagentTool(coordinator: subagentCoordinator, agents: agentStore))
+        // M7 Slice 3b (Autonomy: scheduling/triggers) — Slice 6 is merged on this
+        // branch, so `run_tool_script` is wired to the REAL `executionRouter`
+        // (never nil): a script always routes through the sandbox backend the
+        // router resolves for `.subagent`, never falls back to host.
+        agentTools.append(ScriptedBatchTool(executionRouter: executionRouter))
 
         let agentToolRegistry = AgentToolRegistry(
             tools: agentTools,
             dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
 
-        // The Runs monitor's engine: a background run drives a fresh headless
-        // `AgentSession` per run (`BackgroundRunRunner`), built `unattended: true` for
-        // the same reason as the subagent seam above. Trust tier `.background` (Slice 6,
-        // Task 21) isn't wired yet — until then a background run executes on the host's
-        // own connections/tools like a normal (but unattended) turn.
+        // M7 Slice 3b Task 21 — every `RunManager`-driven headless run (background,
+        // AND schedule/event runs, which enqueue through the SAME `RunManager` /
+        // `BackgroundRunRunner` — see the residual-gap note below) is sandboxed at
+        // trust tier `.background`: its own tool registry swaps in a `.background`-
+        // tier `RunTerminalTool` (the shared `agentToolRegistry`'s instance is fixed
+        // at `.mainInteractive`, the only tier ever eligible for `HostBackend`), and
+        // its `AgentSession` gets a non-nil `sandboxAllowList` so the compose layer
+        // (`SandboxPermissionPolicy.compose`) is always active.
+        //
+        // RESIDUAL GAP (flagged during Task 15, not fully closed here): `AgentRun`/
+        // `RunManager.enqueue` carry an `origin` (`.chat`/`.schedule`/`.event`) but
+        // `AgentRunRunner.execute(prompt:appendLog:)` never receives it, and there is
+        // exactly ONE `BackgroundRunRunner` instance shared across every origin — so
+        // a schedule's own `SavedExecutionPosture.sandboxProfileID` (Task 14) cannot
+        // be projected into `ExecutionRouter.resolveProfile(tier:policy:)` without
+        // threading the run (or its posture) through `RunManager`/`AgentRunRunner`,
+        // which is out of this task's file scope (Modify: AgentSession.swift,
+        // AgentSessionSubagentRunner.swift, AppEnvironment.swift only). Every
+        // schedule/event run instead inherits this SAME `.background`-tier sandbox
+        // as a safe default: fail-closed, never `.host`, never an escalation — just
+        // not yet the schedule's OWN saved posture. Follow-up: extend `AgentRun`
+        // with an optional posture/tier, thread it through `RunManager.enqueue` →
+        // `AgentRunRunner.execute` → the session-maker closure.
+        var backgroundAgentTools = agentTools
+        if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
+            backgroundAgentTools[idx] = RunTerminalTool(
+                actionHub: agentActionHub, router: executionRouter, trustTier: .background)
+        }
+        let backgroundToolRegistry = AgentToolRegistry(
+            tools: backgroundAgentTools,
+            dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
+        let backgroundSandboxProfile = executionRouter.resolveProfile(tier: .background, policy: nil)
+
         let runNotifier = UserNotificationRunNotifier()
         let runManager = RunManager(
             persistence: persistence,
             runner: BackgroundRunRunner(makeSession: {
                 AgentSession(
                     providerFor: providerFor, connections: connectionStore, config: agentConfigStore,
-                    context: agentContextService, registry: agentToolRegistry, permissions: agentPermissionStore,
+                    context: agentContextService, registry: backgroundToolRegistry, permissions: agentPermissionStore,
                     agents: agentStore, editJournal: editJournal, unattended: true,
+                    sandboxAllowList: backgroundSandboxProfile.toolAllowList, agentAllowList: nil,
                     router: modelRouter, usage: usageTracker, runtime: runtimeOptionsStore,
                     commands: commandRegistry, authProfiles: authProfileStore,
                     candidatesProvider: candidatesProvider,
                     isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) })
             }),
             notifier: runNotifier, maxConcurrent: 2)
+
+        // M7 Slice 3b (Autonomy: scheduling/triggers) — the whole subsystem live:
+        // `scheduleStore` persists `AgentSchedule`s (`ScheduleUIView`'s create/edit
+        // list); `scheduleRunner` fires enabled `.time` schedules on a 60s tick;
+        // `triggerDispatcher` fans event triggers (file/git change, webhook) into
+        // `runManager`, rate-limited; `fileChangeWatcher` is registered below for
+        // every enabled `.fileChange`/`.gitChange` schedule found at launch. A
+        // schedule added/enabled later (via `ScheduleUIView`) only starts firing
+        // its FSEvents watch on the NEXT launch — this loop is a one-time seed,
+        // matching `WorkspaceFileIndex`'s launch-time-only refresh above.
+        let scheduleStore = ScheduleStore(persistence: persistence)
+        let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
+        let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)
+        let fileChangeWatcher = FileChangeWatcher()
+        for schedule in scheduleStore.schedules where schedule.enabled {
+            switch schedule.trigger {
+            case .fileChange(let path, let glob):
+                fileChangeWatcher.watch(scheduleID: schedule.id, path: path, glob: glob) { event in
+                    triggerDispatcher.fire(event)
+                }
+            case .gitChange(let repoPath):
+                // PROVISIONAL: prefer a native Git Mage change event if/when one
+                // exists; until then, watch `.git` refs via FSEvents.
+                fileChangeWatcher.watchGitChange(scheduleID: schedule.id, repoPath: repoPath) { event in
+                    triggerDispatcher.fire(event)
+                }
+            case .time, .webhook:
+                break   // .time fires via scheduleRunner; .webhook via WebhookServer (off by default)
+            }
+        }
+        scheduleRunner.start()
+        // `WebhookServer` is deliberately NOT constructed here: it needs a port +
+        // bearer token (from `SecretStore`, once the user enables it in a future
+        // settings surface) and must never `start()` at launch — constructing it
+        // eagerly with a placeholder token would be a live, unauthenticated-by-
+        // default local listener. Left for the settings surface that turns it on.
 
         // `@`-mention file index (M7 Slice 5c Task 22a wiring; the overlay UI itself
         // is Task 22b). No first-class "project directory" concept exists yet — default
@@ -696,6 +794,10 @@ final class AppEnvironment {
             editJournal: editJournal,
             subagentCoordinator: subagentCoordinator,
             runManager: runManager,
+            scheduleStore: scheduleStore,
+            scheduleRunner: scheduleRunner,
+            triggerDispatcher: triggerDispatcher,
+            fileChangeWatcher: fileChangeWatcher,
             modelCatalogService: modelCatalogService,
             modelCatalog: modelCatalog,
             modelPriceTable: modelPriceTable,
@@ -854,8 +956,8 @@ final class AppEnvironment {
         agentContextService: AgentContextService,
         agentPermissionStore: AgentPermissionStore,
         agentStore: AgentStore
-    ) -> @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession {
-        { profile, registry, model in
+    ) -> @MainActor (AgentProfile, AgentToolRegistry, String, Set<String>) -> AgentSession {
+        { profile, registry, model, sandboxAllowList in
             let pinned = RuntimeOptionsStore(persistence: InMemoryPersistenceStore())
             pinned.pinModel(model)
             return AgentSession(
@@ -867,7 +969,20 @@ final class AppEnvironment {
                 permissions: agentPermissionStore,
                 basePrompt: profile.instructions.isEmpty ? AgentSession.defaultPrompt : profile.instructions,
                 agents: agentStore,
+                // M7 Slice 3b Task 21: every child session is sandboxed at trust
+                // tier `.subagent` — `sandboxAllowList` is always non-nil here (the
+                // runner resolves it per-run via `ExecutionRouter.resolveProfile`),
+                // so the compose layer is always active for a spawned subagent.
+                // `agentAllowList: nil` — see Task 21 report: `AgentToolPolicy`'s
+                // `.restricted` case (deny-list + tool-class allow) doesn't reduce
+                // losslessly to `compose`'s `Set<String>?` allow-only shape, and the
+                // full policy is already enforced by `SubagentRegistryFilter` (the
+                // child's registry never even contains a disallowed tool) — a lossy
+                // second projection here would risk incorrectly denying a call the
+                // class-based allow already permits.
                 unattended: true,
+                sandboxAllowList: sandboxAllowList,
+                agentAllowList: nil,
                 runtime: pinned)
         }
     }

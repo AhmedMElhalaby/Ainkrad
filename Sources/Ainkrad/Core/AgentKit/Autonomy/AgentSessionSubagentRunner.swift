@@ -14,15 +14,22 @@ final class AgentSessionSubagentRunner: SubagentRunner {
     private let allTools: [any AgentTool]
     private let agents: AgentStore
     private let router: ModelRouter
+    /// M7 Slice 3b Task 21 — resolves the `SandboxProfile` every child session's
+    /// tools are narrowed to. Every subagent runs at trust tier `.subagent`
+    /// (never `.mainInteractive`), so this always resolves to a sandboxed
+    /// (never `.host`) profile — see `ExecutionRouter.resolveProfile`.
+    private let executionRouter: ExecutionRouter
     private let candidatesProvider: @MainActor () -> [RouterCandidate]
-    private let makeSession: @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession
+    private let makeSession: @MainActor (AgentProfile, AgentToolRegistry, String, Set<String>) -> AgentSession
 
     init(allTools: [any AgentTool], agents: AgentStore, router: ModelRouter,
+         executionRouter: ExecutionRouter,
          candidatesProvider: @escaping @MainActor () -> [RouterCandidate],
-         makeSession: @escaping @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession) {
+         makeSession: @escaping @MainActor (AgentProfile, AgentToolRegistry, String, Set<String>) -> AgentSession) {
         self.allTools = allTools
         self.agents = agents
         self.router = router
+        self.executionRouter = executionRouter
         self.candidatesProvider = candidatesProvider
         self.makeSession = makeSession
     }
@@ -37,7 +44,13 @@ final class AgentSessionSubagentRunner: SubagentRunner {
 
         let tools = SubagentRegistryFilter.tools(from: allTools, allow: spec.toolAllowList, policy: profile.toolPolicy)
         let registry = AgentToolRegistry(tools: tools)
-        let session = makeSession(profile, registry, decision.candidate.model)
+        // `AgentProfile` carries no per-Agent `AgentExecutionPolicy` projection yet
+        // (no `sandboxProfileID`/`allowCloud` fields) — `policy: nil` lets the
+        // router fall back to `.subagent`'s restrictive tier default
+        // (`BuiltInSandboxProfiles.workspaceWrite`), which is fail-closed, never
+        // an escalation. See Task 21 report for this discrepancy vs. the brief.
+        let sandboxProfile = executionRouter.resolveProfile(tier: .subagent, policy: nil)
+        let session = makeSession(profile, registry, decision.candidate.model, sandboxProfile.toolAllowList)
 
         session.send(spec.prompt)
         await session.currentTask?.value

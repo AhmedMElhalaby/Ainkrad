@@ -21,6 +21,7 @@ struct DocumentConformanceTests {
         #expect(SandboxProfileDocument.documentID == "sandbox-profiles")
         #expect(SkillCommandsDocument.documentID == "skill-commands")
         #expect(DiscoveredModelsDocument.documentID == "discovered-models")
+        #expect(SchedulesDocument.documentID == "agent-schedules")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
