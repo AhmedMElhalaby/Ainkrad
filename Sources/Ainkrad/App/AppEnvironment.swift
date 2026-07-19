@@ -200,7 +200,11 @@ final class AppEnvironment {
             retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
-        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        let skillInstaller = SkillInstaller(
+            http: URLSessionHTTPClient(), paths: SkillPaths(root: SkillPaths.defaultRoot()),
+            persistence: persistence)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence,
+                                       skillInstaller: skillInstaller)
         let appStoreStore = AppStoreStore(service: appStore, registry: registry)
 
         let appIconStore = AppIconStore(persistence: persistence,

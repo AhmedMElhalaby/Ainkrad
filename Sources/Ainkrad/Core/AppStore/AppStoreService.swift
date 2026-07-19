@@ -6,12 +6,19 @@ import Foundation
 final class AppStoreService: AppStoreServing {
     let catalog: CatalogService
     private let installer: PluginInstaller
+    // Optional (defaulted) so existing call sites that predate the `.skill`
+    // catalog kind keep compiling unchanged; `AppEnvironment` wires a real one.
+    // A `.skill` install/uninstall with no installer configured fails gracefully
+    // via `AppStoreError` rather than crashing.
+    private let skillInstaller: SkillInstaller?
     private let persistence: PersistenceStore
 
-    init(catalog: CatalogService, installer: PluginInstaller, persistence: PersistenceStore) {
+    init(catalog: CatalogService, installer: PluginInstaller, persistence: PersistenceStore,
+         skillInstaller: SkillInstaller? = nil) {
         self.catalog = catalog
         self.installer = installer
         self.persistence = persistence
+        self.skillInstaller = skillInstaller
     }
 
     var cachedCatalog: [CatalogEntry] { catalog.cached }
@@ -22,7 +29,13 @@ final class AppStoreService: AppStoreServing {
         guard let entry = catalog.cached.first(where: { $0.appID == appID }) else {
             throw AppStoreError.notInstalled(appID)   // not in catalog
         }
-        try await installer.install(entry)
+        switch entry.kind {
+        case .plugin:
+            try await installer.install(entry)
+        case .skill:
+            guard let skillInstaller else { throw AppStoreError.invalidBundle("skill installer unavailable") }
+            try await skillInstaller.install(entry)
+        }
     }
 
     /// Guarded update: installs the catalog version over the installed one,
@@ -32,10 +45,25 @@ final class AppStoreService: AppStoreServing {
         guard let entry = catalog.cached.first(where: { $0.appID == appID }) else {
             throw AppStoreError.notInstalled(appID)
         }
-        try await installer.update(entry)
+        switch entry.kind {
+        case .plugin:
+            try await installer.update(entry)
+        case .skill:
+            // Skills have no version guard yet — re-installing simply refetches
+            // and overwrites (see `SkillInstaller.install`'s idempotency note).
+            guard let skillInstaller else { throw AppStoreError.invalidBundle("skill installer unavailable") }
+            try await skillInstaller.install(entry)
+        }
     }
 
-    func uninstall(appID: String) throws { try installer.uninstall(appID: appID) }
+    func uninstall(appID: String) throws {
+        if catalog.cached.first(where: { $0.appID == appID })?.kind == .skill {
+            guard let skillInstaller else { throw AppStoreError.invalidBundle("skill installer unavailable") }
+            try skillInstaller.uninstall(appID: appID)
+        } else {
+            try installer.uninstall(appID: appID)
+        }
+    }
 
     func installedApps() -> [String: InstalledPluginsDocument.Entry] {
         persistence.load(InstalledPluginsDocument.self)?.installed ?? [:]
