@@ -257,7 +257,8 @@ enum TestSessionFactory {
     /// `unattended` is additive/nil-default (mirrors the `AgentSession` init
     /// param) so existing single-arg call sites are unaffected.
     static func make(provider: LLMProvider, mode: AgentPermissionMode = .ask,
-                     unattended: Bool = false) -> AgentSession {
+                     unattended: Bool = false, editJournal: EditJournal? = nil,
+                     commands: CommandRegistry? = nil) -> AgentSession {
         let persistence = InMemoryPersistenceStore()
         let ws = UUID()
         let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
@@ -268,11 +269,23 @@ enum TestSessionFactory {
         let config = AgentConfigStore(persistence: persistence)
         let context = AgentContextService(hub: AgentContextRegistryHub(),
                                           settings: AgentContextSettingsStore(persistence: persistence))
-        let registry = AgentToolRegistry(tools: [FakeEditFileTool(), FakeReadFileTool(), FakeIrreversibleTool()])
+        // When a journal is supplied, register the REAL `EditFileTool(journal:)` ahead
+        // of the fake (first-registered wins by name) so an `edit_file` call actually
+        // writes to disk and records into the journal — needed by the undo tests,
+        // which assert the on-disk file content changes and reverts. Every other
+        // caller of this factory passes no journal and keeps the pre-existing fake
+        // (never touches the filesystem) behavior unchanged.
+        var tools: [any AgentTool] = []
+        if let editJournal { tools.append(EditFileTool(journal: editJournal)) }
+        tools.append(FakeEditFileTool())
+        tools.append(FakeReadFileTool())
+        tools.append(FakeIrreversibleTool())
+        let registry = AgentToolRegistry(tools: tools)
         return AgentSession(
             providerFor: { _ in provider },
             connections: connections, config: config, context: context,
-            registry: registry, permissions: permissions, unattended: unattended)
+            registry: registry, permissions: permissions, editJournal: editJournal,
+            unattended: unattended, commands: commands)
     }
 
     /// A local (free) and a premium candidate on the given connection, for the

@@ -128,6 +128,22 @@ enum BuiltinCommands {
             SlashCommand(name: "export", summary: "Export the transcript (coming soon)", usage: "/export") { _, _ in
                 .handled(note: "Transcript export isn't implemented yet.")
             },
+            SlashCommand(name: "undo", summary: "Undo the last turn's file edits + transcript", usage: "/undo") { _, session in
+                let summary = session.undoLastTurn()
+                if !summary.irreversible.isEmpty {
+                    let ran = summary.irreversible.joined(separator: " ")
+                    return .handled(note: "This turn can't be undone — it ran a tool with irreversible effects. \(ran)")
+                }
+                if summary.revertedEdits == 0 {
+                    return .handled(note: "Nothing to undo.")
+                }
+                let plural = summary.revertedEdits == 1 ? "edit" : "edits"
+                return .handled(note: "Undid the last turn — reverted \(summary.revertedEdits) file \(plural).")
+            },
+            SlashCommand(name: "retry", summary: "Re-run the last user prompt", usage: "/retry") { _, session in
+                session.retryLastTurn()
+                return .handled(note: nil)
+            },
         ]
     }
 }

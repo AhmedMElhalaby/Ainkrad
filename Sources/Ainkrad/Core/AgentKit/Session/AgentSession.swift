@@ -61,6 +61,24 @@ final class AgentSession {
     private let memory: MemoryService?
     private let agents: AgentStore?
 
+    /// M7 Slice 3 (Task 10) — the per-session edit ledger consulted by
+    /// `undoLastTurn()`. Additive/nil-default: with no journal injected, undo
+    /// still rewinds the transcript but reports `revertedEdits: 0` (no file
+    /// edits are tracked to revert), matching pre-Task-10 behavior.
+    private let editJournal: EditJournal?
+
+    /// One entry per user turn, captured at the top of `send(_:)` (after the
+    /// re-entrancy guard, before the user message is appended) so `/undo`/
+    /// `/retry` can rewind to exactly this point. Slash-command inputs never
+    /// reach this point (the command intercept above returns first), so they
+    /// never create a mark.
+    private struct TurnMark {
+        let transcriptCount: Int
+        let editJournalCount: Int
+        let prompt: String
+    }
+    private var turnMarks: [TurnMark] = []
+
     /// M7 Slice 3 — headless runs (subagent/background/scheduled) have no
     /// approval HUD. `false` (default) preserves today's interactive behavior
     /// byte-for-byte. See `execute(_:)`'s approval branch.
@@ -101,6 +119,7 @@ final class AgentSession {
         maxToolIterations: Int = 25,
         memory: MemoryService? = nil,
         agents: AgentStore? = nil,
+        editJournal: EditJournal? = nil,
         unattended: Bool = false,
         router: ModelRouter? = nil,
         usage: UsageTracker? = nil,
@@ -120,6 +139,7 @@ final class AgentSession {
         self.maxToolIterations = maxToolIterations
         self.memory = memory
         self.agents = agents
+        self.editJournal = editJournal
         self.unattended = unattended
         self.router = router
         self.usage = usage
@@ -155,6 +175,14 @@ final class AgentSession {
         case .idle, .failed:
             break
         }
+
+        // Turn-boundary watermark (Task 10): captured AFTER the command
+        // intercept and re-entrancy guard, so only inputs that actually start
+        // a new turn get a mark — a slash command returned above, and a
+        // re-entrant call while a turn is in flight bailed above too.
+        turnMarks.append(TurnMark(transcriptCount: messages.count,
+                                  editJournalCount: editJournal?.count ?? 0,
+                                  prompt: text))
 
         messages.append(AgentMessage(role: .user, text: text))
 
@@ -220,6 +248,59 @@ final class AgentSession {
         // distinguishes `interrupt()` from `reset()`.
     }
 
+    // MARK: - Turn undo/retry (Task 10)
+
+    /// Reverts the last user turn: its file edits (via `EditJournal.revertEntries(after:)`)
+    /// AND the transcript (truncated back to before the turn's user message).
+    ///
+    /// **All-or-nothing:** if the removed turn executed any tool classified as
+    /// irreversible (`TurnUndo.classifyIrreversible`, e.g. `run_terminal`/`git_op` —
+    /// a shell command or a git push already happened and cannot be unwound), the
+    /// WHOLE undo is refused: no file edit is reverted, the transcript is left
+    /// untouched, and the turn mark stays on the stack. Silently reverting only the
+    /// file-edit half of a turn while leaving an irreversible side effect unmentioned
+    /// would misrepresent what actually happened, so refusal is the only honest move.
+    ///
+    /// Calling this repeatedly walks back turn-by-turn (each successful call pops
+    /// exactly one mark). With no turn to undo, returns a zero/empty summary — a
+    /// no-op, not an error.
+    @discardableResult
+    func undoLastTurn() -> TurnUndoSummary {
+        guard let mark = turnMarks.last else {
+            return TurnUndoSummary(revertedEdits: 0, irreversible: [])
+        }
+
+        let start = min(mark.transcriptCount, messages.count)
+        let removedTurn = Array(messages.suffix(from: start))
+        let irreversible = TurnUndo.classifyIrreversible(removedTurn)
+        guard irreversible.isEmpty else {
+            // Refuse entirely — nothing reverted, mark left in place.
+            return TurnUndoSummary(revertedEdits: 0, irreversible: irreversible)
+        }
+
+        turnMarks.removeLast()
+        let reverted = editJournal?.revertEntries(after: mark.editJournalCount) ?? 0
+        // PROVISIONAL (Slice 1): revert memory writes recorded during this turn once
+        // the Slice 1 log exposes a count-based "undo entries after N" hook.
+        // memory?.log.undoEntries(after: mark.memoryLogCount)
+        if mark.transcriptCount <= messages.count {
+            messages.removeLast(messages.count - mark.transcriptCount)
+        }
+        return TurnUndoSummary(revertedEdits: reverted, irreversible: [])
+    }
+
+    /// Re-submits the last user turn's prompt: undoes it first (so a retry doesn't
+    /// pile a second attempt's transcript/edits on top of the first), then sends
+    /// the same prompt again. If the last turn is irreversible, `undoLastTurn()`
+    /// refuses (see above) and this simply resends the prompt as a NEW turn on top
+    /// of the existing transcript — retry never discards an irreversible turn's
+    /// history, it just doesn't get a "clean" rewind first.
+    func retryLastTurn() {
+        guard let prompt = turnMarks.last?.prompt else { return }
+        _ = undoLastTurn()
+        send(prompt)
+    }
+
     func reset() {
         currentTask?.cancel()
         currentTask = nil
@@ -229,6 +310,7 @@ final class AgentSession {
             cont.resume(returning: .denied("cancelled"))
         }
         messages.removeAll()
+        turnMarks.removeAll()
         state = .idle
         streamingText = ""
         streamingThinking = ""
