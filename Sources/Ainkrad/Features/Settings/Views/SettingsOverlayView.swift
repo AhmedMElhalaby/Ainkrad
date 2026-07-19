@@ -40,6 +40,7 @@ struct SettingsOverlayView: View {
         case appIcon
         case shortcuts
         case memory
+        case mcp
         case app(String)
     }
 
@@ -134,6 +135,7 @@ struct SettingsOverlayView: View {
                 sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
                 sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
                 sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
+                sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
 
                 groupLabel("APPEARANCE", tokens: tokens)
                     .padding(.top, 12)
@@ -267,6 +269,8 @@ struct SettingsOverlayView: View {
                     message: "The assistant's memory index couldn't be opened this launch, so it's running memory-less for now. Restart Ainkrad to try again."
                 )
             }
+        case .mcp:
+            MCPManagerView(configStore: environment.mcpServerRegistry.configStore, registry: environment.mcpServerRegistry)
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is

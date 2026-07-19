@@ -21,7 +21,10 @@ enum MCPHealth: Equatable {
 @MainActor
 @Observable
 final class MCPServerRegistry {
-    private let configStore: MCPServerConfigStore
+    /// Exposed (not `private`) so the Settings surface (`MCPManagerView`) can
+    /// read/mutate configs directly while still calling back into `connectEnabled()`
+    /// on this same registry to reconnect after edits.
+    let configStore: MCPServerConfigStore
     private let clientFactory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient?
     private var clients: [String: MCPClient] = [:]
     private var tools: [String: [MCPToolDescriptor]] = [:]
