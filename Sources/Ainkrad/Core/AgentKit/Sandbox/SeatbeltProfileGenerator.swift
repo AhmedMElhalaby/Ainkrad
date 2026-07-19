@@ -61,6 +61,15 @@ enum SeatbeltProfileGenerator {
             "(allow process-exec)",
             "(allow sysctl-read)",
             "(allow mach-lookup)",
+            // Root directory itself (NOT subpath — this does not grant access
+            // to anything under it) must be readable: dyld/zsh path
+            // resolution (getcwd-style traversal, shared-cache lookup) stats
+            // "/" during startup even when cwd is elsewhere. Without this a
+            // sandboxed shell aborts (SIGABRT) before running anything.
+            // confirmed at execution (Task 6): verified via `sandbox-exec`
+            // denial log (`file-read-data /`) on the target macOS version.
+            "(allow file-read-data (literal \"/\"))",
+            "(allow file-read-metadata (literal \"/\"))",
         ]
 
         for sys in systemReadPaths {
