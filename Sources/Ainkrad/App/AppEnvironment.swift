@@ -30,6 +30,10 @@ final class AppEnvironment {
     let agentContextService: AgentContextService
     let agentStore: AgentStore
     let agentSession: AgentSession
+    /// M7 Slice 2 (MCP) — owns configured servers' live connections; its discovered
+    /// tools feed `agentToolRegistry.dynamicTools` and its trust decisions feed
+    /// `agentSession`'s `mcpTrust` closure. See `bootstrap()`.
+    let mcpServerRegistry: MCPServerRegistry
     let modelCatalogService: ModelCatalogService
     /// M7 Slice 5b (Model Router / Usage / Failover) runtime wiring.
     let modelCatalog: ModelCatalog
@@ -99,6 +103,7 @@ final class AppEnvironment {
         agentContextService: AgentContextService,
         agentStore: AgentStore,
         agentSession: AgentSession,
+        mcpServerRegistry: MCPServerRegistry,
         modelCatalogService: ModelCatalogService,
         modelCatalog: ModelCatalog,
         modelPriceTable: ModelPriceTable,
@@ -136,6 +141,7 @@ final class AppEnvironment {
         self.agentContextService = agentContextService
         self.agentStore = agentStore
         self.agentSession = agentSession
+        self.mcpServerRegistry = mcpServerRegistry
         self.modelCatalogService = modelCatalogService
         self.modelCatalog = modelCatalog
         self.modelPriceTable = modelPriceTable
@@ -262,7 +268,19 @@ final class AppEnvironment {
             agentTools.append(MemoryWriteTool(service: memoryService))
             agentTools.append(MemorySearchTool(service: memoryService))
         }
-        let agentToolRegistry = AgentToolRegistry(tools: agentTools)
+
+        // MCP (M7 Slice 2): configured servers + their live connections. Uses
+        // `MCPServerRegistry.defaultClientFactory` (the real stdio/httpSSE transport
+        // factory, the one place real transports get instantiated) — tests inject a
+        // stub factory instead so the registry core never spawns a process or hits
+        // the network. Connecting is kicked off after `environment` exists (below),
+        // never awaited here, so a down/misconfigured server can't delay launch.
+        let mcpConfigStore = MCPServerConfigStore(persistence: persistence, secrets: secrets)
+        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+
+        let agentToolRegistry = AgentToolRegistry(
+            tools: agentTools,
+            dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentStore = AgentStore(persistence: persistence)
 
@@ -334,7 +352,8 @@ final class AppEnvironment {
             commands: commandRegistry,
             authProfiles: authProfileStore,
             candidatesProvider: candidatesProvider,
-            isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) }
+            isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) },
+            mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
         let environment = AppEnvironment(
@@ -362,6 +381,7 @@ final class AppEnvironment {
             agentContextService: agentContextService,
             agentStore: agentStore,
             agentSession: agentSession,
+            mcpServerRegistry: mcpServerRegistry,
             modelCatalogService: modelCatalogService,
             modelCatalog: modelCatalog,
             modelPriceTable: modelPriceTable,
@@ -392,6 +412,15 @@ final class AppEnvironment {
                     tokenFor: { connectionStore.token(for: $0) })
                 try? await Task.sleep(for: .seconds(30))
             }
+        }
+
+        // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
+        // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
+        // launch itself must never block on a slow or down server, so this is fired
+        // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
+        // Tools/trust populate as servers come up; a down server just never appears.
+        Task { [weak mcpServerRegistry] in
+            await mcpServerRegistry?.connectEnabled()
         }
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.

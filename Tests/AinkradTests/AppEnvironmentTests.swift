@@ -43,6 +43,8 @@ final class AppEnvironmentTests {
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
         let agentPermissionStore = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
         let agentStore = AgentStore(persistence: persistence)
+        let mcpServerRegistry = MCPServerRegistry(
+            configStore: MCPServerConfigStore(persistence: persistence, secrets: secrets))
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -84,6 +86,7 @@ final class AppEnvironmentTests {
             agentContextService: agentContextService,
             agentStore: agentStore,
             agentSession: agentSession,
+            mcpServerRegistry: mcpServerRegistry,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
             modelCatalog: ModelCatalog(),
             modelPriceTable: ModelPriceTable(),
