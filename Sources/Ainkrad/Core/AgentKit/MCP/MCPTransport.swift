@@ -56,24 +56,46 @@ actor StubMCPTransport: MCPTransport {
 private final class ContinuationBox: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: AsyncThrowingStream<JSONValue, Error>.Continuation?
+    // Values/finish that arrive BEFORE a consumer attaches are buffered and
+    // flushed on `set()`, so a reply yielded before the read loop starts
+    // consuming `incoming()` is never dropped. Without this, MCPClient.connect()
+    // could send `initialize` and have the reply yielded before its read-loop
+    // Task attached — the reply vanished and the request stalled to its timeout.
+    // (Real Stdio/HTTP transports are shielded by pipe/socket buffering; this
+    // makes the in-memory stub behave the same way.)
+    private var buffered: [JSONValue] = []
+    private var finished = false
 
     func set(_ continuation: AsyncThrowingStream<JSONValue, Error>.Continuation) {
         lock.lock()
         self.continuation = continuation
+        let pending = buffered
+        buffered.removeAll()
+        let didFinish = finished
         lock.unlock()
+        for value in pending { continuation.yield(value) }
+        if didFinish { continuation.finish() }
     }
 
     func yield(_ value: JSONValue) {
         lock.lock()
-        let c = continuation
-        lock.unlock()
-        c?.yield(value)
+        if let c = continuation {
+            lock.unlock()
+            c.yield(value)
+        } else {
+            buffered.append(value)
+            lock.unlock()
+        }
     }
 
     func finish() {
         lock.lock()
-        let c = continuation
-        lock.unlock()
-        c?.finish()
+        if let c = continuation {
+            lock.unlock()
+            c.finish()
+        } else {
+            finished = true
+            lock.unlock()
+        }
     }
 }
