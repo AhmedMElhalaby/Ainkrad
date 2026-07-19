@@ -95,6 +95,8 @@ final class AppEnvironmentTests {
             localModelAvailability: LocalModelAvailability(),
             authProfileStore: AuthProfileStore(persistence: persistence, secrets: secrets),
             commandRegistry: CommandRegistry(builtins: []),
+            assistantWorkingDirectory: FileManager.default.homeDirectoryForCurrentUser,
+            workspaceFileIndex: WorkspaceFileIndex(root: FileManager.default.homeDirectoryForCurrentUser),
             memoryService: nil
         )
 

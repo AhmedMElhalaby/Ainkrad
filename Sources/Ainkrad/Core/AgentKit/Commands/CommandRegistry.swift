@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Commands/CommandRegistry.swift
 import Foundation
+import AppKit
 
 /// Single slash-command dispatch path. `AgentSession.send` runs every input through
 /// this registry first — this is also where Slice 1's old `/remember ` prefix
@@ -122,11 +123,41 @@ enum BuiltinCommands {
                 """
                 return .handled(note: note)
             },
-            SlashCommand(name: "compact", summary: "Compact the transcript (coming soon)", usage: "/compact") { _, _ in
-                .handled(note: "Transcript compaction isn't implemented yet.")
+            // `/compact` and `/export` both need LIVE session state (the transcript),
+            // which `SlashCommand.handler` already receives as its `session` argument —
+            // that existing seam is the cleanest way to reach it, so neither command
+            // needs `BuiltinCommands.make` to take an `AgentSession` dependency itself.
+            SlashCommand(name: "compact", summary: "Summarize older messages to shrink the transcript", usage: "/compact") { _, session in
+                // Guard against mid-turn execution: `replaceMessages` overwrites
+                // `session.messages` wholesale, so compacting while a turn is
+                // in flight (thinking/streaming/tool-calling/awaiting approval)
+                // would clobber in-flight appends with a stale pre-turn snapshot.
+                // Mirrors the same state set `AgentSession.send`'s re-entrancy
+                // guard treats as "busy".
+                switch session.state {
+                case .thinking, .streaming, .callingTool, .awaitingApproval:
+                    return .handled(note: "Can't compact while a turn is in progress — stop or finish it first.")
+                case .idle, .failed:
+                    break
+                }
+                let originalCount = session.messages.count
+                let keepRecent = 6
+                guard originalCount > keepRecent else {
+                    return .handled(note: "Nothing to compact yet — only \(originalCount) message\(originalCount == 1 ? "" : "s") in this session.")
+                }
+                let summary = TranscriptCompactor.summarizeHeuristically(session.messages)
+                let compacted = TranscriptCompactor.compact(session.messages, keepRecent: keepRecent, summary: summary)
+                session.replaceMessages(compacted)
+                let summarizedCount = originalCount - keepRecent
+                return .handled(note: "Compacted \(summarizedCount) earlier message\(summarizedCount == 1 ? "" : "s") into a summary; kept the most recent \(keepRecent).")
             },
-            SlashCommand(name: "export", summary: "Export the transcript (coming soon)", usage: "/export") { _, _ in
-                .handled(note: "Transcript export isn't implemented yet.")
+            SlashCommand(name: "export", summary: "Copy the transcript to the clipboard as Markdown", usage: "/export") { _, session in
+                guard !session.messages.isEmpty else { return .handled(note: "Nothing to export yet.") }
+                let rendered = ConversationExporter.export(session.messages, format: .markdown)
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(rendered, forType: .string)
+                return .handled(note: "Copied the transcript to your clipboard as Markdown (\(rendered.count) characters).")
             },
         ]
     }

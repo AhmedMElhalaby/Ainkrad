@@ -143,29 +143,48 @@ struct OpenAICompatibleProvider: LLMProvider {
 
     /// One `AgentMessage` can expand into multiple OpenAI wire messages: an
     /// assistant turn with tool calls, then one `role:"tool"` message per result.
-    private static func wireMessages(for message: AgentMessage) -> [[String: Any]] {
+    nonisolated private static func wireMessages(for message: AgentMessage) -> [[String: Any]] {
         var texts: [String] = []
         var toolCalls: [[String: Any]] = []
         var toolResults: [[String: Any]] = []
+        var contentParts: [[String: Any]] = []
+        var hasImage = false
         for block in message.content {
             switch block {
-            case .text(let t): texts.append(t)
+            case .text(let t):
+                texts.append(t)
+                contentParts.append(["type": "text", "text": t])
             case .toolUse(let id, let name, let input):
                 let args = String(decoding: (try? JSONSerialization.data(withJSONObject: input.toFoundationObject())) ?? Data("{}".utf8), as: UTF8.self)
                 toolCalls.append(["id": id, "type": "function",
                                   "function": ["name": name, "arguments": args]])
             case .toolResult(let toolUseID, let content, _):
                 toolResults.append(["role": "tool", "tool_call_id": toolUseID, "content": content])
+            case .image(let mediaType, let base64):
+                hasImage = true
+                contentParts.append(["type": "image_url", "image_url": ["url": "data:\(mediaType);base64,\(base64)"]])
             }
         }
         var out: [[String: Any]] = []
         if message.role == .assistant, !toolCalls.isEmpty {
             out.append(["role": "assistant", "content": texts.joined(), "tool_calls": toolCalls])
+        } else if hasImage {
+            // A message carrying an image must use the array content form —
+            // plain string `content` has no way to embed an image_url part.
+            out.append(["role": message.role.rawValue, "content": contentParts])
         } else if !texts.isEmpty || toolResults.isEmpty {
             out.append(["role": message.role.rawValue, "content": texts.joined()])
         }
         out.append(contentsOf: toolResults)
         return out
+    }
+
+    /// Test-only hook exposing the array-content form of `wireMessages(for:)` for a
+    /// single message — the `"content"` array carrying `{"type":"text"|"image_url",...}`
+    /// parts. Returns an empty array for text-only messages (those still wire as a
+    /// plain string, not this array form).
+    nonisolated static func wireContentForTesting(_ message: AgentMessage) -> [[String: Any]] {
+        wireMessages(for: message).first?["content"] as? [[String: Any]] ?? []
     }
 
     /// Best-effort human-readable message from a non-2xx response body. Never echoes the API key

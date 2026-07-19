@@ -123,12 +123,19 @@ final class AgentSession {
         self.isLocalConnection = isLocalConnection
     }
 
-    func send(_ text: String) {
+    /// `images`, when non-empty, are attached as leading `.image` content
+    /// blocks on the user message (M7 Slice 5c Task 22b — composer image
+    /// drop). Defaults to `[]` so every pre-existing `send(_:)` call site
+    /// (text-only) keeps compiling and behaving byte-for-byte unchanged.
+    func send(_ text: String, images: [ImageAttachment] = []) {
         // Single dispatch path for slash commands (migrated from the old
         // `/remember `-only prefix intercept — see `BuiltinCommands.remember`).
         // A recognized command (including an unknown-`/foo`-surfaces-a-note case)
         // returns here without ever touching the transcript/provider path below.
-        if let commands {
+        // Commands never carry images — an attached image always falls through
+        // to the normal user-turn path below, even if the text happens to start
+        // with `/` (there is nothing sensible for a slash command to do with it).
+        if images.isEmpty, let commands {
             switch commands.run(text, on: self) {
             case .notACommand, .sendAsPrompt:
                 break
@@ -149,7 +156,9 @@ final class AgentSession {
             break
         }
 
-        messages.append(AgentMessage(role: .user, text: text))
+        var content: [AgentContentBlock] = images.map { .image(mediaType: $0.mediaType, base64: $0.base64) }
+        content.append(.text(text))
+        messages.append(AgentMessage(role: .user, content: content))
 
         state = .thinking
         streamingText = ""
@@ -185,6 +194,13 @@ final class AgentSession {
     /// Backs the `/remember <text>` command intercepted at the top of `send`.
     func remember(_ fact: String) {
         memory?.write(fact, to: .memory, provenance: .remember)
+    }
+
+    /// Replaces the transcript wholesale — the seam `/compact` (Task 22a) applies
+    /// `TranscriptCompactor`'s output through, without giving every caller direct
+    /// mutation access to `messages`.
+    func replaceMessages(_ newMessages: [AgentMessage]) {
+        messages = newMessages
     }
 
     func reset() {

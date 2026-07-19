@@ -8,6 +8,9 @@ enum AgentContentBlock: Equatable, Sendable {
     case text(String)
     case toolUse(id: String, name: String, input: JSONValue)
     case toolResult(toolUseID: String, content: String, isError: Bool)
+    /// An attached image. `mediaType` is a sniffed MIME type (e.g. `image/png`);
+    /// `base64` is the raw file bytes, base64-encoded (see `ImageAttachment`).
+    case image(mediaType: String, base64: String)
 }
 
 struct AgentMessage: Equatable, Sendable {
