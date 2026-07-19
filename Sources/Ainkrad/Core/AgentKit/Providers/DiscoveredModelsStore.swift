@@ -46,10 +46,13 @@ final class DiscoveredModelsStore {
         doc.byConnection[connectionID.uuidString]
     }
 
-    /// Record a connection's live-discovered models. An empty list is ignored so a
-    /// failed/curated fetch never clobbers a previously-good discovered list.
+    /// Record a connection's LIVE-discovered models. Callers must only pass a
+    /// genuinely-live result (a well-formed provider response) — an EMPTY live list
+    /// is authoritative and IS stored (e.g. an Ollama with nothing pulled), so the
+    /// picker/router show "no models" rather than the curated fallback. A
+    /// failed/parse-error fetch must NOT reach here (the caller keeps the previous
+    /// entry instead). Deduped so an unchanged refresh doesn't churn persistence.
     func setModels(_ models: [String], for connectionID: UUID) {
-        guard !models.isEmpty else { return }
         guard doc.byConnection[connectionID.uuidString] != models else { return }
         doc.byConnection[connectionID.uuidString] = models
         persistence.save(doc)

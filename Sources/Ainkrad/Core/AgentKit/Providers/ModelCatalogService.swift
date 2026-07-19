@@ -33,8 +33,12 @@ final class ModelCatalogService {
         do {
             let (data, response) = try await http.data(for: request)
             guard (200...299).contains(response.statusCode) else { return (curatedFallback, false) }
-            let parsed = Self.parseModels(kind: kind, data: data)
-            return parsed.isEmpty ? (curatedFallback, false) : (parsed, true)
+            // A well-formed response is authoritative even when it lists zero models
+            // (the provider genuinely has none) — return it live so callers show the
+            // real (possibly empty) set rather than the curated fallback. Only a
+            // parse failure (nil) falls back to curated.
+            guard let parsed = Self.parseModels(kind: kind, data: data) else { return (curatedFallback, false) }
+            return (parsed, true)
         } catch {
             return (curatedFallback, false)
         }
@@ -47,7 +51,7 @@ final class ModelCatalogService {
         do {
             let (data, response) = try await http.data(for: request)
             if (200...299).contains(response.statusCode) {
-                let count = Self.parseModels(kind: kind, data: data).count
+                let count = (Self.parseModels(kind: kind, data: data) ?? []).count
                 return ConnectionTestResult(ok: true, message: count > 0 ? "Connected · \(count) models" : "Connected")
             }
             // Body is the server's response — never contains the request key —
@@ -87,14 +91,21 @@ final class ModelCatalogService {
         }
     }
 
-    private static func parseModels(kind: ProviderKind, data: Data) -> [String] {
+    /// Returns `nil` when the body couldn't be parsed at all (unexpected shape),
+    /// distinguished from a well-formed response that genuinely lists zero models
+    /// (`[]`). Callers use that difference to decide between a curated fallback
+    /// (parse failure — we don't know) and an authoritative empty list (the
+    /// provider really has no models, e.g. an Ollama with nothing pulled).
+    private static func parseModels(kind: ProviderKind, data: Data) -> [String]? {
         switch kind {
         case .openAICompatible, .claude:
             struct List: Decodable { struct Item: Decodable { let id: String }; let data: [Item]? }
-            return (try? JSONDecoder().decode(List.self, from: data))?.data?.map(\.id) ?? []
+            guard let list = try? JSONDecoder().decode(List.self, from: data) else { return nil }
+            return list.data?.map(\.id) ?? []
         case .gemini:
             struct List: Decodable { struct Item: Decodable { let name: String }; let models: [Item]? }
-            return (try? JSONDecoder().decode(List.self, from: data))?.models?.map {
+            guard let list = try? JSONDecoder().decode(List.self, from: data) else { return nil }
+            return list.models?.map {
                 $0.name.hasPrefix("models/") ? String($0.name.dropFirst("models/".count)) : $0.name
             } ?? []
         }

@@ -24,14 +24,14 @@ struct DiscoveredModelsStoreTests {
         #expect(reloaded.models(for: id) == ["a", "b"])
     }
 
-    @Test("an empty list never clobbers a previously-good discovered list")
-    func emptyIgnored() {
+    @Test("an authoritative empty live list replaces a previous list (provider now has no models)")
+    func emptyIsAuthoritative() {
         let persistence = InMemoryPersistenceStore()
         let store = DiscoveredModelsStore(persistence: persistence)
         let id = UUID()
         store.setModels(["good"], for: id)
-        store.setModels([], for: id)
-        #expect(store.models(for: id) == ["good"])
+        store.setModels([], for: id)   // e.g. Ollama's last model was removed
+        #expect(store.models(for: id) == [])   // shows "no models", NOT the stale list or curated
     }
 
     @Test("prune drops entries for connections no longer present")
