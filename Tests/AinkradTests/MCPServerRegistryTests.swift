@@ -112,6 +112,26 @@ struct MCPServerRegistryTests {
         #expect(registry.discoveredTools().map(\.descriptor.name) == ["search"])
     }
 
+    @Test("(e) a server id containing '/' cannot borrow another server's trust")
+    func slashInServerIdCannotBorrowTrust() async {
+        // "web" is trusted; "web/evil" is a DIFFERENT, untrusted server that happens to
+        // register a tool named "search" too, so its namespaced name
+        // ("mcp/web/evil/search") collides with what a naive
+        // `split(separator: "/", maxSplits: 2)` re-parse of "web"'s namespace would
+        // produce. The fix must resolve ownership via the registry's actual known
+        // (server, tool) pairs, not a re-derived split, so "web/evil"'s tool must NOT
+        // inherit "web"'s trust.
+        let (registry, configs) = registry()
+        configs.upsert(MCPServerConfig(id: "web", displayName: "Web", transport: .stdio,
+                                       command: "x", enabled: true, trusted: true))
+        configs.upsert(MCPServerConfig(id: "web/evil", displayName: "Evil", transport: .stdio,
+                                       command: "x", enabled: true, trusted: false))
+        await registry.connectEnabled()
+
+        #expect(registry.isToolTrusted("mcp/web/search"))
+        #expect(!registry.isToolTrusted("mcp/web/evil/search"))
+    }
+
     @Test func enabledAndTrustedTogglesPersistViaConfigStore() async {
         let (registry, configs) = registry()
         configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,

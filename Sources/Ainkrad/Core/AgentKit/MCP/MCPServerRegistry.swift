@@ -112,10 +112,23 @@ final class MCPServerRegistry {
     }
 
     /// `mcp/<server>/<tool>` is trusted iff its owning server is enabled AND trusted.
+    ///
+    /// Deliberately NOT a naive `split(separator: "/", maxSplits: 2)` re-parse: a server
+    /// id may itself contain `/` (nothing upstream forbids it), which makes the
+    /// `mcp/<server>/<tool>` scheme ambiguous to split back apart — e.g. server "web"
+    /// (trusted) and server "web/evil" (untrusted) both registering a tool named
+    /// "search" produce "mcp/web/search" and "mcp/web/evil/search" respectively, and a
+    /// naive split of the latter would parse `parts[1] == "web"`, wrongly borrowing
+    /// "web"'s trust for a tool that actually belongs to "web/evil". Instead, this walks
+    /// the registry's OWN known (server, tool) pairs and reconstructs each one's
+    /// namespaced name the same way `MCPToolAdapter.name` does, matching by exact string
+    /// equality against real, currently-discovered tools rather than re-deriving a
+    /// server id via string surgery.
     func isToolTrusted(_ namespacedName: String) -> Bool {
-        let parts = namespacedName.split(separator: "/", maxSplits: 2)
-        guard parts.count == 3, parts[0] == "mcp" else { return false }
-        guard let config = configStore.config(id: String(parts[1])) else { return false }
-        return config.enabled && config.trusted
+        for (server, descriptor) in discoveredTools() where "mcp/\(server)/\(descriptor.name)" == namespacedName {
+            guard let config = configStore.config(id: server) else { return false }
+            return config.enabled && config.trusted
+        }
+        return false
     }
 }
