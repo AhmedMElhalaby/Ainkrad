@@ -100,6 +100,17 @@ final class MCPServerRegistry {
         clients[server]
     }
 
+    /// The live adapter set for the `AgentToolRegistry.dynamicTools` provider:
+    /// one namespaced `MCPToolAdapter` per discovered tool, bound to its owning
+    /// server's connected client. A tool whose server has no live client (e.g.
+    /// raced with a disconnect) is skipped rather than crashing.
+    func currentTools() -> [any AgentTool] {
+        discoveredTools().compactMap { server, descriptor in
+            guard let client = clients[server] else { return nil }
+            return MCPToolAdapter(server: server, descriptor: descriptor, client: client)
+        }
+    }
+
     /// `mcp/<server>/<tool>` is trusted iff its owning server is enabled AND trusted.
     func isToolTrusted(_ namespacedName: String) -> Bool {
         let parts = namespacedName.split(separator: "/", maxSplits: 2)
