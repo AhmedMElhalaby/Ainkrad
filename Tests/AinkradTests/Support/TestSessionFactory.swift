@@ -63,6 +63,50 @@ final class RecordingProvider: LLMProvider {
     }
 }
 
+/// A minimal `AgentSession` builder for tests that stand in for a spawned
+/// subagent's child session (e.g. `AgentSessionSubagentRunnerTests`): the
+/// returned session is wired to a `RecordingProvider` that replays a single
+/// `finalText` assistant turn, so calling `send(_:)` on it settles with the
+/// transcript ending in an assistant message equal to `finalText`.
+@MainActor
+enum StubChildSession {
+    static func make(finalText: String) -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude",
+                                      baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
+        let provider = RecordingProvider(script: [.textDelta(finalText), .done(stopReason: "end_turn")])
+        return AgentSession(
+            providerFor: { _ in provider },
+            connections: connections, config: config, context: context,
+            registry: AgentToolRegistry(tools: []), permissions: permissions)
+    }
+}
+
+/// A minimal `AgentSession` that settles into `.failed` on the first `send`,
+/// via the same "no connection configured" path `AgentSession` already uses
+/// (no `Connection` registered in its `ConnectionStore`). Stands in for a
+/// spawned subagent's child session in tests that assert failure isolation.
+@MainActor
+enum FailingChildSession {
+    static func make() -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
+        return AgentSession(
+            providerFor: { _ in RecordingProvider(script: []) },
+            connections: connections, config: config, context: context,
+            registry: AgentToolRegistry(tools: []), permissions: permissions)
+    }
+}
+
 @MainActor
 enum TestSessionFactory {
     /// Builds a fully-wired `AgentSession` backed by an in-memory persistence
