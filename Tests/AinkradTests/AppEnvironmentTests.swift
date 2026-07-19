@@ -95,7 +95,9 @@ final class AppEnvironmentTests {
             localModelAvailability: LocalModelAvailability(),
             authProfileStore: AuthProfileStore(persistence: persistence, secrets: secrets),
             commandRegistry: CommandRegistry(builtins: []),
-            memoryService: nil
+            memoryService: nil,
+            skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
+            skillCommandStore: SkillCommandStore(persistence: persistence)
         )
 
         #expect(environment.registry === registry)

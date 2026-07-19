@@ -48,6 +48,13 @@ final class AppEnvironment {
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
     let memoryService: MemoryService?
+    /// The Skills subsystem (M7 Slice 4): active-skill registry backing
+    /// `use_skill`/`propose_skill`, the skill-index context source, and the
+    /// skill `/name` slash commands.
+    let skillRegistry: SkillRegistry
+    /// CRUD over `/name` → skill-name command bindings; registers its
+    /// `SlashCommand`s into `commandRegistry` at bootstrap.
+    let skillCommandStore: SkillCommandStore
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -110,7 +117,9 @@ final class AppEnvironment {
         localModelAvailability: LocalModelAvailability,
         authProfileStore: AuthProfileStore,
         commandRegistry: CommandRegistry,
-        memoryService: MemoryService?
+        memoryService: MemoryService?,
+        skillRegistry: SkillRegistry,
+        skillCommandStore: SkillCommandStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -148,6 +157,8 @@ final class AppEnvironment {
         self.authProfileStore = authProfileStore
         self.commandRegistry = commandRegistry
         self.memoryService = memoryService
+        self.skillRegistry = skillRegistry
+        self.skillCommandStore = skillCommandStore
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -200,8 +211,16 @@ final class AppEnvironment {
             retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
+        // Mirrors `memoryRoot` below: when a test injects `rootURL`, Skills lives
+        // under that isolated root rather than the real Application Support path,
+        // so `make test` never touches (or scans) the developer's real skill
+        // library. The installer and the registry share this same root — they
+        // read/write the same on-disk `Skills/` tree.
+        let skillsRoot = rootURL != nil
+            ? documentsRoot.appendingPathComponent("Skills", isDirectory: true)
+            : SkillPaths.defaultRoot()
         let skillInstaller = SkillInstaller(
-            http: URLSessionHTTPClient(), paths: SkillPaths(root: SkillPaths.defaultRoot()),
+            http: URLSessionHTTPClient(), paths: SkillPaths(root: skillsRoot),
             persistence: persistence)
         let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence,
                                        skillInstaller: skillInstaller)
@@ -253,6 +272,22 @@ final class AppEnvironment {
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
 
+        // Skills (M7 Slice 4): construction is synchronous but cheap — `reload()`
+        // only lists `Skills/`'s immediate subdirectories and parses their small
+        // SKILL.md files, the same order of work `MemoryService`'s FTS open and
+        // `PluginLoader.loadAll` already do synchronously at this exact point in
+        // bootstrap. A malformed/unreadable skill is skipped and recorded in
+        // `loadErrors` (never thrown), so a bad skill can't take launch down.
+        // `marketplaceNames` reads the same `InstalledPluginsDocument` plugins use —
+        // `SkillInstaller.install` records installed skills there keyed by appID —
+        // so a skill installed via the marketplace loads tagged `.marketplace`.
+        let skillRegistry = SkillRegistry(
+            paths: SkillPaths(root: skillsRoot),
+            marketplaceNames: { [weak persistence = persistence] in
+                Set((persistence?.load(InstalledPluginsDocument.self)?.installed.keys).map(Array.init) ?? [])
+            })
+        let skillCommandStore = SkillCommandStore(persistence: persistence)
+
         var agentTools: [any AgentTool] = [
             ReadFileTool(), EditFileTool(),
             WorkspaceControlTool(workspaces: workspaceManager),
@@ -266,6 +301,15 @@ final class AppEnvironment {
             agentTools.append(MemoryWriteTool(service: memoryService))
             agentTools.append(MemorySearchTool(service: memoryService))
         }
+        // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
+        // Both hold the mutable `skillRegistry` reference and read its live set at
+        // execute-time, so a reload (install/approve/discard) is reflected without
+        // re-registering anything here.
+        _ = agentContextHub.register(appID: "host.skills") {
+            SkillIndexContextSource.snapshot(from: skillRegistry)
+        }
+        agentTools.append(UseSkillTool(registry: skillRegistry))
+        agentTools.append(ProposeSkillTool(registry: skillRegistry))
         let agentToolRegistry = AgentToolRegistry(tools: agentTools)
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentStore = AgentStore(persistence: persistence)
@@ -316,6 +360,15 @@ final class AppEnvironment {
 
         let commandRegistry = CommandRegistry(builtins: BuiltinCommands.make(
             runtime: runtimeOptionsStore, usage: usageTracker, router: modelRouter, catalog: modelCatalog))
+        // Skill `/name` commands (Task 11): registered after the builtins, through
+        // the same seam skill commands are documented to use — `register(_:)`
+        // never lets a skill-bound name overwrite a builtin (`SkillCommandStore`
+        // already refuses to persist a colliding binding, and
+        // `slashCommands(registry:)` filters `BuiltinCommands.reservedNames` again
+        // here as defense in depth).
+        for command in skillCommandStore.slashCommands(registry: skillRegistry) {
+            commandRegistry.register(command)
+        }
 
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
@@ -377,7 +430,9 @@ final class AppEnvironment {
             localModelAvailability: localModelAvailability,
             authProfileStore: authProfileStore,
             commandRegistry: commandRegistry,
-            memoryService: memoryService
+            memoryService: memoryService,
+            skillRegistry: skillRegistry,
+            skillCommandStore: skillCommandStore
         )
 
         // Kick the local-reachability cache: an immediate refresh so the very
