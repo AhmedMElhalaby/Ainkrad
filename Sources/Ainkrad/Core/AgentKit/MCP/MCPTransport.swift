@@ -14,6 +14,8 @@ protocol MCPTransport: Sendable {
 /// In-memory transport for `MCPClient` tests: capture outbound, inject inbound.
 actor StubMCPTransport: MCPTransport {
     private(set) var sent: [JSONValue] = []
+    /// Test observability: how many times `stop()` has been called.
+    private(set) var stopCount = 0
     // The protocol requires `incoming()` to be callable without actor
     // isolation (Swift 6 rejects an actor-isolated conformance for a
     // synchronous, non-async requirement), so the continuation itself is
@@ -43,7 +45,7 @@ actor StubMCPTransport: MCPTransport {
     /// Test hook: push an unsolicited inbound message.
     func inject(_ message: JSONValue) { box.yield(message) }
 
-    func stop() async { box.finish() }
+    func stop() async { stopCount += 1; box.finish() }
 }
 
 /// Thread-safe holder for an `AsyncThrowingStream` continuation, so a

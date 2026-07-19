@@ -17,6 +17,7 @@ actor MCPClient {
     private var readLoop: Task<Void, Never>?
     private var nextID = 0
     private var pending: [String: CheckedContinuation<Result<JSONValue, MCPError>, Never>] = [:]
+    private var timeouts: [String: Task<Void, Never>] = [:]
     private(set) var serverCapabilities: JSONValue = .object([:])
     private(set) var isConnected = false
     private let requestTimeoutNanos: UInt64
@@ -47,10 +48,13 @@ actor MCPClient {
             isConnected = true
         } catch {
             // Handshake failed (server error, transport drop, unexpected
-            // shape) — tear down the read loop instead of leaving a half-open
-            // session, and surface a typed error rather than crashing.
+            // shape) — fully tear down instead of leaving a half-open session:
+            // cancel the read loop, STOP the transport (StdioTransport.stop is
+            // the only path that terminates the spawned child process — skipping
+            // it here leaks a live process), fail pending, surface a typed error.
             readLoop?.cancel()
             readLoop = nil
+            await transport.stop()
             failAllPending(.notConnected)
             throw error
         }
@@ -82,8 +86,8 @@ actor MCPClient {
     /// blocking sleep on the actor's executor across attempts longer than the
     /// ceiling. Throws the last observed error once attempts are exhausted.
     func reconnect(maxAttempts: Int = 3) async throws {
-        await disconnect()
         precondition(maxAttempts > 0, "reconnect requires at least one attempt")
+        await disconnect()
         var lastError: MCPError = .notConnected
         for attempt in 1...maxAttempts {
             do {
@@ -117,8 +121,10 @@ actor MCPClient {
             }
             // Bounded round-trip: if no response is correlated within the
             // ceiling, resolve the waiter with a typed error. `resolve` no-ops
-            // if a real response already arrived, so this never double-resumes.
-            Task {
+            // if a real response already arrived, so this never double-resumes;
+            // and `resolve` cancels this task when a real response wins, so a
+            // prompt reply leaves no lingering sleep.
+            timeouts[id] = Task {
                 try? await Task.sleep(nanoseconds: timeoutNanos)
                 await self.resolve(id: id, .failure(.transport("request '\(method)' timed out")))
             }
@@ -158,11 +164,14 @@ actor MCPClient {
     /// is dropped silently — never crashes, never blocks anything, since
     /// there is nothing waiting on it.
     private func resolve(id: String, _ outcome: Result<JSONValue, MCPError>) {
+        timeouts.removeValue(forKey: id)?.cancel()
         guard let cont = pending.removeValue(forKey: id) else { return }
         cont.resume(returning: outcome)
     }
 
     private func failAllPending(_ error: MCPError) {
+        for t in timeouts.values { t.cancel() }
+        timeouts.removeAll()
         for cont in pending.values { cont.resume(returning: .failure(error)) }
         pending.removeAll()
     }

@@ -139,6 +139,16 @@ struct MCPClientTests {
         #expect(threw)
     }
 
+    @Test func failedHandshakeStopsTransportSoNoProcessLeaks() async throws {
+        // A rejected initialize must tear the transport down — for the real
+        // StdioTransport, stop() is the only path that kills the child process.
+        let transport = stub(initializeFails: true)
+        let client = MCPClient(transport: transport)
+        await #expect(throws: MCPError.self) { try await client.connect() }
+        let stopped = await transport.stopCount
+        #expect(stopped == 1)
+    }
+
     @Test func reconnectIsBoundedAndDoesNotLoopForever() async throws {
         let flaky = FlakyTransport()
         let client = MCPClient(transport: flaky)
