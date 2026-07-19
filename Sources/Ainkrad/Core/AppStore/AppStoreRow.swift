@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppStoreRowStatus: Equatable { case available, installed, updateAvailable }
-enum AppStoreRowKind: Equatable { case builtIn, plugin }
+enum AppStoreRowKind: Equatable { case builtIn, plugin, mcpServer }
 
 /// A plain, SILGen-safe projection of one row in the App Store grid.
 struct AppStoreRow: Identifiable, Equatable {
