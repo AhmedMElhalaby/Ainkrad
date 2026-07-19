@@ -6,6 +6,13 @@ enum SkillRegistryError: Error, Equatable {
     case unsafeName(String)
 }
 
+/// Thrown by `SkillRegistry.propose(name:description:body:)` when the
+/// assembled skill fails validation (unsafe name, empty body/description)
+/// before anything is written to disk.
+enum SkillProposalError: Error, Equatable {
+    case invalid([SkillValidationIssue])
+}
+
 /// Loads, validates, and dedups the active skill set from disk. The markdown
 /// files are the source of truth; `reload()` is idempotent and cheap. `_proposed`
 /// is deliberately excluded from the active set until a draft is `approve(name:)`d
@@ -135,6 +142,18 @@ final class SkillRegistry {
     func discard(name: String) throws {
         try requireSafeName(name)
         try fm.removeItem(at: paths.proposedDir(name))
+    }
+
+    /// Assembles a `SKILL.md` from discrete fields (as `ProposeSkillTool` gets
+    /// them from the model) and drafts it via `propose(_:name:)` above. Parses
+    /// and validates BEFORE any filesystem write — an unsafe name or an empty
+    /// body/description is rejected here and never reaches disk.
+    func propose(name: String, description: String, body: String) throws {
+        let md = "---\nname: \(name)\ndescription: \(description)\n---\n\(body)"
+        let skill = try SkillParser.parse(md, source: .proposed)
+        let issues = SkillValidator.validate(skill)
+        guard issues.isEmpty else { throw SkillProposalError.invalid(issues) }
+        try propose(md, name: name)
     }
 
     /// Immediate subdirectories of `root`, excluding `_proposed`, sorted for
