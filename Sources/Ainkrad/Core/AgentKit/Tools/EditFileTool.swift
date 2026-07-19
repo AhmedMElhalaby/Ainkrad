@@ -13,6 +13,11 @@ struct EditFileTool: AgentTool {
     """
     let permission: ToolPermissionClass = .write
 
+    /// Optional undo substrate: when present, `execute` records before/after
+    /// content for this edit. Nil-default keeps `EditFileTool()` byte-identical
+    /// to pre-journal behavior.
+    var journal: EditJournal? = nil
+
     var parametersSchema: JSONValue {
         .object([
             "type": .string("object"),
@@ -74,11 +79,14 @@ struct EditFileTool: AgentTool {
 
     func execute(_ input: JSONValue) async throws -> ToolResult {
         let edit = try computeEdit(input)
+        let existedBefore = !(edit.original.isEmpty && (input["old_string"]?.stringValue ?? "").isEmpty)
         do {
             try edit.updated.write(toFile: edit.path, atomically: true, encoding: .utf8)
         } catch {
             throw ToolError.message("Could not write \(edit.path): \(error.localizedDescription).")
         }
+        // Best-effort: journaling must never fail the edit it recorded.
+        journal?.record(path: edit.path, before: edit.original, after: edit.updated, existedBefore: existedBefore)
         return ToolResult(content: "Edited \(edit.path).", isError: false)
     }
 
