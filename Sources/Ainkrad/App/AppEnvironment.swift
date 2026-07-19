@@ -24,6 +24,10 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentActionHub: AgentActionRegistryHub
+    /// M7 Slice 6 (Security & Sandboxing): chooses backend + `SandboxProfile`
+    /// per trust tier. Stored here (not just a local in `bootstrap()`) so it
+    /// outlives the `unowned` reference `RunTerminalTool` holds to it.
+    let executionRouter: ExecutionRouter
     let agentConfigStore: AgentConfigStore
     let agentPermissionStore: AgentPermissionStore
     let agentContextSettingsStore: AgentContextSettingsStore
@@ -93,6 +97,7 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        executionRouter: ExecutionRouter,
         agentConfigStore: AgentConfigStore,
         agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
@@ -130,6 +135,7 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentActionHub = agentActionHub
+        self.executionRouter = executionRouter
         self.agentConfigStore = agentConfigStore
         self.agentPermissionStore = agentPermissionStore
         self.agentContextSettingsStore = agentContextSettingsStore
@@ -249,10 +255,19 @@ final class AppEnvironment {
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
 
+        // M7 Slice 6: only `HostBackend` is wired for the main-interactive
+        // tier here (byte-identical to the pre-router direct exec). Other
+        // backends (seatbelt/docker/ssh/cloud) are registered as non-main
+        // tiers land (Task 12+); an unregistered backend fails closed in
+        // `ExecutionRouter.route` rather than falling back to host.
+        let executionRouter = ExecutionRouter(
+            profiles: SandboxProfileStore(persistence: persistence),
+            backends: [.host: HostBackend()])
+
         var agentTools: [any AgentTool] = [
             ReadFileTool(), EditFileTool(),
             WorkspaceControlTool(workspaces: workspaceManager),
-            RunTerminalTool(actionHub: agentActionHub),
+            RunTerminalTool(actionHub: agentActionHub, router: executionRouter),
             GitOpTool(actionHub: agentActionHub),
         ]
         if let memoryService {
@@ -356,6 +371,7 @@ final class AppEnvironment {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentActionHub: agentActionHub,
+            executionRouter: executionRouter,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,

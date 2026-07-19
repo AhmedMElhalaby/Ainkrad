@@ -38,6 +38,9 @@ final class AppEnvironmentTests {
         let sounds = SoundEngine(settings: generalSettingsStore)
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
+        let executionRouter = ExecutionRouter(
+            profiles: SandboxProfileStore(persistence: persistence),
+            backends: [.host: HostBackend()])
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
@@ -78,6 +81,7 @@ final class AppEnvironmentTests {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentActionHub: agentActionHub,
+            executionRouter: executionRouter,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
