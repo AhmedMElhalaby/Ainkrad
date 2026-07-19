@@ -93,6 +93,7 @@ final class AppEnvironmentTests {
             workspaceManager: workspaceManager,
             launcherStore: launcherStore,
             connectionStore: connectionStore,
+            discoveredModelsStore: DiscoveredModelsStore(persistence: persistence),
             appStore: appStore,
             appStoreStore: appStoreStore,
             appIconStore: AppIconStore(persistence: persistence, applier: AppKitAppIconApplier(), themeManager: themeManager),

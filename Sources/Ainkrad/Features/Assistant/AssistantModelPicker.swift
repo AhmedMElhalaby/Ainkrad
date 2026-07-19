@@ -52,8 +52,6 @@ func modelOptionRowLabel(connectionName: String, model: String, isCurated: Bool)
 @MainActor
 @Observable
 final class AssistantModelPickerModel {
-    /// Live-discovered (or curated-fallback) model ids, keyed by connection id.
-    var discoveredModels: [UUID: [String]] = [:]
     var isRefreshing = false
 
     /// The active connection: the configured one if it still exists, else the
@@ -65,11 +63,22 @@ final class AssistantModelPickerModel {
         return store.connections.first
     }
 
-    /// Models to offer for a connection: the discovered list if fetched, else
-    /// the preset's curated fallback.
-    func modelOptions(for connection: Connection?) -> [String] {
+    /// Models to offer for a connection: the shared store's live-discovered list
+    /// if one was fetched, else the preset's curated fallback.
+    func modelOptions(for connection: Connection?, _ environment: AppEnvironment) -> [String] {
         guard let connection else { return [] }
-        return discoveredModels[connection.id] ?? ProviderPreset.preset(id: connection.presetID).curatedModels
+        return environment.discoveredModelsStore.models(for: connection.id)
+            ?? ProviderPreset.preset(id: connection.presetID).curatedModels
+    }
+
+    /// Kick a live refresh for EVERY configured connection (not just the active
+    /// one), so the dropdown shows live models for all providers and the router's
+    /// candidate store is populated for each. Each fetch is independent and
+    /// non-blocking; a failed one silently leaves the curated fallback in place.
+    func refreshAllModels(_ environment: AppEnvironment) {
+        for connection in environment.connectionStore.connections {
+            refreshModels(for: connection, environment)
+        }
     }
 
     /// Switch the active connection AND reset its model to the curated default,
@@ -107,9 +116,12 @@ final class AssistantModelPickerModel {
         Task {
             let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
                                                 apiKey: key, curatedFallback: preset.curatedModels)
-            discoveredModels[connection.id] = result.models
             isRefreshing = false
+            // Persist ONLY a genuinely live list into the shared store — a curated
+            // fallback is already the default, so storing it would be redundant and
+            // could mask a later real discovery. `setModels` also ignores empties.
             if result.isLive {
+                environment.discoveredModelsStore.setModels(result.models, for: connection.id)
                 reconcileModelIfNeeded(for: connection, availableModels: result.models, environment)
             }
         }
@@ -166,7 +178,7 @@ struct AssistantConnectionModelPicker: View {
 
         var options: [Option] = [.auto]
         options += connections.flatMap { connection in
-            model.modelOptions(for: connection).map { Option.pair(connection: connection.id, model: $0) }
+            model.modelOptions(for: connection, environment).map { Option.pair(connection: connection.id, model: $0) }
         }
         options.append(.manage)
 
@@ -178,7 +190,7 @@ struct AssistantConnectionModelPicker: View {
                 searchPlaceholder: "Search connections & models…"
             )
             .fixedSize()
-            .onAppear { if let c = active { model.refreshModels(for: c, environment) } }
+            .onAppear { model.refreshAllModels(environment) }
             .onChange(of: active?.id) { _, _ in if let c = active { model.refreshModels(for: c, environment) } }
 
             routingBadge

@@ -25,6 +25,10 @@ final class AppEnvironment {
     let workspaceManager: WorkspaceManager
     let launcherStore: LauncherStore
     let connectionStore: ConnectionStore
+    /// Shared per-connection live-discovered models — read by the composer's model
+    /// picker AND the Auto router's `candidatesProvider`, so a live-discovered model
+    /// can be selected and auto-routed. Curated presets are the fallback only.
+    let discoveredModelsStore: DiscoveredModelsStore
     let appStore: AppStoreService
     let appStoreStore: AppStoreStore
     let appIconStore: AppIconStore
@@ -148,6 +152,7 @@ final class AppEnvironment {
         workspaceManager: WorkspaceManager,
         launcherStore: LauncherStore,
         connectionStore: ConnectionStore,
+        discoveredModelsStore: DiscoveredModelsStore,
         appStore: AppStoreService,
         appStoreStore: AppStoreStore,
         appIconStore: AppIconStore,
@@ -198,6 +203,7 @@ final class AppEnvironment {
         self.workspaceManager = workspaceManager
         self.launcherStore = launcherStore
         self.connectionStore = connectionStore
+        self.discoveredModelsStore = discoveredModelsStore
         self.appStore = appStore
         self.appStoreStore = appStoreStore
         self.appIconStore = appIconStore
@@ -361,6 +367,12 @@ final class AppEnvironment {
 
         let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
 
+        // Shared per-connection live-discovered models (picker + router candidates).
+        // Prune entries for connections that no longer exist so a deleted
+        // connection's stale list doesn't linger.
+        let discoveredModelsStore = DiscoveredModelsStore(persistence: persistence)
+        discoveredModelsStore.prune(keeping: Set(connectionStore.connections.map(\.id)))
+
         // AgentKit services (M5 Phase B): one shared streaming HTTP client
         // backs both providers; `AgentSession` is the single read-only chat
         // loop the Assistant built-in (and, later, the ambient island) bind to.
@@ -521,9 +533,15 @@ final class AppEnvironment {
         // out-of-band) IS consulted synchronously here to drop LOCAL candidates whose
         // server isn't currently reachable — otherwise a down Ollama/LM Studio gets
         // picked free-first and every turn fails with "Could not connect to the server."
-        let candidatesProvider: @MainActor () -> [RouterCandidate] = { [connectionStore, modelCatalog, localModelProbe, localModelAvailability] in
+        let candidatesProvider: @MainActor () -> [RouterCandidate] = { [connectionStore, modelCatalog, localModelProbe, localModelAvailability, discoveredModelsStore] in
             let all = connectionStore.connections.flatMap { connection -> [RouterCandidate] in
-                ProviderPreset.preset(id: connection.presetID).curatedModels.map { modelID in
+                // Prefer the connection's LIVE-discovered models; fall back to the
+                // preset's curated list only when nothing was ever discovered. This
+                // is what lets the Auto router pick a real provider model rather than
+                // a hardcoded curated one.
+                let models = discoveredModelsStore.models(for: connection.id)
+                    ?? ProviderPreset.preset(id: connection.presetID).curatedModels
+                return models.map { modelID in
                     RouterCandidate(
                         connectionID: connection.id, model: modelID,
                         descriptor: modelCatalog.descriptor(for: modelID)
@@ -652,6 +670,7 @@ final class AppEnvironment {
             workspaceManager: workspaceManager,
             launcherStore: LauncherStore(registry: registry, workspaceManager: workspaceManager, appAppearanceStore: appAppearanceStore),
             connectionStore: connectionStore,
+            discoveredModelsStore: discoveredModelsStore,
             appStore: appStore,
             appStoreStore: appStoreStore,
             appIconStore: appIconStore,
