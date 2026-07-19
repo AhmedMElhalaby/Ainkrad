@@ -24,6 +24,18 @@ final class CommandRegistry {
         commands[c.name] = c
     }
 
+    /// Removes a previously `register(_:)`ed command by name. Host-internal,
+    /// additive seam for the Skills manager UI (Task 13): re-syncing the live
+    /// skill `/name` commands after a runtime bind/unbind needs to be able to
+    /// drop a name that no longer has a binding, not just overwrite it. A
+    /// no-op when `name` isn't registered — in particular, never removes a
+    /// builtin unless a caller explicitly names one (the manager only ever
+    /// passes skill-command names it tracked itself).
+    func unregister(name: String) {
+        guard commands.removeValue(forKey: name) != nil else { return }
+        order.removeAll { $0 == name }
+    }
+
     func all() -> [SlashCommand] { order.compactMap { commands[$0] } }
 
     func parse(_ input: String) -> (command: SlashCommand, args: String)? {
@@ -46,6 +58,14 @@ final class CommandRegistry {
 /// (they close over `runtime`/`usage`/`router`/`catalog`) and handed to
 /// `CommandRegistry(builtins:)`.
 enum BuiltinCommands {
+    /// Every builtin command name, derived from `make(...)` itself (never a
+    /// hand-maintained duplicate list, so it can't drift as builtins are
+    /// added/renamed). A skill-bound `/name` must never collide with one of
+    /// these — see `SkillCommandStore.isValidCommandName`.
+    static var reservedNames: Set<String> {
+        Set(make(runtime: nil, usage: nil, router: nil, catalog: nil).map(\.name))
+    }
+
     static func make(runtime: RuntimeOptionsStore?, usage: UsageTracker?,
                      router: ModelRouter?, catalog: ModelCatalog?) -> [SlashCommand] {
         [

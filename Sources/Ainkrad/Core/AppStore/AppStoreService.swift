@@ -7,14 +7,20 @@ final class AppStoreService: AppStoreServing {
     let catalog: CatalogService
     private let installer: PluginInstaller
     private let mcpInstaller: MCPServerInstaller
+    // Optional (defaulted) so existing call sites that predate the `.skill`
+    // catalog kind keep compiling unchanged; `AppEnvironment` wires a real one.
+    // A `.skill` install/uninstall with no installer configured fails gracefully
+    // via `AppStoreError` rather than crashing.
+    private let skillInstaller: SkillInstaller?
     private let persistence: PersistenceStore
 
     init(catalog: CatalogService, installer: PluginInstaller, mcpInstaller: MCPServerInstaller,
-         persistence: PersistenceStore) {
+         persistence: PersistenceStore, skillInstaller: SkillInstaller? = nil) {
         self.catalog = catalog
         self.installer = installer
         self.mcpInstaller = mcpInstaller
         self.persistence = persistence
+        self.skillInstaller = skillInstaller
     }
 
     var cachedCatalog: [CatalogEntry] { catalog.cached }
@@ -29,8 +35,13 @@ final class AppStoreService: AppStoreServing {
             throw AppStoreError.notInstalled(appID)   // not in catalog
         }
         switch entry.kind {
-        case .plugin:    try await installer.install(entry)
-        case .mcpServer: try mcpInstaller.install(entry)
+        case .plugin:
+            try await installer.install(entry)
+        case .mcpServer:
+            try mcpInstaller.install(entry)
+        case .skill:
+            guard let skillInstaller else { throw AppStoreError.invalidBundle("skill installer unavailable") }
+            try await skillInstaller.install(entry)
         }
     }
 
@@ -43,8 +54,15 @@ final class AppStoreService: AppStoreServing {
             throw AppStoreError.notInstalled(appID)
         }
         switch entry.kind {
-        case .plugin:    try await installer.update(entry)
-        case .mcpServer: try mcpInstaller.install(entry)
+        case .plugin:
+            try await installer.update(entry)
+        case .mcpServer:
+            try mcpInstaller.install(entry)
+        case .skill:
+            // Skills have no version guard yet — re-installing simply refetches
+            // and overwrites (see `SkillInstaller.install`'s idempotency note).
+            guard let skillInstaller else { throw AppStoreError.invalidBundle("skill installer unavailable") }
+            try await skillInstaller.install(entry)
         }
     }
 
@@ -58,6 +76,9 @@ final class AppStoreService: AppStoreServing {
         switch catalog.cached.first(where: { $0.appID == appID })?.kind {
         case .mcpServer:
             try mcpInstaller.uninstall(appID: appID)
+        case .skill:
+            guard let skillInstaller else { throw AppStoreError.invalidBundle("skill installer unavailable") }
+            try skillInstaller.uninstall(appID: appID)
         case .plugin:
             try installer.uninstall(appID: appID)
         case nil:

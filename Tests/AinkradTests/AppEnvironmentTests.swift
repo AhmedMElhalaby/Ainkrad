@@ -131,7 +131,10 @@ final class AppEnvironmentTests {
             commandRegistry: CommandRegistry(builtins: []),
             assistantWorkingDirectory: FileManager.default.homeDirectoryForCurrentUser,
             workspaceFileIndex: WorkspaceFileIndex(root: FileManager.default.homeDirectoryForCurrentUser),
-            memoryService: nil
+            memoryService: nil,
+            skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
+            skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
+            skillCommandStore: SkillCommandStore(persistence: persistence)
         )
 
         #expect(environment.registry === registry)

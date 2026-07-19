@@ -42,6 +42,7 @@ struct SettingsOverlayView: View {
         case memory
         case mcp
         case lsp
+        case skills
         case app(String)
     }
 
@@ -138,6 +139,7 @@ struct SettingsOverlayView: View {
                 sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
                 sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
                 sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
+                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles", tokens: tokens)
 
                 groupLabel("APPEARANCE", tokens: tokens)
                     .padding(.top, 12)
@@ -275,6 +277,12 @@ struct SettingsOverlayView: View {
             MCPManagerView(configStore: environment.mcpServerRegistry.configStore, registry: environment.mcpServerRegistry)
         case .lsp:
             LSPConfigView(registry: environment.lspServerRegistry)
+        case .skills:
+            SkillsManagerView(
+                registry: environment.skillRegistry,
+                commands: environment.skillCommandStore,
+                resyncCommands: { environment.resyncSkillCommands() }
+            )
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is

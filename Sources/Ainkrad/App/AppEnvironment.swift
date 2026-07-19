@@ -97,6 +97,23 @@ final class AppEnvironment {
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
     let memoryService: MemoryService?
+    /// The Skills subsystem (M7 Slice 4): active-skill registry backing
+    /// `use_skill`/`propose_skill`, the skill-index context source, and the
+    /// skill `/name` slash commands.
+    let skillRegistry: SkillRegistry
+    /// CRUD over `/name` → skill-name command bindings; registers its
+    /// `SlashCommand`s into `commandRegistry` at bootstrap.
+    let skillCommandStore: SkillCommandStore
+    /// Watches `Skills/` on disk (Task 14) and reloads `skillRegistry` when the
+    /// user adds/edits/removes a `SKILL.md` outside the app — retained for the
+    /// process lifetime so its `DispatchSource` stays alive; see `bootstrap()`
+    /// for where it's started.
+    let skillWatcher: SkillWatcher
+    /// Skill `/name` command names currently registered into `commandRegistry`
+    /// — tracked so `resyncSkillCommands()` (Task 13) knows exactly which
+    /// entries to drop before re-registering the current binding set, without
+    /// ever touching a builtin name it didn't register itself.
+    private var registeredSkillCommandNames: Set<String> = []
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -169,7 +186,10 @@ final class AppEnvironment {
         commandRegistry: CommandRegistry,
         assistantWorkingDirectory: URL,
         workspaceFileIndex: WorkspaceFileIndex,
-        memoryService: MemoryService?
+        memoryService: MemoryService?,
+        skillRegistry: SkillRegistry,
+        skillWatcher: SkillWatcher,
+        skillCommandStore: SkillCommandStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -217,6 +237,35 @@ final class AppEnvironment {
         self.assistantWorkingDirectory = assistantWorkingDirectory
         self.workspaceFileIndex = workspaceFileIndex
         self.memoryService = memoryService
+        self.skillRegistry = skillRegistry
+        self.skillWatcher = skillWatcher
+        self.skillCommandStore = skillCommandStore
+        // Seeds `registeredSkillCommandNames` with whatever bootstrap already
+        // registered (see the loop right after `commandRegistry` is built),
+        // so the very first `resyncSkillCommands()` call — triggered by a
+        // bind/unbind from the Skills manager UI — knows what to drop.
+        self.registeredSkillCommandNames = Set(skillCommandStore.slashCommands(registry: skillRegistry).map(\.name))
+    }
+
+    /// Re-syncs the live `commandRegistry` with the current
+    /// `skillCommandStore` bindings. Bootstrap (`bootstrap()` below) only
+    /// registers skill `/name` commands once, at launch — a bind/unbind made
+    /// afterward via the Skills manager UI (Task 13) would otherwise sit
+    /// invisibly in `skillCommandStore` until the next relaunch. Call this
+    /// after every bind/unbind so `/name` starts/stops working immediately.
+    /// Never touches a builtin: it only unregisters names THIS method
+    /// previously registered, then re-registers the current binding set
+    /// (`slashCommands(registry:)` independently filters out any name that
+    /// collides with a builtin, as defense in depth).
+    func resyncSkillCommands() {
+        for name in registeredSkillCommandNames {
+            commandRegistry.unregister(name: name)
+        }
+        let commands = skillCommandStore.slashCommands(registry: skillRegistry)
+        for command in commands {
+            commandRegistry.register(command)
+        }
+        registeredSkillCommandNames = Set(commands.map(\.name))
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
@@ -276,8 +325,20 @@ final class AppEnvironment {
         // versa.
         let mcpConfigStore = MCPServerConfigStore(persistence: persistence, secrets: secrets)
         let mcpInstaller = MCPServerInstaller(configStore: mcpConfigStore, persistence: persistence)
+        // Mirrors `memoryRoot` below: when a test injects `rootURL`, Skills lives
+        // under that isolated root rather than the real Application Support path,
+        // so `make test` never touches (or scans) the developer's real skill
+        // library. The installer and the registry share this same root — they
+        // read/write the same on-disk `Skills/` tree.
+        let skillsRoot = rootURL != nil
+            ? documentsRoot.appendingPathComponent("Skills", isDirectory: true)
+            : SkillPaths.defaultRoot()
+        let skillInstaller = SkillInstaller(
+            http: URLSessionHTTPClient(), paths: SkillPaths(root: skillsRoot),
+            persistence: persistence)
         let appStore = AppStoreService(catalog: catalogService, installer: installer,
-                                        mcpInstaller: mcpInstaller, persistence: persistence)
+                                       mcpInstaller: mcpInstaller, persistence: persistence,
+                                       skillInstaller: skillInstaller)
         let appStoreStore = AppStoreStore(service: appStore, registry: registry)
 
         let appIconStore = AppIconStore(persistence: persistence,
@@ -339,6 +400,30 @@ final class AppEnvironment {
         // records into, so a turn's file edits can be undone via `/undo`.
         let editJournal = EditJournal()
 
+        // Skills (M7 Slice 4): construction is synchronous but cheap — `reload()`
+        // only lists `Skills/`'s immediate subdirectories and parses their small
+        // SKILL.md files, the same order of work `MemoryService`'s FTS open and
+        // `PluginLoader.loadAll` already do synchronously at this exact point in
+        // bootstrap. A malformed/unreadable skill is skipped and recorded in
+        // `loadErrors` (never thrown), so a bad skill can't take launch down.
+        // `marketplaceNames` reads the same `InstalledPluginsDocument` plugins use —
+        // `SkillInstaller.install` records installed skills there keyed by appID —
+        // so a skill installed via the marketplace loads tagged `.marketplace`.
+        let skillRegistry = SkillRegistry(
+            paths: SkillPaths(root: skillsRoot),
+            marketplaceNames: { [weak persistence = persistence] in
+                Set((persistence?.load(InstalledPluginsDocument.self)?.installed.keys).map(Array.init) ?? [])
+            })
+        let skillCommandStore = SkillCommandStore(persistence: persistence)
+        // File-watch reload (Task 14): a user editing/adding/removing a
+        // SKILL.md directly in Skills/ (outside the app) is picked up live.
+        // Captures `skillRegistry` weakly — the watcher never extends its
+        // lifetime, only reacts while it's alive.
+        let skillWatcher = SkillWatcher(paths: SkillPaths(root: skillsRoot)) { [weak skillRegistry] in
+            skillRegistry?.reload()
+        }
+        skillWatcher.start()
+
         // M7 Slice 6: every backend is registered by its own kind — host
         // (trusted-main only, unchanged), seatbelt (macOS sandbox-exec),
         // docker + ssh (feature-detected: `isAvailable()` self-reports false
@@ -391,6 +476,16 @@ final class AppEnvironment {
         // the network. Connecting is kicked off after `environment` exists (below),
         // never awaited here, so a down/misconfigured server can't delay launch.
         let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+
+        // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
+        // Both hold the mutable `skillRegistry` reference and read its live set at
+        // execute-time, so a reload (install/approve/discard) is reflected without
+        // re-registering anything here.
+        _ = agentContextHub.register(appID: "host.skills") {
+            SkillIndexContextSource.snapshot(from: skillRegistry)
+        }
+        agentTools.append(UseSkillTool(registry: skillRegistry))
+        agentTools.append(ProposeSkillTool(registry: skillRegistry))
 
         // NOTE: `agentToolRegistry` (the registry the main `agentSession` and every
         // background run's headless session bind to) is built further below, AFTER
@@ -519,6 +614,16 @@ final class AppEnvironment {
         // directory walk, without ever touching the index off its required actor.
         Task { workspaceFileIndex.refresh() }
 
+        // Skill `/name` commands (Task 11): registered after the builtins, through
+        // the same seam skill commands are documented to use — `register(_:)`
+        // never lets a skill-bound name overwrite a builtin (`SkillCommandStore`
+        // already refuses to persist a colliding binding, and
+        // `slashCommands(registry:)` filters `BuiltinCommands.reservedNames` again
+        // here as defense in depth).
+        for command in skillCommandStore.slashCommands(registry: skillRegistry) {
+            commandRegistry.register(command)
+        }
+
         let agentSession = AgentSession(
             providerFor: providerFor,
             connections: connectionStore,
@@ -585,7 +690,10 @@ final class AppEnvironment {
             commandRegistry: commandRegistry,
             assistantWorkingDirectory: assistantWorkingDirectory,
             workspaceFileIndex: workspaceFileIndex,
-            memoryService: memoryService
+            memoryService: memoryService,
+            skillRegistry: skillRegistry,
+            skillWatcher: skillWatcher,
+            skillCommandStore: skillCommandStore
         )
 
         // Kick the local-reachability cache: an immediate refresh so the very
