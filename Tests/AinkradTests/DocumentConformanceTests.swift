@@ -17,6 +17,7 @@ struct DocumentConformanceTests {
         #expect(AssistantWorkspaceSettings.documentID == "assistant-workspace")
         #expect(MCPServersDocument.documentID == "mcp-servers")
         #expect(LSPServersDocument.documentID == "lsp-servers")
+        #expect(AgentRunsDocument.documentID == "agent-runs")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")

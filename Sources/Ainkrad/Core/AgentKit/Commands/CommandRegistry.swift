@@ -159,6 +159,22 @@ enum BuiltinCommands {
                 pasteboard.setString(rendered, forType: .string)
                 return .handled(note: "Copied the transcript to your clipboard as Markdown (\(rendered.count) characters).")
             },
+            SlashCommand(name: "undo", summary: "Undo the last turn's file edits + transcript", usage: "/undo") { _, session in
+                let summary = session.undoLastTurn()
+                if !summary.irreversible.isEmpty {
+                    let ran = summary.irreversible.joined(separator: " ")
+                    return .handled(note: "This turn can't be undone — it ran a tool with irreversible effects. \(ran)")
+                }
+                if summary.revertedEdits == 0 {
+                    return .handled(note: "Nothing to undo.")
+                }
+                let plural = summary.revertedEdits == 1 ? "edit" : "edits"
+                return .handled(note: "Undid the last turn — reverted \(summary.revertedEdits) file \(plural).")
+            },
+            SlashCommand(name: "retry", summary: "Re-run the last user prompt", usage: "/retry") { _, session in
+                session.retryLastTurn()
+                return .handled(note: nil)
+            },
         ]
     }
 }

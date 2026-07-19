@@ -13,10 +13,14 @@ struct EditFileTool: AgentTool {
     """
     let permission: ToolPermissionClass = .write
 
-    /// Optional advisory LSP integration (Task 17). Defaulted `nil` so every
+    /// Optional advisory LSP integration (Slice 2, Task 17). Defaulted `nil` so every
     /// existing call site (`EditFileTool()`) and test keeps compiling and
     /// behaving identically when no LSP registry is wired up.
     var editQuality: EditQuality? = nil
+    /// Optional undo substrate (Slice 3a, Task 10): when present, `execute` records
+    /// before/after content for this edit. Nil-default keeps `EditFileTool()`
+    /// byte-identical to pre-journal behavior.
+    var journal: EditJournal? = nil
 
     var parametersSchema: JSONValue {
         .object([
@@ -79,11 +83,14 @@ struct EditFileTool: AgentTool {
 
     func execute(_ input: JSONValue) async throws -> ToolResult {
         let edit = try computeEdit(input)
+        let existedBefore = !(edit.original.isEmpty && (input["old_string"]?.stringValue ?? "").isEmpty)
         do {
             try edit.updated.write(toFile: edit.path, atomically: true, encoding: .utf8)
         } catch {
             throw ToolError.message("Could not write \(edit.path): \(error.localizedDescription).")
         }
+        // Best-effort: journaling must never fail the edit it recorded.
+        journal?.record(path: edit.path, before: edit.original, after: edit.updated, existedBefore: existedBefore)
         var content = "\(edit.original.isEmpty ? "Created" : "Edited") \(edit.path)."
         if let summary = await editQuality?.afterEdit(path: edit.path) {
             content += "\n\nLSP diagnostics:\n\(summary)"

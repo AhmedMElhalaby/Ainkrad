@@ -65,6 +65,20 @@ final class AppEnvironmentTests {
             permissions: agentPermissionStore,
             agents: agentStore
         )
+        let editJournal = EditJournal()
+        let subagentCoordinator = SubagentCoordinator(
+            runner: AgentSessionSubagentRunner(
+                allTools: [ReadFileTool()], agents: agentStore,
+                router: ModelRouter(catalog: ModelCatalog(), outcomes: RouterOutcomeStore(persistence: persistence)),
+                candidatesProvider: { [] },
+                makeSession: AppEnvironment.makeSubagentSession(
+                    providerFor: { _ in ClaudeProvider(http: URLSessionStreamingHTTPClient()) },
+                    connections: connectionStore, agentConfigStore: agentConfigStore,
+                    agentContextService: agentContextService, agentPermissionStore: agentPermissionStore,
+                    agentStore: agentStore)))
+        let runManager = RunManager(
+            persistence: persistence,
+            runner: BackgroundRunRunner(makeSession: { agentSession }))
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -93,6 +107,9 @@ final class AppEnvironmentTests {
             agentSession: agentSession,
             mcpServerRegistry: mcpServerRegistry,
             lspServerRegistry: lspServerRegistry,
+            editJournal: editJournal,
+            subagentCoordinator: subagentCoordinator,
+            runManager: runManager,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
             modelCatalog: ModelCatalog(),
             modelPriceTable: ModelPriceTable(),

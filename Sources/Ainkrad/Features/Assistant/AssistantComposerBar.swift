@@ -22,6 +22,7 @@ struct AssistantComposerBar: View {
     @Binding var draft: String
     var autoFocusOnAppear: Bool = false
     @State private var isUsageDashboardPresented = false
+    @State private var isRunsPanelPresented = false
 
     /// Images attached via drag-and-drop, carried into the NEXT `session.send`
     /// call and cleared on send (or on manual removal via its chip's ✕).
@@ -72,6 +73,8 @@ struct AssistantComposerBar: View {
 
                 exportTrigger
 
+                runsPanelTrigger
+
                 usageDashboardTrigger
 
                 Button { send() } label: {
@@ -90,6 +93,9 @@ struct AssistantComposerBar: View {
         }
         .ainkradModal(isPresented: $isExportModalPresented) {
             exportModalContent
+        }
+        .ainkradModal(isPresented: $isRunsPanelPresented) {
+            RunsPanelView(manager: environment.runManager, tokens: tokens)
         }
         .background(
             // Tab-cycle affordance (M7 Slice 5a Task 5): swallows a plain Tab
@@ -363,6 +369,20 @@ struct AssistantComposerBar: View {
     /// in a scoped `.ainkradModal` — the same "gauge" glyph `/usage`'s text
     /// note already reports on, just visualized. A themed icon button, not a
     /// native control.
+    /// Opens the live Runs monitor (M7 Slice 3 Task 11) — queue/active/history across
+    /// every origin, pause/stop, in the same `.ainkradModal` pattern as Usage. A run
+    /// started via `spawn_subagent` or a background schedule shows up here live, since
+    /// this reads the SAME `RunManager` the run itself updates.
+    private var runsPanelTrigger: some View {
+        Button { isRunsPanelPresented = true } label: {
+            Image(systemName: "list.bullet.rectangle.portrait")
+                .font(.system(size: 14))
+                .foregroundStyle(tokens.foreground.opacity(0.55))
+        }
+        .buttonStyle(.plain)
+        .help("Runs")
+    }
+
     private var usageDashboardTrigger: some View {
         Button { isUsageDashboardPresented = true } label: {
             Image(systemName: "gauge.with.dots.needle.67percent")

@@ -50,6 +50,15 @@ final class AppEnvironment {
     /// `EditQuality` advisory diagnostics/formatting for `EditFileTool`. See
     /// `bootstrap()` for the non-blocking first-launch autodetect seed.
     let lspServerRegistry: LSPServerRegistry
+    /// M7 Slice 3 (Autonomy) Task 11 wiring: the per-session edit ledger `agentSession`
+    /// (and every background run's headless session) journals into, the subagent
+    /// fan-out coordinator `spawn_subagent` delegates through, and the Runs monitor's
+    /// observable queue/active/history engine — retained here so `RunsPanelView` and
+    /// any future surface can bind to the SAME live `RunManager` a background run
+    /// updates.
+    let editJournal: EditJournal
+    let subagentCoordinator: SubagentCoordinator
+    let runManager: RunManager
     let modelCatalogService: ModelCatalogService
     /// M7 Slice 5b (Model Router / Usage / Failover) runtime wiring.
     let modelCatalog: ModelCatalog
@@ -129,6 +138,9 @@ final class AppEnvironment {
         agentSession: AgentSession,
         mcpServerRegistry: MCPServerRegistry,
         lspServerRegistry: LSPServerRegistry,
+        editJournal: EditJournal,
+        subagentCoordinator: SubagentCoordinator,
+        runManager: RunManager,
         modelCatalogService: ModelCatalogService,
         modelCatalog: ModelCatalog,
         modelPriceTable: ModelPriceTable,
@@ -170,6 +182,9 @@ final class AppEnvironment {
         self.agentSession = agentSession
         self.mcpServerRegistry = mcpServerRegistry
         self.lspServerRegistry = lspServerRegistry
+        self.editJournal = editJournal
+        self.subagentCoordinator = subagentCoordinator
+        self.runManager = runManager
         self.modelCatalogService = modelCatalogService
         self.modelCatalog = modelCatalog
         self.modelPriceTable = modelPriceTable
@@ -302,8 +317,13 @@ final class AppEnvironment {
         // delay launch.
         let lspServerRegistry = LSPServerRegistry(persistence: persistence)
 
+        // M7 Slice 3 (Autonomy) Task 10/11 — the per-session edit ledger `EditFileTool`
+        // records into, so a turn's file edits can be undone via `/undo`.
+        let editJournal = EditJournal()
+
         var agentTools: [any AgentTool] = [
-            ReadFileTool(), EditFileTool(editQuality: EditQuality(registry: lspServerRegistry)),
+            ReadFileTool(),
+            EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
             WorkspaceControlTool(workspaces: workspaceManager),
             RunTerminalTool(actionHub: agentActionHub),
             GitOpTool(actionHub: agentActionHub),
@@ -315,7 +335,6 @@ final class AppEnvironment {
             agentTools.append(MemoryWriteTool(service: memoryService))
             agentTools.append(MemorySearchTool(service: memoryService))
         }
-
         // MCP (M7 Slice 2): configured servers + their live connections. Uses
         // `MCPServerRegistry.defaultClientFactory` (the real stdio/httpSSE transport
         // factory, the one place real transports get instantiated) — tests inject a
@@ -324,9 +343,11 @@ final class AppEnvironment {
         // never awaited here, so a down/misconfigured server can't delay launch.
         let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
 
-        let agentToolRegistry = AgentToolRegistry(
-            tools: agentTools,
-            dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
+        // NOTE: `agentToolRegistry` (the registry the main `agentSession` and every
+        // background run's headless session bind to) is built further below, AFTER
+        // `spawn_subagent` is appended to `agentTools` — see the Slice 3 wiring block
+        // once the Slice 5b Model Router / `candidatesProvider` it needs exist. Its
+        // `dynamicTools` closure surfaces the Slice 2 MCP servers' discovered tools.
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentStore = AgentStore(persistence: persistence)
 
@@ -376,6 +397,65 @@ final class AppEnvironment {
 
         let commandRegistry = CommandRegistry(builtins: BuiltinCommands.make(
             runtime: runtimeOptionsStore, usage: usageTracker, router: modelRouter, catalog: modelCatalog))
+        // M7 Slice 3 (Autonomy) Task 11: `/stop` interrupts the in-flight turn.
+        // `/undo` and `/retry` are already registered as builtins (Task 10).
+        commandRegistry.register(SlashCommand(
+            name: "stop", summary: "Interrupt the current turn", usage: "/stop") { _, session in
+            session.interrupt()
+            return .handled(note: "Interrupted.")
+        })
+
+        // Single provider-resolution closure, shared by the main `agentSession`, every
+        // subagent's child session, and every background run's headless session — one
+        // provider construction rule, not three copies that could drift.
+        let providerFor: @MainActor (Connection) -> LLMProvider = { connection in
+            switch connection.kind {
+            case .claude: return ClaudeProvider(http: streamingHTTP)
+            case .openAICompatible: return OpenAICompatibleProvider(http: streamingHTTP, baseURL: connection.baseURL)
+            case .gemini: return GeminiProvider(http: streamingHTTP, baseURL: connection.baseURL)
+            }
+        }
+
+        // M7 Slice 3 (Autonomy) Task 11 — wires the whole 3a subsystem live:
+        // `spawn_subagent` delegates through `SubagentCoordinator` to the PRODUCTION
+        // `AgentSessionSubagentRunner`, whose `makeSession` seam (Task 6's deferred
+        // closure) is built here — every child session is UNATTENDED (a requireApproval
+        // tool auto-denies rather than parking on a HUD nobody can answer — Task 8's
+        // gate) with its router-resolved model PINNED (no router/candidatesProvider
+        // passed to the child, so it never re-routes per tool-loop turn).
+        let subagentRunner = AgentSessionSubagentRunner(
+            allTools: agentTools, agents: agentStore, router: modelRouter,
+            candidatesProvider: candidatesProvider,
+            makeSession: AppEnvironment.makeSubagentSession(
+                providerFor: providerFor, connections: connectionStore,
+                agentConfigStore: agentConfigStore, agentContextService: agentContextService,
+                agentPermissionStore: agentPermissionStore, agentStore: agentStore))
+        let subagentCoordinator = SubagentCoordinator(runner: subagentRunner, maxConcurrent: 4)
+        agentTools.append(SpawnSubagentTool(coordinator: subagentCoordinator, agents: agentStore))
+
+        let agentToolRegistry = AgentToolRegistry(
+            tools: agentTools,
+            dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
+
+        // The Runs monitor's engine: a background run drives a fresh headless
+        // `AgentSession` per run (`BackgroundRunRunner`), built `unattended: true` for
+        // the same reason as the subagent seam above. Trust tier `.background` (Slice 6,
+        // Task 21) isn't wired yet — until then a background run executes on the host's
+        // own connections/tools like a normal (but unattended) turn.
+        let runNotifier = UserNotificationRunNotifier()
+        let runManager = RunManager(
+            persistence: persistence,
+            runner: BackgroundRunRunner(makeSession: {
+                AgentSession(
+                    providerFor: providerFor, connections: connectionStore, config: agentConfigStore,
+                    context: agentContextService, registry: agentToolRegistry, permissions: agentPermissionStore,
+                    agents: agentStore, editJournal: editJournal, unattended: true,
+                    router: modelRouter, usage: usageTracker, runtime: runtimeOptionsStore,
+                    commands: commandRegistry, authProfiles: authProfileStore,
+                    candidatesProvider: candidatesProvider,
+                    isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) })
+            }),
+            notifier: runNotifier, maxConcurrent: 2)
 
         // `@`-mention file index (M7 Slice 5c Task 22a wiring; the overlay UI itself
         // is Task 22b). No first-class "project directory" concept exists yet — default
@@ -391,13 +471,7 @@ final class AppEnvironment {
         Task { workspaceFileIndex.refresh() }
 
         let agentSession = AgentSession(
-            providerFor: { (connection: Connection) -> LLMProvider in
-                switch connection.kind {
-                case .claude: return ClaudeProvider(http: streamingHTTP)
-                case .openAICompatible: return OpenAICompatibleProvider(http: streamingHTTP, baseURL: connection.baseURL)
-                case .gemini: return GeminiProvider(http: streamingHTTP, baseURL: connection.baseURL)
-                }
-            },
+            providerFor: providerFor,
             connections: connectionStore,
             config: agentConfigStore,
             context: agentContextService,
@@ -405,6 +479,7 @@ final class AppEnvironment {
             permissions: agentPermissionStore,
             memory: memoryService,
             agents: agentStore,
+            editJournal: editJournal,
             router: modelRouter,
             usage: usageTracker,
             runtime: runtimeOptionsStore,
@@ -442,6 +517,9 @@ final class AppEnvironment {
             agentSession: agentSession,
             mcpServerRegistry: mcpServerRegistry,
             lspServerRegistry: lspServerRegistry,
+            editJournal: editJournal,
+            subagentCoordinator: subagentCoordinator,
+            runManager: runManager,
             modelCatalogService: modelCatalogService,
             modelCatalog: modelCatalog,
             modelPriceTable: modelPriceTable,
@@ -569,5 +647,49 @@ final class AppEnvironment {
 
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")
         return environment
+    }
+
+    /// The production `makeSession` closure for `AgentSessionSubagentRunner` (M7 Slice 3
+    /// Task 11 — the seam Task 6 deferred). Every child `AgentSession` this builds is:
+    /// - **`unattended: true`** — a `.requireApproval` tool auto-denies instead of parking
+    ///   on an approval HUD that a headless subagent can never answer (Task 8's gate).
+    ///   This can only narrow what a child may do, never approve something the gate
+    ///   itself would have blocked.
+    /// - **model-PINNED, not re-routed** — the caller (`AgentSessionSubagentRunner.run`)
+    ///   already resolved `model` via the Model Router within the spec's budget ceiling;
+    ///   handing the child its own `router`/`candidatesProvider` would let it re-route on
+    ///   every tool-loop turn and drift off that decision. Instead the resolved model is
+    ///   pinned via a private, in-memory `RuntimeOptionsStore` — `resolveTurn`'s degraded
+    ///   path (`pin ?? agents?.active.defaultModel ?? config.current.model`) then always
+    ///   picks it.
+    /// - scoped to the **filtered registry** the runner already narrowed via
+    ///   `SubagentRegistryFilter`, with the profile's `instructions` as the base prompt.
+    ///
+    /// Extracted as a static, standalone-callable factory (rather than inlined in
+    /// `bootstrap()`) so a wiring test can exercise it without spinning up the entire
+    /// `AppEnvironment`.
+    static func makeSubagentSession(
+        providerFor: @escaping @MainActor (Connection) -> LLMProvider,
+        connections: ConnectionStore,
+        agentConfigStore: AgentConfigStore,
+        agentContextService: AgentContextService,
+        agentPermissionStore: AgentPermissionStore,
+        agentStore: AgentStore
+    ) -> @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession {
+        { profile, registry, model in
+            let pinned = RuntimeOptionsStore(persistence: InMemoryPersistenceStore())
+            pinned.pinModel(model)
+            return AgentSession(
+                providerFor: providerFor,
+                connections: connections,
+                config: agentConfigStore,
+                context: agentContextService,
+                registry: registry,
+                permissions: agentPermissionStore,
+                basePrompt: profile.instructions.isEmpty ? AgentSession.defaultPrompt : profile.instructions,
+                agents: agentStore,
+                unattended: true,
+                runtime: pinned)
+        }
     }
 }
