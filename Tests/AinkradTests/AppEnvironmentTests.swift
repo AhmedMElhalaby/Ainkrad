@@ -42,6 +42,7 @@ final class AppEnvironmentTests {
         let executionRouter = ExecutionRouter(
             profiles: sandboxProfileStore,
             backends: [.host: HostBackend()])
+        let cloudCredentialsStore = CloudCredentialsStore(secrets: secrets)
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
@@ -84,6 +85,7 @@ final class AppEnvironmentTests {
             agentActionHub: agentActionHub,
             sandboxProfileStore: sandboxProfileStore,
             executionRouter: executionRouter,
+            cloudCredentialsStore: cloudCredentialsStore,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,

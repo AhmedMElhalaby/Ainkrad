@@ -93,6 +93,12 @@ struct SandboxPolicyUIView: View {
     @State private var hostsText: String = ""
     @State private var pendingDeleteID: String?
     @State private var explainToolName: String = SandboxPolicyExplainer.sampleToolNames[0]
+    /// Local draft of each provider's token — mirrors
+    /// `CloudCredentialsStore.credential(for:)` at `onAppear`; each edit
+    /// writes straight through to the Keychain-backed store via
+    /// `setCredential(_:for:)`. Never logged, never persisted anywhere but
+    /// the store itself.
+    @State private var cloudTokens: [CloudProvider: String] = [:]
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -112,9 +118,13 @@ struct SandboxPolicyUIView: View {
 
             newProfileRow()
             trustTierDefaults(tokens: tokens)
+            cloudSection(tokens: tokens)
             explainerSection(tokens: tokens)
         }
-        .onAppear { syncDraft() }
+        .onAppear {
+            syncDraft()
+            syncCloudTokens()
+        }
         .onChange(of: selectedID) { _, _ in syncDraft() }
     }
 
@@ -318,6 +328,53 @@ struct SandboxPolicyUIView: View {
         }
         .padding(14)
         .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.3)))
+    }
+
+    // MARK: - Cloud
+
+    private func syncCloudTokens() {
+        for provider in CloudProvider.allCases {
+            cloudTokens[provider] = environment.cloudCredentialsStore.credential(for: provider) ?? ""
+        }
+    }
+
+    /// Cloud provider credential entry. Storing a token here only satisfies
+    /// `ModalCloudBackend.isAvailable()` — it does NOT enable cloud routing by
+    /// itself. Cloud stays opt-in per-Agent (`AgentExecutionPolicy.allowCloud`,
+    /// set on an Agent's profile, not here) and, even once opted in, the
+    /// remote-execution driver itself still fails closed until Task 15's
+    /// research lands (see `ModalCloudBackend`).
+    private func cloudSection(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("CLOUD").font(AinkradFont.display(12, weight: .semibold)).foregroundStyle(tokens.foreground.opacity(0.6))
+            Text("Cloud execution is opt-in per Agent — enable it on an Agent's profile.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.55))
+
+            ForEach(CloudProvider.allCases, id: \.self) { provider in
+                AinkradFormRow(title: providerLabel(provider)) {
+                    AinkradSecureField(
+                        text: Binding(
+                            get: { cloudTokens[provider] ?? "" },
+                            set: { newValue in
+                                cloudTokens[provider] = newValue
+                                environment.cloudCredentialsStore.setCredential(
+                                    newValue.isEmpty ? nil : newValue, for: provider)
+                            }),
+                        placeholder: "\(providerLabel(provider)) token")
+                }
+            }
+        }
+        .padding(14)
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.3)))
+    }
+
+    private func providerLabel(_ provider: CloudProvider) -> String {
+        switch provider {
+        case .modal: return "Modal"
+        case .daytona: return "Daytona"
+        case .singularity: return "Singularity"
+        }
     }
 
     // MARK: - Explainer
