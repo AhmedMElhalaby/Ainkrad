@@ -41,6 +41,21 @@ actor StdioTransport: MCPTransport {
         } catch {
             throw MCPError.transport("could not launch \(command): \(error.localizedDescription)")
         }
+        // A dead/half-dead MCP server (peer closed its read end of stdin) means
+        // writing to `stdin.fileHandleForWriting` hits EPIPE. By default the
+        // kernel also raises SIGPIPE on the writing thread, and SIGPIPE's
+        // default disposition is process termination — this fires *before*
+        // `write()` even returns, so it kills the host regardless of whether
+        // the write call is the throwing or non-throwing Foundation API.
+        // `F_SETNOSIGPIPE` disables that signal for this specific descriptor,
+        // downgrading the failure to a plain EPIPE return value, which
+        // `write(contentsOf:)` in `send()` then surfaces as a catchable Swift
+        // error routed into `MCPError`. Verified empirically: without this,
+        // a write after the peer closes stdin kills the process with SIGPIPE
+        // (exit 141) even through `write(contentsOf:) throws`; with it, the
+        // same write throws `NSPOSIXErrorDomain code 32` ("Broken pipe").
+        var noSigPipe: Int32 = 1
+        _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, &noSigPipe)
         process = p
     }
 
@@ -52,7 +67,20 @@ actor StdioTransport: MCPTransport {
         }
         var line = data
         line.append(0x0A)   // '\n' — newline-delimited framing
-        stdin.fileHandleForWriting.write(line)
+        // A dead/half-dead MCP server (peer closed its stdin read end, or the
+        // process exited between the `isRunning` check above and this write)
+        // is a ROUTINE failure mode, not exceptional. The older non-throwing
+        // `FileHandle.write(_:)` raises an uncaught ObjC exception on EPIPE,
+        // which would crash the whole host — so we use the throwing
+        // `write(contentsOf:)` (macOS 10.15.4+, well under this target's
+        // 14.0) which surfaces the same EPIPE as a catchable Swift `Error`
+        // instead, and fold it into the same typed `MCPError` path used
+        // elsewhere in `send()`/`start()`.
+        do {
+            try stdin.fileHandleForWriting.write(contentsOf: line)
+        } catch {
+            throw MCPError.transport("write to \(command) failed: \(error.localizedDescription)")
+        }
     }
 
     nonisolated func incoming() -> AsyncThrowingStream<JSONValue, Error> {
