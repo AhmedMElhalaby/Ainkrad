@@ -128,6 +128,18 @@ enum BuiltinCommands {
             // that existing seam is the cleanest way to reach it, so neither command
             // needs `BuiltinCommands.make` to take an `AgentSession` dependency itself.
             SlashCommand(name: "compact", summary: "Summarize older messages to shrink the transcript", usage: "/compact") { _, session in
+                // Guard against mid-turn execution: `replaceMessages` overwrites
+                // `session.messages` wholesale, so compacting while a turn is
+                // in flight (thinking/streaming/tool-calling/awaiting approval)
+                // would clobber in-flight appends with a stale pre-turn snapshot.
+                // Mirrors the same state set `AgentSession.send`'s re-entrancy
+                // guard treats as "busy".
+                switch session.state {
+                case .thinking, .streaming, .callingTool, .awaitingApproval:
+                    return .handled(note: "Can't compact while a turn is in progress — stop or finish it first.")
+                case .idle, .failed:
+                    break
+                }
                 let originalCount = session.messages.count
                 let keepRecent = 6
                 guard originalCount > keepRecent else {
