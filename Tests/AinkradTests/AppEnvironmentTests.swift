@@ -97,6 +97,7 @@ final class AppEnvironmentTests {
             commandRegistry: CommandRegistry(builtins: []),
             memoryService: nil,
             skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
+            skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
             skillCommandStore: SkillCommandStore(persistence: persistence)
         )
 

@@ -55,6 +55,11 @@ final class AppEnvironment {
     /// CRUD over `/name` → skill-name command bindings; registers its
     /// `SlashCommand`s into `commandRegistry` at bootstrap.
     let skillCommandStore: SkillCommandStore
+    /// Watches `Skills/` on disk (Task 14) and reloads `skillRegistry` when the
+    /// user adds/edits/removes a `SKILL.md` outside the app — retained for the
+    /// process lifetime so its `DispatchSource` stays alive; see `bootstrap()`
+    /// for where it's started.
+    let skillWatcher: SkillWatcher
     /// Skill `/name` command names currently registered into `commandRegistry`
     /// — tracked so `resyncSkillCommands()` (Task 13) knows exactly which
     /// entries to drop before re-registering the current binding set, without
@@ -124,6 +129,7 @@ final class AppEnvironment {
         commandRegistry: CommandRegistry,
         memoryService: MemoryService?,
         skillRegistry: SkillRegistry,
+        skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore
     ) {
         self.persistence = persistence
@@ -163,6 +169,7 @@ final class AppEnvironment {
         self.commandRegistry = commandRegistry
         self.memoryService = memoryService
         self.skillRegistry = skillRegistry
+        self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
@@ -318,6 +325,14 @@ final class AppEnvironment {
                 Set((persistence?.load(InstalledPluginsDocument.self)?.installed.keys).map(Array.init) ?? [])
             })
         let skillCommandStore = SkillCommandStore(persistence: persistence)
+        // File-watch reload (Task 14): a user editing/adding/removing a
+        // SKILL.md directly in Skills/ (outside the app) is picked up live.
+        // Captures `skillRegistry` weakly — the watcher never extends its
+        // lifetime, only reacts while it's alive.
+        let skillWatcher = SkillWatcher(paths: SkillPaths(root: skillsRoot)) { [weak skillRegistry] in
+            skillRegistry?.reload()
+        }
+        skillWatcher.start()
 
         var agentTools: [any AgentTool] = [
             ReadFileTool(), EditFileTool(),
@@ -463,6 +478,7 @@ final class AppEnvironment {
             commandRegistry: commandRegistry,
             memoryService: memoryService,
             skillRegistry: skillRegistry,
+            skillWatcher: skillWatcher,
             skillCommandStore: skillCommandStore
         )
 
