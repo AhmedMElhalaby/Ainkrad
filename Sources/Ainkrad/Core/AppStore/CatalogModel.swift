@@ -7,6 +7,21 @@ struct ManifestLink: Codable, Equatable {
     let url: URL
 }
 
+/// The kind of item a `CatalogEntry` represents. Defaults to `.plugin` on
+/// decode so pre-existing (kind-less) catalog entries keep decoding
+/// unchanged (see `CatalogEntry.init(from:)`).
+enum CatalogItemKind: String, Codable, Equatable {
+    case plugin
+    case skill
+}
+
+/// Points at a raw `SKILL.md` asset for a `.skill` catalog entry — a
+/// markdown file, not a zip/`dlopen`-loaded plugin bundle. For `.skill`
+/// entries, `CatalogEntry.downloadURL`/`sha256` are unused.
+struct SkillCatalogDescriptor: Codable, Equatable {
+    let contentURL: URL
+}
+
 /// One installable app in the catalog, assembled from a repo's latest release.
 ///
 /// `author`/`longDescription`/`screenshots`/`links` (AIN-147) are additive
@@ -14,6 +29,10 @@ struct ManifestLink: Codable, Equatable {
 /// memberwise initializer and when decoding a pre-AIN-147 cached catalog
 /// JSON that has no such keys — so existing callers/persisted caches are
 /// unaffected.
+///
+/// `kind`/`skill` are additive too: `kind` defaults to `.plugin` and `skill`
+/// to `nil` when decoding a pre-existing (kind-less) catalog entry, so
+/// existing plugin-only catalogs keep decoding unchanged.
 struct CatalogEntry: Equatable, Identifiable, Codable {
     var id: String { appID }
     let appID: String
@@ -29,11 +48,14 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
     let longDescription: String?
     let screenshots: [URL]
     let links: [ManifestLink]
+    let kind: CatalogItemKind
+    let skill: SkillCatalogDescriptor?
 
     init(appID: String, displayName: String, icon: String, description: String, version: String,
          apiVersion: Int, downloadURL: URL, sha256: String, sourceRepo: String,
          author: String? = nil, longDescription: String? = nil,
-         screenshots: [URL] = [], links: [ManifestLink] = []) {
+         screenshots: [URL] = [], links: [ManifestLink] = [],
+         kind: CatalogItemKind = .plugin, skill: SkillCatalogDescriptor? = nil) {
         self.appID = appID
         self.displayName = displayName
         self.icon = icon
@@ -47,11 +69,13 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
         self.longDescription = longDescription
         self.screenshots = screenshots
         self.links = links
+        self.kind = kind
+        self.skill = skill
     }
 
     enum CodingKeys: String, CodingKey {
         case appID, displayName, icon, description, version, apiVersion, downloadURL, sha256, sourceRepo
-        case author, longDescription, screenshots, links
+        case author, longDescription, screenshots, links, kind, skill
     }
 
     init(from decoder: Decoder) throws {
@@ -69,6 +93,18 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
         longDescription = try c.decodeIfPresent(String.self, forKey: .longDescription)
         screenshots = try c.decodeIfPresent([URL].self, forKey: .screenshots) ?? []
         links = try c.decodeIfPresent([ManifestLink].self, forKey: .links) ?? []
+        kind = try c.decodeIfPresent(CatalogItemKind.self, forKey: .kind) ?? .plugin
+        skill = try c.decodeIfPresent(SkillCatalogDescriptor.self, forKey: .skill)
+    }
+}
+
+extension CatalogEntry {
+    /// True iff this entry is a well-formed `.skill` entry (has a descriptor).
+    /// A `.skill`-kind entry missing its descriptor is malformed and should
+    /// be treated as skippable rather than fatal, mirroring existing catalog
+    /// skip behavior for other malformed entries.
+    var isValidSkillEntry: Bool {
+        kind == .skill && skill != nil
     }
 }
 
