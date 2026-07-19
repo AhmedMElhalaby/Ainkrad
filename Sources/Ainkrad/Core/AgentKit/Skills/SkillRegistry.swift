@@ -13,6 +13,20 @@ enum SkillProposalError: Error, Equatable {
     case invalid([SkillValidationIssue])
 }
 
+/// One entry in the proposal-review list (`SkillRegistry.proposals()`). A
+/// proposal is always listed — even when unreadable or unparseable — so a
+/// reviewer sees every draft in `_proposed/`, never a silent drop. Exactly one
+/// of `skill`/`error` is non-nil: `error` covers unreadable/malformed drafts
+/// that never became a `Skill`; `issues` are `SkillValidator` warnings on a
+/// successfully parsed draft (may be non-empty even though `skill` parsed).
+struct SkillProposal: Equatable, Identifiable {
+    var id: String { name }
+    let name: String
+    let skill: Skill?
+    let issues: [SkillValidationIssue]
+    let error: String?
+}
+
 /// Loads, validates, and dedups the active skill set from disk. The markdown
 /// files are the source of truth; `reload()` is idempotent and cheap. `_proposed`
 /// is deliberately excluded from the active set until a draft is `approve(name:)`d
@@ -154,6 +168,43 @@ final class SkillRegistry {
         let issues = SkillValidator.validate(skill)
         guard issues.isEmpty else { throw SkillProposalError.invalid(issues) }
         try propose(md, name: name)
+    }
+
+    /// Lists every draft under `_proposed/` for review, sorted by directory
+    /// name for deterministic ordering. Unlike `reload()`'s active-set scan, a
+    /// malformed/unreadable draft is never dropped here — it's returned as a
+    /// `SkillProposal` with `skill == nil` and `error` set, so the reviewer
+    /// can see (and discard) it. A proposal remains inert regardless of what
+    /// this reports; only `approve(name:)` activates one.
+    func proposals() -> [SkillProposal] {
+        proposedDirNames().map { name in
+            let url = paths.proposedFile(name)
+            let text: String
+            do {
+                text = try String(contentsOf: url, encoding: .utf8)
+            } catch {
+                return SkillProposal(name: name, skill: nil, issues: [],
+                                     error: "unreadable or not valid UTF-8: \(error.localizedDescription)")
+            }
+            do {
+                let skill = try SkillParser.parse(text, source: .proposed)
+                return SkillProposal(name: name, skill: skill,
+                                     issues: SkillValidator.validate(skill), error: nil)
+            } catch {
+                return SkillProposal(name: name, skill: nil, issues: [], error: String(describing: error))
+            }
+        }
+    }
+
+    /// Immediate subdirectories of `_proposed/`, sorted for deterministic
+    /// ordering regardless of filesystem enumeration order.
+    private func proposedDirNames() -> [String] {
+        guard let entries = try? fm.contentsOfDirectory(
+            at: paths.proposedRoot, includingPropertiesForKeys: [.isDirectoryKey]) else { return [] }
+        return entries.compactMap { url -> String? in
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            return isDir ? url.lastPathComponent : nil
+        }.sorted()
     }
 
     /// Immediate subdirectories of `root`, excluding `_proposed`, sorted for
