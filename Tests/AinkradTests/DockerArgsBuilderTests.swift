@@ -26,6 +26,18 @@ struct DockerArgsBuilderTests {
         #expect(zip(args, args.dropFirst()).contains { $0 == "--network" && $1 == "bridge" })
     }
 
+    @Test func networkAllowListFailsClosedToNetworkNone() {
+        // Docker has no hostname-level egress filter, so an allow-list
+        // (unlike a blanket `.on`) must fail CLOSED to `--network none` —
+        // matching SeatbeltProfileGenerator's posture for this same
+        // un-filterable case — rather than silently degrading to full bridge.
+        let p = profile(fs: FilesystemPolicy(readablePaths: [], writablePaths: ["<workspace>"]),
+                         net: .allowList(["example.com"]))
+        let args = DockerArgsBuilder.runArgs(command: "ls", profile: p, workspacePath: "/ws", image: "img")
+        #expect(zip(args, args.dropFirst()).contains { $0 == "--network" && $1 == "none" })
+        #expect(!zip(args, args.dropFirst()).contains { $0 == "--network" && $1 == "bridge" })
+    }
+
     @Test func mountsWorkdirAndSetsWorkdirFlag() {
         let p = profile(fs: FilesystemPolicy(readablePaths: [], writablePaths: ["<workspace>"]), net: .off)
         let args = DockerArgsBuilder.runArgs(command: "ls", profile: p, workspacePath: "/ws", image: "img")

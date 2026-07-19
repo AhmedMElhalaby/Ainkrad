@@ -18,14 +18,16 @@ enum DockerArgsBuilder {
         switch profile.networkPolicy {
         case .off:
             args += ["--network", "none"]
-        case .on, .allowList:
-            // Docker has no per-hostname allow-list primitive comparable to an
-            // egress proxy; an allow-list degrades to full bridge network,
-            // same posture as SeatbeltProfileGenerator degrades allowList to
-            // deny (fail toward the safer side for the layer that lacks the
-            // primitive — here that's "don't silently cut network the caller
-            // asked to allow", there it's "don't silently grant it").
+        case .on:
             args += ["--network", "bridge"]
+        case .allowList:
+            // Docker has no per-hostname allow-list primitive comparable to an
+            // egress proxy, so it can't honor "restrict to these hosts" —
+            // and silently degrading that to full bridge network would be
+            // fail-OPEN. Fail CLOSED instead: deny all network, matching
+            // SeatbeltProfileGenerator's posture for this same
+            // un-filterable case.
+            args += ["--network", "none"]
         }
 
         if let mem = profile.resourceLimits.memoryMB { args += ["--memory", "\(mem)m"] }
