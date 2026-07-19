@@ -27,6 +27,7 @@ struct AssistantSettingsView: View {
                 connectionsSection(tokens: tokens)
                 modelSection(tokens: tokens)
                 permissionsSection(tokens: tokens)
+                SandboxPolicyUIView(store: environment.sandboxProfileStore)
                 contextPrivacySection(tokens: tokens)
             }
             .padding(18)

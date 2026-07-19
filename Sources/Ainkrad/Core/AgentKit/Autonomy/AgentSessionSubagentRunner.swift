@@ -1,0 +1,51 @@
+// Sources/Ainkrad/Core/AgentKit/Autonomy/AgentSessionSubagentRunner.swift
+import Foundation
+
+/// The production `SubagentRunner`: resolves an `AgentProfile`, asks the Model
+/// Router for a concrete model within the spec's budget ceiling, narrows the
+/// tool surface via `SubagentRegistryFilter`, spins a child `AgentSession`
+/// (via the injected `makeSession` seam), runs the prompt, and maps the final
+/// session state to a `SubagentOutcome`.
+///
+/// Failure isolation: `run` never throws — a child session that settles into
+/// `.failed` maps to a `.failed` outcome rather than propagating.
+@MainActor
+final class AgentSessionSubagentRunner: SubagentRunner {
+    private let allTools: [any AgentTool]
+    private let agents: AgentStore
+    private let router: ModelRouter
+    private let candidatesProvider: @MainActor () -> [RouterCandidate]
+    private let makeSession: @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession
+
+    init(allTools: [any AgentTool], agents: AgentStore, router: ModelRouter,
+         candidatesProvider: @escaping @MainActor () -> [RouterCandidate],
+         makeSession: @escaping @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession) {
+        self.allTools = allTools
+        self.agents = agents
+        self.router = router
+        self.candidatesProvider = candidatesProvider
+        self.makeSession = makeSession
+    }
+
+    func run(_ spec: SubagentSpec) async -> SubagentOutcome {
+        let profile = spec.profileID.flatMap { id in agents.agents.first { $0.id == id } } ?? agents.active
+
+        let decision = router.route(forSubagent: SubagentModelRequest(
+            budgetTier: spec.budgetTier, needsVision: false, needsTools: true,
+            estimatedInputTokens: max(1, spec.prompt.count / 4),
+            candidates: candidatesProvider()))
+
+        let tools = SubagentRegistryFilter.tools(from: allTools, allow: spec.toolAllowList, policy: profile.toolPolicy)
+        let registry = AgentToolRegistry(tools: tools)
+        let session = makeSession(profile, registry, decision.candidate.model)
+
+        session.send(spec.prompt)
+        await session.currentTask?.value
+
+        if case .failed(let message) = session.state {
+            return SubagentOutcome(id: spec.id, status: .failed, resultText: message)
+        }
+        let text = session.messages.last { $0.role == .assistant }?.text ?? ""
+        return SubagentOutcome(id: spec.id, status: .succeeded, resultText: text)
+    }
+}

@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Commands/CommandRegistry.swift
 import Foundation
+import AppKit
 
 /// Single slash-command dispatch path. `AgentSession.send` runs every input through
 /// this registry first — this is also where Slice 1's old `/remember ` prefix
@@ -21,6 +22,18 @@ final class CommandRegistry {
     func register(_ c: SlashCommand) {
         if commands[c.name] == nil { order.append(c.name) }
         commands[c.name] = c
+    }
+
+    /// Removes a previously `register(_:)`ed command by name. Host-internal,
+    /// additive seam for the Skills manager UI (Task 13): re-syncing the live
+    /// skill `/name` commands after a runtime bind/unbind needs to be able to
+    /// drop a name that no longer has a binding, not just overwrite it. A
+    /// no-op when `name` isn't registered — in particular, never removes a
+    /// builtin unless a caller explicitly names one (the manager only ever
+    /// passes skill-command names it tracked itself).
+    func unregister(name: String) {
+        guard commands.removeValue(forKey: name) != nil else { return }
+        order.removeAll { $0 == name }
     }
 
     func all() -> [SlashCommand] { order.compactMap { commands[$0] } }
@@ -45,6 +58,14 @@ final class CommandRegistry {
 /// (they close over `runtime`/`usage`/`router`/`catalog`) and handed to
 /// `CommandRegistry(builtins:)`.
 enum BuiltinCommands {
+    /// Every builtin command name, derived from `make(...)` itself (never a
+    /// hand-maintained duplicate list, so it can't drift as builtins are
+    /// added/renamed). A skill-bound `/name` must never collide with one of
+    /// these — see `SkillCommandStore.isValidCommandName`.
+    static var reservedNames: Set<String> {
+        Set(make(runtime: nil, usage: nil, router: nil, catalog: nil).map(\.name))
+    }
+
     static func make(runtime: RuntimeOptionsStore?, usage: UsageTracker?,
                      router: ModelRouter?, catalog: ModelCatalog?) -> [SlashCommand] {
         [
@@ -122,11 +143,57 @@ enum BuiltinCommands {
                 """
                 return .handled(note: note)
             },
-            SlashCommand(name: "compact", summary: "Compact the transcript (coming soon)", usage: "/compact") { _, _ in
-                .handled(note: "Transcript compaction isn't implemented yet.")
+            // `/compact` and `/export` both need LIVE session state (the transcript),
+            // which `SlashCommand.handler` already receives as its `session` argument —
+            // that existing seam is the cleanest way to reach it, so neither command
+            // needs `BuiltinCommands.make` to take an `AgentSession` dependency itself.
+            SlashCommand(name: "compact", summary: "Summarize older messages to shrink the transcript", usage: "/compact") { _, session in
+                // Guard against mid-turn execution: `replaceMessages` overwrites
+                // `session.messages` wholesale, so compacting while a turn is
+                // in flight (thinking/streaming/tool-calling/awaiting approval)
+                // would clobber in-flight appends with a stale pre-turn snapshot.
+                // Mirrors the same state set `AgentSession.send`'s re-entrancy
+                // guard treats as "busy".
+                switch session.state {
+                case .thinking, .streaming, .callingTool, .awaitingApproval:
+                    return .handled(note: "Can't compact while a turn is in progress — stop or finish it first.")
+                case .idle, .failed:
+                    break
+                }
+                let originalCount = session.messages.count
+                let keepRecent = 6
+                guard originalCount > keepRecent else {
+                    return .handled(note: "Nothing to compact yet — only \(originalCount) message\(originalCount == 1 ? "" : "s") in this session.")
+                }
+                let summary = TranscriptCompactor.summarizeHeuristically(session.messages)
+                let compacted = TranscriptCompactor.compact(session.messages, keepRecent: keepRecent, summary: summary)
+                session.replaceMessages(compacted)
+                let summarizedCount = originalCount - keepRecent
+                return .handled(note: "Compacted \(summarizedCount) earlier message\(summarizedCount == 1 ? "" : "s") into a summary; kept the most recent \(keepRecent).")
             },
-            SlashCommand(name: "export", summary: "Export the transcript (coming soon)", usage: "/export") { _, _ in
-                .handled(note: "Transcript export isn't implemented yet.")
+            SlashCommand(name: "export", summary: "Copy the transcript to the clipboard as Markdown", usage: "/export") { _, session in
+                guard !session.messages.isEmpty else { return .handled(note: "Nothing to export yet.") }
+                let rendered = ConversationExporter.export(session.messages, format: .markdown)
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(rendered, forType: .string)
+                return .handled(note: "Copied the transcript to your clipboard as Markdown (\(rendered.count) characters).")
+            },
+            SlashCommand(name: "undo", summary: "Undo the last turn's file edits + transcript", usage: "/undo") { _, session in
+                let summary = session.undoLastTurn()
+                if !summary.irreversible.isEmpty {
+                    let ran = summary.irreversible.joined(separator: " ")
+                    return .handled(note: "This turn can't be undone — it ran a tool with irreversible effects. \(ran)")
+                }
+                if summary.revertedEdits == 0 {
+                    return .handled(note: "Nothing to undo.")
+                }
+                let plural = summary.revertedEdits == 1 ? "edit" : "edits"
+                return .handled(note: "Undid the last turn — reverted \(summary.revertedEdits) file \(plural).")
+            },
+            SlashCommand(name: "retry", summary: "Re-run the last user prompt", usage: "/retry") { _, session in
+                session.retryLastTurn()
+                return .handled(note: nil)
             },
         ]
     }

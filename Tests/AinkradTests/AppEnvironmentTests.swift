@@ -30,7 +30,11 @@ final class AppEnvironmentTests {
             pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
             retainedDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("retained-plugin-data"),
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
-        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        let mcpInstaller = MCPServerInstaller(
+            configStore: MCPServerConfigStore(persistence: persistence, secrets: secrets),
+            persistence: persistence)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer,
+                                        mcpInstaller: mcpInstaller, persistence: persistence)
         let appStoreStore = AppStoreStore(service: appStore, registry: registry)
         let shortcutStore = ShortcutStore(persistence: persistence)
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())
@@ -38,11 +42,19 @@ final class AppEnvironmentTests {
         let sounds = SoundEngine(settings: generalSettingsStore)
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
+        let sandboxProfileStore = SandboxProfileStore(persistence: persistence)
+        let executionRouter = ExecutionRouter(
+            profiles: sandboxProfileStore,
+            backends: [.host: HostBackend()])
+        let cloudCredentialsStore = CloudCredentialsStore(secrets: secrets)
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
         let agentContextService = AgentContextService(hub: agentContextHub, settings: agentContextSettingsStore)
         let agentPermissionStore = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
         let agentStore = AgentStore(persistence: persistence)
+        let mcpServerRegistry = MCPServerRegistry(
+            configStore: MCPServerConfigStore(persistence: persistence, secrets: secrets))
+        let lspServerRegistry = LSPServerRegistry(persistence: persistence)
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -58,6 +70,20 @@ final class AppEnvironmentTests {
             permissions: agentPermissionStore,
             agents: agentStore
         )
+        let editJournal = EditJournal()
+        let subagentCoordinator = SubagentCoordinator(
+            runner: AgentSessionSubagentRunner(
+                allTools: [ReadFileTool()], agents: agentStore,
+                router: ModelRouter(catalog: ModelCatalog(), outcomes: RouterOutcomeStore(persistence: persistence)),
+                candidatesProvider: { [] },
+                makeSession: AppEnvironment.makeSubagentSession(
+                    providerFor: { _ in ClaudeProvider(http: URLSessionStreamingHTTPClient()) },
+                    connections: connectionStore, agentConfigStore: agentConfigStore,
+                    agentContextService: agentContextService, agentPermissionStore: agentPermissionStore,
+                    agentStore: agentStore)))
+        let runManager = RunManager(
+            persistence: persistence,
+            runner: BackgroundRunRunner(makeSession: { agentSession }))
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -78,12 +104,20 @@ final class AppEnvironmentTests {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentActionHub: agentActionHub,
+            sandboxProfileStore: sandboxProfileStore,
+            executionRouter: executionRouter,
+            cloudCredentialsStore: cloudCredentialsStore,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,
             agentContextService: agentContextService,
             agentStore: agentStore,
             agentSession: agentSession,
+            mcpServerRegistry: mcpServerRegistry,
+            lspServerRegistry: lspServerRegistry,
+            editJournal: editJournal,
+            subagentCoordinator: subagentCoordinator,
+            runManager: runManager,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
             modelCatalog: ModelCatalog(),
             modelPriceTable: ModelPriceTable(),
@@ -95,7 +129,12 @@ final class AppEnvironmentTests {
             localModelAvailability: LocalModelAvailability(),
             authProfileStore: AuthProfileStore(persistence: persistence, secrets: secrets),
             commandRegistry: CommandRegistry(builtins: []),
-            memoryService: nil
+            assistantWorkingDirectory: FileManager.default.homeDirectoryForCurrentUser,
+            workspaceFileIndex: WorkspaceFileIndex(root: FileManager.default.homeDirectoryForCurrentUser),
+            memoryService: nil,
+            skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
+            skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
+            skillCommandStore: SkillCommandStore(persistence: persistence)
         )
 
         #expect(environment.registry === registry)

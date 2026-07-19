@@ -164,6 +164,8 @@ struct ClaudeProvider: LLMProvider {
                 return ["type": "tool_use", "id": id, "name": name, "input": input.toFoundationObject()]
             case .toolResult(let toolUseID, let content, let isError):
                 return ["type": "tool_result", "tool_use_id": toolUseID, "content": content, "is_error": isError]
+            case .image(let mediaType, let base64):
+                return ["type": "image", "source": ["type": "base64", "media_type": mediaType, "data": base64]]
             }
         }
         return ["role": message.role.rawValue, "content": blocks]

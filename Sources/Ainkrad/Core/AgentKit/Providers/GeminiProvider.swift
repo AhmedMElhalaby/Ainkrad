@@ -114,7 +114,7 @@ struct GeminiProvider: LLMProvider {
     }
 
     /// Maps one `AgentMessage` to a Gemini `content` object. Assistant → "model".
-    private static func wireContent(_ message: AgentMessage) -> [String: Any] {
+    nonisolated private static func wireContent(_ message: AgentMessage) -> [String: Any] {
         let role = message.role == .assistant ? "model" : "user"
         let parts: [[String: Any]] = message.content.map { block in
             switch block {
@@ -125,9 +125,16 @@ struct GeminiProvider: LLMProvider {
             case .toolResult(let toolUseID, let content, _):
                 // toolUseID == the function name (see class doc).
                 return ["functionResponse": ["name": toolUseID, "response": ["result": content]]]
+            case .image(let mediaType, let base64):
+                return ["inlineData": ["mimeType": mediaType, "data": base64]]
             }
         }
         return ["role": role, "parts": parts]
+    }
+
+    /// Test-only hook exposing `wireContent(_:)`'s `"parts"` array for a single message.
+    nonisolated static func wireContentForTesting(_ message: AgentMessage) -> [[String: Any]] {
+        wireContent(message)["parts"] as? [[String: Any]] ?? []
     }
 
     private static func errorMessage(fromResponseBody body: String) -> String {
