@@ -14,6 +14,7 @@ struct DocumentConformanceTests {
         #expect(RouterOutcomeDocument.documentID == "router-outcomes")
         #expect(AuthProfilesDocument.documentID == "auth-profiles")
         #expect(AssistantRuntimeOptions.documentID == "assistant-runtime")
+        #expect(SandboxProfileDocument.documentID == "sandbox-profiles")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
