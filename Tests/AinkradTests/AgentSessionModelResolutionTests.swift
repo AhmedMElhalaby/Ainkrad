@@ -18,6 +18,46 @@ struct AgentSessionModelResolutionTests {
         #expect(resolved.tier == .local)   // free-first
     }
 
+    /// Regression: a user pin to a LIVE-DISCOVERED model (e.g. an OpenRouter model
+    /// id) that is absent from the preset-derived candidate list must still be
+    /// honored on the ACTIVE connection — the router must NOT silently free-first
+    /// route to some other connection's free model (the `llama3.2`-on-Ollama bug).
+    @Test("a pin absent from the candidate list is honored on the active connection, not free-first routed")
+    func pinAbsentFromCandidatesHonoredOnActiveConnection() async {
+        let persistence = InMemoryPersistenceStore()
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        // Active connection: OpenRouter, pinned to a discovered model NOT in any preset.
+        let openRouter = connections.addConnection(preset: ProviderPreset.preset(id: "openrouter"),
+            displayName: "OpenRouter", baseURL: ProviderPreset.preset(id: "openrouter").defaultBaseURL, token: "k")
+        // A separate LOCAL connection whose free llama3.2 the buggy router would grab.
+        let ollama = connections.addConnection(preset: ProviderPreset.preset(id: "ollama"),
+            displayName: "Ollama", baseURL: ProviderPreset.preset(id: "ollama").defaultBaseURL, token: "")
+
+        let config = AgentConfigStore(persistence: persistence)
+        config.setActiveConnectionID(openRouter.id)
+        config.setModel("nvidia/nemotron-nano-9b-v2:free")
+        let runtime = RuntimeOptionsStore(persistence: persistence)
+        runtime.pinModel("nvidia/nemotron-nano-9b-v2:free")
+        let router = ModelRouter(catalog: ModelCatalog(), outcomes: RouterOutcomeStore(persistence: persistence))
+        // Candidates DELIBERATELY exclude the pinned model and offer only the free
+        // local one on the OTHER connection.
+        let candidates: [RouterCandidate] = [
+            RouterCandidate(connectionID: ollama.id, model: "llama3.2",
+                descriptor: ModelDescriptor(id: "llama3.2", tier: .local, contextWindow: 128_000, capabilities: [.toolUse])),
+        ]
+        let session = AgentSession(
+            providerFor: { _ in RecordingProvider(script: []) },
+            connections: connections, config: config,
+            context: AgentContextService(hub: AgentContextRegistryHub(), settings: AgentContextSettingsStore(persistence: persistence)),
+            registry: AgentToolRegistry(tools: []),
+            permissions: AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() }),
+            router: router, runtime: runtime, candidatesProvider: { candidates })
+
+        let resolved = await session.resolveTurnForTesting()
+        #expect(resolved.model == "nvidia/nemotron-nano-9b-v2:free")   // pin honored, not llama3.2
+        #expect(resolved.connection?.id == openRouter.id)              // on the active connection, not Ollama
+    }
+
     // MARK: - Invariant 1: router is opt-in / overridable
 
     @Test("a disabled Agent router honors the first candidate, NOT the router's free-first auto-pick")

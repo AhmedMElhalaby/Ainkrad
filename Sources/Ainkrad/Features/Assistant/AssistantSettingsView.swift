@@ -234,7 +234,7 @@ struct AssistantSettingsView: View {
                 labeled("MODEL", tokens: tokens) {
                     HStack(spacing: 8) {
                         AinkradSelect(
-                            items: modelPicker.modelOptions(for: active),
+                            items: modelPicker.modelOptions(for: active, environment),
                             selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
                             label: { $0 }
                         )

@@ -52,9 +52,22 @@ struct ModelCatalogServiceTests {
         #expect(result.isLive == false)
     }
 
-    @Test("modelsResult signals isLive == false on an empty parse")
-    func modelsResultEmptyParseIsNotLive() async throws {
+    @Test("a well-formed but EMPTY list is authoritative (live, no curated fallback)")
+    func modelsResultEmptyListIsAuthoritative() async throws {
+        // e.g. an Ollama with nothing pulled: `{"data":[]}` means the provider
+        // genuinely has zero models — show that, NOT the hardcoded curated list.
         let stub = StubDataHTTPClient(status: 200, body: "{\"data\":[]}", captured: nil)
+        let svc = ModelCatalogService(http: stub)
+        let result = await svc.modelsResult(kind: .openAICompatible, baseURL: "https://x/v1", apiKey: "k", curatedFallback: ["llama3.2", "qwen2.5-coder"])
+        #expect(result.models == [])       // NOT the curated fallback
+        #expect(result.isLive == true)     // authoritative
+    }
+
+    @Test("an UNPARSEABLE 200 body falls back to curated (isLive == false)")
+    func modelsResultUnparseableFallsBackToCurated() async throws {
+        // A 2xx whose body we can't decode at all — we don't know the real set,
+        // so the curated fallback is the honest choice (distinct from empty).
+        let stub = StubDataHTTPClient(status: 200, body: "not json at all", captured: nil)
         let svc = ModelCatalogService(http: stub)
         let result = await svc.modelsResult(kind: .openAICompatible, baseURL: "https://x/v1", apiKey: "k", curatedFallback: ["a", "b"])
         #expect(result.models == ["a", "b"])
