@@ -34,6 +34,10 @@ final class AppEnvironment {
     /// tools feed `agentToolRegistry.dynamicTools` and its trust decisions feed
     /// `agentSession`'s `mcpTrust` closure. See `bootstrap()`.
     let mcpServerRegistry: MCPServerRegistry
+    /// M7 Slice 2 (LSP) — owns live language-server connections; feeds
+    /// `EditQuality` advisory diagnostics/formatting for `EditFileTool`. See
+    /// `bootstrap()` for the non-blocking first-launch autodetect seed.
+    let lspServerRegistry: LSPServerRegistry
     let modelCatalogService: ModelCatalogService
     /// M7 Slice 5b (Model Router / Usage / Failover) runtime wiring.
     let modelCatalog: ModelCatalog
@@ -104,6 +108,7 @@ final class AppEnvironment {
         agentStore: AgentStore,
         agentSession: AgentSession,
         mcpServerRegistry: MCPServerRegistry,
+        lspServerRegistry: LSPServerRegistry,
         modelCatalogService: ModelCatalogService,
         modelCatalog: ModelCatalog,
         modelPriceTable: ModelPriceTable,
@@ -142,6 +147,7 @@ final class AppEnvironment {
         self.agentStore = agentStore
         self.agentSession = agentSession
         self.mcpServerRegistry = mcpServerRegistry
+        self.lspServerRegistry = lspServerRegistry
         self.modelCatalogService = modelCatalogService
         self.modelCatalog = modelCatalog
         self.modelPriceTable = modelPriceTable
@@ -263,8 +269,17 @@ final class AppEnvironment {
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
 
+        // LSP (M7 Slice 2): configured language servers backing `EditFileTool`'s
+        // advisory diagnostics/formatting. Uses `LSPServerRegistry.defaultClientFactory`
+        // (the real stdio transport factory) — tests inject a stub factory instead so the
+        // registry core never spawns a real language-server process. PATH autodetection
+        // (below, after `environment` exists) shells out to `which` per known server, so
+        // it's seeded from an unawaited `Task`, never here, so a slow/missing binary can't
+        // delay launch.
+        let lspServerRegistry = LSPServerRegistry(persistence: persistence)
+
         var agentTools: [any AgentTool] = [
-            ReadFileTool(), EditFileTool(),
+            ReadFileTool(), EditFileTool(editQuality: EditQuality(registry: lspServerRegistry)),
             WorkspaceControlTool(workspaces: workspaceManager),
             RunTerminalTool(actionHub: agentActionHub),
             GitOpTool(actionHub: agentActionHub),
@@ -389,6 +404,7 @@ final class AppEnvironment {
             agentStore: agentStore,
             agentSession: agentSession,
             mcpServerRegistry: mcpServerRegistry,
+            lspServerRegistry: lspServerRegistry,
             modelCatalogService: modelCatalogService,
             modelCatalog: modelCatalog,
             modelPriceTable: modelPriceTable,
@@ -428,6 +444,16 @@ final class AppEnvironment {
         // Tools/trust populate as servers come up; a down server just never appears.
         Task { [weak mcpServerRegistry] in
             await mcpServerRegistry?.connectEnabled()
+        }
+
+        // Seed autodetected LSP servers off the launch path: `autodetect()` shells out to
+        // `which` once per known server (a handful of `Process` spawns), so it runs inside
+        // this unawaited `Task` rather than synchronously in `bootstrap()`. `seedIfEmpty`
+        // is a no-op once the user has any configs (from a prior autodetect or a manual
+        // edit in the LSP config UI), so this only ever does something on first launch.
+        Task { [weak lspServerRegistry] in
+            let configs = LSPServerRegistry.autodetect()
+            await lspServerRegistry?.seedIfEmpty(with: configs)
         }
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.

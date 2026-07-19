@@ -49,6 +49,7 @@ final class AppEnvironmentTests {
         let agentStore = AgentStore(persistence: persistence)
         let mcpServerRegistry = MCPServerRegistry(
             configStore: MCPServerConfigStore(persistence: persistence, secrets: secrets))
+        let lspServerRegistry = LSPServerRegistry(persistence: persistence)
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -91,6 +92,7 @@ final class AppEnvironmentTests {
             agentStore: agentStore,
             agentSession: agentSession,
             mcpServerRegistry: mcpServerRegistry,
+            lspServerRegistry: lspServerRegistry,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
             modelCatalog: ModelCatalog(),
             modelPriceTable: ModelPriceTable(),

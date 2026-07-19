@@ -18,6 +18,7 @@ enum LSPHealth: Equatable {
 @MainActor
 final class LSPServerRegistry {
     private var doc: LSPServersDocument
+    private let persistence: PersistenceStore
     private let clientFactory: @MainActor @Sendable (LSPServerConfig) -> LSPClient?
     private var clients: [String: LSPClient] = [:]
     private(set) var health: [String: LSPHealth] = [:]
@@ -29,7 +30,31 @@ final class LSPServerRegistry {
          clientFactory: @escaping @MainActor @Sendable (LSPServerConfig) -> LSPClient? =
             LSPServerRegistry.defaultClientFactory) {
         self.doc = persistence.load(LSPServersDocument.self) ?? LSPServersDocument()
+        self.persistence = persistence
         self.clientFactory = clientFactory
+    }
+
+    /// First-launch bootstrap: seeds `doc.servers` with `configs` (typically
+    /// `autodetect()`'s result) and persists them — but ONLY when the document
+    /// is currently empty. A user who has already added or edited configs (or
+    /// simply has some persisted from a prior autodetect) is never clobbered;
+    /// this is a no-op on every subsequent launch. See `AppEnvironment.bootstrap()`,
+    /// which calls this off the launch path since `autodetect()` shells out to
+    /// `which` per known server.
+    func seedIfEmpty(with configs: [LSPServerConfig]) {
+        guard doc.servers.isEmpty, !configs.isEmpty else { return }
+        doc.servers = configs
+        persistence.save(doc)
+    }
+
+    /// Disconnects every currently-connected client (best-effort `shutdown()` +
+    /// transport stop) and clears cached clients/health. Mirrors
+    /// `MCPServerRegistry.disconnectAll()` — for app-quit/teardown callers and
+    /// for the config UI (Task 19) to cleanly restart a client after an edit.
+    func disconnectAll() async {
+        for client in clients.values { await client.shutdown() }
+        clients.removeAll()
+        health.removeAll()
     }
 
     /// Builds a real `LSPStdioTransport`-backed client from a config. A config with an
