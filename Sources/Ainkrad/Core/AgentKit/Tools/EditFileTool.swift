@@ -13,6 +13,11 @@ struct EditFileTool: AgentTool {
     """
     let permission: ToolPermissionClass = .write
 
+    /// Optional advisory LSP integration (Task 17). Defaulted `nil` so every
+    /// existing call site (`EditFileTool()`) and test keeps compiling and
+    /// behaving identically when no LSP registry is wired up.
+    var editQuality: EditQuality? = nil
+
     var parametersSchema: JSONValue {
         .object([
             "type": .string("object"),
@@ -79,7 +84,11 @@ struct EditFileTool: AgentTool {
         } catch {
             throw ToolError.message("Could not write \(edit.path): \(error.localizedDescription).")
         }
-        return ToolResult(content: "Edited \(edit.path).", isError: false)
+        var content = "\(edit.original.isEmpty ? "Created" : "Edited") \(edit.path)."
+        if let summary = await editQuality?.afterEdit(path: edit.path) {
+            content += "\n\nLSP diagnostics:\n\(summary)"
+        }
+        return ToolResult(content: content, isError: false)
     }
 
     func approvalPreview(_ input: JSONValue) -> ToolApprovalPreview {

@@ -38,6 +38,7 @@ struct AppStoreCard: View {
                         }
                         Spacer()
                         if row.status == .updateAvailable { AinkradBadge(text: "UPDATE", status: .warning) }
+                        else if row.kind == .mcpServer { AinkradBadge(text: "MCP", status: .success) }
                         else if isDevPlugin { AinkradBadge(text: "DEV", status: .neutral) }
                     }
 

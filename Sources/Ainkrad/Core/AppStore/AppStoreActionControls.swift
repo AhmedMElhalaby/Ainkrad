@@ -49,8 +49,11 @@ struct AppStoreActionControls: View {
             case .updateAvailable:
                 actionButton("Update", style: .primary, morphsBusy: true, action: onUpdate)
                     .transition(rowTransition)
-                if style.showsEnableToggle {
+                if style.showsEnableToggle && row.kind != .mcpServer {
                     enableToggle
+                        .transition(rowTransition)
+                } else if style.showsEnableToggle && row.kind == .mcpServer {
+                    mcpManagerHint
                         .transition(rowTransition)
                 }
                 if style.showsUninstall && row.isManaged {
@@ -60,8 +63,11 @@ struct AppStoreActionControls: View {
             case .installed:
                 installedLabel
                     .transition(rowTransition)
-                if style.showsEnableToggle {
+                if style.showsEnableToggle && row.kind != .mcpServer {
                     enableToggle
+                        .transition(rowTransition)
+                } else if style.showsEnableToggle && row.kind == .mcpServer {
+                    mcpManagerHint
                         .transition(rowTransition)
                 }
                 if style.showsUninstall && row.isManaged {
@@ -95,6 +101,20 @@ struct AppStoreActionControls: View {
                 .foregroundStyle(row.isEnabled ? tokens.accentTertiary : tokens.foreground.opacity(0.55))
         }
         .help(row.isEnabled ? "Disable" : "Enable")
+    }
+
+    /// MCP-server rows delegate enable/trust to the MCP manager (Task 11) —
+    /// this hint replaces the enable toggle so a re-install (which resets
+    /// enabled/trusted to false, per `MCPServerInstaller`) reads as "go
+    /// re-trust this in the MCP manager" rather than a broken toggle.
+    private var mcpManagerHint: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: style.fontSize - 1))
+            Text("Add secrets & enable in MCP Servers")
+                .font(.system(size: style.fontSize - 1, weight: .medium))
+        }
+        .foregroundStyle(tokens.foreground.opacity(0.55))
+        .help("Enable, trust, and configure secrets for this MCP server in Settings → MCP Servers")
     }
 
     /// An `AinkradButton` that, while `morphsBusy && isBusy`, crossfades to

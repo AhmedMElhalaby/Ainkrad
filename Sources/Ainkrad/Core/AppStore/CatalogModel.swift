@@ -7,6 +7,38 @@ struct ManifestLink: Codable, Equatable {
     let url: URL
 }
 
+/// Discriminates what kind of installable item a `CatalogEntry` represents.
+/// Absent on decode (all pre-existing catalog JSON) → defaults to `.plugin`,
+/// preserving current behavior for every catalog published before MCP
+/// marketplace support existed.
+enum CatalogItemKind: String, Codable, Equatable {
+    case plugin
+    case mcpServer
+}
+
+/// The fields needed to configure an MCP server from a catalog entry. Only
+/// required secret *keys* (names) are declared here — never secret values;
+/// actual values are supplied by the user at install time and stored via the
+/// existing secrets store.
+struct MCPCatalogDescriptor: Codable, Equatable {
+    let transport: MCPTransportKind
+    let command: String?
+    let args: [String]
+    let url: URL?
+    let envKeys: [String]
+    let headerKeys: [String]
+
+    init(transport: MCPTransportKind, command: String? = nil, args: [String] = [],
+         url: URL? = nil, envKeys: [String] = [], headerKeys: [String] = []) {
+        self.transport = transport
+        self.command = command
+        self.args = args
+        self.url = url
+        self.envKeys = envKeys
+        self.headerKeys = headerKeys
+    }
+}
+
 /// One installable app in the catalog, assembled from a repo's latest release.
 ///
 /// `author`/`longDescription`/`screenshots`/`links` (AIN-147) are additive
@@ -29,11 +61,17 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
     let longDescription: String?
     let screenshots: [URL]
     let links: [ManifestLink]
+    /// Defaults to `.plugin` (both here and on decode) so pre-MCP catalog
+    /// entries — which have no `kind` field — are unaffected.
+    let kind: CatalogItemKind
+    /// Only populated for `.mcpServer` entries; `nil` for `.plugin`.
+    let mcp: MCPCatalogDescriptor?
 
     init(appID: String, displayName: String, icon: String, description: String, version: String,
          apiVersion: Int, downloadURL: URL, sha256: String, sourceRepo: String,
          author: String? = nil, longDescription: String? = nil,
-         screenshots: [URL] = [], links: [ManifestLink] = []) {
+         screenshots: [URL] = [], links: [ManifestLink] = [],
+         kind: CatalogItemKind = .plugin, mcp: MCPCatalogDescriptor? = nil) {
         self.appID = appID
         self.displayName = displayName
         self.icon = icon
@@ -47,11 +85,14 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
         self.longDescription = longDescription
         self.screenshots = screenshots
         self.links = links
+        self.kind = kind
+        self.mcp = mcp
     }
 
     enum CodingKeys: String, CodingKey {
         case appID, displayName, icon, description, version, apiVersion, downloadURL, sha256, sourceRepo
         case author, longDescription, screenshots, links
+        case kind, mcp
     }
 
     init(from decoder: Decoder) throws {
@@ -69,6 +110,23 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
         longDescription = try c.decodeIfPresent(String.self, forKey: .longDescription)
         screenshots = try c.decodeIfPresent([URL].self, forKey: .screenshots) ?? []
         links = try c.decodeIfPresent([ManifestLink].self, forKey: .links) ?? []
+        kind = try c.decodeIfPresent(CatalogItemKind.self, forKey: .kind) ?? .plugin
+        mcp = try c.decodeIfPresent(MCPCatalogDescriptor.self, forKey: .mcp)
+    }
+}
+
+extension CatalogEntry {
+    /// An MCP catalog entry is valid iff it carries a descriptor with a
+    /// launch target matching its transport (HTTPS url for httpSSE, command
+    /// for stdio). Malformed/incomplete entries are rejected here so a
+    /// single bad catalog entry can be skipped (logged) rather than crashing
+    /// the whole catalog load.
+    var isValidMCPEntry: Bool {
+        guard kind == .mcpServer, let mcp else { return false }
+        switch mcp.transport {
+        case .stdio: return (mcp.command?.isEmpty == false)
+        case .httpSSE: return mcp.url?.scheme?.lowercased() == "https"
+        }
     }
 }
 

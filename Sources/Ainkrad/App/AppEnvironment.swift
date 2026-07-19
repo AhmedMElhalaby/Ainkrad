@@ -42,6 +42,14 @@ final class AppEnvironment {
     let agentContextService: AgentContextService
     let agentStore: AgentStore
     let agentSession: AgentSession
+    /// M7 Slice 2 (MCP) — owns configured servers' live connections; its discovered
+    /// tools feed `agentToolRegistry.dynamicTools` and its trust decisions feed
+    /// `agentSession`'s `mcpTrust` closure. See `bootstrap()`.
+    let mcpServerRegistry: MCPServerRegistry
+    /// M7 Slice 2 (LSP) — owns live language-server connections; feeds
+    /// `EditQuality` advisory diagnostics/formatting for `EditFileTool`. See
+    /// `bootstrap()` for the non-blocking first-launch autodetect seed.
+    let lspServerRegistry: LSPServerRegistry
     let modelCatalogService: ModelCatalogService
     /// M7 Slice 5b (Model Router / Usage / Failover) runtime wiring.
     let modelCatalog: ModelCatalog
@@ -119,6 +127,8 @@ final class AppEnvironment {
         agentContextService: AgentContextService,
         agentStore: AgentStore,
         agentSession: AgentSession,
+        mcpServerRegistry: MCPServerRegistry,
+        lspServerRegistry: LSPServerRegistry,
         modelCatalogService: ModelCatalogService,
         modelCatalog: ModelCatalog,
         modelPriceTable: ModelPriceTable,
@@ -158,6 +168,8 @@ final class AppEnvironment {
         self.agentContextService = agentContextService
         self.agentStore = agentStore
         self.agentSession = agentSession
+        self.mcpServerRegistry = mcpServerRegistry
+        self.lspServerRegistry = lspServerRegistry
         self.modelCatalogService = modelCatalogService
         self.modelCatalog = modelCatalog
         self.modelPriceTable = modelPriceTable
@@ -224,7 +236,15 @@ final class AppEnvironment {
             retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
-        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        // Built here (rather than down by `mcpServerRegistry`, its other user)
+        // so `AppStoreService` can be given the same store the MCP install
+        // path (Task 13) records configs into — installing an MCP catalog
+        // entry from the App Store must show up in the MCP manager and vice
+        // versa.
+        let mcpConfigStore = MCPServerConfigStore(persistence: persistence, secrets: secrets)
+        let mcpInstaller = MCPServerInstaller(configStore: mcpConfigStore, persistence: persistence)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer,
+                                        mcpInstaller: mcpInstaller, persistence: persistence)
         let appStoreStore = AppStoreStore(service: appStore, registry: registry)
 
         let appIconStore = AppIconStore(persistence: persistence,
@@ -273,8 +293,17 @@ final class AppEnvironment {
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
 
+        // LSP (M7 Slice 2): configured language servers backing `EditFileTool`'s
+        // advisory diagnostics/formatting. Uses `LSPServerRegistry.defaultClientFactory`
+        // (the real stdio transport factory) — tests inject a stub factory instead so the
+        // registry core never spawns a real language-server process. PATH autodetection
+        // (below, after `environment` exists) shells out to `which` per known server, so
+        // it's seeded from an unawaited `Task`, never here, so a slow/missing binary can't
+        // delay launch.
+        let lspServerRegistry = LSPServerRegistry(persistence: persistence)
+
         var agentTools: [any AgentTool] = [
-            ReadFileTool(), EditFileTool(),
+            ReadFileTool(), EditFileTool(editQuality: EditQuality(registry: lspServerRegistry)),
             WorkspaceControlTool(workspaces: workspaceManager),
             RunTerminalTool(actionHub: agentActionHub),
             GitOpTool(actionHub: agentActionHub),
@@ -286,7 +315,18 @@ final class AppEnvironment {
             agentTools.append(MemoryWriteTool(service: memoryService))
             agentTools.append(MemorySearchTool(service: memoryService))
         }
-        let agentToolRegistry = AgentToolRegistry(tools: agentTools)
+
+        // MCP (M7 Slice 2): configured servers + their live connections. Uses
+        // `MCPServerRegistry.defaultClientFactory` (the real stdio/httpSSE transport
+        // factory, the one place real transports get instantiated) — tests inject a
+        // stub factory instead so the registry core never spawns a process or hits
+        // the network. Connecting is kicked off after `environment` exists (below),
+        // never awaited here, so a down/misconfigured server can't delay launch.
+        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+
+        let agentToolRegistry = AgentToolRegistry(
+            tools: agentTools,
+            dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
         let agentStore = AgentStore(persistence: persistence)
 
@@ -371,7 +411,8 @@ final class AppEnvironment {
             commands: commandRegistry,
             authProfiles: authProfileStore,
             candidatesProvider: candidatesProvider,
-            isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) }
+            isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) },
+            mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
         let environment = AppEnvironment(
@@ -399,6 +440,8 @@ final class AppEnvironment {
             agentContextService: agentContextService,
             agentStore: agentStore,
             agentSession: agentSession,
+            mcpServerRegistry: mcpServerRegistry,
+            lspServerRegistry: lspServerRegistry,
             modelCatalogService: modelCatalogService,
             modelCatalog: modelCatalog,
             modelPriceTable: modelPriceTable,
@@ -431,6 +474,25 @@ final class AppEnvironment {
                     tokenFor: { connectionStore.token(for: $0) })
                 try? await Task.sleep(for: .seconds(30))
             }
+        }
+
+        // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
+        // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
+        // launch itself must never block on a slow or down server, so this is fired
+        // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
+        // Tools/trust populate as servers come up; a down server just never appears.
+        Task { [weak mcpServerRegistry] in
+            await mcpServerRegistry?.connectEnabled()
+        }
+
+        // Seed autodetected LSP servers off the launch path: `autodetect()` shells out to
+        // `which` once per known server (a handful of `Process` spawns), so it runs inside
+        // this unawaited `Task` rather than synchronously in `bootstrap()`. `seedIfEmpty`
+        // is a no-op once the user has any configs (from a prior autodetect or a manual
+        // edit in the LSP config UI), so this only ever does something on first launch.
+        Task { [weak lspServerRegistry] in
+            let configs = LSPServerRegistry.autodetect()
+            await lspServerRegistry?.seedIfEmpty(with: configs)
         }
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.

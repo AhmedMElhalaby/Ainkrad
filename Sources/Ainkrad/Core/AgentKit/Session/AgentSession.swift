@@ -81,6 +81,12 @@ final class AgentSession {
     /// terminal connection-failure message actionable (Fix 3); `nil` (host not wired,
     /// e.g. older test doubles) falls back to the generic provider message unchanged.
     private let isLocalConnection: (@MainActor (Connection) -> Bool)?
+    /// M7 Slice 2 seam: per-server MCP trust, keyed by the tool's namespaced name
+    /// (`mcp/<server>/<tool>`). `nil` (no host wiring, or a plain non-MCP tool) means
+    /// "not trusted" — see `execute`'s `isTrusted: mcpTrust?(tool.name) ?? false`. This
+    /// can only ever ADD an auto-approve for an MCP tool the registry considers trusted;
+    /// it never runs for the irreversible case, which `decide` always gates first.
+    private let mcpTrust: (@MainActor (String) -> Bool)?
 
     private enum ApprovalOutcome { case approved, denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
@@ -102,7 +108,8 @@ final class AgentSession {
         commands: CommandRegistry? = nil,
         authProfiles: AuthProfileStore? = nil,
         candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil,
-        isLocalConnection: (@MainActor (Connection) -> Bool)? = nil
+        isLocalConnection: (@MainActor (Connection) -> Bool)? = nil,
+        mcpTrust: (@MainActor (String) -> Bool)? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -121,6 +128,7 @@ final class AgentSession {
         self.authProfiles = authProfiles
         self.candidatesProvider = candidatesProvider
         self.isLocalConnection = isLocalConnection
+        self.mcpTrust = mcpTrust
     }
 
     /// `images`, when non-empty, are attached as leading `.image` content
@@ -547,7 +555,8 @@ final class AgentSession {
         let decision = AgentPermissionPolicy.decide(
             toolPermission: tool.permission, toolName: tool.name,
             mode: effectiveMode(), allowlist: permissions.allowlist,
-            gateReads: permissions.gateReads, isIrreversible: tool.isIrreversible(call.input))
+            gateReads: permissions.gateReads, isIrreversible: tool.isIrreversible(call.input),
+            isTrusted: mcpTrust?(tool.name) ?? false)
 
         if decision == .requireApproval {
             let preview = tool.approvalPreview(call.input)
