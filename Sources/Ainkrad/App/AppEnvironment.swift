@@ -36,6 +36,18 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentActionHub: AgentActionRegistryHub
+    /// M7 Slice 6 (Security & Sandboxing): the persisted store of built-in +
+    /// user-defined `SandboxProfile`s the router resolves against.
+    let sandboxProfileStore: SandboxProfileStore
+    /// M7 Slice 6 (Security & Sandboxing): chooses backend + `SandboxProfile`
+    /// per trust tier. Stored here (not just a local in `bootstrap()`) so it
+    /// outlives the `unowned` reference `RunTerminalTool` holds to it.
+    let executionRouter: ExecutionRouter
+    /// M7 Slice 6 (Security & Sandboxing, Task 16): Keychain-backed per-provider
+    /// cloud credentials (Modal token, etc). Cloud stays opt-in per-Agent
+    /// (`AgentExecutionPolicy.allowCloud`) — storing a credential here never by
+    /// itself enables cloud routing (see `ExecutionRouter`).
+    let cloudCredentialsStore: CloudCredentialsStore
     let agentConfigStore: AgentConfigStore
     let agentPermissionStore: AgentPermissionStore
     let agentContextSettingsStore: AgentContextSettingsStore
@@ -130,6 +142,9 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        sandboxProfileStore: SandboxProfileStore,
+        executionRouter: ExecutionRouter,
+        cloudCredentialsStore: CloudCredentialsStore,
         agentConfigStore: AgentConfigStore,
         agentPermissionStore: AgentPermissionStore,
         agentContextSettingsStore: AgentContextSettingsStore,
@@ -174,6 +189,9 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentActionHub = agentActionHub
+        self.sandboxProfileStore = sandboxProfileStore
+        self.executionRouter = executionRouter
+        self.cloudCredentialsStore = cloudCredentialsStore
         self.agentConfigStore = agentConfigStore
         self.agentPermissionStore = agentPermissionStore
         self.agentContextSettingsStore = agentContextSettingsStore
@@ -321,11 +339,42 @@ final class AppEnvironment {
         // records into, so a turn's file edits can be undone via `/undo`.
         let editJournal = EditJournal()
 
+        // M7 Slice 6: every backend is registered by its own kind — host
+        // (trusted-main only, unchanged), seatbelt (macOS sandbox-exec),
+        // docker + ssh (feature-detected: `isAvailable()` self-reports false
+        // when the CLI/daemon/connection isn't present). Construction here
+        // never spawns a process or blocks the launch/main-actor path —
+        // `DockerBackend`/`SSHBackend`/`SeatbeltBackend` only stat a path or
+        // check a stored `nil` connection at init; the actual (bounded,
+        // async) availability probe happens lazily inside `router.route`,
+        // per call. No backend is registered as a fallback for another kind —
+        // an unregistered/unavailable backend fails closed in
+        // `ExecutionRouter.route`, never substituting host.
+        //
+        // `.cloud` (Task 16): `ModalCloudBackend.isAvailable()` self-reports
+        // false until a Modal token is stored via `cloudCredentialsStore` —
+        // and even once configured, `AgentExecutionPolicy.allowCloud` (never
+        // a tier default; see `ExecutionRouter.route`) is still required
+        // before this backend is even attempted, and its `remoteExec` driver
+        // is a fail-closed research stub (see `ModalCloudBackend`). Cloud
+        // never becomes a working "just works" path from this wiring alone.
+        let sandboxProfileStore = SandboxProfileStore(persistence: persistence)
+        let cloudCredentialsStore = CloudCredentialsStore(secrets: secrets)
+        let executionRouter = ExecutionRouter(
+            profiles: sandboxProfileStore,
+            backends: [
+                .host: HostBackend(),
+                .seatbelt: SeatbeltBackend(),
+                .docker: DockerBackend(),
+                .ssh: SSHBackend(connection: nil),   // Leyline connection wired when AinkradSSH lands
+                .cloud: ModalCloudBackend(credentials: cloudCredentialsStore),
+            ])
+
         var agentTools: [any AgentTool] = [
             ReadFileTool(),
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
             WorkspaceControlTool(workspaces: workspaceManager),
-            RunTerminalTool(actionHub: agentActionHub),
+            RunTerminalTool(actionHub: agentActionHub, router: executionRouter),
             GitOpTool(actionHub: agentActionHub),
         ]
         if let memoryService {
@@ -509,6 +558,9 @@ final class AppEnvironment {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentActionHub: agentActionHub,
+            sandboxProfileStore: sandboxProfileStore,
+            executionRouter: executionRouter,
+            cloudCredentialsStore: cloudCredentialsStore,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
             agentContextSettingsStore: agentContextSettingsStore,

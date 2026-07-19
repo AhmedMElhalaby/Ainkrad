@@ -18,6 +18,7 @@ struct DocumentConformanceTests {
         #expect(MCPServersDocument.documentID == "mcp-servers")
         #expect(LSPServersDocument.documentID == "lsp-servers")
         #expect(AgentRunsDocument.documentID == "agent-runs")
+        #expect(SandboxProfileDocument.documentID == "sandbox-profiles")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
