@@ -365,7 +365,23 @@ final class AgentSession {
     /// missing, resolution degrades to the pre-Task-16 pin/default/config chain.
     private func resolveTurn() async -> ResolvedTurn {
         let pin = runtime?.options.pinnedModel
-        let candidates = candidatesProvider?() ?? []
+        var candidates = candidatesProvider?() ?? []
+
+        // An explicit pin is an explicit override and MUST be honorable even when it
+        // isn't in the preset-derived candidate list — e.g. a live-discovered model
+        // id (an OpenRouter/Ollama model the user selected) that no `curatedModels`
+        // enumerates. Without this, the router can't match the pin (it matches by
+        // `candidate.model == pin`) and silently free-first routes to some OTHER
+        // connection's free model. Synthesize a candidate for the pin on the ACTIVE
+        // connection so the router's pin-match resolves it on the connection the user
+        // actually chose. Uses the same conservative descriptor `candidatesProvider`
+        // falls back to for a model the catalog doesn't recognize.
+        if let pin, !candidates.contains(where: { $0.model == pin }), let active = activeConnection() {
+            candidates.insert(RouterCandidate(
+                connectionID: active.id, model: pin,
+                descriptor: ModelDescriptor(id: pin, tier: .cheapPaid, contextWindow: 128_000, capabilities: [.toolUse])),
+                at: 0)
+        }
 
         if let router, !candidates.isEmpty {
             let routing = agents?.active.routing ?? AgentRouting()
