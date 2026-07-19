@@ -1,6 +1,18 @@
 import Foundation
 import AinkradAppKit
 
+/// Persisted root directory for the `@`-mention file index (M7 Slice 5c Task 22).
+/// Defaults to the user's home directory until a later folder-picker (Task 22b,
+/// not built here) lets the user change it.
+struct AssistantWorkspaceSettings: PersistableDocument {
+    static let documentID = "assistant-workspace"
+    var workingDirectoryPath: String
+
+    init(workingDirectoryPath: String = FileManager.default.homeDirectoryForCurrentUser.path) {
+        self.workingDirectoryPath = workingDirectoryPath
+    }
+}
+
 /// The composition root, assembled once in `AinkradHostApp.init` and injected
 /// via `.environment(_:)`. See State, Persistence & Dependency Injection.md.
 @MainActor
@@ -44,6 +56,14 @@ final class AppEnvironment {
     let localModelAvailability: LocalModelAvailability
     let authProfileStore: AuthProfileStore
     let commandRegistry: CommandRegistry
+    /// The root directory `workspaceFileIndex` was built from — persisted via
+    /// `AssistantWorkspaceSettings`, defaulting to the home directory. Task 22b's
+    /// folder-picker will add a setter that persists a new root and rebuilds the
+    /// index; not built here.
+    let assistantWorkingDirectory: URL
+    /// Fuzzy file index over `assistantWorkingDirectory`, backing the `@`-mention
+    /// overlay Task 22b builds. Refreshed once asynchronously at bootstrap.
+    let workspaceFileIndex: WorkspaceFileIndex
     /// The assistant memory subsystem (M7 Slice 1). `nil` when the FTS index
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
@@ -110,6 +130,8 @@ final class AppEnvironment {
         localModelAvailability: LocalModelAvailability,
         authProfileStore: AuthProfileStore,
         commandRegistry: CommandRegistry,
+        assistantWorkingDirectory: URL,
+        workspaceFileIndex: WorkspaceFileIndex,
         memoryService: MemoryService?
     ) {
         self.persistence = persistence
@@ -147,6 +169,8 @@ final class AppEnvironment {
         self.localModelAvailability = localModelAvailability
         self.authProfileStore = authProfileStore
         self.commandRegistry = commandRegistry
+        self.assistantWorkingDirectory = assistantWorkingDirectory
+        self.workspaceFileIndex = workspaceFileIndex
         self.memoryService = memoryService
     }
 
@@ -313,6 +337,19 @@ final class AppEnvironment {
         let commandRegistry = CommandRegistry(builtins: BuiltinCommands.make(
             runtime: runtimeOptionsStore, usage: usageTracker, router: modelRouter, catalog: modelCatalog))
 
+        // `@`-mention file index (M7 Slice 5c Task 22a wiring; the overlay UI itself
+        // is Task 22b). No first-class "project directory" concept exists yet — default
+        // to the home directory until a folder-picker persists a real choice.
+        let assistantWorkingDirectory = persistence.load(AssistantWorkspaceSettings.self)
+            .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let workspaceFileIndex = WorkspaceFileIndex(root: assistantWorkingDirectory)
+        // `WorkspaceFileIndex` is `@MainActor`; deferring the initial `refresh()` into a
+        // `Task` (still main-actor-isolated, since it's spawned from this MainActor-only
+        // static func) keeps bootstrap's synchronous path from stalling on a large
+        // directory walk, without ever touching the index off its required actor.
+        Task { workspaceFileIndex.refresh() }
+
         let agentSession = AgentSession(
             providerFor: { (connection: Connection) -> LLMProvider in
                 switch connection.kind {
@@ -373,6 +410,8 @@ final class AppEnvironment {
             localModelAvailability: localModelAvailability,
             authProfileStore: authProfileStore,
             commandRegistry: commandRegistry,
+            assistantWorkingDirectory: assistantWorkingDirectory,
+            workspaceFileIndex: workspaceFileIndex,
             memoryService: memoryService
         )
 

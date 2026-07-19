@@ -187,6 +187,13 @@ final class AgentSession {
         memory?.write(fact, to: .memory, provenance: .remember)
     }
 
+    /// Replaces the transcript wholesale — the seam `/compact` (Task 22a) applies
+    /// `TranscriptCompactor`'s output through, without giving every caller direct
+    /// mutation access to `messages`.
+    func replaceMessages(_ newMessages: [AgentMessage]) {
+        messages = newMessages
+    }
+
     func reset() {
         currentTask?.cancel()
         currentTask = nil
