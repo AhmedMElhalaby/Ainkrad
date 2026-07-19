@@ -42,6 +42,30 @@ struct MCPWireTypesTests {
         #expect(message == "Method not found")
     }
 
+    @Test func decodesRPCErrorWithOutOfRangeCodeDoesNotCrash() {
+        let msg = JSONValue.object([
+            "jsonrpc": .string("2.0"), "id": .string("9"),
+            "error": .object(["code": .number(1e300), "message": .string("huge code")]),
+        ])
+        guard case .failure(.rpc(let code, let message)) = MCPRPC.decodeResponse(msg) else {
+            Issue.record("expected rpc error"); return
+        }
+        #expect(code == 0)
+        #expect(message == "huge code")
+    }
+
+    @Test func decodesRPCErrorWithNaNCodeDoesNotCrash() {
+        let msg = JSONValue.object([
+            "jsonrpc": .string("2.0"), "id": .string("9"),
+            "error": .object(["code": .number(.nan), "message": .string("nan code")]),
+        ])
+        guard case .failure(.rpc(let code, let message)) = MCPRPC.decodeResponse(msg) else {
+            Issue.record("expected rpc error"); return
+        }
+        #expect(code == 0)
+        #expect(message == "nan code")
+    }
+
     @Test func decodesToolList() {
         let result = JSONValue.object(["tools": .array([
             .object(["name": .string("search"),

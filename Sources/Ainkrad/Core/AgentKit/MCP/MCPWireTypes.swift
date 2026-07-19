@@ -56,7 +56,10 @@ enum MCPRPC {
     }
 
     private static func intValue(_ v: JSONValue) -> Int? {
-        if case .number(let n) = v { return Int(n) }
+        if case .number(let n) = v {
+            guard n.isFinite else { return nil }
+            return Int(exactly: n.rounded())
+        }
         return nil
     }
 }
