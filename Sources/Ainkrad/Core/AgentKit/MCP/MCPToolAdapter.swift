@@ -2,11 +2,14 @@
 import Foundation
 
 /// Presents one discovered MCP tool to the LLM as a native `AgentTool`. Names
-/// are namespaced `mcp/<server>/<tool>` (parsed back by
-/// `MCPServerRegistry.isToolTrusted` via `split(separator: "/", maxSplits: 2)`)
-/// to avoid collisions across servers and with built-in tools. MCP tools are
-/// `.write` class (gated) by default; a trusted server auto-approves them via
-/// the permission seam (Task 9).
+/// are namespaced `mcp/<server>/<tool>` to avoid collisions across servers and
+/// with built-in tools. Trust is resolved by `MCPServerRegistry.isToolTrusted`,
+/// which matches the namespaced name against the registry's REAL discovered
+/// `(server, tool)` pairs by exact equality — deliberately NOT by splitting the
+/// string on `/` (a server id may contain `/`, and a naive split would let one
+/// server borrow another's trust). Do not "simplify" that lookup to a split.
+/// MCP tools are `.write` class (gated) by default; a trusted server
+/// auto-approves them via the permission seam (Task 9), never an irreversible op.
 struct MCPToolAdapter: AgentTool {
     let server: String
     let descriptor: MCPToolDescriptor
