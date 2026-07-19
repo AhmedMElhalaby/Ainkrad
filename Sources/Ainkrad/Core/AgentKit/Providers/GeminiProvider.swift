@@ -125,6 +125,8 @@ struct GeminiProvider: LLMProvider {
             case .toolResult(let toolUseID, let content, _):
                 // toolUseID == the function name (see class doc).
                 return ["functionResponse": ["name": toolUseID, "response": ["result": content]]]
+            case .image(let mediaType, let base64):
+                return ["inline_data": ["mime_type": mediaType, "data": base64]]
             }
         }
         return ["role": role, "parts": parts]

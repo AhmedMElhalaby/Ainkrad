@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AinkradAppKit
 
 /// The Assistant Block's content: a transcript bound to the host's single
@@ -126,7 +127,29 @@ struct AssistantRootView: View {
                         tokens: tokens
                     )
                 }
+                if case .image(let mediaType, let base64) = block {
+                    imageChip(mediaType: mediaType, base64: base64, tokens: tokens)
+                }
             }
+        }
+    }
+
+    /// Renders an attached image as a thumbnail, falling back to a `[image]` chip
+    /// when the base64 payload can't be decoded (e.g. malformed/truncated data).
+    @ViewBuilder
+    private func imageChip(mediaType: String, base64: String, tokens: DesignTokens) -> some View {
+        if let data = Data(base64Encoded: base64), let nsImage = NSImage(data: data) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 160, maxHeight: 160)
+                .clipShape(ChamferShape(cut: AinkradRadius.md))
+        } else {
+            Text("[image]")
+                .font(AinkradFont.display(12))
+                .foregroundStyle(tokens.foreground.opacity(0.6))
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.3)))
         }
     }
 
