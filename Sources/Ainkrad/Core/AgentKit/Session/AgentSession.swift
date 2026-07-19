@@ -61,6 +61,11 @@ final class AgentSession {
     private let memory: MemoryService?
     private let agents: AgentStore?
 
+    /// M7 Slice 3 — headless runs (subagent/background/scheduled) have no
+    /// approval HUD. `false` (default) preserves today's interactive behavior
+    /// byte-for-byte. See `execute(_:)`'s approval branch.
+    private let unattended: Bool
+
     /// M7 Slice 5b wiring — every one of these is OPTIONAL and defaults to `nil`,
     /// mirroring the Slice 1 degrade-don't-crash pattern: with none of them injected
     /// the session behaves exactly as it did before this task (config.current model,
@@ -96,6 +101,7 @@ final class AgentSession {
         maxToolIterations: Int = 25,
         memory: MemoryService? = nil,
         agents: AgentStore? = nil,
+        unattended: Bool = false,
         router: ModelRouter? = nil,
         usage: UsageTracker? = nil,
         runtime: RuntimeOptionsStore? = nil,
@@ -114,6 +120,7 @@ final class AgentSession {
         self.maxToolIterations = maxToolIterations
         self.memory = memory
         self.agents = agents
+        self.unattended = unattended
         self.router = router
         self.usage = usage
         self.runtime = runtime
@@ -185,6 +192,32 @@ final class AgentSession {
     /// Backs the `/remember <text>` command intercepted at the top of `send`.
     func remember(_ fact: String) {
         memory?.write(fact, to: .memory, provenance: .remember)
+    }
+
+    /// Hard-interrupt the in-flight turn but KEEP the transcript, so the user can
+    /// redirect with a new instruction that builds on prior context (contrast
+    /// with `reset()`, which discards `messages` too). Cancels the in-flight
+    /// `currentTask` and unwedges any parked approval so the loop can never be
+    /// left half-parked; a subsequent `send(_:)` continues with the preserved
+    /// history.
+    ///
+    /// Limitation: a `run_terminal` child `Process` already spawned is not
+    /// force-killed by task cancellation — its captured result is simply
+    /// discarded when the cancelled task next checks `Task.isCancelled`.
+    /// Callers running under a `RunManager` should note the possible partial
+    /// side-effect in the run log.
+    func interrupt() {
+        currentTask?.cancel()
+        currentTask = nil
+        if let cont = approvalContinuation {
+            approvalContinuation = nil
+            cont.resume(returning: .denied("interrupted"))
+        }
+        streamingText = ""
+        streamingThinking = ""
+        state = .idle
+        // NOTE: `messages` intentionally preserved — this is the one thing that
+        // distinguishes `interrupt()` from `reset()`.
     }
 
     func reset() {
@@ -534,6 +567,18 @@ final class AgentSession {
             gateReads: permissions.gateReads, isIrreversible: tool.isIrreversible(call.input))
 
         if decision == .requireApproval {
+            // Unattended gate (M7 Slice 3): a headless run (subagent/background/
+            // scheduled) has no HUD to resolve an approval, so parking on the
+            // continuation here would wedge the run forever. `decide`'s verdict
+            // is untouched — this only changes how the SESSION handles a
+            // `.requireApproval` it gets back: auto-deny instead of awaiting a
+            // human. This can only narrow (deny more), never approve something
+            // the gate itself would have blocked — no privilege escalation.
+            guard !unattended else {
+                return ToolResult(
+                    content: "Blocked: \(call.name) requires approval and this run is unattended.",
+                    isError: true)
+            }
             let preview = tool.approvalPreview(call.input)
             state = .awaitingApproval(PendingApproval(call: call, preview: preview))
             let outcome = await withCheckedContinuation { (cont: CheckedContinuation<ApprovalOutcome, Never>) in

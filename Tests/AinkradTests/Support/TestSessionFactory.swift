@@ -39,6 +39,21 @@ struct FakeReadFileTool: AgentTool {
     func execute(_ input: JSONValue) async throws -> ToolResult { ToolResult(content: "read", isError: false) }
 }
 
+/// A fake write-classified tool that ALWAYS reports `isIrreversible`, standing
+/// in for a real always-on-guard tool (`RunTerminalTool`/`WorkspaceControlTool`/
+/// `GitOpTool`'s force paths) in tests that need to prove the unattended gate
+/// denies the irreversible guard's `.requireApproval` even in `.fullAuto` mode
+/// (Task 8) — never auto-approves it.
+@MainActor
+struct FakeIrreversibleTool: AgentTool {
+    let name = "irreversible_tool"
+    let description = "an always-guarded tool"
+    var parametersSchema: JSONValue { .object(["type": .string("object")]) }
+    let permission: ToolPermissionClass = .write
+    func execute(_ input: JSONValue) async throws -> ToolResult { ToolResult(content: "done", isError: false) }
+    func isIrreversible(_ input: JSONValue) -> Bool { true }
+}
+
 /// A scripted `LLMProvider` double used by the model-resolution tests: replays a
 /// fixed event script and records the `AgentModelConfig`/`apiKey` it was called with,
 /// so a test can assert exactly which resolved model actually reached the provider.
@@ -107,6 +122,88 @@ enum FailingChildSession {
     }
 }
 
+/// A `LLMProvider` double for the interrupt/redirect tests (Task 8): streams a
+/// single `.thinkingDelta` and then suspends indefinitely until `release()` is
+/// called, at which point it emits a trailing text turn and `.done`. Each call
+/// to `send(...)` (i.e. each turn) re-arms its own release gate, so a session
+/// that `interrupt()`s and then `send()`s again gets a fresh, independently
+/// releasable stream.
+@MainActor
+final class SlowStubProvider: LLMProvider {
+    private var released = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
+              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+        released = false
+        return AsyncThrowingStream { cont in
+            Task { @MainActor in
+                cont.yield(.thinkingDelta("thinking"))
+                await self.waitForRelease()
+                cont.yield(.textDelta("done"))
+                cont.yield(.done(stopReason: "end_turn"))
+                cont.finish()
+            }
+        }
+    }
+
+    private func waitForRelease() async {
+        if released { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            continuation = cont
+        }
+    }
+
+    /// Unblocks whichever turn is currently parked, letting its stream finish.
+    func release() {
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+/// A `LLMProvider` double for the unattended-gate test (Task 8): its first
+/// turn emits one `edit_file` tool call (write-classified — gated in `.ask`
+/// mode), its second (post tool-result) turn emits a trailing text + `.done`
+/// so the loop settles to `.idle` regardless of whether the call was approved
+/// or denied. `path`/`newContents` are carried in the tool-call input purely
+/// for shape parity with a real edit tool; the registry's `FakeEditFileTool`
+/// never actually touches the filesystem, so the test's file-unchanged
+/// assertion is really proving the call never reached the tool at all.
+@MainActor
+final class EditOnceStubProvider: LLMProvider {
+    private let path: String
+    private let newContents: String
+    private let toolName: String
+    private var turnIndex = 0
+
+    init(path: String, newContents: String, toolName: String = "edit_file") {
+        self.path = path
+        self.newContents = newContents
+        self.toolName = toolName
+    }
+
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
+              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+        turnIndex += 1
+        let isFirstTurn = turnIndex == 1
+        let path = path
+        let newContents = newContents
+        let toolName = toolName
+        return AsyncThrowingStream { cont in
+            if isFirstTurn {
+                cont.yield(.toolUseComplete(id: "1", name: toolName,
+                    input: .object(["path": .string(path), "contents": .string(newContents)])))
+                cont.yield(.done(stopReason: "tool_use"))
+            } else {
+                cont.yield(.textDelta("skipped"))
+                cont.yield(.done(stopReason: "end_turn"))
+            }
+            cont.finish()
+        }
+    }
+}
+
 @MainActor
 enum TestSessionFactory {
     /// Builds a fully-wired `AgentSession` backed by an in-memory persistence
@@ -152,6 +249,30 @@ enum TestSessionFactory {
             registry: registry, permissions: permissions, memory: memory, agents: agents,
             router: router, usage: usage, runtime: runtime, commands: commands,
             candidatesProvider: candidatesProvider)
+    }
+
+    /// Builds a session wired to a caller-supplied provider — for the interrupt/
+    /// redirect and unattended-gate tests (Task 8), which need to drive `send`
+    /// against a controllable provider rather than exercising `execute` directly.
+    /// `unattended` is additive/nil-default (mirrors the `AgentSession` init
+    /// param) so existing single-arg call sites are unaffected.
+    static func make(provider: LLMProvider, mode: AgentPermissionMode = .ask,
+                     unattended: Bool = false) -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let ws = UUID()
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        permissions.setMode(mode)
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude",
+                                      baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let registry = AgentToolRegistry(tools: [FakeEditFileTool(), FakeReadFileTool(), FakeIrreversibleTool()])
+        return AgentSession(
+            providerFor: { _ in provider },
+            connections: connections, config: config, context: context,
+            registry: registry, permissions: permissions, unattended: unattended)
     }
 
     /// A local (free) and a premium candidate on the given connection, for the
