@@ -115,4 +115,17 @@ struct DockerArgsBuilderTests {
         let args = DockerArgsBuilder.runArgs(command: "ls", profile: p, workspacePath: "/ws", image: "img")
         #expect(!args.contains { $0.contains("relative/path") })
     }
+
+    @Test func pathContainingColonIsSkippedNotMounted() {
+        // A colon in a mount source collides with docker's `-v
+        // source:dest:mode` separator and would produce a malformed/
+        // misinterpreted triple. Fail-closed: skip the mount entirely rather
+        // than emit it, matching SeatbeltProfileGenerator.resolve's rigor.
+        let p = profile(fs: FilesystemPolicy(readablePaths: ["/opt/weird:path"],
+                                              writablePaths: ["<workspace>", "/opt/other:weird"]),
+                         net: .off)
+        let args = DockerArgsBuilder.runArgs(command: "ls", profile: p, workspacePath: "/ws", image: "img")
+        #expect(!args.contains { $0.contains("/opt/weird:path") })
+        #expect(!args.contains { $0.contains("/opt/other:weird") })
+    }
 }

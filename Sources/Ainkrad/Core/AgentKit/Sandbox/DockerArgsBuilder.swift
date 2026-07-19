@@ -54,13 +54,16 @@ enum DockerArgsBuilder {
 
     /// Resolves the `<workspace>` placeholder and validates a policy path is
     /// safe to embed as a bind-mount source. Fail-closed: anything that isn't
-    /// an unambiguous absolute path (or contains control characters) is
-    /// rejected — silently skipped from the mount list — rather than guessed
-    /// at or passed through. Mirrors `SeatbeltProfileGenerator.resolve`.
+    /// an unambiguous absolute path (or contains control characters, or a
+    /// `:` that would collide with docker's `-v source:dest:mode` separator
+    /// and produce a malformed/misinterpreted mount) is rejected — silently
+    /// skipped from the mount list — rather than guessed at or passed
+    /// through. Mirrors `SeatbeltProfileGenerator.resolve`.
     private static func resolvedPath(_ path: String, workspacePath: String) -> String? {
         let expanded = path == "<workspace>" ? workspacePath : path
         guard !expanded.isEmpty, expanded.hasPrefix("/") else { return nil }
         guard !expanded.unicodeScalars.contains(where: { $0.isASCII && $0.value < 0x20 }) else { return nil }
+        guard !expanded.contains(":") else { return nil }
         return expanded
     }
 }
