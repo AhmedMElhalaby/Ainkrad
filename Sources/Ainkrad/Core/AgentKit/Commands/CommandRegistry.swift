@@ -45,6 +45,14 @@ final class CommandRegistry {
 /// (they close over `runtime`/`usage`/`router`/`catalog`) and handed to
 /// `CommandRegistry(builtins:)`.
 enum BuiltinCommands {
+    /// Every builtin command name, derived from `make(...)` itself (never a
+    /// hand-maintained duplicate list, so it can't drift as builtins are
+    /// added/renamed). A skill-bound `/name` must never collide with one of
+    /// these — see `SkillCommandStore.isValidCommandName`.
+    static var reservedNames: Set<String> {
+        Set(make(runtime: nil, usage: nil, router: nil, catalog: nil).map(\.name))
+    }
+
     static func make(runtime: RuntimeOptionsStore?, usage: UsageTracker?,
                      router: ModelRouter?, catalog: ModelCatalog?) -> [SlashCommand] {
         [
