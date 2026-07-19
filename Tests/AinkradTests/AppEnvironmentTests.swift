@@ -84,6 +84,10 @@ final class AppEnvironmentTests {
         let runManager = RunManager(
             persistence: persistence,
             runner: BackgroundRunRunner(makeSession: { agentSession }))
+        let scheduleStore = ScheduleStore(persistence: persistence)
+        let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
+        let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)
+        let fileChangeWatcher = FileChangeWatcher()
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -119,6 +123,10 @@ final class AppEnvironmentTests {
             editJournal: editJournal,
             subagentCoordinator: subagentCoordinator,
             runManager: runManager,
+            scheduleStore: scheduleStore,
+            scheduleRunner: scheduleRunner,
+            triggerDispatcher: triggerDispatcher,
+            fileChangeWatcher: fileChangeWatcher,
             modelCatalogService: ModelCatalogService(http: URLSessionDataHTTPClient()),
             modelCatalog: ModelCatalog(),
             modelPriceTable: ModelPriceTable(),
