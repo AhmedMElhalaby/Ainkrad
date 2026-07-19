@@ -23,6 +23,18 @@ final class CommandRegistry {
         commands[c.name] = c
     }
 
+    /// Removes a previously `register(_:)`ed command by name. Host-internal,
+    /// additive seam for the Skills manager UI (Task 13): re-syncing the live
+    /// skill `/name` commands after a runtime bind/unbind needs to be able to
+    /// drop a name that no longer has a binding, not just overwrite it. A
+    /// no-op when `name` isn't registered — in particular, never removes a
+    /// builtin unless a caller explicitly names one (the manager only ever
+    /// passes skill-command names it tracked itself).
+    func unregister(name: String) {
+        guard commands.removeValue(forKey: name) != nil else { return }
+        order.removeAll { $0 == name }
+    }
+
     func all() -> [SlashCommand] { order.compactMap { commands[$0] } }
 
     func parse(_ input: String) -> (command: SlashCommand, args: String)? {

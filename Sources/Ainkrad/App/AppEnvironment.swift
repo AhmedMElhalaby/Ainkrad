@@ -55,6 +55,11 @@ final class AppEnvironment {
     /// CRUD over `/name` → skill-name command bindings; registers its
     /// `SlashCommand`s into `commandRegistry` at bootstrap.
     let skillCommandStore: SkillCommandStore
+    /// Skill `/name` command names currently registered into `commandRegistry`
+    /// — tracked so `resyncSkillCommands()` (Task 13) knows exactly which
+    /// entries to drop before re-registering the current binding set, without
+    /// ever touching a builtin name it didn't register itself.
+    private var registeredSkillCommandNames: Set<String> = []
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -159,6 +164,32 @@ final class AppEnvironment {
         self.memoryService = memoryService
         self.skillRegistry = skillRegistry
         self.skillCommandStore = skillCommandStore
+        // Seeds `registeredSkillCommandNames` with whatever bootstrap already
+        // registered (see the loop right after `commandRegistry` is built),
+        // so the very first `resyncSkillCommands()` call — triggered by a
+        // bind/unbind from the Skills manager UI — knows what to drop.
+        self.registeredSkillCommandNames = Set(skillCommandStore.slashCommands(registry: skillRegistry).map(\.name))
+    }
+
+    /// Re-syncs the live `commandRegistry` with the current
+    /// `skillCommandStore` bindings. Bootstrap (`bootstrap()` below) only
+    /// registers skill `/name` commands once, at launch — a bind/unbind made
+    /// afterward via the Skills manager UI (Task 13) would otherwise sit
+    /// invisibly in `skillCommandStore` until the next relaunch. Call this
+    /// after every bind/unbind so `/name` starts/stops working immediately.
+    /// Never touches a builtin: it only unregisters names THIS method
+    /// previously registered, then re-registers the current binding set
+    /// (`slashCommands(registry:)` independently filters out any name that
+    /// collides with a builtin, as defense in depth).
+    func resyncSkillCommands() {
+        for name in registeredSkillCommandNames {
+            commandRegistry.unregister(name: name)
+        }
+        let commands = skillCommandStore.slashCommands(registry: skillRegistry)
+        for command in commands {
+            commandRegistry.register(command)
+        }
+        registeredSkillCommandNames = Set(commands.map(\.name))
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
