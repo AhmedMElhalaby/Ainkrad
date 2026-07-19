@@ -24,6 +24,9 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentActionHub: AgentActionRegistryHub
+    /// M7 Slice 6 (Security & Sandboxing): the persisted store of built-in +
+    /// user-defined `SandboxProfile`s the router resolves against.
+    let sandboxProfileStore: SandboxProfileStore
     /// M7 Slice 6 (Security & Sandboxing): chooses backend + `SandboxProfile`
     /// per trust tier. Stored here (not just a local in `bootstrap()`) so it
     /// outlives the `unowned` reference `RunTerminalTool` holds to it.
@@ -97,6 +100,7 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        sandboxProfileStore: SandboxProfileStore,
         executionRouter: ExecutionRouter,
         agentConfigStore: AgentConfigStore,
         agentPermissionStore: AgentPermissionStore,
@@ -135,6 +139,7 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentActionHub = agentActionHub
+        self.sandboxProfileStore = sandboxProfileStore
         self.executionRouter = executionRouter
         self.agentConfigStore = agentConfigStore
         self.agentPermissionStore = agentPermissionStore
@@ -255,14 +260,26 @@ final class AppEnvironment {
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
 
-        // M7 Slice 6: only `HostBackend` is wired for the main-interactive
-        // tier here (byte-identical to the pre-router direct exec). Other
-        // backends (seatbelt/docker/ssh/cloud) are registered as non-main
-        // tiers land (Task 12+); an unregistered backend fails closed in
-        // `ExecutionRouter.route` rather than falling back to host.
+        // M7 Slice 6: every backend is registered by its own kind — host
+        // (trusted-main only, unchanged), seatbelt (macOS sandbox-exec),
+        // docker + ssh (feature-detected: `isAvailable()` self-reports false
+        // when the CLI/daemon/connection isn't present). Construction here
+        // never spawns a process or blocks the launch/main-actor path —
+        // `DockerBackend`/`SSHBackend`/`SeatbeltBackend` only stat a path or
+        // check a stored `nil` connection at init; the actual (bounded,
+        // async) availability probe happens lazily inside `router.route`,
+        // per call. `.cloud` is added in Task 16. No backend is registered as
+        // a fallback for another kind — an unregistered/unavailable backend
+        // fails closed in `ExecutionRouter.route`, never substituting host.
+        let sandboxProfileStore = SandboxProfileStore(persistence: persistence)
         let executionRouter = ExecutionRouter(
-            profiles: SandboxProfileStore(persistence: persistence),
-            backends: [.host: HostBackend()])
+            profiles: sandboxProfileStore,
+            backends: [
+                .host: HostBackend(),
+                .seatbelt: SeatbeltBackend(),
+                .docker: DockerBackend(),
+                .ssh: SSHBackend(connection: nil),   // Leyline connection wired when AinkradSSH lands
+            ])
 
         var agentTools: [any AgentTool] = [
             ReadFileTool(), EditFileTool(),
@@ -371,6 +388,7 @@ final class AppEnvironment {
             sounds: sounds,
             agentContextHub: agentContextHub,
             agentActionHub: agentActionHub,
+            sandboxProfileStore: sandboxProfileStore,
             executionRouter: executionRouter,
             agentConfigStore: agentConfigStore,
             agentPermissionStore: agentPermissionStore,
