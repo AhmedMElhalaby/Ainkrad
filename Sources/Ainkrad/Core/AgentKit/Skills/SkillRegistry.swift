@@ -1,5 +1,11 @@
 import Foundation
 
+/// Thrown by any `SkillRegistry` method that builds a filesystem path from a
+/// caller-supplied `name:` before performing any `FileManager` operation.
+enum SkillRegistryError: Error, Equatable {
+    case unsafeName(String)
+}
+
 /// Loads, validates, and dedups the active skill set from disk. The markdown
 /// files are the source of truth; `reload()` is idempotent and cheap. `_proposed`
 /// is deliberately excluded from the active set until a draft is `approve(name:)`d
@@ -74,9 +80,21 @@ final class SkillRegistry {
         onChange?()
     }
 
+    /// Guards every path-building entry point below against traversal via a
+    /// caller-supplied `name`. Reuses `SkillValidator`'s allow-list (lowercase
+    /// slug: `[a-z0-9-]`, non-empty) so a name can never contain `/`, `..`,
+    /// a leading `.`, or control characters. Must be checked BEFORE any
+    /// `FileManager` operation — an unsafe name performs no filesystem effect.
+    private func requireSafeName(_ name: String) throws {
+        guard SkillValidator.isSafeName(name) else {
+            throw SkillRegistryError.unsafeName(name)
+        }
+    }
+
     /// Writes/overwrites an active local skill directly and reloads. Used by
     /// the manager's editor.
     func writeLocal(_ text: String, name: String) throws {
+        try requireSafeName(name)
         let url = paths.skillFile(name)
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try text.write(to: url, atomically: true, encoding: .utf8)
@@ -88,6 +106,7 @@ final class SkillRegistry {
     /// Writes a draft to `_proposed/<name>/SKILL.md`. Deliberately does NOT
     /// touch the active set — a proposed skill is inert until `approve(name:)`.
     func propose(_ text: String, name: String) throws {
+        try requireSafeName(name)
         let url = paths.proposedFile(name)
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try text.write(to: url, atomically: true, encoding: .utf8)
@@ -98,6 +117,7 @@ final class SkillRegistry {
     /// dedup rules — approving an invalid draft still yields a captured
     /// `loadErrors` entry rather than crashing).
     func approve(name: String) throws {
+        try requireSafeName(name)
         let source = paths.proposedFile(name)
         let destination = paths.skillFile(name)
         try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -113,6 +133,7 @@ final class SkillRegistry {
     /// Removes a pending proposal. Operates only on `_proposed/`; never
     /// touches the active set.
     func discard(name: String) throws {
+        try requireSafeName(name)
         try fm.removeItem(at: paths.proposedDir(name))
     }
 

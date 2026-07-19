@@ -151,4 +151,66 @@ struct SkillRegistryTests {
         #expect(reg.skill(named: "draft") == nil)
         #expect(reg.skill(named: "good") != nil)   // untouched
     }
+
+    // MARK: - Path-traversal rejection (security)
+
+    nonisolated private static let traversalNames = ["../../../../tmp/evil", "a/b", ".."]
+
+    @Test(arguments: traversalNames)
+    func proposeRejectsTraversalName(name: String) throws {
+        let root = tempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = SkillPaths(root: root)
+        let reg = SkillRegistry(paths: paths)
+
+        // Sentinel just outside the root, to prove no FS effect escapes it.
+        let sentinelDir = root.deletingLastPathComponent().appendingPathComponent("sr-sentinel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: sentinelDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: sentinelDir) }
+
+        #expect(throws: SkillRegistryError.unsafeName(name)) {
+            try reg.propose(md("draft", "a proposed skill"), name: name)
+        }
+        #expect(FileManager.default.fileExists(atPath: sentinelDir.path))
+        #expect(reg.skills.isEmpty)
+    }
+
+    @Test(arguments: traversalNames)
+    func approveRejectsTraversalName(name: String) throws {
+        let root = tempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = SkillPaths(root: root)
+        let reg = SkillRegistry(paths: paths)
+
+        let sentinelDir = root.deletingLastPathComponent().appendingPathComponent("sr-sentinel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: sentinelDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: sentinelDir) }
+
+        #expect(throws: SkillRegistryError.unsafeName(name)) {
+            try reg.approve(name: name)
+        }
+        #expect(FileManager.default.fileExists(atPath: sentinelDir.path))
+        #expect(reg.skills.isEmpty)
+    }
+
+    @Test(arguments: traversalNames)
+    func discardRejectsTraversalName(name: String) throws {
+        let root = tempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = SkillPaths(root: root)
+        try write(md("good", "ok"), name: "good", root: root)
+        let reg = SkillRegistry(paths: paths)
+
+        // Sentinel dir placed just outside `root`, named so that `root/../<sentinel>`
+        // would resolve to it if traversal were not blocked.
+        let sentinelDir = root.deletingLastPathComponent().appendingPathComponent("tmp-evil")
+        try FileManager.default.createDirectory(at: sentinelDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: sentinelDir) }
+
+        #expect(throws: SkillRegistryError.unsafeName(name)) {
+            try reg.discard(name: name)
+        }
+        #expect(FileManager.default.fileExists(atPath: sentinelDir.path))
+        #expect(reg.skill(named: "good") != nil)   // untouched
+    }
 }
