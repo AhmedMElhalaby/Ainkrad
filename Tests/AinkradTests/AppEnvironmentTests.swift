@@ -30,7 +30,11 @@ final class AppEnvironmentTests {
             pluginDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("plugin-data"),
             retainedDataDir: FileManager.default.temporaryDirectory.appendingPathComponent("retained-plugin-data"),
             persistence: persistence, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
-        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        let mcpInstaller = MCPServerInstaller(
+            configStore: MCPServerConfigStore(persistence: persistence, secrets: secrets),
+            persistence: persistence)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer,
+                                        mcpInstaller: mcpInstaller, persistence: persistence)
         let appStoreStore = AppStoreStore(service: appStore, registry: registry)
         let shortcutStore = ShortcutStore(persistence: persistence)
         let quitCoordinator = QuitCoordinator(persistence: persistence, terminator: FakeTerminationReplier())

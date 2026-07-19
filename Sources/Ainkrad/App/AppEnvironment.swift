@@ -206,7 +206,15 @@ final class AppEnvironment {
             retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
             loadBundle: { loader.loadBundle(at: $0) })
-        let appStore = AppStoreService(catalog: catalogService, installer: installer, persistence: persistence)
+        // Built here (rather than down by `mcpServerRegistry`, its other user)
+        // so `AppStoreService` can be given the same store the MCP install
+        // path (Task 13) records configs into — installing an MCP catalog
+        // entry from the App Store must show up in the MCP manager and vice
+        // versa.
+        let mcpConfigStore = MCPServerConfigStore(persistence: persistence, secrets: secrets)
+        let mcpInstaller = MCPServerInstaller(configStore: mcpConfigStore, persistence: persistence)
+        let appStore = AppStoreService(catalog: catalogService, installer: installer,
+                                        mcpInstaller: mcpInstaller, persistence: persistence)
         let appStoreStore = AppStoreStore(service: appStore, registry: registry)
 
         let appIconStore = AppIconStore(persistence: persistence,
@@ -275,7 +283,6 @@ final class AppEnvironment {
         // stub factory instead so the registry core never spawns a process or hits
         // the network. Connecting is kicked off after `environment` exists (below),
         // never awaited here, so a down/misconfigured server can't delay launch.
-        let mcpConfigStore = MCPServerConfigStore(persistence: persistence, secrets: secrets)
         let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
 
         let agentToolRegistry = AgentToolRegistry(
