@@ -75,6 +75,7 @@ final class AppEnvironmentTests {
             runner: AgentSessionSubagentRunner(
                 allTools: [ReadFileTool()], agents: agentStore,
                 router: ModelRouter(catalog: ModelCatalog(), outcomes: RouterOutcomeStore(persistence: persistence)),
+                executionRouter: executionRouter,
                 candidatesProvider: { [] },
                 makeSession: AppEnvironment.makeSubagentSession(
                     providerFor: { _ in ClaudeProvider(http: URLSessionStreamingHTTPClient()) },

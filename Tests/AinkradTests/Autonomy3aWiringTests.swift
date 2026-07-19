@@ -49,7 +49,7 @@ struct Autonomy3aWiringTests {
             agentContextService: agentContextService, agentPermissionStore: agentPermissionStore,
             agentStore: agentStore)
 
-        let child = makeSession(profile, registry, "claude-opus-4-8")
+        let child = makeSession(profile, registry, "claude-opus-4-8", [])
         #expect(child.unattendedForTesting == true)
         #expect(child.activeModelIDForCommands() == "claude-opus-4-8")
     }

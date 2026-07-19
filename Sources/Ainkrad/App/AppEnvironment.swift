@@ -614,6 +614,7 @@ final class AppEnvironment {
         // passed to the child, so it never re-routes per tool-loop turn).
         let subagentRunner = AgentSessionSubagentRunner(
             allTools: agentTools, agents: agentStore, router: modelRouter,
+            executionRouter: executionRouter,
             candidatesProvider: candidatesProvider,
             makeSession: AppEnvironment.makeSubagentSession(
                 providerFor: providerFor, connections: connectionStore,
@@ -631,19 +632,48 @@ final class AppEnvironment {
             tools: agentTools,
             dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
 
-        // The Runs monitor's engine: a background run drives a fresh headless
-        // `AgentSession` per run (`BackgroundRunRunner`), built `unattended: true` for
-        // the same reason as the subagent seam above. Trust tier `.background` (Slice 6,
-        // Task 21) isn't wired yet — until then a background run executes on the host's
-        // own connections/tools like a normal (but unattended) turn.
+        // M7 Slice 3b Task 21 — every `RunManager`-driven headless run (background,
+        // AND schedule/event runs, which enqueue through the SAME `RunManager` /
+        // `BackgroundRunRunner` — see the residual-gap note below) is sandboxed at
+        // trust tier `.background`: its own tool registry swaps in a `.background`-
+        // tier `RunTerminalTool` (the shared `agentToolRegistry`'s instance is fixed
+        // at `.mainInteractive`, the only tier ever eligible for `HostBackend`), and
+        // its `AgentSession` gets a non-nil `sandboxAllowList` so the compose layer
+        // (`SandboxPermissionPolicy.compose`) is always active.
+        //
+        // RESIDUAL GAP (flagged during Task 15, not fully closed here): `AgentRun`/
+        // `RunManager.enqueue` carry an `origin` (`.chat`/`.schedule`/`.event`) but
+        // `AgentRunRunner.execute(prompt:appendLog:)` never receives it, and there is
+        // exactly ONE `BackgroundRunRunner` instance shared across every origin — so
+        // a schedule's own `SavedExecutionPosture.sandboxProfileID` (Task 14) cannot
+        // be projected into `ExecutionRouter.resolveProfile(tier:policy:)` without
+        // threading the run (or its posture) through `RunManager`/`AgentRunRunner`,
+        // which is out of this task's file scope (Modify: AgentSession.swift,
+        // AgentSessionSubagentRunner.swift, AppEnvironment.swift only). Every
+        // schedule/event run instead inherits this SAME `.background`-tier sandbox
+        // as a safe default: fail-closed, never `.host`, never an escalation — just
+        // not yet the schedule's OWN saved posture. Follow-up: extend `AgentRun`
+        // with an optional posture/tier, thread it through `RunManager.enqueue` →
+        // `AgentRunRunner.execute` → the session-maker closure.
+        var backgroundAgentTools = agentTools
+        if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
+            backgroundAgentTools[idx] = RunTerminalTool(
+                actionHub: agentActionHub, router: executionRouter, trustTier: .background)
+        }
+        let backgroundToolRegistry = AgentToolRegistry(
+            tools: backgroundAgentTools,
+            dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
+        let backgroundSandboxProfile = executionRouter.resolveProfile(tier: .background, policy: nil)
+
         let runNotifier = UserNotificationRunNotifier()
         let runManager = RunManager(
             persistence: persistence,
             runner: BackgroundRunRunner(makeSession: {
                 AgentSession(
                     providerFor: providerFor, connections: connectionStore, config: agentConfigStore,
-                    context: agentContextService, registry: agentToolRegistry, permissions: agentPermissionStore,
+                    context: agentContextService, registry: backgroundToolRegistry, permissions: agentPermissionStore,
                     agents: agentStore, editJournal: editJournal, unattended: true,
+                    sandboxAllowList: backgroundSandboxProfile.toolAllowList, agentAllowList: nil,
                     router: modelRouter, usage: usageTracker, runtime: runtimeOptionsStore,
                     commands: commandRegistry, authProfiles: authProfileStore,
                     candidatesProvider: candidatesProvider,
@@ -926,8 +956,8 @@ final class AppEnvironment {
         agentContextService: AgentContextService,
         agentPermissionStore: AgentPermissionStore,
         agentStore: AgentStore
-    ) -> @MainActor (AgentProfile, AgentToolRegistry, String) -> AgentSession {
-        { profile, registry, model in
+    ) -> @MainActor (AgentProfile, AgentToolRegistry, String, Set<String>) -> AgentSession {
+        { profile, registry, model, sandboxAllowList in
             let pinned = RuntimeOptionsStore(persistence: InMemoryPersistenceStore())
             pinned.pinModel(model)
             return AgentSession(
@@ -939,7 +969,20 @@ final class AppEnvironment {
                 permissions: agentPermissionStore,
                 basePrompt: profile.instructions.isEmpty ? AgentSession.defaultPrompt : profile.instructions,
                 agents: agentStore,
+                // M7 Slice 3b Task 21: every child session is sandboxed at trust
+                // tier `.subagent` — `sandboxAllowList` is always non-nil here (the
+                // runner resolves it per-run via `ExecutionRouter.resolveProfile`),
+                // so the compose layer is always active for a spawned subagent.
+                // `agentAllowList: nil` — see Task 21 report: `AgentToolPolicy`'s
+                // `.restricted` case (deny-list + tool-class allow) doesn't reduce
+                // losslessly to `compose`'s `Set<String>?` allow-only shape, and the
+                // full policy is already enforced by `SubagentRegistryFilter` (the
+                // child's registry never even contains a disallowed tool) — a lossy
+                // second projection here would risk incorrectly denying a call the
+                // class-based allow already permits.
                 unattended: true,
+                sandboxAllowList: sandboxAllowList,
+                agentAllowList: nil,
                 runtime: pinned)
         }
     }
