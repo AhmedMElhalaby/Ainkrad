@@ -137,6 +137,11 @@ final class AppEnvironment {
     /// state — wrapping `runManager` via `RunManagerMenuBarAdapter`. Constructed
     /// in `bootstrap()` alongside `runManager` so both share the same instance.
     let menuBarPresence: MenuBarPresence
+    /// M7 Slice 7 (Live Canvas): the spatial-card store `CanvasApp`'s pane binds
+    /// to and `canvas_render` (appended to the shared `agentToolRegistry` in
+    /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
+    /// `runManager`/`scheduleStore` above.
+    let canvasStore: CanvasStore
     /// Owns the `NSStatusItem`/popover for the app's lifetime. `var`/optional
     /// (not an `init` param) because its content closure captures `self` —
     /// it's built in `bootstrap()` right after `environment` itself exists,
@@ -228,7 +233,8 @@ final class AppEnvironment {
         skillRegistry: SkillRegistry,
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
-        menuBarPresence: MenuBarPresence
+        menuBarPresence: MenuBarPresence,
+        canvasStore: CanvasStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -285,6 +291,7 @@ final class AppEnvironment {
         self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
         self.menuBarPresence = menuBarPresence
+        self.canvasStore = canvasStore
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
         // so the very first `resyncSkillCommands()` call — triggered by a
@@ -537,6 +544,15 @@ final class AppEnvironment {
         }
         agentTools.append(UseSkillTool(registry: skillRegistry))
         agentTools.append(ProposeSkillTool(registry: skillRegistry))
+
+        // M7 Slice 7 (Live Canvas): `canvas_render` only draws structured cards
+        // from agent-supplied data — it executes nothing and touches no files
+        // or system state (see `CanvasRenderTool`), so it's appended alongside
+        // the other read-class tools. `canvasStore` defaults to sessionKey
+        // "default" (PROVISIONAL — per-session keying awaits a stable session
+        // identifier from Slice 5; see Task 12 brief).
+        let canvasStore = CanvasStore(persistence: persistence)
+        agentTools.append(CanvasRenderTool(store: canvasStore))
 
         // NOTE: `agentToolRegistry` (the registry the main `agentSession` and every
         // background run's headless session bind to) is built further below, AFTER
@@ -832,7 +848,8 @@ final class AppEnvironment {
             skillRegistry: skillRegistry,
             skillWatcher: skillWatcher,
             skillCommandStore: skillCommandStore,
-            menuBarPresence: menuBarPresence
+            menuBarPresence: menuBarPresence,
+            canvasStore: canvasStore
         )
 
         // Built after `environment` exists so the content closure can inject
@@ -899,6 +916,13 @@ final class AppEnvironment {
                                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
+        // Live Canvas (M7 Slice 7) is likewise a host-embedded built-in — its
+        // pane reads `AppEnvironment.canvasStore` directly (see `CanvasApp`).
+        let canvasHost = HostServicesImpl(appID: "canvas", dataRootURL: pluginDataRoot,
+                                          secretStore: secrets, themeManager: themeManager,
+                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
+
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
             builtIn: [
@@ -917,7 +941,11 @@ final class AppEnvironment {
                             base: themeManager.tokens.background
                         )
                     }
-                )
+                ),
+                RegisteredApp.builtIn(
+                    CanvasApp.self,
+                    summary: "The Live Canvas — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
+                    host: canvasHost)
             ],
             loaded: loaded.apps,
             failures: loaded.failures

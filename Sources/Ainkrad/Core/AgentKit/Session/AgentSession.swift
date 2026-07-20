@@ -24,7 +24,11 @@ final class AgentSession {
     static let defaultPrompt = """
     You are Ainkrad's built-in assistant, embedded in a native macOS \
     developer workspace. You can read and edit files using the provided tools. \
-    Answer concisely and precisely.
+    Answer concisely and precisely. For structured or comparative output — \
+    tables, diagrams, charts, code, status boards, or several related cards — \
+    prefer the `canvas_render` tool over inline chat; it persists as movable \
+    HUD cards you can update in place for live progress. Keep short \
+    conversational answers and one-off inline snippets in chat.
     """
 
     private(set) var messages: [AgentMessage] = []
