@@ -26,8 +26,25 @@ enum RecordingIndicatorState: Equatable {
 struct RecordingIndicatorView: View {
     let status: PushToTalkController.Status
     let tokens: DesignTokens
+    /// `VoiceService.lastNotice` — the on-device→provider fallback disclosure.
+    /// Display-only; shown alongside whichever status row is active so the
+    /// user learns why transcription switched backends. `nil` renders nothing.
+    var notice: String? = nil
 
     var body: some View {
+        HStack(spacing: 6) {
+            statusRow
+            if let notice {
+                Text(notice)
+                    .font(AinkradFont.display(10))
+                    .foregroundStyle(tokens.foreground.opacity(0.4))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
         switch RecordingIndicatorState.from(status) {
         case .hidden:
             EmptyView()

@@ -82,7 +82,8 @@ struct AssistantComposerBar: View {
 
                 micTrigger
 
-                RecordingIndicatorView(status: environment.voiceService.pushToTalk.status, tokens: tokens)
+                RecordingIndicatorView(status: environment.voiceService.pushToTalk.status, tokens: tokens,
+                                        notice: environment.voiceService.lastNotice)
 
                 usageDashboardTrigger
 
