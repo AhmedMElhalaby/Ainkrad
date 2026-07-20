@@ -53,6 +53,20 @@ final class ExecutionRouter {
             if p.backend == .host && tier != .mainInteractive && !p.allowHostOverride {
                 return workspaceWrite
             }
+            // Narrowing CEILING (defense-in-depth): for `.background` runs, a
+            // posture-named *sandboxed* profile (anything other than `.host`,
+            // which is already gated above, and `.cloud`, which is gated by
+            // `allowCloud` in `route`) must not be MORE permissive than the
+            // tier's own restrictive default. This mirrors the permission-mode
+            // narrowing philosophy elsewhere: a schedule/trigger posture can
+            // only make a background run more restrictive (or equal), never
+            // broader than `workspace-write`. Not a live vuln today (nothing
+            // currently writes a broader posture), but closes the ceiling so
+            // a future posture author can't silently widen a background run.
+            if tier == .background && p.backend != .host && p.backend != .cloud
+                && !p.isNoMorePermissive(than: workspaceWrite) {
+                return workspaceWrite
+            }
             return p
         }
 

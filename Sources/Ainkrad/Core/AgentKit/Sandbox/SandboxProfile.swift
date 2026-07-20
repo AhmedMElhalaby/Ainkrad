@@ -81,4 +81,29 @@ struct SandboxProfile: Codable, Equatable, Sendable, Identifiable {
         toolAllowList = try c.decodeIfPresent(Set<String>.self, forKey: .toolAllowList) ?? []
         allowHostOverride = try c.decodeIfPresent(Bool.self, forKey: .allowHostOverride) ?? false
     }
+
+    /// A coarse, defense-in-depth permissiveness check used by
+    /// `ExecutionRouter`'s background-tier narrowing ceiling. Profiles don't
+    /// have a total ordering in general (arbitrary custom profiles could
+    /// differ in incomparable ways), so this is deliberately conservative:
+    /// it only says "no more permissive" when EVERY dimension we can compare
+    /// (network openness, and readable/writable filesystem scope) is no
+    /// broader than `baseline`. Any dimension we can't clearly compare (or
+    /// that is broader) fails the check, which is the fail-closed direction.
+    func isNoMorePermissive(than baseline: SandboxProfile) -> Bool {
+        guard Self.networkRank(networkPolicy) <= Self.networkRank(baseline.networkPolicy) else { return false }
+        guard Set(fsPolicy.writablePaths).isSubset(of: Set(baseline.fsPolicy.writablePaths)) else { return false }
+        guard Set(fsPolicy.readablePaths).isSubset(of: Set(baseline.fsPolicy.readablePaths)) else { return false }
+        return true
+    }
+
+    /// Openness ordering for `NetworkPolicy`: fully blocked < an explicit
+    /// allow-list < unrestricted.
+    private static func networkRank(_ policy: NetworkPolicy) -> Int {
+        switch policy {
+        case .off: return 0
+        case .allowList: return 1
+        case .on: return 2
+        }
+    }
 }

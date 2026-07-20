@@ -78,6 +78,17 @@ private struct MermaidDiagramHost: View {
                 }
             }
         }
+        // A later `canvas_render` can correct a previously-bad diagram body
+        // in place (stable element id, new `source`). Without this, once
+        // `renderError` is set the `Group` above permanently pins the error
+        // branch and the web view is never shown again for this element
+        // instance, even though `MermaidWebView.updateNSView` would happily
+        // reload the corrected source. Reset on every source change so a
+        // fix has a chance to render; if the NEW source also fails,
+        // `onError` re-populates `renderError` from the fresh load.
+        .onChange(of: source) { _, _ in
+            renderError = nil
+        }
     }
 }
 
@@ -122,6 +133,14 @@ private struct MermaidWebView: NSViewRepresentable {
         webView.underPageBackgroundColor = NSColor(tokens.surfaceElevated)
         load(into: webView, context: context)
         return webView
+    }
+
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        // Conventional WKWebView teardown: drop the JS bridge so the
+        // controller doesn't retain the coordinator past this view's life,
+        // and stop any in-flight load.
+        webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        webView.stopLoading()
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
