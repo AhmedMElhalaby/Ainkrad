@@ -49,3 +49,39 @@ struct CanvasDiagramTests {
         #expect(bars == [CanvasChartBar(label: "Bo", value: 4)])
     }
 }
+
+@Suite("CanvasDiagramRouting")
+struct CanvasDiagramRoutingTests {
+    private func element(kind: CanvasElementKind, body: String) -> CanvasElement {
+        CanvasElement(id: "el-1", kind: kind, body: body)
+    }
+
+    @Test func emptyDiagramBodyRoutesToFallback() {
+        let route = CanvasDiagramRouting.route(for: element(kind: .diagram, body: "   "))
+        #expect(route == .diagramFallback)
+    }
+
+    @Test func nonEmptyDiagramBodyRoutesToDiagram() {
+        let route = CanvasDiagramRouting.route(for: element(kind: .diagram, body: "graph TD; A-->B"))
+        #expect(route == .diagram(source: "graph TD; A-->B"))
+    }
+
+    @Test func chartKindRoutesToChartWhenBarsParse() {
+        let route = CanvasDiagramRouting.route(for: element(kind: .chart, body: "Ada,3\nBo,7"))
+        #expect(route == .chart(bars: [
+            CanvasChartBar(label: "Ada", value: 3),
+            CanvasChartBar(label: "Bo", value: 7),
+        ]))
+    }
+
+    @Test func chartKindRoutesToFallbackWhenBarsEmpty() {
+        let route = CanvasDiagramRouting.route(for: element(kind: .chart, body: "junk"))
+        #expect(route == .chartFallback)
+    }
+
+    @Test func nonDiagramNonChartKindRoutesLikeDiagram() {
+        // Default (non-.chart) branch covers every other kind, e.g. .unknown.
+        let route = CanvasDiagramRouting.route(for: element(kind: .unknown, body: ""))
+        #expect(route == .diagramFallback)
+    }
+}

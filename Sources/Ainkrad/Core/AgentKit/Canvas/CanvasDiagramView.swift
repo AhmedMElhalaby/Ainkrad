@@ -3,6 +3,29 @@ import WebKit
 import AppKit
 import AinkradAppKit
 
+/// Which concrete branch `CanvasDiagramView` will render for a given element.
+/// A pure, synchronous seam over the kind/body dispatch logic so the routing
+/// itself is unit-testable without spinning up WebKit.
+enum CanvasDiagramRoute: Equatable {
+    case diagram(source: String)
+    case diagramFallback
+    case chart(bars: [CanvasChartBar])
+    case chartFallback
+}
+
+enum CanvasDiagramRouting {
+    static func route(for element: CanvasElement) -> CanvasDiagramRoute {
+        switch element.kind {
+        case .chart:
+            let bars = CanvasChartParse.bars(from: element.body)
+            return bars.isEmpty ? .chartFallback : .chart(bars: bars)
+        default:
+            let source = element.body.trimmingCharacters(in: .whitespacesAndNewlines)
+            return source.isEmpty ? .diagramFallback : .diagram(source: source)
+        }
+    }
+}
+
 /// Routes `.diagram` (mermaid, rendered via `WKWebView`) and `.chart`
 /// (native shape-drawn bars) canvas elements. This is the ONE approved web
 /// surface in the app — every other element on the canvas, and every part
@@ -16,31 +39,15 @@ struct CanvasDiagramView: View {
     let tokens: DesignTokens
 
     var body: some View {
-        switch element.kind {
-        case .chart:
-            chartOrFallback
-        default:
-            diagramOrFallback
-        }
-    }
-
-    @ViewBuilder
-    private var diagramOrFallback: some View {
-        let source = element.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        if source.isEmpty {
-            fallback(caption: "Diagram preview pending", language: "mermaid")
-        } else {
+        switch CanvasDiagramRouting.route(for: element) {
+        case .diagram(let source):
             MermaidDiagramHost(source: source, tokens: tokens)
-        }
-    }
-
-    @ViewBuilder
-    private var chartOrFallback: some View {
-        let bars = CanvasChartParse.bars(from: element.body)
-        if bars.isEmpty {
-            fallback(caption: "Chart data unavailable", language: "csv")
-        } else {
+        case .diagramFallback:
+            fallback(caption: "Diagram preview pending", language: "mermaid")
+        case .chart(let bars):
             CanvasChartView(bars: bars, tokens: tokens)
+        case .chartFallback:
+            fallback(caption: "Chart data unavailable", language: "csv")
         }
     }
 
@@ -113,23 +120,32 @@ private struct MermaidWebView: NSViewRepresentable {
         config.userContentController = controller
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.underPageBackgroundColor = NSColor(tokens.surfaceElevated)
-        load(into: webView)
+        load(into: webView, context: context)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        // The caller re-creates this view whenever `element.id` changes, so
-        // a fresh load per update keeps mermaid's rendered output in sync
-        // with edits to `body` without needing incremental diffing.
-        load(into: webView)
+        // `updateNSView` fires on every SwiftUI update pass of this view,
+        // including ones driven by unrelated state changes on the canvas
+        // (e.g. `onContinuousHover`-driven parallax on mouse move) — the
+        // `NSViewRepresentable` itself is reused across those passes, it is
+        // NOT recreated per update. Only reload the ~3.4MB mermaid HTML when
+        // the diagram source or theme actually changed since the last load;
+        // otherwise this would reload (and visibly flash) on every mouse move.
+        guard context.coordinator.lastLoaded?.source != source
+            || context.coordinator.lastLoaded?.tokens != tokens else {
+            return
+        }
+        load(into: webView, context: context)
     }
 
-    private func load(into webView: WKWebView) {
+    private func load(into webView: WKWebView, context: Context) {
         guard let jsURL = Bundle.main.url(forResource: "mermaid.min", withExtension: "js"),
               let js = try? String(contentsOf: jsURL, encoding: .utf8) else {
             onError("mermaid.min.js resource not found in app bundle")
             return
         }
+        context.coordinator.lastLoaded = (source, tokens)
         webView.loadHTMLString(Self.html(js: js, source: source, tokens: tokens), baseURL: nil)
     }
 
@@ -138,6 +154,7 @@ private struct MermaidWebView: NSViewRepresentable {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
             .replacingOccurrences(of: "${", with: "\\${")
+            .replacingOccurrences(of: "</script>", with: "<\\/script>")
         let bg = tokens.surfaceElevated.hexString ?? "1A2233"
         let fg = tokens.foreground.hexString ?? "E2E8F0"
         let primary = tokens.accentPrimary.hexString ?? "2563EB"
@@ -197,6 +214,9 @@ private struct MermaidWebView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, WKScriptMessageHandler {
         let onError: (String) -> Void
+        /// The `(source, tokens)` pair last loaded into the web view, used
+        /// by `updateNSView` to skip a reload when neither changed.
+        var lastLoaded: (source: String, tokens: DesignTokens)?
         init(onError: @escaping (String) -> Void) { self.onError = onError }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
