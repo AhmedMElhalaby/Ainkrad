@@ -30,6 +30,9 @@ struct SkillIndexContextSourceTests {
         #expect(snap?.text.contains("pdf: work with PDFs") == true)
         #expect(snap?.text.contains("git: git workflows") == true)
         #expect(snap?.text.contains("use_skill") == true)   // tells the model how to load a body
+        // Guardrail against over-triggering: the index must warn the model off
+        // inventing names / firing on trivial turns (see fix/skill-overtriggering).
+        #expect(snap?.text.contains("never invent") == true)
     }
 
     @Test func reflectsCurrentActiveSetAfterReload() throws {
