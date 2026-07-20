@@ -168,6 +168,10 @@ struct AssistantRootView: View {
             }
         }
         .onHover { isHovering in
+            // Only assistant turns with text show the hover copy button, so
+            // only they drive the hovered-turn state — no dead writes for user
+            // bubbles (which have no overlay).
+            guard message.role == .assistant, !message.text.isEmpty else { return }
             hoveredTurnIndex = isHovering ? index : (hoveredTurnIndex == index ? nil : hoveredTurnIndex)
         }
     }

@@ -1,3 +1,4 @@
+import AppKit
 import Observation
 
 /// Owns the Settings → General section: the full-screen status bar toggle
@@ -29,9 +30,20 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     private(set) var uiReduceMotion: Bool
     private let persistence: PersistenceStore
 
-    init(persistence: PersistenceStore) {
+    init(persistence: PersistenceStore,
+         systemReduceMotion: @autoclosure () -> Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
         self.persistence = persistence
-        let settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        let loaded = persistence.load(GlobalSettings.self)
+        var settings = loaded ?? GlobalSettings()
+        // First launch only (no persisted document yet): adopt the macOS Reduce
+        // Motion preference as the initial default, so an accessibility user
+        // isn't met with full motion, then persist it. This is a one-time seed —
+        // once written, the in-app setting (Settings → Appearance → Motion) is
+        // the sole source of truth and the OS flag is never read again.
+        if loaded == nil {
+            settings.uiReduceMotion = systemReduceMotion()
+            persistence.save(settings)
+        }
         self.showFullScreenStatusBar = settings.showFullScreenStatusBar
         self.soundEnabled = settings.soundEnabled
         self.soundVolume = settings.soundVolume
