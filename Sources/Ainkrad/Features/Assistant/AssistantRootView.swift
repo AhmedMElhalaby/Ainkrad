@@ -154,7 +154,8 @@ struct AssistantRootView: View {
                         title: name,
                         summary: result.text,
                         diff: nil,
-                        tokens: tokens
+                        tokens: tokens,
+                        result: result
                     )
                 }
                 if case .image(let mediaType, let base64) = block {

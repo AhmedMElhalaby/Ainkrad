@@ -2,9 +2,10 @@ import SwiftUI
 import AinkradAppKit
 
 /// Inline transcript card for a tool call. In `.awaitingApproval` it shows the
-/// preview (with a diff for edits) and Approve/Deny; committed calls render as a
-/// compact, muted summary. Seamless surface, no separator lines — matches the
-/// streaming/error bubbles.
+/// preview (with a diff for edits) and Approve/Deny; committed calls render a
+/// per-tool identity (icon/tint), a success/error/pending verdict, and are
+/// compact by default with a tap-to-expand body. Seamless surface, no
+/// separator lines — matches the streaming/error bubbles.
 struct ToolCallCardView: View {
     let title: String
     let summary: String
@@ -13,48 +14,97 @@ struct ToolCallCardView: View {
     var onApprove: (() -> Void)?
     var onDeny: (() -> Void)?
     var onApproveAlways: (() -> Void)?
+    /// Present for committed transcript cards; nil for the approval card.
+    var result: ToolResultSummary?
+
+    @State private var isExpanded = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    private var presentation: ToolPresentation { ToolPresentation.for(toolName: title) }
+    private var tint: Color { presentation.tint == .primary ? tokens.accentPrimary : tokens.accentSecondary }
+    private var isError: Bool { result?.isError == true }
+    private var isPending: Bool { result?.isPending == true }
+    private var isApproval: Bool { onApprove != nil || onDeny != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "wrench.and.screwdriver")
-                    .font(.system(size: 11))
-                    .foregroundStyle(tokens.accentSecondary)
-                Text(title)
-                    .font(AinkradFont.display(12, weight: .semibold))
-                    .foregroundStyle(tokens.foreground.opacity(0.85))
-                Spacer()
+            header
+            if isExpanded || isApproval {
+                bodyContent
             }
-
-            Text(summary)
-                .font(AinkradFont.mono(11))
-                .foregroundStyle(tokens.foreground.opacity(0.6))
-                .lineLimit(2)
-
-            if let diff, !diff.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    Text(diffAttributed(diff))
-                        .font(AinkradFont.mono(11))
-                        .textSelection(.enabled)
-                }
-                .frame(maxHeight: 200)
-            }
-
-            if onApprove != nil || onDeny != nil {
-                HStack(spacing: 8) {
-                    Spacer()
-                    ToolCardButton(title: "Deny", tint: tokens.accentTertiary, filled: false, tokens: tokens) { onDeny?() }
-                    if let onApproveAlways {
-                        ToolCardButton(title: "Allow always", tint: tokens.accentSecondary, filled: false, tokens: tokens) { onApproveAlways() }
-                    }
-                    ToolCardButton(title: "Approve", tint: tokens.accentPrimary, filled: true, tokens: tokens) { onApprove?() }
-                }
-            }
+            if isApproval { approvalButtons }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
-        .shadow(color: tokens.accentSecondary.opacity(0.14), radius: 7)
+        .overlay(alignment: .leading) {
+            if isError {
+                Rectangle().fill(tokens.accentTertiary).frame(width: 2)
+            }
+        }
+        .shadow(color: (isError ? tokens.accentTertiary : tint).opacity(0.14), radius: 7)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard result != nil, !isApproval else { return }
+            withAnimation(reduceMotion ? nil : AinkradMotion.present) { isExpanded.toggle() }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(systemName: presentation.icon)
+                .font(.system(size: 11))
+                .foregroundStyle(isError ? tokens.accentTertiary : tint)
+            Text(presentation.label)
+                .font(AinkradFont.display(12, weight: .semibold))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+            Spacer()
+            verdictGlyph
+            if result != nil && !isApproval {
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9))
+                    .foregroundStyle(tokens.foreground.opacity(0.4))
+            }
+        }
+    }
+
+    @ViewBuilder private var verdictGlyph: some View {
+        if isPending {
+            Text("Running…").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
+        } else if isError {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10)).foregroundStyle(tokens.accentTertiary)
+        } else if result != nil {
+            Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(tokens.accentSecondary.opacity(0.7))
+        }
+    }
+
+    @ViewBuilder private var bodyContent: some View {
+        if !summary.isEmpty && !isPending {
+            Text(summary)
+                .font(AinkradFont.mono(11))
+                .foregroundStyle(tokens.foreground.opacity(isError ? 0.85 : 0.6))
+                .lineLimit(isError ? nil : (isExpanded ? nil : 2))   // errors never truncated away
+                .textSelection(.enabled)
+        }
+        if let diff, !diff.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(diffAttributed(diff)).font(AinkradFont.mono(11)).textSelection(.enabled)
+            }
+            .frame(maxHeight: 200)
+        }
+    }
+
+    private var approvalButtons: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            ToolCardButton(title: "Deny", tint: tokens.accentTertiary, filled: false, tokens: tokens) { onDeny?() }
+            if let onApproveAlways {
+                ToolCardButton(title: "Allow always", tint: tokens.accentSecondary, filled: false, tokens: tokens) { onApproveAlways() }
+            }
+            ToolCardButton(title: "Approve", tint: tokens.accentPrimary, filled: true, tokens: tokens) { onApprove?() }
+        }
     }
 
     private func diffAttributed(_ diff: String) -> AttributedString {
