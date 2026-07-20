@@ -13,9 +13,10 @@ struct ToolCallCardView: View {
     let summary: String
     let diff: String?
     let tokens: DesignTokens
-    var onApprove: (() -> Void)?
-    var onDeny: (() -> Void)?
-    var onApproveAlways: (() -> Void)?
+    /// True for the inline card of a tool currently awaiting approval: gives it
+    /// the accent frame + a forced-open body (buttons live in the docked
+    /// AssistantApprovalBar, not here).
+    var pendingApproval: Bool = false
     /// Present for committed transcript cards; nil for the approval card.
     var result: ToolResultSummary?
 
@@ -26,21 +27,19 @@ struct ToolCallCardView: View {
     private var tint: Color { presentation.tint == .primary ? tokens.accentPrimary : tokens.accentSecondary }
     private var isError: Bool { result?.isError == true }
     private var isPending: Bool { result?.isPending == true }
-    private var isApproval: Bool { onApprove != nil || onDeny != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            if isExpanded || isApproval || isError {
+            if isExpanded || isError || pendingApproval {
                 bodyContent
             }
-            if isApproval { approvalButtons }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         .overlay {
-            if isApproval {
+            if pendingApproval {
                 ChamferShape(cut: AinkradRadius.md)
                     .stroke(tokens.accentPrimary.opacity(0.6), lineWidth: 1)
             }
@@ -53,7 +52,7 @@ struct ToolCallCardView: View {
         .shadow(color: (isError ? tokens.accentTertiary : tint).opacity(0.14), radius: 7)
         .contentShape(Rectangle())
         .onTapGesture {
-            guard result != nil, !isApproval else { return }
+            guard result != nil, !pendingApproval else { return }
             withAnimation(reduceMotion ? nil : AinkradMotion.present) { isExpanded.toggle() }
         }
     }
@@ -68,7 +67,7 @@ struct ToolCallCardView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.85))
             Spacer()
             verdictGlyph
-            if result != nil && !isApproval && !isError {
+            if result != nil && !pendingApproval && !isError {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9))
                     .foregroundStyle(tokens.foreground.opacity(0.4))
@@ -104,17 +103,6 @@ struct ToolCallCardView: View {
         }
     }
 
-    private var approvalButtons: some View {
-        HStack(spacing: 8) {
-            Spacer()
-            ToolCardButton(title: "Deny", tint: tokens.accentTertiary, filled: false, tokens: tokens) { onDeny?() }
-            if let onApproveAlways {
-                ToolCardButton(title: "Allow always", tint: tokens.accentSecondary, filled: false, tokens: tokens) { onApproveAlways() }
-            }
-            ToolCardButton(title: "Approve", tint: tokens.accentPrimary, filled: true, tokens: tokens) { onApprove?() }
-        }
-    }
-
     private func diffGutterAttributed(_ diff: String) -> AttributedString {
         var out = AttributedString()
         for (i, line) in diff.components(separatedBy: "\n").enumerated() {
@@ -127,35 +115,5 @@ struct ToolCallCardView: View {
             out += seg
         }
         return out
-    }
-}
-
-/// A tool-card action button with a hover highlight. `filled` renders the
-/// primary (Approve) affordance as a solid accent chip; the others are text
-/// buttons that gain a soft tinted fill on hover.
-private struct ToolCardButton: View {
-    let title: String
-    let tint: Color
-    let filled: Bool
-    let tokens: DesignTokens
-    let action: () -> Void
-    @State private var isHovering = false
-    @Environment(\.ainkradReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(AinkradFont.display(12, weight: filled ? .semibold : .regular))
-                .foregroundStyle(filled ? tint.contrastingText : tint.opacity(isHovering ? 1 : 0.85))
-                .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(
-                    ChamferShape(cut: AinkradRadius.sm)
-                        .fill(filled ? tint.opacity(0.9) : tint.opacity(isHovering ? 0.18 : 0))
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
     }
 }

@@ -27,6 +27,17 @@ struct AssistantRootView: View {
 
             transcript(session: session, tokens: tokens)
 
+            if case .awaitingApproval(let pending) = session.state {
+                AssistantApprovalBar(
+                    toolName: pending.call.name,
+                    title: pending.preview.title,
+                    tokens: tokens,
+                    onDeny: { session.deny(reason: "Denied by user.") },
+                    onApproveAlways: { session.approve(always: true) },
+                    onApprove: { session.approve() }
+                )
+            }
+
             AssistantComposerBar(
                 session: session,
                 tokens: tokens,
@@ -105,9 +116,7 @@ struct AssistantRootView: View {
                                 summary: pending.preview.summary,
                                 diff: pending.preview.diff,
                                 tokens: tokens,
-                                onApprove: { session.approve() },
-                                onDeny: { session.deny(reason: "Denied by user.") },
-                                onApproveAlways: { session.approve(always: true) }
+                                pendingApproval: true
                             )
                             .id("approval")
                         }
