@@ -29,7 +29,7 @@ struct ToolCallCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            if isExpanded || isApproval {
+            if isExpanded || isApproval || isError {
                 bodyContent
             }
             if isApproval { approvalButtons }
@@ -60,7 +60,7 @@ struct ToolCallCardView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.85))
             Spacer()
             verdictGlyph
-            if result != nil && !isApproval {
+            if result != nil && !isApproval && !isError {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9))
                     .foregroundStyle(tokens.foreground.opacity(0.4))
