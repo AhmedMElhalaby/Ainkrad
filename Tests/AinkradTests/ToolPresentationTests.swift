@@ -53,4 +53,8 @@ struct ToolPresentationTests {
         #expect(ToolPresentation.humanize("run_terminal") == "Run terminal")
         #expect(ToolPresentation.humanize("canvas") == "canvas")
     }
+
+    @Test func humanizeStripsMcpPrefixAndCollapsesSeparators() {
+        #expect(ToolPresentation.humanize("mcp__linear__create_issue") == "Linear create issue")
+    }
 }

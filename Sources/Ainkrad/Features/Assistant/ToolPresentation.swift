@@ -16,11 +16,16 @@ struct ToolPresentation: Equatable {
         return ToolPresentation(icon: icon, tint: tint, label: humanize(name))
     }
 
-    /// "run_terminal" → "Run terminal". Underscores → spaces, sentence-cased.
+    /// "run_terminal" → "Run terminal"; strips a leading "mcp__" and collapses
+    /// the doubled separators MCP names carry ("mcp__linear__create_issue" →
+    /// "Linear create issue"). A name with no underscore is returned unchanged.
     static func humanize(_ name: String) -> String {
-        guard name.contains("_") else { return name }
-        let spaced = name.replacingOccurrences(of: "_", with: " ").lowercased()
-        return spaced.prefix(1).uppercased() + spaced.dropFirst()
+        let base = name.hasPrefix("mcp__") ? String(name.dropFirst(5)) : name
+        guard base.contains("_") else { return base }
+        let spaced = base.replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+        return spaced.prefix(1).uppercased() + spaced.dropFirst().lowercased()
     }
 
     private static func iconAndTint(for name: String) -> (String, ToolTint) {

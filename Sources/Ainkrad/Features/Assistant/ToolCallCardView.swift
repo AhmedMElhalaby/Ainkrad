@@ -52,7 +52,7 @@ struct ToolCallCardView: View {
         .shadow(color: (isError ? tokens.accentTertiary : tint).opacity(0.14), radius: 7)
         .contentShape(Rectangle())
         .onTapGesture {
-            guard result != nil, !pendingApproval else { return }
+            guard result != nil, !pendingApproval, !isPending else { return }
             withAnimation(reduceMotion ? nil : AinkradMotion.present) { isExpanded.toggle() }
         }
     }
@@ -67,7 +67,7 @@ struct ToolCallCardView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.85))
             Spacer()
             verdictGlyph
-            if result != nil && !pendingApproval && !isError {
+            if result != nil && !pendingApproval && !isError && !isPending {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9))
                     .foregroundStyle(tokens.foreground.opacity(0.4))
