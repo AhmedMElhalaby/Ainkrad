@@ -84,7 +84,7 @@ final class AppEnvironmentTests {
                     agentStore: agentStore)))
         let runManager = RunManager(
             persistence: persistence,
-            runner: BackgroundRunRunner(makeSession: { agentSession }))
+            runner: BackgroundRunRunner(makeSession: { _ in agentSession }))
         let scheduleStore = ScheduleStore(persistence: persistence)
         let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
         let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)

@@ -37,6 +37,32 @@ struct AgentRunTests {
         #expect(run.status == .queued)
         #expect(run.origin == .chat)
         #expect(run.logs.isEmpty)
+        #expect(run.posture == nil)
+    }
+
+    /// M7 Wave B (B1c) — `AgentRun.posture` round-trips through encode/decode.
+    @Test func postureRoundTrips() throws {
+        var r = AgentRun(origin: .schedule, prompt: "nightly",
+                          posture: SavedExecutionPosture(permissionMode: "ask", sandboxProfileID: "workspace-write"))
+        r.status = .done
+        let data = try JSONEncoder().encode(r)
+        let decoded = try JSONDecoder().decode(AgentRun.self, from: data)
+        #expect(decoded == r)
+        #expect(decoded.posture?.permissionMode == "ask")
+        #expect(decoded.posture?.sandboxProfileID == "workspace-write")
+    }
+
+    /// M7 Wave B (B1c) — an old persisted payload predating the `posture` field
+    /// (this file's own pre-Wave-B `codableRoundTrips` payload shape) still
+    /// decodes, with `posture` falling back to `nil` rather than throwing.
+    @Test func decodesPreWaveBPayloadWithoutPostureField() throws {
+        let id = UUID().uuidString
+        let legacy = #"{"id":"\#(id)","origin":"schedule","prompt":"nightly","status":"done","logs":[]}"#
+            .data(using: .utf8)!
+        let run = try JSONDecoder().decode(AgentRun.self, from: legacy)
+        #expect(run.origin == .schedule)
+        #expect(run.status == .done)
+        #expect(run.posture == nil)
     }
 
     @Test func documentDecodesEmptyObject() throws {

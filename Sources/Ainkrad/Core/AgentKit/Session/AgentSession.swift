@@ -127,6 +127,15 @@ final class AgentSession {
     /// can only ever ADD an auto-approve for an MCP tool the registry considers trusted;
     /// it never runs for the irreversible case, which `decide` always gates first.
     private let mcpTrust: (@MainActor (String) -> Bool)?
+    /// M7 Wave B — the ORIGINATING schedule/trigger's own saved permission
+    /// posture (`SavedExecutionPosture.permissionMode`), pre-resolved to an
+    /// `AgentPermissionMode` by the caller. Composed into `effectiveMode()`
+    /// the same narrowing-only way as `agents?.active.permissionPosture`:
+    /// it can only make a background/scheduled run MORE restrictive than the
+    /// workspace's own `permissions.mode`, never less. `nil` (every pre-Wave-B
+    /// call site, and the main interactive session) leaves `effectiveMode()`
+    /// byte-identical to before this seam existed.
+    private let permissionModeOverride: AgentPermissionMode?
 
     private enum ApprovalOutcome { case approved, denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
@@ -153,7 +162,8 @@ final class AgentSession {
         authProfiles: AuthProfileStore? = nil,
         candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil,
         isLocalConnection: (@MainActor (Connection) -> Bool)? = nil,
-        mcpTrust: (@MainActor (String) -> Bool)? = nil
+        mcpTrust: (@MainActor (String) -> Bool)? = nil,
+        permissionModeOverride: AgentPermissionMode? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -177,6 +187,7 @@ final class AgentSession {
         self.candidatesProvider = candidatesProvider
         self.isLocalConnection = isLocalConnection
         self.mcpTrust = mcpTrust
+        self.permissionModeOverride = permissionModeOverride
     }
 
     /// `images`, when non-empty, are attached as leading `.image` content
@@ -801,12 +812,21 @@ final class AgentSession {
     }
 
     /// The permission mode actually passed to `AgentPermissionPolicy.decide`:
-    /// the MORE restrictive of the workspace mode and the active Agent's
-    /// `permissionPosture` (when set). A profile can tighten the gate but can
-    /// never loosen it beyond the workspace's own mode.
+    /// the MOST restrictive of the workspace mode, the active Agent's
+    /// `permissionPosture` (when set), and `permissionModeOverride` (when set,
+    /// M7 Wave B — a schedule/trigger's own saved posture). Each seam can only
+    /// tighten the gate further; neither can ever loosen it beyond the
+    /// workspace's own mode, and composing both narrows at least as much as
+    /// either alone.
     private func effectiveMode() -> AgentPermissionMode {
-        guard let posture = agents?.active.permissionPosture else { return permissions.mode }
-        return Self.rank(posture) < Self.rank(permissions.mode) ? posture : permissions.mode
+        var mode = permissions.mode
+        if let posture = agents?.active.permissionPosture, Self.rank(posture) < Self.rank(mode) {
+            mode = posture
+        }
+        if let override = permissionModeOverride, Self.rank(override) < Self.rank(mode) {
+            mode = override
+        }
+        return mode
     }
 
     // MARK: - Test hooks (internal; exercised via @testable import in AinkradTests)

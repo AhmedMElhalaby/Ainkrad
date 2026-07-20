@@ -11,7 +11,7 @@ struct MenuBarWiringTests {
     /// cleanly (no leaked-continuation misuse warning) once `RunManager.stop`
     /// or process teardown cancels the in-flight task.
     final class HangingRunner: AgentRunRunner {
-        func execute(prompt: String, appendLog: @escaping (String) -> Void) async -> AgentRunOutcome {
+        func execute(prompt: String, posture: SavedExecutionPosture?, appendLog: @escaping (String) -> Void) async -> AgentRunOutcome {
             try? await Task.sleep(for: .seconds(300))
             return .failure("did not complete in test")
         }

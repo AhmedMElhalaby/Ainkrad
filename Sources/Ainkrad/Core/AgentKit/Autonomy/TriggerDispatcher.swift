@@ -38,7 +38,7 @@ final class TriggerDispatcher {
         let prompt = event.payload.isEmpty
             ? schedule.prompt
             : "\(schedule.prompt)\n\n[trigger payload]\n\(event.payload)"
-        let run = runs.enqueue(prompt: prompt, origin: .event)
+        let run = runs.enqueue(prompt: prompt, origin: .event, posture: schedule.posture)
         store.recordFired(schedule.id, runID: run.id, date: now)
         return run.id
     }

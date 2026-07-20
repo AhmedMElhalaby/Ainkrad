@@ -29,10 +29,18 @@ struct AgentRun: Codable, Equatable, Identifiable, Sendable {
     let createdAt: Date
     var startedAt: Date?
     var finishedAt: Date?
+    /// M7 Wave B (Slice 3b follow-up): the schedule/trigger's own saved
+    /// permission/sandbox posture, projected onto this specific run so
+    /// `BackgroundRunRunner`/`AgentSession` can narrow the effective mode and
+    /// sandbox profile for THIS run rather than always inheriting the shared
+    /// background default. `nil` for `.chat` runs (no schedule to inherit
+    /// from) and for any old persisted run predating this field.
+    var posture: SavedExecutionPosture?
 
     init(id: UUID = UUID(), origin: AgentRunOrigin = .chat, prompt: String,
          status: AgentRunStatus = .queued, logs: [String] = [], result: String? = nil,
-         createdAt: Date = Date(), startedAt: Date? = nil, finishedAt: Date? = nil) {
+         createdAt: Date = Date(), startedAt: Date? = nil, finishedAt: Date? = nil,
+         posture: SavedExecutionPosture? = nil) {
         self.id = id
         self.origin = origin
         self.prompt = prompt
@@ -42,6 +50,7 @@ struct AgentRun: Codable, Equatable, Identifiable, Sendable {
         self.createdAt = createdAt
         self.startedAt = startedAt
         self.finishedAt = finishedAt
+        self.posture = posture
     }
 
     // Forward-compatible decode (wave-1 idiom, mirrors GlobalSettings): tolerate
@@ -59,6 +68,7 @@ struct AgentRun: Codable, Equatable, Identifiable, Sendable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
         finishedAt = try container.decodeIfPresent(Date.self, forKey: .finishedAt)
+        posture = try container.decodeIfPresent(SavedExecutionPosture.self, forKey: .posture) ?? nil
     }
 }
 

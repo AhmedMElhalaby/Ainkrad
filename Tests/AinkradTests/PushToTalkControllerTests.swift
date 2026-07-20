@@ -146,6 +146,137 @@ struct PushToTalkControllerTests {
         #expect(c.status == .idle)
     }
 
+    // MARK: - C1: temp `.caf` cleanup
+
+    @Test func stopAndTranscribeDeletesTempFileOnSuccess() async throws {
+        let (c, capture) = make(mode: .hold)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ptt-\(UUID().uuidString).caf")
+        try Data("audio".utf8).write(to: tmp)
+        capture.producedURL = tmp
+        #expect(FileManager.default.fileExists(atPath: tmp.path))
+
+        c.pressStarted()
+        c.pressEnded()
+        await c.awaitPendingForTesting()
+
+        #expect(!FileManager.default.fileExists(atPath: tmp.path))
+    }
+
+    private struct FailingService: TranscriptionService {
+        func transcribe(audio: Data, fileName: String, localeIdentifier: String?) async throws -> TranscriptionResult {
+            throw TranscriptionError.provider("boom")
+        }
+    }
+
+    @Test func stopAndTranscribeDeletesTempFileOnFailure() async throws {
+        let settings = VoiceSettingsStore(persistence: InMemoryPersistenceStore())
+        settings.setMode(.hold)
+        let capture = FakeCaptureSession()
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ptt-\(UUID().uuidString).caf")
+        try Data("audio".utf8).write(to: tmp)
+        capture.producedURL = tmp
+        let selector = TranscriptionBackendSelector(
+            settings: settings, onDevice: FailingService(),
+            providerFactory: { nil }, availability: AlwaysAvailable())
+        let c = PushToTalkController(
+            settings: settings, capture: capture,
+            permission: FakeMicPermission(status: .authorized, grantOnRequest: true),
+            selector: selector, readAudio: { _ in Data("A".utf8) })
+
+        c.pressStarted()
+        c.pressEnded()
+        await c.awaitPendingForTesting()
+
+        #expect(!FileManager.default.fileExists(atPath: tmp.path))
+        if case .failed = c.status {} else { Issue.record("expected .failed, got \(c.status)") }
+    }
+
+    @Test func cancelDeletesTempFile() throws {
+        let (c, capture) = make(mode: .hold)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ptt-\(UUID().uuidString).caf")
+        try Data("audio".utf8).write(to: tmp)
+        capture.producedURL = tmp
+
+        c.pressStarted()
+        #expect(capture.isRecording)
+        c.cancel()
+
+        #expect(!FileManager.default.fileExists(atPath: tmp.path))
+        #expect(c.status == .idle)
+    }
+
+    // MARK: - C2: cancel() cancels in-flight transcription
+
+    /// A transcription service that suspends until the test resolves it —
+    /// lets the test deterministically land `cancel()` while status is
+    /// `.transcribing`, then verify the eventual (late) result never reaches
+    /// `onTranscript`/`onAutoSend`. Same continuation-gate idiom as
+    /// `DeferredMicPermission` above.
+    private final class DeferredTranscriptionService: TranscriptionService, @unchecked Sendable {
+        private var resultContinuation: CheckedContinuation<String, Never>?
+        private var startedContinuation: CheckedContinuation<Void, Never>?
+        private var hasStarted = false
+
+        func transcribe(audio: Data, fileName: String, localeIdentifier: String?) async throws -> TranscriptionResult {
+            hasStarted = true
+            startedContinuation?.resume(); startedContinuation = nil
+            let text = await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
+                self.resultContinuation = cont
+            }
+            return TranscriptionResult(text: text)
+        }
+
+        func waitUntilStarted() async {
+            if hasStarted { return }
+            await withCheckedContinuation { self.startedContinuation = $0 }
+        }
+
+        func resolve(text: String) {
+            resultContinuation?.resume(returning: text)
+            resultContinuation = nil
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelDuringTranscribingDoesNotDeliverTranscript() async {
+        let settings = VoiceSettingsStore(persistence: InMemoryPersistenceStore())
+        settings.setMode(.hold)
+        let capture = FakeCaptureSession()
+        let slow = DeferredTranscriptionService()
+        let selector = TranscriptionBackendSelector(
+            settings: settings, onDevice: slow,
+            providerFactory: { nil }, availability: AlwaysAvailable())
+        let c = PushToTalkController(
+            settings: settings, capture: capture,
+            permission: FakeMicPermission(status: .authorized, grantOnRequest: true),
+            selector: selector, readAudio: { _ in Data("A".utf8) })
+        var review: String?
+        var sent: String?
+        c.onTranscript = { review = $0 }
+        c.onAutoSend = { sent = $0 }
+
+        c.pressStarted()
+        c.pressEnded()
+        await slow.waitUntilStarted()
+        #expect(c.status == .transcribing)
+
+        c.cancel()
+        #expect(c.status == .idle)
+
+        slow.resolve(text: "late result")
+        // Let the now-orphaned (cancelled) task actually resume and hit its
+        // cancellation guard — same actor (MainActor) as this test, so a few
+        // yields are enough to flush it; `.timeLimit` above is the hard backstop.
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(review == nil)
+        #expect(sent == nil)
+        #expect(c.status == .idle)
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func holdGrantResolvesWhileStillHeldStartsCapture() async {
         let settings = VoiceSettingsStore(persistence: InMemoryPersistenceStore())

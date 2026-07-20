@@ -16,6 +16,4 @@ enum TranscriptionError: Error, Equatable {
     case unsupportedFormat(String)
     case tooLarge(Int)
     case provider(String)
-    case micDenied
-    case cancelled
 }

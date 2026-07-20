@@ -19,14 +19,19 @@ import Foundation
 /// a normal (but unattended) turn.
 @MainActor
 final class BackgroundRunRunner: AgentRunRunner {
-    private let makeSession: @MainActor () -> AgentSession
+    /// Receives the originating run's `SavedExecutionPosture` (nil for `.chat`
+    /// runs) so the caller can project it into the session it builds — the
+    /// session's own permission-mode override and the sandbox profile routed
+    /// through `ExecutionRouter.resolveProfile` (M7 Wave B).
+    private let makeSession: @MainActor (SavedExecutionPosture?) -> AgentSession
 
-    init(makeSession: @escaping @MainActor () -> AgentSession) {
+    init(makeSession: @escaping @MainActor (SavedExecutionPosture?) -> AgentSession) {
         self.makeSession = makeSession
     }
 
-    func execute(prompt: String, appendLog: @escaping (String) -> Void) async -> AgentRunOutcome {
-        let session = makeSession()
+    func execute(prompt: String, posture: SavedExecutionPosture?,
+                 appendLog: @escaping (String) -> Void) async -> AgentRunOutcome {
+        let session = makeSession(posture)
         session.send(prompt)
         await session.currentTask?.value
 

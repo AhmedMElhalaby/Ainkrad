@@ -140,4 +140,37 @@ struct ExecutionRouterTests {
         let (backend, _) = try await router().route(tier: .background, policy: nil)
         #expect(backend.kind != .cloud)
     }
+
+    @Test func backgroundPostureCannotNameABroaderSandboxedProfile() async throws {
+        // A posture naming `networked-build` (network `.on`, strictly broader
+        // than `workspace-write`'s network `.off`) for a `.background` run
+        // must be narrowed back to the tier's restrictive default — the
+        // ceiling never lets a posture widen a background run beyond it.
+        let store = SandboxProfileStore(persistence: InMemoryPersistenceStore())
+        store.upsert(BuiltInSandboxProfiles.networkedBuild)
+        let r = ExecutionRouter(profiles: store, backends: [
+            .seatbelt: StubBackend(kind: .seatbelt, available: true),
+        ])
+        let policy = AgentExecutionPolicy(sandboxProfileID: BuiltInSandboxProfiles.networkedBuild.id,
+                                          allowCloud: false, toolAllowList: nil)
+        let (backend, profile) = try await r.route(tier: .background, policy: policy)
+        #expect(backend.kind == .seatbelt)
+        #expect(profile.id == BuiltInSandboxProfiles.defaultNonMainID)
+    }
+
+    @Test func backgroundPostureNamingAnNarrowerSandboxedProfileIsHonored() async throws {
+        // A posture naming `read-only` (strictly narrower than the default
+        // `workspace-write`: no writable paths at all) must still be honored
+        // — the ceiling only blocks widening, never narrowing.
+        let store = SandboxProfileStore(persistence: InMemoryPersistenceStore())
+        store.upsert(BuiltInSandboxProfiles.readOnly)
+        let r = ExecutionRouter(profiles: store, backends: [
+            .seatbelt: StubBackend(kind: .seatbelt, available: true),
+        ])
+        let policy = AgentExecutionPolicy(sandboxProfileID: BuiltInSandboxProfiles.readOnly.id,
+                                          allowCloud: false, toolAllowList: nil)
+        let (backend, profile) = try await r.route(tier: .background, policy: policy)
+        #expect(backend.kind == .seatbelt)
+        #expect(profile.id == BuiltInSandboxProfiles.readOnly.id)
+    }
 }

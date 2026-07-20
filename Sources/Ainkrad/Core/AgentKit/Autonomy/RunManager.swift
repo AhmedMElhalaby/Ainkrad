@@ -43,8 +43,9 @@ final class RunManager {
     var history: [AgentRun] { runs.filter { [.done, .failed, .interrupted].contains($0.status) } }
 
     @discardableResult
-    func enqueue(prompt: String, origin: AgentRunOrigin = .chat) -> AgentRun {
-        let run = AgentRun(origin: origin, prompt: prompt)
+    func enqueue(prompt: String, origin: AgentRunOrigin = .chat,
+                 posture: SavedExecutionPosture? = nil) -> AgentRun {
+        let run = AgentRun(origin: origin, prompt: prompt, posture: posture)
         document.runs.append(run)
         save()
         pump()
@@ -97,9 +98,10 @@ final class RunManager {
         document.runs[i].startedAt = Date()
         save()
         let prompt = document.runs[i].prompt
+        let posture = document.runs[i].posture
         tasks[id] = Task { [weak self] in
             guard let self else { return }
-            let outcome = await self.runner.execute(prompt: prompt) { line in
+            let outcome = await self.runner.execute(prompt: prompt, posture: posture) { line in
                 Task { @MainActor in self.appendLog(id, line) }
             }
             guard !Task.isCancelled else { return }

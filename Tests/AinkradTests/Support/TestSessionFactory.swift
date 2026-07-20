@@ -255,7 +255,8 @@ enum TestSessionFactory {
         usage: UsageTracker? = nil,
         runtime: RuntimeOptionsStore? = nil,
         commands: CommandRegistry? = nil,
-        candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil
+        candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil,
+        permissionModeOverride: AgentPermissionMode? = nil
     ) -> AgentSession {
         let persistence = persistence ?? InMemoryPersistenceStore()
         let ws = UUID()
@@ -280,7 +281,8 @@ enum TestSessionFactory {
             connections: resolvedConnections, config: config, context: context,
             registry: registry, permissions: permissions, memory: memory, agents: agents,
             router: router, usage: usage, runtime: runtime, commands: commands,
-            candidatesProvider: candidatesProvider)
+            candidatesProvider: candidatesProvider,
+            permissionModeOverride: permissionModeOverride)
     }
 
     /// Builds a session wired to a caller-supplied provider — for the interrupt/

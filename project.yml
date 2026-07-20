@@ -42,6 +42,10 @@ targets:
       - package: AinkradAppKit
         embed: true
         link: true
+      # WebKit backs the ONE approved web surface in the app — the mermaid
+      # diagram renderer in CanvasDiagramView (Task 10). Everything else
+      # stays native SwiftUI per the Cardinal HUD design language.
+      - sdk: WebKit.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app

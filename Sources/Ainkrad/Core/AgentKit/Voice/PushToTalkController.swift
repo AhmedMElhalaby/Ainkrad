@@ -55,7 +55,11 @@ final class PushToTalkController {
 
     func cancel() {
         isPressHeld = false
-        _ = capture.stop()
+        pending?.cancel()
+        pending = nil
+        if let url = capture.stop() {
+            try? FileManager.default.removeItem(at: url)
+        }
         status = .idle
     }
 
@@ -106,6 +110,10 @@ final class PushToTalkController {
         status = .transcribing
         pending = Task { [weak self] in
             guard let self else { return }
+            // Self-cleaning: the recorded `.caf` is scratch space for this one
+            // transcription attempt (success, failure, or cancellation) — mirrors
+            // AVAudioSlicer.slice's `defer { removeItem }` idiom.
+            defer { try? FileManager.default.removeItem(at: url) }
             do {
                 let resolved = try self.selector.resolve()
                 if let notice = resolved.notice { self.onNotice?(notice) }
@@ -113,10 +121,16 @@ final class PushToTalkController {
                 let result = try await resolved.service.transcribe(
                     audio: audio, fileName: url.lastPathComponent,
                     localeIdentifier: self.settings.document.localeIdentifier)
+                // Cooperative cancellation: `cancel()` may have fired while this
+                // was in flight (and already reset `status` to `.idle`) — don't
+                // let a late result resurrect a transcript/auto-send/status after
+                // the user cancelled. Mirrors RunManager.stop's `!Task.isCancelled` guard.
+                guard !Task.isCancelled else { return }
                 if self.settings.document.autoSend { self.onAutoSend?(result.text) }
                 else { self.onTranscript?(result.text) }
                 self.status = .idle
             } catch {
+                guard !Task.isCancelled else { return }
                 self.status = .failed(String(describing: error))
             }
         }

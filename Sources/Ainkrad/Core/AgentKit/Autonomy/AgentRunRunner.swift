@@ -11,5 +11,11 @@ enum AgentRunOutcome: Sendable {
 /// tests inject a stub.
 @MainActor
 protocol AgentRunRunner: AnyObject {
-    func execute(prompt: String, appendLog: @escaping (String) -> Void) async -> AgentRunOutcome
+    /// `posture` is the ORIGINATING schedule/trigger's saved execution posture
+    /// (M7 Wave B) — `nil` for plain `.chat` runs. A conformer projects it into
+    /// the session it builds (permission mode narrowing + sandbox profile);
+    /// it must never be used to WIDEN beyond whatever the conformer would have
+    /// used with no posture at all.
+    func execute(prompt: String, posture: SavedExecutionPosture?,
+                 appendLog: @escaping (String) -> Void) async -> AgentRunOutcome
 }
