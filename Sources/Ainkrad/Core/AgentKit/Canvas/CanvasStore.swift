@@ -37,6 +37,17 @@ final class CanvasStore {
         return e.id
     }
 
+    /// Add-or-replace by id, unconditionally — unlike `update(id:mutate:)` this
+    /// never guards on the id already existing. Used where the caller has
+    /// already computed the full resulting element (e.g. `CanvasRenderTool`,
+    /// which must match `CanvasReconstruction.apply`'s create-or-merge
+    /// semantics so a live render and a transcript replay never diverge).
+    func upsert(_ element: CanvasElement) {
+        var m = model
+        m.upsert(element)
+        commit(m)
+    }
+
     func update(id: String, mutate: (inout CanvasElement) -> Void) {
         var m = model
         guard var e = m.elements.first(where: { $0.id == id }) else { return }
