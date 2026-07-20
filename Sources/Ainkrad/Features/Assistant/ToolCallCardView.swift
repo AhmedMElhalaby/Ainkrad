@@ -37,6 +37,12 @@ struct ToolCallCardView: View {
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .overlay {
+            if isApproval {
+                ChamferShape(cut: AinkradRadius.md)
+                    .stroke(tokens.accentPrimary.opacity(0.6), lineWidth: 1)
+            }
+        }
         .overlay(alignment: .leading) {
             if isError {
                 Rectangle().fill(tokens.accentTertiary).frame(width: 2)
@@ -90,7 +96,7 @@ struct ToolCallCardView: View {
         }
         if let diff, !diff.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(diffAttributed(diff)).font(AinkradFont.mono(11)).textSelection(.enabled)
+                Text(diffGutterAttributed(diff)).font(AinkradFont.mono(11)).textSelection(.enabled)
             }
             .frame(maxHeight: 200)
         }
@@ -107,12 +113,14 @@ struct ToolCallCardView: View {
         }
     }
 
-    private func diffAttributed(_ diff: String) -> AttributedString {
+    private func diffGutterAttributed(_ diff: String) -> AttributedString {
         var out = AttributedString()
         for (i, line) in diff.components(separatedBy: "\n").enumerated() {
-            var seg = AttributedString((i == 0 ? "" : "\n") + line)
-            if line.hasPrefix("+") { seg.foregroundColor = tokens.accentSecondary }
-            else if line.hasPrefix("-") { seg.foregroundColor = tokens.accentTertiary }
+            let sign = line.first
+            let gutter = sign == "+" ? "+ " : (sign == "-" ? "- " : "  ")
+            var seg = AttributedString((i == 0 ? "" : "\n") + gutter + line.dropFirst(sign == "+" || sign == "-" ? 1 : 0))
+            if sign == "+" { seg.foregroundColor = tokens.accentSecondary }
+            else if sign == "-" { seg.foregroundColor = tokens.accentTertiary }
             else { seg.foregroundColor = tokens.foreground.opacity(0.5) }
             out += seg
         }
