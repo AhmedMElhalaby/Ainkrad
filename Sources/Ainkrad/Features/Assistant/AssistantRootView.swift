@@ -198,11 +198,7 @@ struct AssistantRootView: View {
                         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentPrimary.opacity(0.18)))
                         .shadow(color: tokens.accentPrimary.opacity(0.12), radius: 6)
                 } else {
-                    // Borderless — Task 5 replaces this Text with AssistantMarkdownText.
-                    Text(message.text)
-                        .font(AinkradFont.display(13))
-                        .foregroundStyle(tokens.foreground.opacity(0.9))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    AssistantMarkdownText(text: message.text, tokens: tokens)
                 }
             }
 
@@ -231,11 +227,12 @@ struct AssistantRootView: View {
             }
 
             if session.state == .streaming || !session.streamingText.isEmpty {
-                (Text(session.streamingText)
-                    + Text(session.state == .streaming ? " ▍" : "")
-                        .foregroundColor(tokens.accentSecondary))
-                    .font(AinkradFont.display(13))
-                    .foregroundStyle(tokens.foreground.opacity(0.9))
+                VStack(alignment: .leading, spacing: 2) {
+                    AssistantMarkdownText(text: session.streamingText, tokens: tokens)
+                    if session.state == .streaming {
+                        Text("▍").font(AinkradFont.display(13)).foregroundStyle(tokens.accentSecondary)
+                    }
+                }
             } else if session.streamingThinking.isEmpty {
                 Text("Thinking…")
                     .font(AinkradFont.display(12))
