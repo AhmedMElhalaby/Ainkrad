@@ -110,7 +110,9 @@ struct ScheduleUIView: View {
         case .gitChange:
             trigger = .gitChange(repoPath: draftPath)
         case .webhook:
-            trigger = .webhook(id: UUID().uuidString)
+            // No independent id (M7 Wave B / B3 fix): the real webhook path
+            // keys off the owning `AgentSchedule.id`, never this case's payload.
+            trigger = .webhook
         }
         store.upsert(AgentSchedule(
             name: draftName, trigger: trigger, prompt: draftPrompt,

@@ -34,7 +34,7 @@ final class ScheduleRunner {
             // instants (e.g. app asleep across days). We coalesce them into a
             // single run rather than backfilling one per missed instant
             // (recordFired stores `now`, not `due`, below).
-            let run = runs.enqueue(prompt: schedule.prompt, origin: .schedule)
+            let run = runs.enqueue(prompt: schedule.prompt, origin: .schedule, posture: schedule.posture)
             store.recordFired(schedule.id, runID: run.id, date: now)   // now, not `due`, so the window coalesces
             fired.append(schedule.id)
         }

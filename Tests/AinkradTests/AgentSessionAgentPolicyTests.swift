@@ -45,4 +45,25 @@ struct AgentSessionAgentPolicyTests {
         let session = TestSessionFactory.make(agents: agents, mode: .fullAuto)
         #expect(session.effectiveModeForTesting() == .ask)
     }
+
+    // M7 Wave B (B1) — a schedule/trigger's own `SavedExecutionPosture`,
+    // projected into `AgentSession` as `permissionModeOverride`, composes into
+    // `effectiveMode()` the SAME most-restrictive-wins way as the Agent's own
+    // `permissionPosture` above.
+    @Test func scheduledRunPostureNarrowsBelowGlobalMode() {
+        // Workspace fullAuto + a schedule posture override of .ask → effective
+        // .ask, NOT the global fullAuto: this is the run whose posture actually
+        // narrows, proven against the global mode it would otherwise inherit.
+        let session = TestSessionFactory.make(mode: .fullAuto, permissionModeOverride: .ask)
+        #expect(session.effectiveModeForTesting() == .ask)
+    }
+
+    @Test func scheduledRunPostureCannotWidenBeyondGlobalMode() {
+        // Security invariant: a posture override can only NARROW, never widen.
+        // Workspace .ask + a (hypothetical, malformed) override of .fullAuto
+        // must still settle to .ask — the more restrictive of the two wins,
+        // exactly mirroring the Agent-profile posture seam's own guarantee.
+        let session = TestSessionFactory.make(mode: .ask, permissionModeOverride: .fullAuto)
+        #expect(session.effectiveModeForTesting() == .ask)
+    }
 }

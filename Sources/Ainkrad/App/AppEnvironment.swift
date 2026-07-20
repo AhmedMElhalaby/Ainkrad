@@ -676,20 +676,15 @@ final class AppEnvironment {
         // its `AgentSession` gets a non-nil `sandboxAllowList` so the compose layer
         // (`SandboxPermissionPolicy.compose`) is always active.
         //
-        // RESIDUAL GAP (flagged during Task 15, not fully closed here): `AgentRun`/
-        // `RunManager.enqueue` carry an `origin` (`.chat`/`.schedule`/`.event`) but
-        // `AgentRunRunner.execute(prompt:appendLog:)` never receives it, and there is
-        // exactly ONE `BackgroundRunRunner` instance shared across every origin — so
-        // a schedule's own `SavedExecutionPosture.sandboxProfileID` (Task 14) cannot
-        // be projected into `ExecutionRouter.resolveProfile(tier:policy:)` without
-        // threading the run (or its posture) through `RunManager`/`AgentRunRunner`,
-        // which is out of this task's file scope (Modify: AgentSession.swift,
-        // AgentSessionSubagentRunner.swift, AppEnvironment.swift only). Every
-        // schedule/event run instead inherits this SAME `.background`-tier sandbox
-        // as a safe default: fail-closed, never `.host`, never an escalation — just
-        // not yet the schedule's OWN saved posture. Follow-up: extend `AgentRun`
-        // with an optional posture/tier, thread it through `RunManager.enqueue` →
-        // `AgentRunRunner.execute` → the session-maker closure.
+        // RESIDUAL GAP CLOSED (M7 Wave B): `AgentRun.posture` now carries the
+        // originating schedule/trigger's `SavedExecutionPosture` end-to-end —
+        // `RunManager.enqueue(posture:)` → `AgentRunRunner.execute(posture:)` →
+        // `BackgroundRunRunner`'s `makeSession(posture:)` below, which projects
+        // `posture.sandboxProfileID` into `ExecutionRouter.resolveProfile` and
+        // `posture.permissionMode` into `AgentSession`'s narrowing-only
+        // `permissionModeOverride`. A `nil` posture (plain `.chat` runs) or an
+        // unresolvable `sandboxProfileID` falls back to the SAME `.background`-
+        // tier default as before — fail-closed, never `.host`, never escalation.
         // `canvas_render` is EXCLUDED from the background/headless tool list: it's
         // bound to the foreground `canvasStore` (sessionKey "default", the SAME
         // store the `CanvasApp` pane reads), so an autonomous background/schedule/
@@ -705,21 +700,31 @@ final class AppEnvironment {
         let backgroundToolRegistry = AgentToolRegistry(
             tools: backgroundAgentTools,
             dynamicTools: { [weak mcpServerRegistry] in mcpServerRegistry?.currentTools() ?? [] })
-        let backgroundSandboxProfile = executionRouter.resolveProfile(tier: .background, policy: nil)
-
         let runNotifier = UserNotificationRunNotifier()
         let runManager = RunManager(
             persistence: persistence,
-            runner: BackgroundRunRunner(makeSession: {
-                AgentSession(
+            runner: BackgroundRunRunner(makeSession: { posture in
+                // M7 Wave B: resolve THIS run's own sandbox profile from its
+                // posture (nil sandboxProfileID == nil policy's behavior below,
+                // so a `.chat`/postureless run resolves identically to before).
+                let policy = AgentExecutionPolicy(
+                    sandboxProfileID: posture?.sandboxProfileID, allowCloud: false, toolAllowList: nil)
+                let sandboxProfile = executionRouter.resolveProfile(tier: .background, policy: policy)
+                // Narrowing-only: an unrecognized `permissionMode` string (future/
+                // corrupt payload) degrades to `nil` (no override) rather than
+                // guessing — `AgentSession.effectiveMode()` then simply falls back
+                // to the workspace's own mode, never a wider or crashing path.
+                let permissionModeOverride = posture.flatMap { AgentPermissionMode(rawValue: $0.permissionMode) }
+                return AgentSession(
                     providerFor: providerFor, connections: connectionStore, config: agentConfigStore,
                     context: agentContextService, registry: backgroundToolRegistry, permissions: agentPermissionStore,
                     agents: agentStore, editJournal: editJournal, unattended: true,
-                    sandboxAllowList: backgroundSandboxProfile.toolAllowList, agentAllowList: nil,
+                    sandboxAllowList: sandboxProfile.toolAllowList, agentAllowList: nil,
                     router: modelRouter, usage: usageTracker, runtime: runtimeOptionsStore,
                     commands: commandRegistry, authProfiles: authProfileStore,
                     candidatesProvider: candidatesProvider,
-                    isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) })
+                    isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) },
+                    permissionModeOverride: permissionModeOverride)
             }),
             notifier: runNotifier, maxConcurrent: 2)
 
@@ -755,6 +760,8 @@ final class AppEnvironment {
                 }
             case .time, .webhook:
                 break   // .time fires via scheduleRunner; .webhook via WebhookServer (off by default)
+            case .unknown:
+                break   // forward-compat (M7 Wave B): a future trigger kind this build doesn't know yet
             }
         }
         scheduleRunner.start()

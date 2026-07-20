@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct Autonomy3aWiringTests {
     final class InstantRunner: AgentRunRunner {
-        func execute(prompt: String, appendLog: @escaping (String) -> Void) async -> AgentRunOutcome { .success("ok") }
+        func execute(prompt: String, posture: SavedExecutionPosture?, appendLog: @escaping (String) -> Void) async -> AgentRunOutcome { .success("ok") }
     }
 
     @Test func spawnSubagentToolConstructsInRegistry() {
