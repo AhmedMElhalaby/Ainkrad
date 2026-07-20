@@ -35,6 +35,7 @@ struct MenuBarPopoverView: View {
             Text("ASSISTANT").font(AinkradFont.display(12, weight: .medium)).kerning(0.6)
                 .foregroundStyle(tokens.foreground.opacity(0.7))
             Spacer()
+            RecordingIndicatorView(status: environment.voiceService.pushToTalk.status, tokens: tokens)
             AinkradIconButton(systemName: "arrow.up.forward.app") {
                 environment.workspaceManager.activeWorkspace.tileLayout.openApp(AssistantApp.id)
                 presence.close()
