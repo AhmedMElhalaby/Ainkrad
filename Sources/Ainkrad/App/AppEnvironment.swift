@@ -683,7 +683,14 @@ final class AppEnvironment {
         // not yet the schedule's OWN saved posture. Follow-up: extend `AgentRun`
         // with an optional posture/tier, thread it through `RunManager.enqueue` →
         // `AgentRunRunner.execute` → the session-maker closure.
-        var backgroundAgentTools = agentTools
+        // `canvas_render` is EXCLUDED from the background/headless tool list: it's
+        // bound to the foreground `canvasStore` (sessionKey "default", the SAME
+        // store the `CanvasApp` pane reads), so an autonomous background/schedule/
+        // trigger run calling it would silently mutate the canvas the user is
+        // looking at — a cross-session split-brain. The foreground
+        // `agentToolRegistry` above keeps `canvas_render`; only this background
+        // copy drops it.
+        var backgroundAgentTools = agentTools.filter { !($0 is CanvasRenderTool) }
         if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
             backgroundAgentTools[idx] = RunTerminalTool(
                 actionHub: agentActionHub, router: executionRouter, trustTier: .background)

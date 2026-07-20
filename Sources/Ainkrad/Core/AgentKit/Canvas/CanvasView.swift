@@ -30,8 +30,6 @@ struct CanvasView: View {
                     CanvasCard(element: element, store: store, tokens: tokens,
                                parallax: parallax(for: element, in: proxy.size),
                                reduceMotion: reduceMotion)
-                        .frame(width: element.rect.width, height: element.rect.height)
-                        .offset(x: element.rect.x, y: element.rect.y)
                         .zIndex(Double(element.z))
                 }
             }
@@ -70,6 +68,29 @@ private struct CanvasCard: View {
     @State private var isHovering = false
     @GestureState private var dragStart: CanvasRect?
     @GestureState private var resizeStart: CanvasRect?
+    // Perf fix (I2/M1): live-drag/resize preview state ONLY — the store is a
+    // synchronous full-document atomic-write persistence layer (`CanvasStore.
+    // commit`), so writing it on every `DragGesture.onChanged` tick was a disk
+    // write per pixel of movement. These hold the in-flight visual delta;
+    // the store is committed exactly once, in `.onEnded`.
+    @State private var dragPreviewOffset: CGSize = .zero
+    @State private var resizePreviewSize: CGSize?
+    @State private var hasBroughtToFrontThisDrag = false
+
+    /// The rect actually rendered: the committed `element.rect`, overlaid with
+    /// any in-flight drag/resize preview. `element.rect` itself never changes
+    /// mid-gesture (the store isn't written to until `.onEnded`), so it stays
+    /// a stable anchor for the whole gesture.
+    private var previewRect: CanvasRect {
+        var r = element.rect
+        r.x += dragPreviewOffset.width
+        r.y += dragPreviewOffset.height
+        if let size = resizePreviewSize {
+            r.width = size.width
+            r.height = size.height
+        }
+        return r
+    }
 
     var body: some View {
         CanvasElementView(element: element, tokens: tokens)
@@ -88,13 +109,23 @@ private struct CanvasCard: View {
                         if state == nil { state = element.rect }
                     }
                     .onChanged { v in
+                        if !hasBroughtToFrontThisDrag {
+                            store.bringToFront(id: element.id)
+                            hasBroughtToFrontThisDrag = true
+                        }
+                        dragPreviewOffset = v.translation
+                    }
+                    .onEnded { v in
                         let base = dragStart ?? element.rect
-                        store.bringToFront(id: element.id)
                         store.move(id: element.id,
                                    to: CGPoint(x: base.x + v.translation.width,
                                                y: base.y + v.translation.height))
+                        dragPreviewOffset = .zero
+                        hasBroughtToFrontThisDrag = false
                     }
             )
+            .frame(width: previewRect.width, height: previewRect.height)
+            .offset(x: previewRect.x, y: previewRect.y)
     }
 
     private var controls: some View {
@@ -120,9 +151,15 @@ private struct CanvasCard: View {
                     }
                     .onChanged { v in
                         let base = resizeStart ?? element.rect
+                        resizePreviewSize = CGSize(width: max(160, base.width + v.translation.width),
+                                                    height: max(100, base.height + v.translation.height))
+                    }
+                    .onEnded { v in
+                        let base = resizeStart ?? element.rect
                         store.resize(id: element.id,
                                      to: CGSize(width: max(160, base.width + v.translation.width),
                                                 height: max(100, base.height + v.translation.height)))
+                        resizePreviewSize = nil
                     }
             )
     }
