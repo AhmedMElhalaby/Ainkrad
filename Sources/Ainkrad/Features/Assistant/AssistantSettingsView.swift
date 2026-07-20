@@ -345,7 +345,7 @@ struct AssistantSettingsView: View {
 
     /// Humanize a stored tool name (e.g. "run_terminal" → "Run terminal").
     private func toolLabel(_ name: String) -> String {
-        name.replacingOccurrences(of: "_", with: " ").capitalized
+        ToolPresentation.humanize(name)
     }
 
     // MARK: - Context privacy
