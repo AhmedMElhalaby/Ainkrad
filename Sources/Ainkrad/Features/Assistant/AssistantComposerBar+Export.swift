@@ -3,18 +3,10 @@ import SwiftUI
 import AinkradAppKit
 
 /// Export/redaction flow for `AssistantComposerBar` (M7 finalize Wave D, D2 —
-/// extracted verbatim, no behavior change).
+/// extracted verbatim, no behavior change). The strip entry point now lives in
+/// the `•••` overflow panel (`AssistantComposerBar+Overflow.swift`), which sets
+/// `isExportModalPresented` directly; this extension owns the modal + export.
 extension AssistantComposerBar {
-    var exportTrigger: some View {
-        Button { isExportModalPresented = true } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 14))
-                .foregroundStyle(tokens.foreground.opacity(0.55))
-        }
-        .buttonStyle(.plain)
-        .help("Export conversation")
-    }
-
     /// Redaction/confirm modal content. Rendering + writing happens on
     /// confirm (`performExport`): `ConversationExporter.export` runs with the
     /// user's comma-separated redaction strings, the result is copied to the

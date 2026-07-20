@@ -59,6 +59,17 @@ final class AgentPermissionStore {
         persistence.save(document)
     }
 
+    /// Advance the current workspace's mode: ask -> autoApprove -> fullAuto -> ask.
+    func cycle() {
+        let next: AgentPermissionMode
+        switch mode {
+        case .ask: next = .autoApprove
+        case .autoApprove: next = .fullAuto
+        case .fullAuto: next = .ask
+        }
+        setMode(next)
+    }
+
     func setGateReads(_ value: Bool) {
         document.gateReads = value
         persistence.save(document)

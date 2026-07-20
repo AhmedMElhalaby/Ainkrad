@@ -25,7 +25,10 @@ struct AssistantComposerBar: View {
     let modelPicker: AssistantModelPickerModel
     @Binding var draft: String
     var autoFocusOnAppear: Bool = false
-    @State private var isUsageDashboardPresented = false
+    // Not `private` — set from `AssistantComposerBar+Overflow.swift` (Wave 3
+    // Task 7 collapses the Usage trigger into the `•••` panel; same
+    // minimal-widening rationale as the export/mention/palette state above).
+    @State var isUsageDashboardPresented = false
     @State private var isRunsPanelPresented = false
     /// M7 Slice 3b (Autonomy: scheduling/triggers) — presents `ScheduleUIView`,
     /// same `.ainkradModal` pattern as the Runs panel below.
@@ -58,6 +61,17 @@ struct AssistantComposerBar: View {
     @State var isExportModalPresented = false
     @State var redactionsText = ""
 
+    /// `•••` overflow panel state (M7 finalize follow-up: composer strip
+    /// polish) — see `AssistantComposerBar+Overflow.swift`. Not `private`,
+    /// same widening rationale as the state above (read from that extension).
+    @State var isOverflowVisible = false
+
+    /// Wave 3e: the ONE uniform height every control in the bottom strip is
+    /// pinned to — icon buttons (`size:`), the model select (`.frame`), and
+    /// `SendButton`'s footprint. Not `private` — read from
+    /// `AssistantComposerBar+Overflow.swift`'s `overflowTrigger`.
+    static let controlHeight: CGFloat = 30
+
     var body: some View {
         let isBusy = AssistantComposerBar.isBusy(session.state)
 
@@ -72,8 +86,24 @@ struct AssistantComposerBar: View {
                 .disabled(isBusy)
                 .onDrop(of: [.image, .fileURL], isTargeted: nil, perform: handleDrop)
 
+            // Wave 3e: the whole strip is pinned to one uniform control height
+            // (30) so the icon buttons, the model select, and the send button
+            // all read as the same size — see each control's `size`/`.frame`
+            // below, all set to `Self.controlHeight`.
             HStack(spacing: 8) {
-                AgentSwitcherView(store: environment.agentStore, tokens: tokens)
+                // Left cluster (Wave 3c): agent and permission are icon
+                // buttons that cycle on click, matching the right cluster's
+                // `AinkradIconButton` idiom; model is the only real select.
+                // Replaces the old grouped "well" of three stacked selects.
+                AinkradIconButton(systemName: environment.agentStore.active.icon, size: Self.controlHeight,
+                                  tooltip: "Agent: \(environment.agentStore.active.name) — Shift+Tab") {
+                    environment.agentStore.cycleActive()
+                }
+
+                AinkradIconButton(systemName: environment.agentPermissionStore.mode.glyph, size: Self.controlHeight,
+                                  tooltip: "Permission: \(AssistantComposerBar.title(environment.agentPermissionStore.mode)) — ⌘⇧P") {
+                    environment.agentPermissionStore.cycle()
+                }
 
                 AssistantConnectionModelPicker(
                     model: modelPicker,
@@ -81,31 +111,24 @@ struct AssistantComposerBar: View {
                     onManageConnections: { environment.isSettingsPresented = true }
                 )
 
-                permissionModeSelect
-
                 Spacer(minLength: 8)
 
-                exportTrigger
-
+                // Action cluster: high-traffic triggers stay visible; Usage
+                // and Export collapse into `overflowTrigger`'s `•••` panel.
                 runsPanelTrigger
 
                 schedulesTrigger
+
+                overflowTrigger
 
                 micTrigger
 
                 RecordingIndicatorView(status: environment.voiceService.pushToTalk.status, tokens: tokens,
                                         notice: environment.voiceService.lastNotice)
 
-                usageDashboardTrigger
-
-                Button { send() } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(canSend(isBusy: isBusy) ? tokens.accentSecondary : tokens.foreground.opacity(0.25))
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend(isBusy: isBusy))
+                SendButton(enabled: canSend(isBusy: isBusy), tokens: tokens) { send() }
             }
+            .frame(height: Self.controlHeight)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
@@ -174,18 +197,6 @@ struct AssistantComposerBar: View {
         .padding(14)
     }
 
-    private var permissionModeSelect: some View {
-        let store = environment.agentPermissionStore
-        // `AinkradSelect` is a single `Binding<T>` with no on-change hook, so the
-        // `store.setMode` write-back rides in the binding's setter.
-        return AinkradSelect(
-            items: AgentPermissionMode.allCases,
-            selection: Binding(get: { store.mode }, set: { store.setMode($0) }),
-            label: { AssistantComposerBar.title($0) }
-        )
-        .fixedSize()
-    }
-
     /// Opens the `/usage` dashboard (session + cumulative tokens/cost/savings)
     /// in a scoped `.ainkradModal` — the same "gauge" glyph `/usage`'s text
     /// note already reports on, just visualized. A themed icon button, not a
@@ -195,13 +206,9 @@ struct AssistantComposerBar: View {
     /// started via `spawn_subagent` or a background schedule shows up here live, since
     /// this reads the SAME `RunManager` the run itself updates.
     private var runsPanelTrigger: some View {
-        Button { isRunsPanelPresented = true } label: {
-            Image(systemName: "list.bullet.rectangle.portrait")
-                .font(.system(size: 14))
-                .foregroundStyle(tokens.foreground.opacity(0.55))
+        AinkradIconButton(systemName: "list.bullet.rectangle.portrait", size: Self.controlHeight, tooltip: "Runs") {
+            isRunsPanelPresented = true
         }
-        .buttonStyle(.plain)
-        .help("Runs")
     }
 
     /// Opens the Scheduler (M7 Slice 3b) — create/edit `AgentSchedule`s (time,
@@ -210,7 +217,7 @@ struct AssistantComposerBar: View {
     /// bare-`Button` idiom the sibling triggers above use) so this new trigger
     /// is a proper Cardinal HUD component, not a native control.
     private var schedulesTrigger: some View {
-        AinkradIconButton(systemName: "clock.badge", size: 22, tooltip: "Schedules") {
+        AinkradIconButton(systemName: "clock.badge", size: Self.controlHeight, tooltip: "Schedules") {
             isSchedulesPresented = true
         }
     }
@@ -220,19 +227,9 @@ struct AssistantComposerBar: View {
     /// directly; the live status is reflected next to it by
     /// `RecordingIndicatorView`, not by this button's own glyph.
     private var micTrigger: some View {
-        AinkradIconButton(systemName: "mic.fill", size: 22, tooltip: "Push to talk") {
+        AinkradIconButton(systemName: "mic.fill", size: Self.controlHeight, tooltip: "Push to talk") {
             environment.voiceService.pushToTalk.toggle()
         }
-    }
-
-    private var usageDashboardTrigger: some View {
-        Button { isUsageDashboardPresented = true } label: {
-            Image(systemName: "gauge.with.dots.needle.67percent")
-                .font(.system(size: 14))
-                .foregroundStyle(tokens.foreground.opacity(0.55))
-        }
-        .buttonStyle(.plain)
-        .help("Usage & cost")
     }
 
     private func canSend(isBusy: Bool) -> Bool {
@@ -294,5 +291,37 @@ enum ComposerTriggers {
     static func trailingToken(of text: String) -> String {
         guard let idx = text.lastIndex(where: { $0.isWhitespace }) else { return text }
         return String(text[text.index(after: idx)...])
+    }
+}
+
+/// Send affordance: a chamfered Cardinal HUD button (matching the kit's
+/// filled tool-card / `AinkradIconButton` idiom) with hover/press feedback
+/// and an enabled-state glow — square footprint matching the composer's
+/// `AssistantComposerBar.controlHeight`-sized icon buttons.
+private struct SendButton: View {
+    let enabled: Bool
+    let tokens: DesignTokens
+    let action: () -> Void
+    @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    private static let footprint: CGFloat = AssistantComposerBar.controlHeight
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(enabled ? tokens.accentSecondary.contrastingText : tokens.foreground.opacity(0.3))
+                .frame(width: Self.footprint, height: Self.footprint)
+                .background(ChamferShape(cut: 6).fill(enabled ? tokens.accentSecondary.opacity(0.9) : tokens.surfaceElevated.opacity(0.5)))
+                .contentShape(ChamferShape(cut: 6))
+                .scaleEffect(isHovering && enabled && !reduceMotion ? 1.06 : 1.0)
+                .shadow(color: enabled ? tokens.accentSecondary.opacity(isHovering ? 0.55 : 0.3) : .clear,
+                        radius: enabled ? 6 : 0)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { isHovering = $0 }
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
 }

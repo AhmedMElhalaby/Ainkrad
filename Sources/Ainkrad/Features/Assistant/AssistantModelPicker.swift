@@ -190,6 +190,12 @@ struct AssistantConnectionModelPicker: View {
                 searchPlaceholder: "Search connections & models…"
             )
             .fixedSize()
+            // Bordered trigger's own padding (AinkradSpacing.sm vertical) runs
+            // taller than the composer's icon buttons; pin the row height so
+            // the control cluster reads as one consistent height — see
+            // `AssistantComposerBar.controlHeight` (Wave 3e: whole strip
+            // unified to 30).
+            .frame(height: AssistantComposerBar.controlHeight)
             .onAppear { model.refreshAllModels(environment) }
             .onChange(of: active?.id) { _, _ in if let c = active { model.refreshModels(for: c, environment) } }
 
@@ -205,10 +211,7 @@ struct AssistantConnectionModelPicker: View {
     @ViewBuilder
     private var routingBadge: some View {
         let pinned = environment.runtimeOptionsStore.options.pinnedModel
-        let routerEnabled = environment.agentStore.active.routing.routerEnabled
-        if modelPillShowsAutoBadge(pinnedModel: pinned, routerEnabled: routerEnabled) {
-            AinkradBadge(text: "Auto", tint: tokens.accentSecondary)
-        } else if pinned != nil {
+        if pinned != nil {
             AinkradBadge(text: "Pinned", tint: tokens.accentPrimary)
         }
     }
@@ -260,7 +263,7 @@ struct AssistantConnectionModelPicker: View {
     private func label(_ option: Option) -> String {
         switch option {
         case .auto:
-            return "↺ Auto — router picks each turn"
+            return "Auto"
         case .empty:
             return "No connection"
         case .manage:

@@ -101,4 +101,16 @@ struct AgentPermissionStoreTests {
         let reloaded = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { UUID() })
         #expect(reloaded.allowlist == ["run_terminal"])
     }
+
+    @Test func cycleAdvancesModeAndWraps() {
+        let ws = UUID()
+        let store = AgentPermissionStore(persistence: InMemoryPersistenceStore(), currentWorkspaceID: { ws })
+        #expect(store.mode == .ask)
+        store.cycle()
+        #expect(store.mode == .autoApprove)
+        store.cycle()
+        #expect(store.mode == .fullAuto)
+        store.cycle()
+        #expect(store.mode == .ask)   // wraps back around
+    }
 }

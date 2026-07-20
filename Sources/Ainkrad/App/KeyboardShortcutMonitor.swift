@@ -360,6 +360,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 // Unreachable: intercepted in `handle` above before `perform`
                 // is called. Present only for switch exhaustiveness.
                 return true
+            case .cyclePermissionMode:
+                environment.agentPermissionStore.cycle()
+                return true
             }
         }
     }
