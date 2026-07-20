@@ -67,4 +67,22 @@ final class GlobalSettingsTests {
         #expect(decoded.uiFontFamily == .exo2)
         #expect(decoded.accentColorHex == nil)
     }
+
+    @Test("reduce-motion defaults to off (motion on) with no prior write")
+    func reduceMotionDefaultsOff() {
+        #expect(GlobalSettings().uiReduceMotion == false)
+    }
+
+    @MainActor
+    @Test("setUiReduceMotion updates the store and persists across a fresh load")
+    func reduceMotionSetterRoundTrips() {
+        let persistence = InMemoryPersistenceStore()
+        let store = GeneralSettingsStore(persistence: persistence)
+        #expect(store.uiReduceMotion == false)
+
+        store.setUiReduceMotion(true)
+        #expect(store.uiReduceMotion == true)
+        // Persisted: a store rebuilt on the same backing sees the new value.
+        #expect(GeneralSettingsStore(persistence: persistence).uiReduceMotion == true)
+    }
 }

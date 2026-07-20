@@ -24,7 +24,8 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     private(set) var launcherViewMode: LauncherViewMode
     /// AINKRAD-controlled motion preference (independent of the macOS
     /// system-level Reduce Motion toggle), injected into `\.ainkradReduceMotion`
-    /// at the host root. No settings UI yet — default false = motion on.
+    /// at the host root. Toggled in Settings → Appearance → Motion; default
+    /// false = motion on.
     private(set) var uiReduceMotion: Bool
     private let persistence: PersistenceStore
 
@@ -61,6 +62,13 @@ final class GeneralSettingsStore: SoundSettingsProviding {
         overlayBlurEnabled = isOn
         var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         settings.overlayBlurEnabled = isOn
+        persistence.save(settings)
+    }
+
+    func setUiReduceMotion(_ isOn: Bool) {
+        uiReduceMotion = isOn
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.uiReduceMotion = isOn
         persistence.save(settings)
     }
 

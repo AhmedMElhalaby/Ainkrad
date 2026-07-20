@@ -90,6 +90,7 @@ struct AssistantRootView: View {
                         ForEach(Array(session.messages.enumerated()), id: \.offset) { index, message in
                             bubble(for: message, at: index, in: session.messages, tokens: tokens)
                                 .id(index)
+                                .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
                         if session.state == .thinking || session.state == .streaming {
@@ -121,11 +122,17 @@ struct AssistantRootView: View {
                         }
                     }
                     .padding(14)
+                    // The message array is mutated inside `AgentSession`, outside
+                    // any `withAnimation`, so the per-turn `.transition` above has
+                    // no transaction to ride. Binding an animation to the count
+                    // gives newly-inserted rows their materialize transition.
+                    // Gated so Reduce Motion inserts rows instantly.
+                    .animation(reduceMotion ? nil : AinkradMotion.present, value: session.messages.count)
                 }
             }
             .scrollContentBackground(.hidden)
             .onChange(of: session.messages.count) { _, _ in
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { proxy.scrollTo("streaming", anchor: .bottom) }
+                withAnimation(reduceMotion ? nil : AinkradMotion.present) { proxy.scrollTo("streaming", anchor: .bottom) }
             }
             .onChange(of: session.streamingText) { _, _ in
                 proxy.scrollTo("streaming", anchor: .bottom)
@@ -230,7 +237,7 @@ struct AssistantRootView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     AssistantMarkdownText(text: session.streamingText, tokens: tokens)
                     if session.state == .streaming {
-                        Text("▍").font(AinkradFont.display(13)).foregroundStyle(tokens.accentSecondary)
+                        StreamingCursor(tokens: tokens)
                     }
                 }
             } else if session.streamingThinking.isEmpty {
@@ -246,7 +253,7 @@ struct AssistantRootView: View {
     private func thinkingDisclosure(session: AgentSession, tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
-                isThinkingExpanded.toggle()
+                withAnimation(reduceMotion ? nil : AinkradMotion.present) { isThinkingExpanded.toggle() }
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: isThinkingExpanded ? "chevron.down" : "chevron.right")
@@ -297,7 +304,7 @@ private struct HoverNewChatButton: View {
         .buttonStyle(.plain)
         .help("New chat")
         .onHover { isHovering = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovering)
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
 }
 
@@ -320,5 +327,26 @@ private struct AssistantTurnCopyButton: View {
         }
         .opacity(isVisible ? 0.8 : 0)
         .animation(reduceMotion ? nil : AinkradMotion.hover, value: isVisible)
+    }
+}
+
+/// Blinking caret shown at the tail of streaming output; steady under reduce-motion.
+private struct StreamingCursor: View {
+    let tokens: DesignTokens
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if reduceMotion {
+            caret(opacity: 1)
+        } else {
+            TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                let on = Int(context.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+                caret(opacity: on ? 1 : 0.15)
+            }
+        }
+    }
+
+    private func caret(opacity: Double) -> some View {
+        Text("▍").font(AinkradFont.display(13)).foregroundStyle(tokens.accentSecondary.opacity(opacity))
     }
 }
