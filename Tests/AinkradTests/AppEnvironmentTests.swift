@@ -91,6 +91,8 @@ final class AppEnvironmentTests {
         let fileChangeWatcher = FileChangeWatcher()
         let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
         let canvasStore = CanvasStore(persistence: persistence)
+        let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
+        voiceService.attachSession(agentSession)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -148,7 +150,8 @@ final class AppEnvironmentTests {
             skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
             skillCommandStore: SkillCommandStore(persistence: persistence),
             menuBarPresence: menuBarPresence,
-            canvasStore: canvasStore
+            canvasStore: canvasStore,
+            voiceService: voiceService
         )
 
         #expect(environment.registry === registry)
