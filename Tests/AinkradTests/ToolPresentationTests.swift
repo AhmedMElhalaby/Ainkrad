@@ -18,16 +18,23 @@ struct ToolPresentationTests {
         #expect(ToolPresentation.for(toolName: "workspace_control").icon == "macwindow")
     }
 
-    @Test func editToolsUsePrimaryTint() {
-        for name in ["Edit", "Write", "str_replace"] {
-            let p = ToolPresentation.for(toolName: name)
-            #expect(p.icon == "pencil")
-            #expect(p.tint == .primary)
-        }
+    @Test func editFileUsesPrimaryTint() {
+        let p = ToolPresentation.for(toolName: "edit_file")
+        #expect(p.icon == "pencil")
+        #expect(p.tint == .primary)
+        #expect(p.label == "Edit file")
     }
 
-    @Test func readTool() {
-        #expect(ToolPresentation.for(toolName: "Read").icon == "doc.text")
+    @Test func readFileTool() {
+        let p = ToolPresentation.for(toolName: "read_file")
+        #expect(p.icon == "doc.text")
+        #expect(p.label == "Read file")
+    }
+
+    @Test func memoryWriteUsesPrimaryTint() {
+        let p = ToolPresentation.for(toolName: "memory_write")
+        #expect(p.icon == "brain")
+        #expect(p.tint == .primary)
     }
 
     @Test func mcpToolsByPrefix() {
@@ -42,7 +49,8 @@ struct ToolPresentationTests {
     }
 
     @Test func humanizeReplacesUnderscoresAndCapitalizes() {
+        #expect(ToolPresentation.humanize("read_file") == "Read file")
         #expect(ToolPresentation.humanize("run_terminal") == "Run terminal")
-        #expect(ToolPresentation.humanize("Read") == "Read")
+        #expect(ToolPresentation.humanize("canvas") == "canvas")
     }
 }

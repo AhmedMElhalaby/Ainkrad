@@ -7,6 +7,8 @@ import AinkradAppKit
 /// compact by default with a tap-to-expand body. Seamless surface, no
 /// separator lines — matches the streaming/error bubbles.
 struct ToolCallCardView: View {
+    /// Raw registered tool name (e.g. "edit_file") — identity only, drives icon/tint.
+    var toolName: String
     let title: String
     let summary: String
     let diff: String?
@@ -20,7 +22,7 @@ struct ToolCallCardView: View {
     @State private var isExpanded = false
     @Environment(\.ainkradReduceMotion) private var reduceMotion
 
-    private var presentation: ToolPresentation { ToolPresentation.for(toolName: title) }
+    private var presentation: ToolPresentation { ToolPresentation.for(toolName: toolName) }
     private var tint: Color { presentation.tint == .primary ? tokens.accentPrimary : tokens.accentSecondary }
     private var isError: Bool { result?.isError == true }
     private var isPending: Bool { result?.isPending == true }
@@ -61,7 +63,7 @@ struct ToolCallCardView: View {
             Image(systemName: presentation.icon)
                 .font(.system(size: 11))
                 .foregroundStyle(isError ? tokens.accentTertiary : tint)
-            Text(presentation.label)
+            Text(title)
                 .font(AinkradFont.display(12, weight: .semibold))
                 .foregroundStyle(tokens.foreground.opacity(0.85))
             Spacer()

@@ -100,6 +100,7 @@ struct AssistantRootView: View {
 
                         if case .awaitingApproval(let pending) = session.state {
                             ToolCallCardView(
+                                toolName: pending.call.name,
                                 title: pending.preview.title,
                                 summary: pending.preview.summary,
                                 diff: pending.preview.diff,
@@ -112,7 +113,7 @@ struct AssistantRootView: View {
                         }
 
                         if case .callingTool(let name) = session.state {
-                            Text("Running \(name)…")
+                            Text("Running \(ToolPresentation.humanize(name))…")
                                 .font(AinkradFont.display(12))
                                 .foregroundStyle(tokens.foreground.opacity(0.45))
                         }
@@ -151,7 +152,8 @@ struct AssistantRootView: View {
                 if case .toolUse(let id, let name, _) = block {
                     let result = ToolResultLookup.summary(forToolUseID: id, after: index, in: messages)
                     ToolCallCardView(
-                        title: name,
+                        toolName: name,
+                        title: ToolPresentation.humanize(name),
                         summary: result.text,
                         diff: nil,
                         tokens: tokens,

@@ -26,12 +26,19 @@ struct ToolPresentation: Equatable {
     private static func iconAndTint(for name: String) -> (String, ToolTint) {
         if name.hasPrefix("mcp__") { return ("puzzlepiece.extension", .secondary) }
         switch name {
-        case "run_terminal":        return ("terminal", .secondary)
-        case "git_op":              return ("arrow.triangle.branch", .secondary)
-        case "workspace_control":   return ("macwindow", .secondary)
-        case "Edit", "Write", "str_replace": return ("pencil", .primary)
-        case "Read":                return ("doc.text", .secondary)
-        default:                    return ("wrench.and.screwdriver", .secondary)
+        case "run_terminal":      return ("terminal", .secondary)
+        case "run_tool_script":   return ("curlybraces", .secondary)
+        case "git_op":            return ("arrow.triangle.branch", .secondary)
+        case "workspace_control": return ("macwindow", .secondary)
+        case "edit_file":         return ("pencil", .primary)
+        case "read_file":         return ("doc.text", .secondary)
+        case "memory_write":      return ("brain", .primary)
+        case "memory_search":     return ("brain.head.profile", .secondary)
+        case "canvas_render":     return ("paintpalette", .secondary)
+        case "spawn_subagent":    return ("person.2", .secondary)
+        case "use_skill":         return ("wand.and.stars", .secondary)
+        case "propose_skill":     return ("lightbulb", .secondary)
+        default:                  return ("wrench.and.screwdriver", .secondary)
         }
     }
 }
