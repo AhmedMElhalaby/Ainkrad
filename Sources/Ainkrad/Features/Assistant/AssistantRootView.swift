@@ -36,6 +36,7 @@ struct AssistantRootView: View {
                     onApproveAlways: { session.approve(always: true) },
                     onApprove: { session.approve() }
                 )
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             }
 
             AssistantComposerBar(
@@ -46,6 +47,7 @@ struct AssistantRootView: View {
                 autoFocusOnAppear: autoFocusComposer
             )
         }
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
         .background {
             // Opacity-tinted surface. The blur (when enabled) is rendered by the
             // host behind the whole pane in `BlockView` — the same path every app
@@ -107,6 +109,7 @@ struct AssistantRootView: View {
                         if session.state == .thinking || session.state == .streaming {
                             streamingBubble(session: session, tokens: tokens)
                                 .id("streaming")
+                                .transition(reduceMotion ? .identity : .opacity)
                         }
 
                         if case .awaitingApproval(let pending) = session.state {
@@ -119,16 +122,19 @@ struct AssistantRootView: View {
                                 pendingApproval: true
                             )
                             .id("approval")
+                            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
                         if case .callingTool(let name) = session.state {
                             Text("Running \(ToolPresentation.humanize(name))…")
                                 .font(AinkradFont.display(12))
                                 .foregroundStyle(tokens.foreground.opacity(0.45))
+                                .transition(reduceMotion ? .identity : .opacity)
                         }
 
                         if case .failed(let message) = session.state {
                             errorBubble(message, tokens: tokens)
+                                .transition(reduceMotion ? .identity : .opacity)
                         }
                     }
                     .padding(14)
@@ -138,6 +144,7 @@ struct AssistantRootView: View {
                     // gives newly-inserted rows their materialize transition.
                     // Gated so Reduce Motion inserts rows instantly.
                     .animation(reduceMotion ? nil : AinkradMotion.present, value: session.messages.count)
+                    .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -168,6 +175,7 @@ struct AssistantRootView: View {
                         tokens: tokens,
                         result: result
                     )
+                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                 }
                 if case .image(let mediaType, let base64) = block {
                     imageChip(mediaType: mediaType, base64: base64, tokens: tokens)
