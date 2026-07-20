@@ -149,9 +149,10 @@ struct AssistantRootView: View {
 
             ForEach(Array(message.content.enumerated()), id: \.offset) { _, block in
                 if case .toolUse(let id, let name, _) = block {
+                    let result = ToolResultLookup.summary(forToolUseID: id, after: index, in: messages)
                     ToolCallCardView(
                         title: name,
-                        summary: toolResultSummary(for: id, after: index, in: messages),
+                        summary: result.text,
                         diff: nil,
                         tokens: tokens
                     )
@@ -215,19 +216,6 @@ struct AssistantRootView: View {
 
             if !isUser { Spacer(minLength: 40) }
         }
-    }
-
-    /// Finds the `.toolResult` matching a tool_use id in the following message(s)
-    /// and returns its content as the card summary, or a muted fallback.
-    private func toolResultSummary(for id: String, after index: Int, in messages: [AgentMessage]) -> String {
-        for message in messages[(index + 1)...] {
-            for block in message.content {
-                if case .toolResult(let toolUseID, let content, _) = block, toolUseID == id {
-                    return content
-                }
-            }
-        }
-        return "Running…"
     }
 
     @ViewBuilder
