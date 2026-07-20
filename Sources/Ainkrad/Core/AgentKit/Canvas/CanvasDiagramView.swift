@@ -1,0 +1,206 @@
+import SwiftUI
+import WebKit
+import AppKit
+import AinkradAppKit
+
+/// Routes `.diagram` (mermaid, rendered via `WKWebView`) and `.chart`
+/// (native shape-drawn bars) canvas elements. This is the ONE approved web
+/// surface in the app — every other element on the canvas, and every part
+/// of this view besides the mermaid host itself, is native SwiftUI per the
+/// Cardinal HUD design language. Malformed data for either kind degrades to
+/// a preformatted `AinkradCodeBlock` fallback card — never a crash, and
+/// never takes any other canvas element down with it.
+@MainActor
+struct CanvasDiagramView: View {
+    let element: CanvasElement
+    let tokens: DesignTokens
+
+    var body: some View {
+        switch element.kind {
+        case .chart:
+            chartOrFallback
+        default:
+            diagramOrFallback
+        }
+    }
+
+    @ViewBuilder
+    private var diagramOrFallback: some View {
+        let source = element.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if source.isEmpty {
+            fallback(caption: "Diagram preview pending", language: "mermaid")
+        } else {
+            MermaidDiagramHost(source: source, tokens: tokens)
+        }
+    }
+
+    @ViewBuilder
+    private var chartOrFallback: some View {
+        let bars = CanvasChartParse.bars(from: element.body)
+        if bars.isEmpty {
+            fallback(caption: "Chart data unavailable", language: "csv")
+        } else {
+            CanvasChartView(bars: bars, tokens: tokens)
+        }
+    }
+
+    private func fallback(caption: String, language: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(caption).font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
+            AinkradCodeBlock(element.body, language: language)
+        }
+    }
+}
+
+/// Owns the mermaid render-error state: while rendering (or once it
+/// succeeds) it shows the `WKWebView`; on a reported failure it swaps to a
+/// native inline error card and never shows the web view again for this
+/// element instance.
+private struct MermaidDiagramHost: View {
+    let source: String
+    let tokens: DesignTokens
+    @State private var renderError: String?
+
+    var body: some View {
+        Group {
+            if let renderError {
+                MermaidErrorCard(message: renderError, tokens: tokens)
+            } else {
+                MermaidWebView(source: source, tokens: tokens) { error in
+                    renderError = error
+                }
+            }
+        }
+    }
+}
+
+/// Native inline error card shown when mermaid fails to parse/render — the
+/// isolation contract from `CanvasElementView.errorCard` mirrored here so a
+/// bad diagram body never propagates past this one element.
+private struct MermaidErrorCard: View {
+    let message: String
+    let tokens: DesignTokens
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Circle().fill(tokens.danger).frame(width: 7, height: 7).padding(.top, 3)
+            Text("Diagram render error: \(message)")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.danger.opacity(0.9))
+        }
+    }
+}
+
+/// `NSViewRepresentable` hosting a `WKWebView` that renders `source` as a
+/// mermaid diagram, dark-themed to match the HUD's accent/foreground
+/// tokens. The bundled `mermaid.min.js` (Resources/) is inlined into the
+/// loaded HTML so no on-disk file access is needed at render time. Any
+/// parse/render failure — thrown synchronously by `mermaid.parse`, rejected
+/// by the `mermaid.render` promise, or an uncaught JS error — is posted back
+/// through a `WKScriptMessageHandler` bridge and surfaced via `onError`;
+/// this view never lets a bad diagram body crash the host app.
+private struct MermaidWebView: NSViewRepresentable {
+    let source: String
+    let tokens: DesignTokens
+    let onError: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onError: onError) }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let controller = WKUserContentController()
+        controller.add(context.coordinator, name: "mermaidBridge")
+        let config = WKWebViewConfiguration()
+        config.userContentController = controller
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.underPageBackgroundColor = NSColor(tokens.surfaceElevated)
+        load(into: webView)
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        // The caller re-creates this view whenever `element.id` changes, so
+        // a fresh load per update keeps mermaid's rendered output in sync
+        // with edits to `body` without needing incremental diffing.
+        load(into: webView)
+    }
+
+    private func load(into webView: WKWebView) {
+        guard let jsURL = Bundle.main.url(forResource: "mermaid.min", withExtension: "js"),
+              let js = try? String(contentsOf: jsURL, encoding: .utf8) else {
+            onError("mermaid.min.js resource not found in app bundle")
+            return
+        }
+        webView.loadHTMLString(Self.html(js: js, source: source, tokens: tokens), baseURL: nil)
+    }
+
+    private static func html(js: String, source: String, tokens: DesignTokens) -> String {
+        let escapedSource = source
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "`", with: "\\`")
+            .replacingOccurrences(of: "${", with: "\\${")
+        let bg = tokens.surfaceElevated.hexString ?? "1A2233"
+        let fg = tokens.foreground.hexString ?? "E2E8F0"
+        let primary = tokens.accentPrimary.hexString ?? "2563EB"
+        let secondary = tokens.accentSecondary.hexString ?? "22D3EE"
+        return """
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <style>
+          html, body { margin: 0; padding: 0; background: #\(bg); overflow: auto; }
+          #diagram { display: flex; align-items: center; justify-content: center; padding: 8px; }
+          #diagram svg { max-width: 100%; height: auto; }
+        </style>
+        </head>
+        <body>
+        <div id="diagram"></div>
+        <script>\(js)</script>
+        <script>
+        (function () {
+          function reportError(err) {
+            var message = (err && err.message) ? err.message : String(err);
+            if (window.webkit && window.webkit.messageHandlers.mermaidBridge) {
+              window.webkit.messageHandlers.mermaidBridge.postMessage(message);
+            }
+          }
+          window.onerror = function (message) { reportError(message); return true; };
+          try {
+            window.mermaid.initialize({
+              startOnLoad: false,
+              theme: "dark",
+              themeVariables: {
+                background: "#\(bg)",
+                primaryColor: "#\(primary)",
+                primaryTextColor: "#\(fg)",
+                primaryBorderColor: "#\(secondary)",
+                lineColor: "#\(secondary)",
+                textColor: "#\(fg)"
+              }
+            });
+            var source = `\(escapedSource)`;
+            window.mermaid.render("ainkradMermaidDiagram", source)
+              .then(function (result) {
+                document.getElementById("diagram").innerHTML = result.svg;
+              })
+              .catch(function (err) { reportError(err); });
+          } catch (err) {
+            reportError(err);
+          }
+        })();
+        </script>
+        </body>
+        </html>
+        """
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        let onError: (String) -> Void
+        init(onError: @escaping (String) -> Void) { self.onError = onError }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            onError((message.body as? String) ?? "unknown mermaid render error")
+        }
+    }
+}

@@ -70,10 +70,7 @@ struct CanvasElementView: View {
         case .image:
             return AnyView(imageBody)
         case .diagram, .chart:
-            // Task 10 owns the real CanvasDiagramView/CanvasChartView
-            // renderers; until then this kind never crashes — it degrades
-            // to a preformatted fallback card.
-            return AnyView(diagramFallback)
+            return AnyView(CanvasDiagramView(element: element, tokens: tokens))
         case .unknown:
             return AnyView(placeholder("Unsupported element type"))
         }
@@ -145,18 +142,6 @@ struct CanvasElementView: View {
             AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { ProgressView() }
         } else {
             placeholder("Image unavailable")
-        }
-    }
-
-    /// `.diagram`/`.chart` fallback until Task 10 lands the real renderers —
-    /// a plain preformatted preview so the element is still legible.
-    private var diagramFallback: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(element.kind == .chart ? "Chart preview pending" : "Diagram preview pending")
-                .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
-            Text(element.body).font(AinkradFont.mono(10))
-                .foregroundStyle(tokens.foreground.opacity(0.6))
-                .lineLimit(4)
         }
     }
 
