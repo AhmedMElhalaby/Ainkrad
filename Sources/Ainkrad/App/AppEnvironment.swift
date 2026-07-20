@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import AinkradAppKit
 
 /// Persisted root directory for the `@`-mention file index (M7 Slice 5c Task 22).
@@ -132,6 +133,20 @@ final class AppEnvironment {
     /// process lifetime so its `DispatchSource` stays alive; see `bootstrap()`
     /// for where it's started.
     let skillWatcher: SkillWatcher
+    /// M7 Slice 7: menu-bar (status item) presence — derived run summary + open
+    /// state — wrapping `runManager` via `RunManagerMenuBarAdapter`. Constructed
+    /// in `bootstrap()` alongside `runManager` so both share the same instance.
+    let menuBarPresence: MenuBarPresence
+    /// M7 Slice 7 (Live Canvas): the spatial-card store `CanvasApp`'s pane binds
+    /// to and `canvas_render` (appended to the shared `agentToolRegistry` in
+    /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
+    /// `runManager`/`scheduleStore` above.
+    let canvasStore: CanvasStore
+    /// Owns the `NSStatusItem`/popover for the app's lifetime. `var`/optional
+    /// (not an `init` param) because its content closure captures `self` —
+    /// it's built in `bootstrap()` right after `environment` itself exists,
+    /// then installed/torn down by `AinkradAppDelegate`.
+    var menuBarController: MenuBarController?
     /// Skill `/name` command names currently registered into `commandRegistry`
     /// — tracked so `resyncSkillCommands()` (Task 13) knows exactly which
     /// entries to drop before re-registering the current binding set, without
@@ -217,7 +232,9 @@ final class AppEnvironment {
         memoryService: MemoryService?,
         skillRegistry: SkillRegistry,
         skillWatcher: SkillWatcher,
-        skillCommandStore: SkillCommandStore
+        skillCommandStore: SkillCommandStore,
+        menuBarPresence: MenuBarPresence,
+        canvasStore: CanvasStore
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -273,6 +290,8 @@ final class AppEnvironment {
         self.skillRegistry = skillRegistry
         self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
+        self.menuBarPresence = menuBarPresence
+        self.canvasStore = canvasStore
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
         // so the very first `resyncSkillCommands()` call — triggered by a
@@ -526,6 +545,15 @@ final class AppEnvironment {
         agentTools.append(UseSkillTool(registry: skillRegistry))
         agentTools.append(ProposeSkillTool(registry: skillRegistry))
 
+        // M7 Slice 7 (Live Canvas): `canvas_render` only draws structured cards
+        // from agent-supplied data — it executes nothing and touches no files
+        // or system state (see `CanvasRenderTool`), so it's appended alongside
+        // the other read-class tools. `canvasStore` defaults to sessionKey
+        // "default" (PROVISIONAL — per-session keying awaits a stable session
+        // identifier from Slice 5; see Task 12 brief).
+        let canvasStore = CanvasStore(persistence: persistence)
+        agentTools.append(CanvasRenderTool(store: canvasStore))
+
         // NOTE: `agentToolRegistry` (the registry the main `agentSession` and every
         // background run's headless session bind to) is built further below, AFTER
         // `spawn_subagent` is appended to `agentTools` — see the Slice 3 wiring block
@@ -655,7 +683,14 @@ final class AppEnvironment {
         // not yet the schedule's OWN saved posture. Follow-up: extend `AgentRun`
         // with an optional posture/tier, thread it through `RunManager.enqueue` →
         // `AgentRunRunner.execute` → the session-maker closure.
-        var backgroundAgentTools = agentTools
+        // `canvas_render` is EXCLUDED from the background/headless tool list: it's
+        // bound to the foreground `canvasStore` (sessionKey "default", the SAME
+        // store the `CanvasApp` pane reads), so an autonomous background/schedule/
+        // trigger run calling it would silently mutate the canvas the user is
+        // looking at — a cross-session split-brain. The foreground
+        // `agentToolRegistry` above keeps `canvas_render`; only this background
+        // copy drops it.
+        var backgroundAgentTools = agentTools.filter { !($0 is CanvasRenderTool) }
         if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
             backgroundAgentTools[idx] = RunTerminalTool(
                 actionHub: agentActionHub, router: executionRouter, trustTier: .background)
@@ -680,6 +715,11 @@ final class AppEnvironment {
                     isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) })
             }),
             notifier: runNotifier, maxConcurrent: 2)
+
+        // M7 Slice 7: menu-bar presence wraps the SAME `runManager` above via
+        // `RunManagerMenuBarAdapter`, so the status-item popover's run list is
+        // always in lockstep with the Runs surface and any background trigger.
+        let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
 
         // M7 Slice 3b (Autonomy: scheduling/triggers) — the whole subsystem live:
         // `scheduleStore` persists `AgentSchedule`s (`ScheduleUIView`'s create/edit
@@ -814,8 +854,19 @@ final class AppEnvironment {
             memoryService: memoryService,
             skillRegistry: skillRegistry,
             skillWatcher: skillWatcher,
-            skillCommandStore: skillCommandStore
+            skillCommandStore: skillCommandStore,
+            menuBarPresence: menuBarPresence,
+            canvasStore: canvasStore
         )
+
+        // Built after `environment` exists so the content closure can inject
+        // `self` for `MenuBarPopoverView`'s `.environment(_:)` — mirrors how
+        // `launcherStore.presentOverlay`/`pluginLaunchHub` below capture
+        // `[weak environment]` rather than being wired inside the initializer.
+        environment.menuBarController = MenuBarController(presence: environment.menuBarPresence) { [weak environment] in
+            guard let environment else { return AnyView(EmptyView()) }
+            return AnyView(MenuBarPopoverView(presence: environment.menuBarPresence).environment(environment))
+        }
 
         // Kick the local-reachability cache: an immediate refresh so the very
         // first turn already reflects reality (best-effort — a turn started
@@ -872,6 +923,13 @@ final class AppEnvironment {
                                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
+        // Live Canvas (M7 Slice 7) is likewise a host-embedded built-in — its
+        // pane reads `AppEnvironment.canvasStore` directly (see `CanvasApp`).
+        let canvasHost = HostServicesImpl(appID: "canvas", dataRootURL: pluginDataRoot,
+                                          secretStore: secrets, themeManager: themeManager,
+                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
+
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
             builtIn: [
@@ -890,7 +948,11 @@ final class AppEnvironment {
                             base: themeManager.tokens.background
                         )
                     }
-                )
+                ),
+                RegisteredApp.builtIn(
+                    CanvasApp.self,
+                    summary: "The Live Canvas — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
+                    host: canvasHost)
             ],
             loaded: loaded.apps,
             failures: loaded.failures

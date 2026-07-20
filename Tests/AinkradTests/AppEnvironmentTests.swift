@@ -89,6 +89,8 @@ final class AppEnvironmentTests {
         let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
         let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)
         let fileChangeWatcher = FileChangeWatcher()
+        let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
+        let canvasStore = CanvasStore(persistence: persistence)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -144,7 +146,9 @@ final class AppEnvironmentTests {
             memoryService: nil,
             skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
             skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
-            skillCommandStore: SkillCommandStore(persistence: persistence)
+            skillCommandStore: SkillCommandStore(persistence: persistence),
+            menuBarPresence: menuBarPresence,
+            canvasStore: canvasStore
         )
 
         #expect(environment.registry === registry)
@@ -175,9 +179,10 @@ final class AppEnvironmentTests {
         defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
         let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        // Terminal is an App Store plugin, not built-in; Assistant is the one
-        // compiled-in built-in the host registers itself (M5 Phase B).
-        #expect(environment.registry.allApps.map(\.id) == ["assistant"])
+        // Terminal is an App Store plugin, not built-in; Assistant and Canvas
+        // are the compiled-in built-ins the host registers itself (M5 Phase B,
+        // M7 Slice 7).
+        #expect(environment.registry.allApps.map(\.id) == ["assistant", "canvas"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)

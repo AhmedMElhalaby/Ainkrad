@@ -22,6 +22,7 @@ struct DocumentConformanceTests {
         #expect(SkillCommandsDocument.documentID == "skill-commands")
         #expect(DiscoveredModelsDocument.documentID == "discovered-models")
         #expect(SchedulesDocument.documentID == "agent-schedules")
+        #expect(CanvasWorkspaceDocument.documentID == "agent-canvas")
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
