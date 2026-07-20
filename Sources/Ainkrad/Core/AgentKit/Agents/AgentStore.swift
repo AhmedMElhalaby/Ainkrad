@@ -81,7 +81,8 @@ final class AgentStore {
         let copy = AgentProfile(
             name: "\(source.name) Copy", instructions: source.instructions,
             toolPolicy: source.toolPolicy, defaultModel: source.defaultModel,
-            permissionPosture: source.permissionPosture, routing: source.routing, builtin: false)
+            permissionPosture: source.permissionPosture, routing: source.routing, builtin: false,
+            icon: source.icon)
         return add(copy)
     }
 

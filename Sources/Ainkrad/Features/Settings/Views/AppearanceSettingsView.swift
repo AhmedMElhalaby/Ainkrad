@@ -29,6 +29,9 @@ struct AppearanceSettingsView: View {
                 typographySection(tokens: tokens)
                     .padding(.top, 8)
 
+                motionSection(tokens: tokens)
+                    .padding(.top, 8)
+
                 overlaysSection(tokens: tokens)
                     .padding(.top, 8)
             }
@@ -56,6 +59,24 @@ struct AppearanceSettingsView: View {
             labeled("ACCENT COLOR", tokens: tokens) {
                 accentColorRow(tokens: tokens, manager: manager)
             }
+        }
+    }
+
+    // MARK: - Motion (Ainkrad-controlled, independent of the macOS system flag)
+
+    private func motionSection(tokens: DesignTokens) -> some View {
+        let store = environment.generalSettingsStore
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "MOTION", tokens: tokens)
+
+            labeled("REDUCE MOTION", tokens: tokens) {
+                segmented([true, false], selected: store.uiReduceMotion, tokens: tokens,
+                          title: { $0 ? "On" : "Off" }, action: { store.setUiReduceMotion($0) })
+            }
+            Text("Turns off transitions, parallax, blinking cursors, and other animation across Ainkrad. Independent of the macOS system Reduce Motion setting.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

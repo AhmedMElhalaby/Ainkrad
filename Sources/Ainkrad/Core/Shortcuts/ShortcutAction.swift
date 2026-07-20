@@ -10,6 +10,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
     case closeBlock
     case openQuickAsk
     case pushToTalk
+    case cyclePermissionMode
 
     var displayName: String {
         switch self {
@@ -21,6 +22,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
         case .closeBlock: return "Close Block"
         case .openQuickAsk: return "Open Quick Ask"
         case .pushToTalk: return "Push-to-Talk (Voice)"
+        case .cyclePermissionMode: return "Cycle Permission Mode"
         }
     }
 
@@ -44,6 +46,8 @@ enum ShortcutAction: String, Codable, CaseIterable {
             return KeyChord(keyCode: 49, command: true, shift: true, option: false, control: false)  // ⌘⇧Space
         case .pushToTalk:
             return KeyChord(keyCode: 49, command: false, shift: false, option: true, control: true)  // ⌃⌥Space
+        case .cyclePermissionMode:
+            return KeyChord(keyCode: 35, command: true, shift: true, option: false, control: false)  // ⌘⇧P
         }
     }
 }

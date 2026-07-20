@@ -2,6 +2,14 @@ import Foundation
 
 enum AgentPermissionMode: String, Codable, CaseIterable, Sendable {
     case ask, autoApprove, fullAuto
+
+    var glyph: String {
+        switch self {
+        case .ask: "hand.raised"
+        case .autoApprove: "bolt"
+        case .fullAuto: "bolt.fill"
+        }
+    }
 }
 
 enum PermissionDecision: Sendable, Equatable { case autoApprove, requireApproval }

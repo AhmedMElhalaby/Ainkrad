@@ -14,7 +14,8 @@ enum BuiltInAgents {
         toolPolicy: .restricted(allow: [], deny: [], allowClasses: [.read]),
         permissionPosture: nil,
         routing: AgentRouting(routerEnabled: true),
-        builtin: true)
+        builtin: true,
+        icon: "list.bullet.clipboard")
 
     static let build = AgentProfile(
         id: buildID, name: "Build",
@@ -25,7 +26,8 @@ enum BuiltInAgents {
         toolPolicy: .all,
         permissionPosture: nil,
         routing: AgentRouting(routerEnabled: true),
-        builtin: true)
+        builtin: true,
+        icon: "hammer")
 
     static let all: [AgentProfile] = [plan, build]
 }

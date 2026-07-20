@@ -5,11 +5,14 @@ import SwiftUI
 /// D2 — extracted verbatim, no behavior change). App-scoped (not global),
 /// mirroring `KeyboardShortcutMonitor`'s established pattern.
 
-/// Installs a local `keyDown` monitor that swallows a plain Tab keystroke to
-/// cycle the active agent, ONLY while the composer's draft is empty —
-/// otherwise Tab is returned untouched so it keeps moving keyboard focus
-/// everywhere else (M7 Slice 5a Task 5). Zero-size, invisible; attached via
-/// `.background(...)` so it rides the composer's lifetime.
+/// Installs a local `keyDown` monitor that swallows a plain Tab OR Shift+Tab
+/// keystroke to cycle the active agent, ONLY while the composer's draft is
+/// empty — otherwise Tab is returned untouched so it keeps moving keyboard
+/// focus everywhere else (M7 Slice 5a Task 5; Shift+Tab added Wave 3c so the
+/// agent icon button's tooltip hint has a matching keystroke). A Tab held
+/// with any OTHER modifier (cmd/opt/ctrl) always passes through. Zero-size,
+/// invisible; attached via `.background(...)` so it rides the composer's
+/// lifetime.
 struct ComposerTabCycleMonitor: NSViewRepresentable {
     let isDraftEmpty: () -> Bool
     let onCycle: () -> Void
@@ -37,11 +40,13 @@ struct ComposerTabCycleMonitor: NSViewRepresentable {
                 guard monitor == nil else { return }
                 monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                     guard let self else { return event }
-                    // Tab, no modifiers (keyCode 48) — Shift-Tab and any
-                    // Tab+modifier combo pass through untouched.
-                    let isPlainTab = event.keyCode == 48
-                        && event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty
-                    if isPlainTab, self.isDraftEmpty?() == true {
+                    // Tab (keyCode 48) with no modifiers, or with ONLY Shift —
+                    // any other modifier combo (cmd/opt/ctrl) passes through
+                    // untouched.
+                    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                    let isPlainTab = event.keyCode == 48 && flags.isEmpty
+                    let isShiftTab = event.keyCode == 48 && flags == .shift
+                    if (isPlainTab || isShiftTab), self.isDraftEmpty?() == true {
                         self.onCycle?()
                         return nil
                     }
