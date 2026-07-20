@@ -19,6 +19,7 @@ struct AinkradHostApp: App {
         let environment = AppEnvironment.bootstrap()
         _environment = State(initialValue: environment)
         appDelegate.quitCoordinator = environment.quitCoordinator
+        appDelegate.menuBarController = environment.menuBarController
     }
 
     var body: some Scene {

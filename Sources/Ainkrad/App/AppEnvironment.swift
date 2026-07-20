@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import AinkradAppKit
 
 /// Persisted root directory for the `@`-mention file index (M7 Slice 5c Task 22).
@@ -132,6 +133,15 @@ final class AppEnvironment {
     /// process lifetime so its `DispatchSource` stays alive; see `bootstrap()`
     /// for where it's started.
     let skillWatcher: SkillWatcher
+    /// M7 Slice 7: menu-bar (status item) presence — derived run summary + open
+    /// state — wrapping `runManager` via `RunManagerMenuBarAdapter`. Constructed
+    /// in `bootstrap()` alongside `runManager` so both share the same instance.
+    let menuBarPresence: MenuBarPresence
+    /// Owns the `NSStatusItem`/popover for the app's lifetime. `var`/optional
+    /// (not an `init` param) because its content closure captures `self` —
+    /// it's built in `bootstrap()` right after `environment` itself exists,
+    /// then installed/torn down by `AinkradAppDelegate`.
+    var menuBarController: MenuBarController?
     /// Skill `/name` command names currently registered into `commandRegistry`
     /// — tracked so `resyncSkillCommands()` (Task 13) knows exactly which
     /// entries to drop before re-registering the current binding set, without
@@ -217,7 +227,8 @@ final class AppEnvironment {
         memoryService: MemoryService?,
         skillRegistry: SkillRegistry,
         skillWatcher: SkillWatcher,
-        skillCommandStore: SkillCommandStore
+        skillCommandStore: SkillCommandStore,
+        menuBarPresence: MenuBarPresence
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -273,6 +284,7 @@ final class AppEnvironment {
         self.skillRegistry = skillRegistry
         self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
+        self.menuBarPresence = menuBarPresence
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
         // so the very first `resyncSkillCommands()` call — triggered by a
@@ -681,6 +693,11 @@ final class AppEnvironment {
             }),
             notifier: runNotifier, maxConcurrent: 2)
 
+        // M7 Slice 7: menu-bar presence wraps the SAME `runManager` above via
+        // `RunManagerMenuBarAdapter`, so the status-item popover's run list is
+        // always in lockstep with the Runs surface and any background trigger.
+        let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
+
         // M7 Slice 3b (Autonomy: scheduling/triggers) — the whole subsystem live:
         // `scheduleStore` persists `AgentSchedule`s (`ScheduleUIView`'s create/edit
         // list); `scheduleRunner` fires enabled `.time` schedules on a 60s tick;
@@ -814,8 +831,18 @@ final class AppEnvironment {
             memoryService: memoryService,
             skillRegistry: skillRegistry,
             skillWatcher: skillWatcher,
-            skillCommandStore: skillCommandStore
+            skillCommandStore: skillCommandStore,
+            menuBarPresence: menuBarPresence
         )
+
+        // Built after `environment` exists so the content closure can inject
+        // `self` for `MenuBarPopoverView`'s `.environment(_:)` — mirrors how
+        // `launcherStore.presentOverlay`/`pluginLaunchHub` below capture
+        // `[weak environment]` rather than being wired inside the initializer.
+        environment.menuBarController = MenuBarController(presence: environment.menuBarPresence) { [weak environment] in
+            guard let environment else { return AnyView(EmptyView()) }
+            return AnyView(MenuBarPopoverView(presence: environment.menuBarPresence).environment(environment))
+        }
 
         // Kick the local-reachability cache: an immediate refresh so the very
         // first turn already reflects reality (best-effort — a turn started

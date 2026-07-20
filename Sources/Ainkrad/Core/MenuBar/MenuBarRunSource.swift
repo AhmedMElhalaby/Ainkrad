@@ -21,3 +21,19 @@ final class EmptyMenuBarRunSource: MenuBarRunSource {
     var activeRunItems: [MenuBarRunItem] { [] }
     func stopRun(_ id: UUID) {}
 }
+
+/// Adapts the real Slice-3 `RunManager` (queue + active/running set) onto the
+/// menu-bar's `MenuBarRunSource` seam: `RunManager.active` already covers
+/// `.queued`/`.running`/`.paused`, so `isActive` distinguishes "actually
+/// running" from "still waiting a slot".
+@MainActor
+final class RunManagerMenuBarAdapter: MenuBarRunSource {
+    private let manager: RunManager
+    init(manager: RunManager) { self.manager = manager }
+    var activeRunItems: [MenuBarRunItem] {
+        manager.active.map {
+            MenuBarRunItem(id: $0.id, title: $0.prompt, isActive: $0.status == .running)
+        }
+    }
+    func stopRun(_ id: UUID) { manager.stop(id) }
+}

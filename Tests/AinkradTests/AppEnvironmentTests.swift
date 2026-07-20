@@ -89,6 +89,7 @@ final class AppEnvironmentTests {
         let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
         let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)
         let fileChangeWatcher = FileChangeWatcher()
+        let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -144,7 +145,8 @@ final class AppEnvironmentTests {
             memoryService: nil,
             skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
             skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
-            skillCommandStore: SkillCommandStore(persistence: persistence)
+            skillCommandStore: SkillCommandStore(persistence: persistence),
+            menuBarPresence: menuBarPresence
         )
 
         #expect(environment.registry === registry)
