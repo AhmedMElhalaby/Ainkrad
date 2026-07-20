@@ -14,6 +14,7 @@ struct AssistantRootView: View {
     @State private var draft = ""
     @State private var isThinkingExpanded = true
     @State private var modelPicker = AssistantModelPickerModel()
+    @State private var hoveredTurnIndex: Int?
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -62,44 +63,65 @@ struct AssistantRootView: View {
 
     // MARK: - Transcript
 
+    private var transcriptIsEmpty: Bool {
+        environment.agentSession.messages.isEmpty
+            && environment.agentSession.state == .idle
+    }
+
+    private func emptyState() -> some View {
+        AinkradEmptyState(
+            icon: "sparkles",
+            title: "Ask the Assistant",
+            message: "Type a message, or start with / for commands and @ to mention files.",
+            actionTitle: nil,
+            action: nil
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func transcript(session: AgentSession, tokens: DesignTokens) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(session.messages.enumerated()), id: \.offset) { index, message in
-                        bubble(for: message, at: index, in: session.messages, tokens: tokens)
-                            .id(index)
-                    }
+                if transcriptIsEmpty {
+                    emptyState()
+                        .padding(.top, 60)
+                } else {
+                    VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+                        ForEach(Array(session.messages.enumerated()), id: \.offset) { index, message in
+                            bubble(for: message, at: index, in: session.messages, tokens: tokens)
+                                .id(index)
+                        }
 
-                    if session.state == .thinking || session.state == .streaming {
-                        streamingBubble(session: session, tokens: tokens)
-                            .id("streaming")
-                    }
+                        if session.state == .thinking || session.state == .streaming {
+                            streamingBubble(session: session, tokens: tokens)
+                                .id("streaming")
+                        }
 
-                    if case .awaitingApproval(let pending) = session.state {
-                        ToolCallCardView(
-                            title: pending.preview.title,
-                            summary: pending.preview.summary,
-                            diff: pending.preview.diff,
-                            tokens: tokens,
-                            onApprove: { session.approve() },
-                            onDeny: { session.deny(reason: "Denied by user.") },
-                            onApproveAlways: { session.approve(always: true) }
-                        )
-                        .id("approval")
-                    }
+                        if case .awaitingApproval(let pending) = session.state {
+                            ToolCallCardView(
+                                title: pending.preview.title,
+                                summary: pending.preview.summary,
+                                diff: pending.preview.diff,
+                                tokens: tokens,
+                                onApprove: { session.approve() },
+                                onDeny: { session.deny(reason: "Denied by user.") },
+                                onApproveAlways: { session.approve(always: true) }
+                            )
+                            .id("approval")
+                        }
 
-                    if case .callingTool(let name) = session.state {
-                        Text("Running \(name)…")
-                            .font(AinkradFont.display(12))
-                            .foregroundStyle(tokens.foreground.opacity(0.45))
-                    }
+                        if case .callingTool(let name) = session.state {
+                            Text("Running \(name)…")
+                                .font(AinkradFont.display(12))
+                                .foregroundStyle(tokens.foreground.opacity(0.45))
+                        }
 
-                    if case .failed(let message) = session.state {
-                        errorBubble(message, tokens: tokens)
+                        if case .failed(let message) = session.state {
+                            errorBubble(message, tokens: tokens)
+                        }
                     }
+                    .padding(14)
                 }
-                .padding(14)
             }
             .scrollContentBackground(.hidden)
             .onChange(of: session.messages.count) { _, _ in
@@ -132,6 +154,15 @@ struct AssistantRootView: View {
                 }
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if message.role == .assistant && !message.text.isEmpty {
+                AssistantTurnCopyButton(text: message.text, isVisible: hoveredTurnIndex == index)
+                    .padding(.trailing, 2)
+            }
+        }
+        .onHover { isHovering in
+            hoveredTurnIndex = isHovering ? index : (hoveredTurnIndex == index ? nil : hoveredTurnIndex)
+        }
     }
 
     /// Renders an attached image as a thumbnail, falling back to a `[image]` chip
@@ -158,15 +189,22 @@ struct AssistantRootView: View {
         return HStack {
             if isUser { Spacer(minLength: 40) }
 
-            Text(message.text)
-                .font(AinkradFont.display(13))
-                .foregroundStyle(tokens.foreground.opacity(0.9))
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(
-                    ChamferShape(cut: AinkradRadius.md)
-                        .fill(isUser ? tokens.accentPrimary.opacity(0.18) : tokens.surfaceElevated.opacity(0.4))
-                )
-                .shadow(color: (isUser ? tokens.accentPrimary : tokens.accentSecondary).opacity(0.12), radius: 6)
+            Group {
+                if isUser {
+                    Text(message.text)
+                        .font(AinkradFont.display(13))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentPrimary.opacity(0.18)))
+                        .shadow(color: tokens.accentPrimary.opacity(0.12), radius: 6)
+                } else {
+                    // Borderless — Task 5 replaces this Text with AssistantMarkdownText.
+                    Text(message.text)
+                        .font(AinkradFont.display(13))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
 
             if !isUser { Spacer(minLength: 40) }
         }
@@ -204,10 +242,8 @@ struct AssistantRootView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.45))
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 9)
+        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.4)))
-        .shadow(color: tokens.accentSecondary.opacity(0.1), radius: 6)
     }
 
     private func thinkingDisclosure(session: AgentSession, tokens: DesignTokens) -> some View {
@@ -265,5 +301,27 @@ private struct HoverNewChatButton: View {
         .help("New chat")
         .onHover { isHovering = $0 }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovering)
+    }
+}
+
+/// Copy-to-pasteboard for a whole assistant turn, revealed on hover.
+private struct AssistantTurnCopyButton: View {
+    let text: String
+    /// Driven by the enclosing turn's hover region, not this button's own frame —
+    /// the button sits at `opacity: 0` until the whole turn is hovered, so tying
+    /// visibility to a local `.onHover` on the icon-sized frame made it undiscoverable.
+    var isVisible: Bool
+    @State private var copied = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        AinkradIconButton(systemName: copied ? "checkmark" : "doc.on.doc", size: 20, tooltip: "Copy") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+        }
+        .opacity(isVisible ? 0.8 : 0)
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isVisible)
     }
 }
