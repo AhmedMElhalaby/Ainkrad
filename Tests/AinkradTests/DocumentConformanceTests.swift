@@ -23,6 +23,14 @@ struct DocumentConformanceTests {
         #expect(DiscoveredModelsDocument.documentID == "discovered-models")
         #expect(SchedulesDocument.documentID == "agent-schedules")
         #expect(CanvasWorkspaceDocument.documentID == "agent-canvas")
+        #expect(VoiceSettingsDocument.documentID == "voice-settings")
+    }
+
+    @Test("VoiceSettingsDocument round-trips through a persistence store")
+    func voiceSettingsRoundTrips() {
+        let store = InMemoryPersistenceStore()
+        store.save(VoiceSettingsDocument(backend: .provider, autoSend: true))
+        #expect(store.load(VoiceSettingsDocument.self) == VoiceSettingsDocument(backend: .provider, autoSend: true))
     }
 
     @Test("GlobalSettings round-trips through a persistence store")
