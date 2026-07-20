@@ -142,6 +142,11 @@ final class AppEnvironment {
     /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
     /// `runManager`/`scheduleStore` above.
     let canvasStore: CanvasStore
+    /// M7 Slice 8 (Voice): push-to-talk + file-transcription facade. Constructed
+    /// after `agentSession` (both in `bootstrap()` and here) so
+    /// `attachSession(_:)` can wire voice auto-send through the real session's
+    /// `send(_:)` — voice is not a privileged input channel.
+    let voiceService: VoiceService
     /// Owns the `NSStatusItem`/popover for the app's lifetime. `var`/optional
     /// (not an `init` param) because its content closure captures `self` —
     /// it's built in `bootstrap()` right after `environment` itself exists,
@@ -234,7 +239,8 @@ final class AppEnvironment {
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
         menuBarPresence: MenuBarPresence,
-        canvasStore: CanvasStore
+        canvasStore: CanvasStore,
+        voiceService: VoiceService
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -292,6 +298,7 @@ final class AppEnvironment {
         self.skillCommandStore = skillCommandStore
         self.menuBarPresence = menuBarPresence
         self.canvasStore = canvasStore
+        self.voiceService = voiceService
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
         // so the very first `resyncSkillCommands()` call — triggered by a
@@ -800,6 +807,9 @@ final class AppEnvironment {
             mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
+        let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
+        voiceService.attachSession(agentSession)
+
         let environment = AppEnvironment(
             persistence: persistence,
             secrets: secrets,
@@ -856,7 +866,8 @@ final class AppEnvironment {
             skillWatcher: skillWatcher,
             skillCommandStore: skillCommandStore,
             menuBarPresence: menuBarPresence,
-            canvasStore: canvasStore
+            canvasStore: canvasStore,
+            voiceService: voiceService
         )
 
         // Built after `environment` exists so the content closure can inject

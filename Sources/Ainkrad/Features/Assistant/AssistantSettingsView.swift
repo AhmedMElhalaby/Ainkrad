@@ -29,6 +29,7 @@ struct AssistantSettingsView: View {
                 permissionsSection(tokens: tokens)
                 SandboxPolicyUIView(store: environment.sandboxProfileStore)
                 contextPrivacySection(tokens: tokens)
+                voiceSection(tokens: tokens)
             }
             .padding(18)
         }
@@ -397,5 +398,15 @@ struct AssistantSettingsView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.45))
             content()
         }
+    }
+
+    // MARK: - Voice
+
+    private func voiceSection(tokens: DesignTokens) -> some View {
+        VoiceSettingsView(
+            settings: environment.voiceService.settings,
+            connections: environment.connectionStore,
+            shortcuts: environment.shortcutStore,
+            tokens: tokens)
     }
 }

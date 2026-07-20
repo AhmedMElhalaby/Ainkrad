@@ -80,6 +80,10 @@ struct AssistantComposerBar: View {
 
                 schedulesTrigger
 
+                micTrigger
+
+                RecordingIndicatorView(status: environment.voiceService.pushToTalk.status, tokens: tokens)
+
                 usageDashboardTrigger
 
                 Button { send() } label: {
@@ -150,6 +154,11 @@ struct AssistantComposerBar: View {
         }
         .ainkradToastHost()
         .onChange(of: draft) { _, newValue in updateOverlayTriggers(newValue) }
+        .onChange(of: environment.voiceService.reviewTranscript) { _, new in
+            guard let new, !new.isEmpty else { return }
+            draft = draft.isEmpty ? new : draft + " " + new
+            environment.voiceService.reviewTranscript = nil
+        }
         .padding(14)
     }
 
@@ -246,7 +255,13 @@ struct AssistantComposerBar: View {
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                     guard let data = item as? Data,
                           let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                    Task { @MainActor in attach(fileURL: url) }
+                    Task { @MainActor in
+                        if AudioFileValidator.allowedExtensions.contains(url.pathExtension.lowercased()) {
+                            await transcribeDroppedAudio(url)
+                        } else {
+                            attach(fileURL: url)
+                        }
+                    }
                 }
             } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                 handled = true
@@ -265,6 +280,23 @@ struct AssistantComposerBar: View {
             attachAndWarn(attachment)
         } catch {
             toastCenter.show("Couldn't attach \(fileURL.lastPathComponent) as an image.", status: .danger)
+        }
+    }
+
+    /// Audio-file drop (M7 Slice 8 Task 14) — routes a dropped fileURL whose
+    /// extension `AudioFileValidator` allows to `fileCoordinator.transcribe`,
+    /// inserting the resulting transcript into the draft. Runs INSIDE the
+    /// same `handleDrop` provider loop Slice 5 established; non-audio file
+    /// URLs keep taking the `attach(fileURL:)` path above unchanged.
+    private func transcribeDroppedAudio(_ url: URL) async {
+        let byteCount = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        do {
+            let text = try await environment.voiceService.fileCoordinator.transcribe(
+                fileURL: url, byteCount: byteCount, progress: { _ in }
+            )
+            draft = draft.isEmpty ? text : draft + "\n\n" + text
+        } catch {
+            toastCenter.show("Couldn't transcribe \(url.lastPathComponent).", status: .danger)
         }
     }
 
@@ -399,6 +431,16 @@ struct AssistantComposerBar: View {
     private var schedulesTrigger: some View {
         AinkradIconButton(systemName: "clock.badge", size: 22, tooltip: "Schedules") {
             isSchedulesPresented = true
+        }
+    }
+
+    /// Push-to-talk mic toggle (M7 Slice 8 Task 14) — `AinkradIconButton`
+    /// (Cardinal HUD, not a native control) calling `pushToTalk.toggle()`
+    /// directly; the live status is reflected next to it by
+    /// `RecordingIndicatorView`, not by this button's own glyph.
+    private var micTrigger: some View {
+        AinkradIconButton(systemName: "mic.fill", size: 22, tooltip: "Push to talk") {
+            environment.voiceService.pushToTalk.toggle()
         }
     }
 
