@@ -40,7 +40,7 @@ final class ClaudeOAuthLoginController: ObservableObject {
         return CallbackResult(code: parts[0], state: parts.count > 1 ? parts[1] : "")
     }
 
-    func beginLogin(for connection: Connection) async throws {
+    func beginLogin(for connection: Connection) async {
         errorMessage = nil
         let pkce = PKCE.generate()
         let state = UUID().uuidString
@@ -55,17 +55,38 @@ final class ClaudeOAuthLoginController: ObservableObject {
             try await complete(cb, for: connection)
         } catch LoopbackError.bindFailed {
             usePasteFallback = true    // UI shows the paste field + authorizeURL
+        } catch {
+            errorMessage = Self.message(for: error)
         }
     }
 
-    func pasteCode(_ raw: String, for connection: Connection) async throws {
-        guard let cb = Self.parsePastedCode(raw) else { throw LoopbackError.malformedCallback }
-        try await complete(cb, for: connection)
+    func pasteCode(_ raw: String, for connection: Connection) async {
+        errorMessage = nil
+        do {
+            guard let cb = Self.parsePastedCode(raw) else { throw LoopbackError.malformedCallback }
+            try await complete(cb, for: connection)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
     }
 
-    func importFromClaudeCode(for connection: Connection) throws {
-        let token = try importer.load()
-        store.store(token, for: connection.id, source: .claudeCodeImport)
+    func importFromClaudeCode(for connection: Connection) {
+        errorMessage = nil
+        do {
+            let token = try importer.load()
+            store.store(token, for: connection.id, source: .claudeCodeImport)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+    }
+
+    private static func message(for error: Error) -> String {
+        switch error {
+        case LoopbackError.malformedCallback:
+            return "That code or link didn't look right. Try pasting it again."
+        default:
+            return "Sign-in failed: \(error.localizedDescription)"
+        }
     }
 
     private func complete(_ cb: CallbackResult, for connection: Connection) async throws {

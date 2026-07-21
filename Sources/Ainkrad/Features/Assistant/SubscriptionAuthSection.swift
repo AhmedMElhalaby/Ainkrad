@@ -70,7 +70,7 @@ struct SubscriptionAuthSection: View {
             isSigningIn = true
             Task {
                 defer { isSigningIn = false }
-                try? await controller.beginLogin(for: connection)
+                await controller.beginLogin(for: connection)
             }
         }
     }
@@ -81,7 +81,7 @@ struct SubscriptionAuthSection: View {
             Button {
                 let raw = pasteText
                 pasteText = ""
-                Task { try? await controller.pasteCode(raw, for: connection) }
+                Task { await controller.pasteCode(raw, for: connection) }
             } label: {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 20))
@@ -92,7 +92,7 @@ struct SubscriptionAuthSection: View {
     }
 
     private func importRow(tokens: DesignTokens) -> some View {
-        Button { try? controller.importFromClaudeCode(for: connection) } label: {
+        Button { controller.importFromClaudeCode(for: connection) } label: {
             HStack(spacing: 10) {
                 Image(systemName: "arrow.down.doc")
                     .font(.system(size: 12))
