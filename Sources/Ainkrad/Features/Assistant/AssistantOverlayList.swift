@@ -24,6 +24,14 @@ struct AssistantOverlayList<Content: View>: View {
             }
         }
         .padding(6)
+        // The floating-panel window is transparent by design
+        // (`AinkradFloatingPanelController` sets it `.clear`/non-opaque), so the
+        // content MUST draw its own panel chrome — same chamfer fill + accent
+        // stroke + glow the kit's own dropdowns use (`MultiSelectPanelView`).
+        // Without this the overlay renders see-through over the transcript.
+        .background(ChamferShape(cut: 8).fill(tokens.surfaceElevated.opacity(0.97)))
+        .overlay(ChamferShape(cut: 8).strokeBorder(tokens.accentSecondary.opacity(0.55), lineWidth: 1.25))
+        .shadow(color: tokens.accentSecondary.opacity(0.35), radius: 10, y: 4)
         .frame(minWidth: 280)
     }
 
