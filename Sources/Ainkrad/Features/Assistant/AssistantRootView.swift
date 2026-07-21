@@ -81,6 +81,18 @@ struct AssistantRootView: View {
             && environment.agentSession.state == .idle
     }
 
+    /// True during the brief `.callingTool` window before the assistant turn's
+    /// `.toolUse` block is committed to `messages` — i.e. no pending card renders yet.
+    /// Once the block commits, the per-message pending card takes over (Task 2).
+    private func isCallingToolWithoutCard(_ session: AgentSession) -> Bool {
+        guard case .callingTool = session.state else { return false }
+        let hasToolUseBlock = session.messages.contains { msg in
+            msg.content.contains { if case .toolUse = $0 { return true } else { return false } }
+                && !msg.content.contains { if case .toolResult = $0 { return true } else { return false } }
+        }
+        return !hasToolUseBlock
+    }
+
     private func emptyState() -> some View {
         AinkradEmptyState(
             icon: "sparkles",
@@ -106,7 +118,8 @@ struct AssistantRootView: View {
                                 .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
-                        if session.state == .thinking || session.state == .streaming {
+                        if session.state == .thinking || session.state == .streaming
+                            || isCallingToolWithoutCard(session) {
                             streamingBubble(session: session, tokens: tokens)
                                 .id("streaming")
                                 .transition(reduceMotion ? .identity : .opacity)
@@ -253,9 +266,7 @@ struct AssistantRootView: View {
                     }
                 }
             } else if session.streamingThinking.isEmpty {
-                Text("Thinking…")
-                    .font(AinkradFont.display(12))
-                    .foregroundStyle(tokens.foreground.opacity(0.45))
+                WorkingIndicator(tokens: tokens)
             }
         }
         .padding(.vertical, 2)
@@ -360,5 +371,39 @@ private struct StreamingCursor: View {
 
     private func caret(opacity: Double) -> some View {
         Text("▍").font(AinkradFont.display(13)).foregroundStyle(tokens.accentSecondary.opacity(opacity))
+    }
+}
+
+/// Breathing "working" affordance shown before the first streamed token and while a
+/// tool call is spinning up before its card commits. Steady under Reduce Motion
+/// (mirrors `StreamingCursor`).
+private struct WorkingIndicator: View {
+    let tokens: DesignTokens
+    var label: String = "Thinking"
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(tokens.accentSecondary.opacity(0.7))
+                        .frame(width: 4, height: 4)
+                        .opacity(reduceMotion ? 1 : (pulse ? 1 : 0.25))
+                        .animation(
+                            reduceMotion ? nil
+                            : .easeInOut(duration: AinkradMotion.durationSlow)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * AinkradMotion.durationFast),
+                            value: pulse
+                        )
+                }
+            }
+            Text("\(label)…")
+                .font(AinkradFont.display(12))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+        }
+        .onAppear { if !reduceMotion { pulse = true } }
     }
 }
