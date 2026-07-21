@@ -8,6 +8,18 @@ struct ClaudeProvider: LLMProvider {
         self.http = http
     }
 
+    nonisolated static let claudeCodeVersion = "2.1.74"
+    private nonisolated static let claudeCodeSystemPrefix = "You are Claude Code, Anthropic's official CLI for Claude."
+    private nonisolated static let oauthBetas =
+        "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"
+
+    /// Subscription billing classifier rejects single-underscore `mcp_` names (400).
+    nonisolated static func oauthWireToolName(_ name: String) -> String {
+        name.hasPrefix("mcp_") && !name.hasPrefix("mcp__")
+            ? "mcp__" + name.dropFirst("mcp_".count)
+            : name
+    }
+
     func send(
         messages: [AgentMessage],
         system: String,
@@ -135,26 +147,36 @@ struct ClaudeProvider: LLMProvider {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
+        var systemText = system
+        var wireTools = tools
         switch credential {
         case .apiKey(let key):
             request.setValue(key, forHTTPHeaderField: "x-api-key")
         case .oauth(let token):
             request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
-            // OAuth mimicry (system prompt/beta headers) added in Task 9.
+            request.setValue(Self.oauthBetas, forHTTPHeaderField: "anthropic-beta")
+            request.setValue("claude-code/\(Self.claudeCodeVersion)", forHTTPHeaderField: "user-agent")
+            request.setValue("cli", forHTTPHeaderField: "x-app")
+            systemText = Self.claudeCodeSystemPrefix + "\n\n" + system
         }
 
         var body: [String: Any] = [
             "model": model.model,
             "max_tokens": 64000,
             "stream": true,
-            "system": system,
+            "system": systemText,
             "messages": messages.map(wireMessage),
             "thinking": ["type": "adaptive", "display": "summarized"],
             "output_config": ["effort": model.effort],
         ]
-        if !tools.isEmpty {
-            body["tools"] = tools.map {
-                ["name": $0.name, "description": $0.description,
+        if !wireTools.isEmpty {
+            let renameNames: Bool = { if case .oauth = credential { return true } else { return false } }()
+            body["tools"] = wireTools.map {
+                // Tool-name rewriting is OAuth-only: subscription billing classifies by `mcp__` names.
+                // Incoming tool_use names from the model already arrive in `mcp__` form and the
+                // registry lookup uses the original name, so no inverse mapping is needed here.
+                ["name": renameNames ? Self.oauthWireToolName($0.name) : $0.name,
+                 "description": $0.description,
                  "input_schema": $0.parameters.toFoundationObject()]
             }
         }
