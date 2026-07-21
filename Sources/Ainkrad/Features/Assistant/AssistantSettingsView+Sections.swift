@@ -8,7 +8,7 @@ extension AssistantSettingsView {
         let store = environment.connectionStore
 
         return VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "CONNECTIONS", tokens: tokens)
+            SettingsSectionHeader(title: "CONNECTIONS", tokens: tokens, icon: "bolt.horizontal")
 
             ForEach(store.connections) { connection in
                 connectionRow(connection, tokens: tokens)
@@ -136,7 +136,7 @@ extension AssistantSettingsView {
             }
         }
         .padding(12)
-        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.3)))
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
     }
 
     private func testConnection(_ connection: Connection) {
@@ -173,11 +173,14 @@ extension AssistantSettingsView {
         let active = modelPicker.activeConnection(environment)
 
         return VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "MODEL", tokens: tokens)
+            SettingsSectionHeader(title: "MODEL", tokens: tokens, icon: "brain")
 
             if store.connections.isEmpty {
-                Text("Add a connection above to choose a model.")
-                    .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
+                AinkradEmptyState(
+                    icon: "bolt.horizontal",
+                    title: "No connections",
+                    message: "Add a connection to choose a model."
+                )
             } else {
                 labeled("CONNECTION", tokens: tokens) {
                     // Keyed on connection `id` (UUID) — `Connection` isn't Hashable
@@ -242,7 +245,7 @@ extension AssistantSettingsView {
         let allowed = permissionStore.allowlist.sorted()
 
         return VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "PERMISSIONS", tokens: tokens)
+            SettingsSectionHeader(title: "PERMISSIONS", tokens: tokens, icon: "lock.shield")
 
             labeled("DEFAULT MODE", tokens: tokens) {
                 AinkradSelect(
@@ -328,7 +331,7 @@ extension AssistantSettingsView {
         let settingsStore = environment.agentContextSettingsStore
 
         return VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "CONTEXT PRIVACY", tokens: tokens)
+            SettingsSectionHeader(title: "CONTEXT PRIVACY", tokens: tokens, icon: "eye.slash")
 
             Text("Choose what workspace context Assistant may read into its prompts.")
                 .font(AinkradFont.display(11))
