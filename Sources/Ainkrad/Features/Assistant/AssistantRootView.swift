@@ -27,6 +27,18 @@ struct AssistantRootView: View {
 
             transcript(session: session, tokens: tokens)
 
+            if case .awaitingApproval(let pending) = session.state {
+                AssistantApprovalBar(
+                    toolName: pending.call.name,
+                    title: pending.preview.title,
+                    tokens: tokens,
+                    onDeny: { session.deny(reason: "Denied by user.") },
+                    onApproveAlways: { session.approve(always: true) },
+                    onApprove: { session.approve() }
+                )
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+            }
+
             AssistantComposerBar(
                 session: session,
                 tokens: tokens,
@@ -35,6 +47,7 @@ struct AssistantRootView: View {
                 autoFocusOnAppear: autoFocusComposer
             )
         }
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
         .background {
             // Opacity-tinted surface. The blur (when enabled) is rendered by the
             // host behind the whole pane in `BlockView` — the same path every app
@@ -96,29 +109,32 @@ struct AssistantRootView: View {
                         if session.state == .thinking || session.state == .streaming {
                             streamingBubble(session: session, tokens: tokens)
                                 .id("streaming")
+                                .transition(reduceMotion ? .identity : .opacity)
                         }
 
                         if case .awaitingApproval(let pending) = session.state {
                             ToolCallCardView(
+                                toolName: pending.call.name,
                                 title: pending.preview.title,
                                 summary: pending.preview.summary,
                                 diff: pending.preview.diff,
                                 tokens: tokens,
-                                onApprove: { session.approve() },
-                                onDeny: { session.deny(reason: "Denied by user.") },
-                                onApproveAlways: { session.approve(always: true) }
+                                pendingApproval: true
                             )
                             .id("approval")
+                            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
                         if case .callingTool(let name) = session.state {
-                            Text("Running \(name)…")
+                            Text("Running \(ToolPresentation.humanize(name))…")
                                 .font(AinkradFont.display(12))
                                 .foregroundStyle(tokens.foreground.opacity(0.45))
+                                .transition(reduceMotion ? .identity : .opacity)
                         }
 
                         if case .failed(let message) = session.state {
                             errorBubble(message, tokens: tokens)
+                                .transition(reduceMotion ? .identity : .opacity)
                         }
                     }
                     .padding(14)
@@ -128,6 +144,7 @@ struct AssistantRootView: View {
                     // gives newly-inserted rows their materialize transition.
                     // Gated so Reduce Motion inserts rows instantly.
                     .animation(reduceMotion ? nil : AinkradMotion.present, value: session.messages.count)
+                    .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -149,12 +166,16 @@ struct AssistantRootView: View {
 
             ForEach(Array(message.content.enumerated()), id: \.offset) { _, block in
                 if case .toolUse(let id, let name, _) = block {
+                    let result = ToolResultLookup.summary(forToolUseID: id, after: index, in: messages)
                     ToolCallCardView(
-                        title: name,
-                        summary: toolResultSummary(for: id, after: index, in: messages),
+                        toolName: name,
+                        title: ToolPresentation.humanize(name),
+                        summary: result.text,
                         diff: nil,
-                        tokens: tokens
+                        tokens: tokens,
+                        result: result
                     )
+                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                 }
                 if case .image(let mediaType, let base64) = block {
                     imageChip(mediaType: mediaType, base64: base64, tokens: tokens)
@@ -215,19 +236,6 @@ struct AssistantRootView: View {
 
             if !isUser { Spacer(minLength: 40) }
         }
-    }
-
-    /// Finds the `.toolResult` matching a tool_use id in the following message(s)
-    /// and returns its content as the card summary, or a muted fallback.
-    private func toolResultSummary(for id: String, after index: Int, in messages: [AgentMessage]) -> String {
-        for message in messages[(index + 1)...] {
-            for block in message.content {
-                if case .toolResult(let toolUseID, let content, _) = block, toolUseID == id {
-                    return content
-                }
-            }
-        }
-        return "Running…"
     }
 
     @ViewBuilder
