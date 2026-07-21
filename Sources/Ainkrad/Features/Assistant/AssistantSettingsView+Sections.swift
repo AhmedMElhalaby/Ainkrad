@@ -12,6 +12,11 @@ extension AssistantSettingsView {
 
             ForEach(store.connections) { connection in
                 connectionRow(connection, tokens: tokens)
+                if connection.kind == .claude {
+                    SubscriptionAuthSection(
+                        connection: connection, connectionStore: store,
+                        oauthStore: environment.oauthStore, tokens: tokens)
+                }
             }
 
             addConnectionRow(tokens: tokens)

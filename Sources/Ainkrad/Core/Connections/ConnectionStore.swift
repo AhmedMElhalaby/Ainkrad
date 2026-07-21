@@ -35,6 +35,16 @@ final class ConnectionStore {
         secrets.setSecret(token, for: connection.secretID)
     }
 
+    /// Switches a connection between API-key and subscription auth. Persisted
+    /// on the connection record itself (unlike the token, which never touches
+    /// the document) so `credentialResolver` and the settings UI agree on how
+    /// this connection authenticates after a relaunch.
+    func setAuthMode(_ mode: AuthMode, for connection: Connection) {
+        guard let index = connections.firstIndex(where: { $0.id == connection.id }) else { return }
+        connections[index].authMode = mode
+        persist()
+    }
+
     func removeConnection(_ connection: Connection) {
         secrets.setSecret(nil, for: connection.secretID)
         connections.removeAll { $0.id == connection.id }

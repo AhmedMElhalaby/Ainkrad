@@ -2,7 +2,7 @@ import Foundation
 
 /// How a connection authenticates. `apiKey` uses the Keychain token at `secretID`;
 /// `subscription` uses an OAuth bearer token owned by `OAuthCredentialStore`.
-enum AuthMode: String, Codable, Sendable { case apiKey, subscription }
+enum AuthMode: String, Codable, Sendable, Hashable { case apiKey, subscription }
 
 /// A configured provider connection — a provider *instance*. The secret (API
 /// token) is NOT stored here; it lives in the Keychain under `secretID`.
