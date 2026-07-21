@@ -138,13 +138,6 @@ struct AssistantRootView: View {
                             .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
-                        if case .callingTool(let name) = session.state {
-                            Text("Running \(ToolPresentation.humanize(name))…")
-                                .font(AinkradFont.display(12))
-                                .foregroundStyle(tokens.foreground.opacity(0.45))
-                                .transition(reduceMotion ? .identity : .opacity)
-                        }
-
                         if case .failed(let message) = session.state {
                             errorBubble(message, tokens: tokens)
                                 .transition(reduceMotion ? .identity : .opacity)

@@ -21,6 +21,7 @@ struct ToolCallCardView: View {
     var result: ToolResultSummary?
 
     @State private var isExpanded = false
+    @State private var pulse = false
     @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     private var presentation: ToolPresentation { ToolPresentation.for(toolName: toolName) }
@@ -62,6 +63,14 @@ struct ToolCallCardView: View {
             Image(systemName: presentation.icon)
                 .font(.system(size: 11))
                 .foregroundStyle(isError ? tokens.accentTertiary : tint)
+                .opacity(isPending && !reduceMotion ? (pulse ? 1 : 0.4) : 1)
+                .animation(
+                    isPending && !reduceMotion
+                    ? .easeInOut(duration: AinkradMotion.durationSlow).repeatForever(autoreverses: true)
+                    : nil,
+                    value: pulse
+                )
+                .onAppear { if isPending && !reduceMotion { pulse = true } }
             Text(title)
                 .font(AinkradFont.display(12, weight: .semibold))
                 .foregroundStyle(tokens.foreground.opacity(0.85))
@@ -77,7 +86,9 @@ struct ToolCallCardView: View {
 
     @ViewBuilder private var verdictGlyph: some View {
         if isPending {
-            Text("Running…").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
+            Text("Running…")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(reduceMotion ? 0.45 : (pulse ? 0.6 : 0.3)))
         } else if isError {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 10)).foregroundStyle(tokens.accentTertiary)
