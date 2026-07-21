@@ -139,7 +139,7 @@ struct AssistantRootView: View {
                         }
 
                         if case .failed(let message) = session.state {
-                            errorBubble(message, tokens: tokens)
+                            errorBubble(message, session: session, tokens: tokens)
                                 .transition(reduceMotion ? .identity : .opacity)
                         }
                     }
@@ -290,14 +290,33 @@ struct AssistantRootView: View {
         }
     }
 
-    private func errorBubble(_ message: String, tokens: DesignTokens) -> some View {
-        Text(message)
-            .font(AinkradFont.display(12))
-            .foregroundStyle(tokens.accentTertiary)
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentTertiary.opacity(0.1)))
-            .shadow(color: tokens.accentTertiary.opacity(0.15), radius: 6)
+    private func errorBubble(_ message: String, session: AgentSession, tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(tokens.accentTertiary)
+                Text("Something went wrong")
+                    .font(AinkradFont.display(12, weight: .semibold))
+                    .foregroundStyle(tokens.foreground.opacity(0.85))
+                Spacer()
+            }
+            Text(message)
+                .font(AinkradFont.mono(11))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+                .textSelection(.enabled)   // never truncated — an unreadable error is useless
+            HStack {
+                Spacer()
+                ErrorRetryButton(tokens: tokens) { session.retryLastTurn() }
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(tokens.accentTertiary).frame(width: 2)
+        }
+        .shadow(color: tokens.accentTertiary.opacity(0.14), radius: 7)
     }
 
 }
@@ -319,6 +338,30 @@ private struct HoverNewChatButton: View {
         }
         .buttonStyle(.plain)
         .help("New chat")
+        .onHover { isHovering = $0 }
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
+    }
+}
+
+/// Retry control for the failed-turn error card. Hover-lit, chamfered — no native button chrome.
+private struct ErrorRetryButton: View {
+    let tokens: DesignTokens
+    let action: () -> Void
+    @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
+                Text("Retry").font(AinkradFont.display(11, weight: .medium))
+            }
+            .foregroundStyle(tokens.accentTertiary.opacity(isHovering ? 1 : 0.85))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(ChamferShape(cut: AinkradRadius.sm)
+                .fill(tokens.accentTertiary.opacity(isHovering ? 0.18 : 0.1)))
+        }
+        .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
