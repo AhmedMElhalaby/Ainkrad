@@ -1,24 +1,55 @@
 import Foundation
+import Security
 
 enum ImportError: Error, Equatable { case fileAbsent, missingInferenceScope, malformed }
 
-/// Reads the Claude Code CLI's own OAuth login from ~/.claude/.credentials.json.
-/// File-based only: the Claude Code Keychain item is ACL-scoped to that binary and
-/// is not readable here. The app is non-sandboxed, so the file read is permitted.
+/// Reads the Claude Code CLI's own OAuth login and returns an `OAuthToken`.
+///
+/// Claude Code stores its credentials in one of two places depending on version:
+/// the file `~/.claude/.credentials.json`, or the macOS Keychain (generic-password
+/// item, service `"Claude Code-credentials"`). Both hold the same
+/// `{"claudeAiOauth":{...}}` JSON shape, so a single `decode(_:)` handles either.
+///
+/// The file is read first (no prompt); the Keychain is the fallback. Reading the
+/// Keychain item's DATA can raise a one-time macOS access prompt (the item is
+/// owned by Claude Code) — but a mere existence check reads attributes only and
+/// never prompts, so `isAvailable` is prompt-free. The app is non-sandboxed, so
+/// both reads are permitted.
 struct ClaudeCodeCredentialImporter {
+    static let keychainService = "Claude Code-credentials"
+
     private let path: URL
+    private let service: String
+    // Seams — default to real file/Keychain access; overridable in tests.
+    private let readFile: (URL) -> Data?
+    private let readKeychainData: (String) -> Data?
+    private let keychainItemExists: (String) -> Bool
 
     init(path: URL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/.credentials.json")) {
+            .appendingPathComponent(".claude/.credentials.json"),
+         service: String = ClaudeCodeCredentialImporter.keychainService,
+         readFile: @escaping (URL) -> Data? = { FileManager.default.fileExists(atPath: $0.path) ? try? Data(contentsOf: $0) : nil },
+         readKeychainData: @escaping (String) -> Data? = ClaudeCodeCredentialImporter.keychainData,
+         keychainItemExists: @escaping (String) -> Bool = ClaudeCodeCredentialImporter.keychainExists) {
         self.path = path
+        self.service = service
+        self.readFile = readFile
+        self.readKeychainData = readKeychainData
+        self.keychainItemExists = keychainItemExists
     }
 
-    var isAvailable: Bool { FileManager.default.fileExists(atPath: path.path) }
+    /// True when a Claude Code login exists in either source. Prompt-free: the
+    /// Keychain check reads attributes only, never the secret data.
+    var isAvailable: Bool {
+        FileManager.default.fileExists(atPath: path.path) || keychainItemExists(service)
+    }
 
+    /// Loads the token, preferring the file (no prompt) and falling back to the
+    /// Keychain (may raise a one-time access prompt).
     func load() throws -> OAuthToken {
-        guard isAvailable else { throw ImportError.fileAbsent }
-        let data = try Data(contentsOf: path)
-        return try Self.decode(data)
+        if let data = readFile(path) { return try Self.decode(data) }
+        if let data = readKeychainData(service) { return try Self.decode(data) }
+        throw ImportError.fileAbsent
     }
 
     static func decode(_ data: Data) throws -> OAuthToken {
@@ -35,5 +66,33 @@ struct ClaudeCodeCredentialImporter {
         return OAuthToken(accessToken: access, refreshToken: refresh,
                           expiresAt: Date(timeIntervalSince1970: expiresMS / 1000),
                           scopes: scopes)
+    }
+
+    // MARK: - Keychain (real access)
+
+    /// Existence check — attributes only, so it never triggers an access prompt.
+    static func keychainExists(_ service: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// Reads the item's secret data. May raise a one-time macOS access prompt
+    /// because the item is owned by Claude Code; returns nil if denied/absent.
+    static func keychainData(_ service: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: true,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else { return nil }
+        return data
     }
 }

@@ -29,4 +29,49 @@ import Foundation
             _ = try ClaudeCodeCredentialImporter.decode(Data("{}".utf8))
         }
     }
+
+    // MARK: - File vs. Keychain source selection (injected seams)
+
+    private let missingURL = URL(fileURLWithPath: "/nonexistent/.credentials.json")
+
+    @Test func loadFallsBackToKeychainWhenFileAbsent() throws {
+        let kc = payload(scopes: ["user:inference"], expiresAt: 7000)
+        let importer = ClaudeCodeCredentialImporter(
+            path: missingURL,
+            readFile: { _ in nil },              // no file
+            readKeychainData: { _ in kc },       // keychain has it
+            keychainItemExists: { _ in true })
+        let token = try importer.load()
+        #expect(token.accessToken == "AT")
+        #expect(token.expiresAt == Date(timeIntervalSince1970: 7))
+    }
+
+    @Test func loadPrefersFileOverKeychain() throws {
+        let fileData = payload(scopes: ["user:inference"], expiresAt: 1000)
+        let importer = ClaudeCodeCredentialImporter(
+            path: missingURL,
+            readFile: { _ in fileData },
+            readKeychainData: { _ in Issue.record("keychain must not be read when file present"); return nil },
+            keychainItemExists: { _ in true })
+        let token = try importer.load()
+        #expect(token.expiresAt == Date(timeIntervalSince1970: 1))   // came from the file
+    }
+
+    @Test func loadThrowsFileAbsentWhenNeitherSourceHasCredentials() {
+        let importer = ClaudeCodeCredentialImporter(
+            path: missingURL,
+            readFile: { _ in nil },
+            readKeychainData: { _ in nil },
+            keychainItemExists: { _ in false })
+        #expect(throws: ImportError.fileAbsent) { _ = try importer.load() }
+    }
+
+    @Test func isAvailableTrueWhenOnlyKeychainItemExists() {
+        let importer = ClaudeCodeCredentialImporter(
+            path: missingURL,
+            readFile: { _ in nil },
+            readKeychainData: { _ in nil },
+            keychainItemExists: { _ in true })
+        #expect(importer.isAvailable == true)
+    }
 }
