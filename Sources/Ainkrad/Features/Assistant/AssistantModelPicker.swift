@@ -46,6 +46,16 @@ func modelOptionRowLabel(connectionName: String, model: String, isCurated: Bool)
     return "\(prefix)\(connectionName) · \(model)"
 }
 
+/// Whether `refreshModels` should hit the network for a connection: skip when a
+/// fetch is already in flight, or when the last successful fetch is younger than
+/// `ttl`. Pure — unit tested without I/O.
+func shouldFetchModels(connectionID: UUID, now: Date, lastFetch: [UUID: Date],
+                       inFlight: Set<UUID>, ttl: TimeInterval) -> Bool {
+    if inFlight.contains(connectionID) { return false }
+    if let last = lastFetch[connectionID], now.timeIntervalSince(last) < ttl { return false }
+    return true
+}
+
 /// The ONE home for the Assistant's connection+model selection logic, previously
 /// duplicated in `AssistantRootView` and `AssistantSettingsView`. Consumers hold
 /// it as `@State`; methods take the `AppEnvironment` so it stays decoupled.
@@ -53,6 +63,14 @@ func modelOptionRowLabel(connectionName: String, model: String, isCurated: Bool)
 @Observable
 final class AssistantModelPickerModel {
     var isRefreshing = false
+
+    /// Discovery cache: last successful fetch time per connection, and
+    /// connections with a fetch currently in flight. Backs `shouldFetchModels`
+    /// so `refreshModels` doesn't re-hit `/models` on every picker `.onAppear`
+    /// / connection switch.
+    private var lastFetch: [UUID: Date] = [:]
+    private var inFlight: Set<UUID> = []
+    private static let discoveryTTL: TimeInterval = 300  // 5 min
 
     /// The active connection: the configured one if it still exists, else the
     /// first connection.
@@ -107,13 +125,22 @@ final class AssistantModelPickerModel {
         environment.runtimeOptionsStore.pinModel(nil)
     }
 
-    func refreshModels(for connection: Connection, _ environment: AppEnvironment) {
+    func refreshModels(for connection: Connection, _ environment: AppEnvironment, force: Bool = false) {
+        if !force && !shouldFetchModels(connectionID: connection.id, now: Date(),
+                                        lastFetch: lastFetch, inFlight: inFlight, ttl: Self.discoveryTTL) {
+            return
+        }
         let store = environment.connectionStore
         let svc = environment.modelCatalogService
         let preset = ProviderPreset.preset(id: connection.presetID)
         let key = store.token(for: connection) ?? ""
         isRefreshing = true
+        inFlight.insert(connection.id)
         Task {
+            defer {
+                lastFetch[connection.id] = Date()
+                inFlight.remove(connection.id)
+            }
             let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
                                                 apiKey: key, curatedFallback: preset.curatedModels)
             isRefreshing = false

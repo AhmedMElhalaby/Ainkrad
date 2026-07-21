@@ -239,7 +239,7 @@ struct AssistantSettingsView: View {
                             selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
                             label: { $0 }
                         )
-                        Button { if let c = active { modelPicker.refreshModels(for: c, environment) } } label: {
+                        Button { if let c = active { modelPicker.refreshModels(for: c, environment, force: true) } } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
                                 .foregroundStyle(tokens.foreground.opacity(modelPicker.isRefreshing ? 0.3 : 0.6))
