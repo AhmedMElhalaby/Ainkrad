@@ -30,20 +30,14 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     private(set) var uiReduceMotion: Bool
     private let persistence: PersistenceStore
 
-    init(persistence: PersistenceStore,
-         systemReduceMotion: @autoclosure () -> Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
+    init(persistence: PersistenceStore) {
         self.persistence = persistence
-        let loaded = persistence.load(GlobalSettings.self)
-        var settings = loaded ?? GlobalSettings()
-        // First launch only (no persisted document yet): adopt the macOS Reduce
-        // Motion preference as the initial default, so an accessibility user
-        // isn't met with full motion, then persist it. This is a one-time seed —
-        // once written, the in-app setting (Settings → Appearance → Motion) is
-        // the sole source of truth and the OS flag is never read again.
-        if loaded == nil {
-            settings.uiReduceMotion = systemReduceMotion()
-            persistence.save(settings)
-        }
+        // Motion is app-owned only: `uiReduceMotion` is controlled solely by the
+        // in-app setting (Settings → Appearance → Motion), defaulting to motion
+        // ON. The macOS system Reduce Motion flag is intentionally never read —
+        // an accessibility user who wants the app's motion suppressed toggles it
+        // here, and the OS setting can't silently disable it.
+        let settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         self.showFullScreenStatusBar = settings.showFullScreenStatusBar
         self.soundEnabled = settings.soundEnabled
         self.soundVolume = settings.soundVolume

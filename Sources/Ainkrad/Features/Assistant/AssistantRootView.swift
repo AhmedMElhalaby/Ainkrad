@@ -81,6 +81,18 @@ struct AssistantRootView: View {
             && environment.agentSession.state == .idle
     }
 
+    /// True during the brief `.callingTool` window before the assistant turn's
+    /// `.toolUse` block is committed to `messages` — i.e. no pending card renders yet.
+    /// Once the block commits, the per-message pending card takes over (Task 2).
+    private func isCallingToolWithoutCard(_ session: AgentSession) -> Bool {
+        guard case .callingTool = session.state else { return false }
+        let hasToolUseBlock = session.messages.contains { msg in
+            msg.content.contains { if case .toolUse = $0 { return true } else { return false } }
+                && !msg.content.contains { if case .toolResult = $0 { return true } else { return false } }
+        }
+        return !hasToolUseBlock
+    }
+
     private func emptyState() -> some View {
         AinkradEmptyState(
             icon: "sparkles",
@@ -106,7 +118,8 @@ struct AssistantRootView: View {
                                 .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
-                        if session.state == .thinking || session.state == .streaming {
+                        if session.state == .thinking || session.state == .streaming
+                            || isCallingToolWithoutCard(session) {
                             streamingBubble(session: session, tokens: tokens)
                                 .id("streaming")
                                 .transition(reduceMotion ? .identity : .opacity)
@@ -125,15 +138,8 @@ struct AssistantRootView: View {
                             .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
 
-                        if case .callingTool(let name) = session.state {
-                            Text("Running \(ToolPresentation.humanize(name))…")
-                                .font(AinkradFont.display(12))
-                                .foregroundStyle(tokens.foreground.opacity(0.45))
-                                .transition(reduceMotion ? .identity : .opacity)
-                        }
-
                         if case .failed(let message) = session.state {
-                            errorBubble(message, tokens: tokens)
+                            errorBubble(message, session: session, tokens: tokens)
                                 .transition(reduceMotion ? .identity : .opacity)
                         }
                     }
@@ -253,9 +259,7 @@ struct AssistantRootView: View {
                     }
                 }
             } else if session.streamingThinking.isEmpty {
-                Text("Thinking…")
-                    .font(AinkradFont.display(12))
-                    .foregroundStyle(tokens.foreground.opacity(0.45))
+                WorkingIndicator(tokens: tokens)
             }
         }
         .padding(.vertical, 2)
@@ -286,14 +290,33 @@ struct AssistantRootView: View {
         }
     }
 
-    private func errorBubble(_ message: String, tokens: DesignTokens) -> some View {
-        Text(message)
-            .font(AinkradFont.display(12))
-            .foregroundStyle(tokens.accentTertiary)
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentTertiary.opacity(0.1)))
-            .shadow(color: tokens.accentTertiary.opacity(0.15), radius: 6)
+    private func errorBubble(_ message: String, session: AgentSession, tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(tokens.accentTertiary)
+                Text("Something went wrong")
+                    .font(AinkradFont.display(12, weight: .semibold))
+                    .foregroundStyle(tokens.foreground.opacity(0.85))
+                Spacer()
+            }
+            Text(message)
+                .font(AinkradFont.mono(11))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+                .textSelection(.enabled)   // never truncated — an unreadable error is useless
+            HStack {
+                Spacer()
+                ErrorRetryButton(tokens: tokens) { session.retryLastTurn() }
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(tokens.accentTertiary).frame(width: 2)
+        }
+        .shadow(color: tokens.accentTertiary.opacity(0.14), radius: 7)
     }
 
 }
@@ -315,6 +338,30 @@ private struct HoverNewChatButton: View {
         }
         .buttonStyle(.plain)
         .help("New chat")
+        .onHover { isHovering = $0 }
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
+    }
+}
+
+/// Retry control for the failed-turn error card. Hover-lit, chamfered — no native button chrome.
+private struct ErrorRetryButton: View {
+    let tokens: DesignTokens
+    let action: () -> Void
+    @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
+                Text("Retry").font(AinkradFont.display(11, weight: .medium))
+            }
+            .foregroundStyle(tokens.accentTertiary.opacity(isHovering ? 1 : 0.85))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(ChamferShape(cut: AinkradRadius.sm)
+                .fill(tokens.accentTertiary.opacity(isHovering ? 0.18 : 0.1)))
+        }
+        .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
@@ -360,5 +407,47 @@ private struct StreamingCursor: View {
 
     private func caret(opacity: Double) -> some View {
         Text("▍").font(AinkradFont.display(13)).foregroundStyle(tokens.accentSecondary.opacity(opacity))
+    }
+}
+
+/// Breathing "working" affordance shown before the first streamed token and while a
+/// tool call is spinning up before its card commits. Steady under Reduce Motion
+/// (mirrors `StreamingCursor`).
+private struct WorkingIndicator: View {
+    let tokens: DesignTokens
+    var label: String = "Thinking"
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 6) {
+            dots
+            Text("\(label)…")
+                .font(AinkradFont.display(12))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+        }
+    }
+
+    // TimelineView-driven so the pulse actually runs — a one-shot `@State`
+    // toggle with `.repeatForever(.animation(value:))` frequently never starts.
+    // Same idiom as `StreamingCursor` above.
+    @ViewBuilder private var dots: some View {
+        if reduceMotion {
+            HStack(spacing: 3) { ForEach(0..<3, id: \.self) { _ in dot(0.7) } }
+        } else {
+            TimelineView(.animation) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        // ~1.6s breathe (2π·durationBase), 60° per-dot stagger.
+                        let phase = t / AinkradMotion.durationBase + Double(i) * .pi / 3
+                        dot(0.3 + 0.6 * (0.5 + 0.5 * sin(phase)))
+                    }
+                }
+            }
+        }
+    }
+
+    private func dot(_ opacity: Double) -> some View {
+        Circle().fill(tokens.accentSecondary.opacity(opacity)).frame(width: 4, height: 4)
     }
 }
