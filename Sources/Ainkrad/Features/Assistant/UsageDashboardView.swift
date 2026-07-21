@@ -22,8 +22,9 @@ func formattedRouterSavings(_ savings: Double?) -> String? {
 }
 
 /// The `/usage` dashboard: session + all-time token/cost/savings, plus
-/// today's token breakdown. Built entirely from Cardinal-HUD kit components
-/// (`AinkradStatRow`, `AinkradListRow`, `AinkradIconGlyph`) — no raw
+/// today's token breakdown, or a first-run empty state before anything is
+/// tracked. Built entirely from Cardinal-HUD kit components (`AinkradStatRow`,
+/// `AinkradEmptyState`, `AinkradIconGlyph`) — no raw
 /// `Text`/`.font(.headline)`/`.foregroundStyle(.secondary)` styling. Presented
 /// via `.ainkradModal` from the composer (see `AssistantComposerBar`'s usage
 /// trigger beside the model pill).
@@ -31,40 +32,66 @@ struct UsageDashboardView: View {
     let tracker: UsageTracker
     let tokens: DesignTokens
 
+    /// True when any usage has ever been tracked. Gated on ALL-TIME totals so a
+    /// fresh session with prior history still shows the populated dashboard (its
+    /// legitimately-zero session numbers against real all-time figures) — only a
+    /// true first-ever run gets the empty state. Pure.
+    static func hasUsage(_ cumulative: TokenUsage) -> Bool { cumulative != .zero }
+
     var body: some View {
         let cumulative = tracker.cumulative()
         let today = tracker.today()
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
-                header
-                sectionPanel(title: "This session") {
-                    AinkradStatRow(label: "Input tokens", value: "\(tracker.session.input)")
-                    AinkradStatRow(label: "Output tokens", value: "\(tracker.session.output)")
-                    AinkradStatRow(label: "Cache read", value: "\(tracker.session.cacheRead)")
-                    AinkradStatRow(label: "Cost", value: formattedUsageCost(tracker.sessionCostUSD),
-                                  status: tracker.sessionCostUSD > 0 ? .neutral : .warning)
-                }
-                sectionPanel(title: "All time") {
-                    AinkradStatRow(label: "Input tokens", value: "\(cumulative.0.input)")
-                    AinkradStatRow(label: "Output tokens", value: "\(cumulative.0.output)")
-                    AinkradStatRow(label: "Cache read", value: "\(cumulative.0.cacheRead)")
-                    AinkradStatRow(label: "Cost", value: formattedUsageCost(cumulative.costUSD),
-                                  status: cumulative.costUSD > 0 ? .neutral : .warning)
-                    if let savings = formattedRouterSavings(cumulative.savingsUSD) {
-                        AinkradStatRow(label: "Router savings", value: savings, status: .success)
+        Group {
+            if Self.hasUsage(cumulative.0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+                        header
+                        sectionPanel(title: "This session") {
+                            AinkradStatRow(label: "Input tokens", value: "\(tracker.session.input)")
+                            AinkradStatRow(label: "Output tokens", value: "\(tracker.session.output)")
+                            AinkradStatRow(label: "Cache read", value: "\(tracker.session.cacheRead)")
+                            AinkradStatRow(label: "Cost", value: formattedUsageCost(tracker.sessionCostUSD),
+                                          status: tracker.sessionCostUSD > 0 ? .neutral : .warning)
+                        }
+                        sectionPanel(title: "All time") {
+                            AinkradStatRow(label: "Input tokens", value: "\(cumulative.0.input)")
+                            AinkradStatRow(label: "Output tokens", value: "\(cumulative.0.output)")
+                            AinkradStatRow(label: "Cache read", value: "\(cumulative.0.cacheRead)")
+                            AinkradStatRow(label: "Cost", value: formattedUsageCost(cumulative.costUSD),
+                                          status: cumulative.costUSD > 0 ? .neutral : .warning)
+                            if let savings = formattedRouterSavings(cumulative.savingsUSD) {
+                                AinkradStatRow(label: "Router savings", value: savings, status: .success)
+                            }
+                        }
+                        sectionPanel(title: "Today") {
+                            AinkradStatRow(label: "Input tokens", value: "\(today.input)")
+                            AinkradStatRow(label: "Output tokens", value: "\(today.output)")
+                            AinkradStatRow(label: "Cache read", value: "\(today.cacheRead)")
+                        }
                     }
+                    .padding(AinkradSpacing.lg)
                 }
-                sectionPanel(title: "Today") {
-                    AinkradListRow(
-                        leading: { AinkradIconGlyph(systemName: "calendar", size: 22) },
-                        title: "In \(today.input) · Out \(today.output)",
-                        subtitle: today.cacheRead > 0 ? "Cache read \(today.cacheRead)" : nil,
-                        trailing: { EmptyView() }
+                // Content-height so the card scrolls only if the sections
+                // outgrow the cap — keeps the modal a compact centered card
+                // (like Settings/Launcher), never a full-height strip.
+                .frame(maxHeight: 460)
+            } else {
+                // Empty state: header pinned top, the (space-filling) empty
+                // treatment centered below within a compact card.
+                VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+                    header
+                    AinkradEmptyState(
+                        icon: "gauge.with.dots.needle.67percent",
+                        title: "No usage yet",
+                        message: "Token counts and cost appear here after your first message.",
+                        actionTitle: nil,
+                        action: nil
                     )
                 }
+                .padding(AinkradSpacing.lg)
+                .frame(height: 240)
             }
-            .padding(AinkradSpacing.lg)
         }
     }
 

@@ -7,7 +7,11 @@ import AinkradAppKit
 /// `AppEnvironment` directly (host-embedded built-in, like the Settings
 /// sections) rather than going through `HostServices`.
 struct AssistantRootView: View {
-    @Environment(AppEnvironment.self) private var environment
+    // Not `private` — read from `AssistantRootView+Export.swift` (a `private`
+    // member is file-scoped in Swift, so an extension in a different file
+    // can't see it; same widening rationale `AssistantComposerBar` already
+    // uses for its cross-file-read state).
+    @Environment(AppEnvironment.self) var environment
     @Environment(\.ainkradReduceMotion) private var reduceMotion
     var showsHeader: Bool = true
     var autoFocusComposer: Bool = false
@@ -15,6 +19,13 @@ struct AssistantRootView: View {
     @State private var isThinkingExpanded = true
     @State private var modelPicker = AssistantModelPickerModel()
     @State private var hoveredTurnIndex: Int?
+    // Not `private` — read from `AssistantRootView+Export.swift`.
+    @Environment(\.ainkradToastCenter) var toastCenter
+    @State private var isUsageDashboardPresented = false
+    @State var isExportModalPresented = false
+    @State private var isRunsPanelPresented = false
+    @State private var isSchedulesPresented = false
+    @State var redactionsText = ""
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -44,7 +55,11 @@ struct AssistantRootView: View {
                 tokens: tokens,
                 modelPicker: modelPicker,
                 draft: $draft,
-                autoFocusOnAppear: autoFocusComposer
+                autoFocusOnAppear: autoFocusComposer,
+                isUsageDashboardPresented: $isUsageDashboardPresented,
+                isRunsPanelPresented: $isRunsPanelPresented,
+                isSchedulesPresented: $isSchedulesPresented,
+                isExportModalPresented: $isExportModalPresented
             )
         }
         .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
@@ -54,6 +69,24 @@ struct AssistantRootView: View {
             // uses now — so this view only paints its opacity tint. At opacity 1.0
             // this is identical to the old opaque background.
             tokens.background.opacity(environment.appAppearanceStore.surfaceOpacity("assistant"))
+        }
+        .ainkradModal(isPresented: $isUsageDashboardPresented) {
+            UsageDashboardView(tracker: environment.usageTracker, tokens: tokens)
+        }
+        .ainkradModal(isPresented: $isExportModalPresented) {
+            exportModalContent
+        }
+        // Runs/Schedules are variable-length lists — bound them to a compact
+        // centered card that scrolls internally (like Settings/Launcher),
+        // never a full-height strip. `.ainkradModal` caps width (480); this
+        // caps height.
+        .ainkradModal(isPresented: $isRunsPanelPresented) {
+            RunsPanelView(manager: environment.runManager, tokens: tokens)
+                .frame(maxHeight: 520)
+        }
+        .ainkradModal(isPresented: $isSchedulesPresented) {
+            ScheduleUIView(store: environment.scheduleStore)
+                .frame(maxHeight: 520)
         }
     }
 

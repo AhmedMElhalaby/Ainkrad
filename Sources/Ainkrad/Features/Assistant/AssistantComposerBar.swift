@@ -25,14 +25,23 @@ struct AssistantComposerBar: View {
     let modelPicker: AssistantModelPickerModel
     @Binding var draft: String
     var autoFocusOnAppear: Bool = false
-    // Not `private` — set from `AssistantComposerBar+Overflow.swift` (Wave 3
-    // Task 7 collapses the Usage trigger into the `•••` panel; same
-    // minimal-widening rationale as the export/mention/palette state above).
-    @State var isUsageDashboardPresented = false
-    @State private var isRunsPanelPresented = false
+    // Owned by `AssistantRootView` (whose top-level `VStack` fills the whole
+    // Assistant surface) so the `.ainkradModal` scrim/content isn't confined
+    // to this short composer strip. Not `private` — set from
+    // `AssistantComposerBar+Overflow.swift` (Wave 3 Task 7 collapses the
+    // Usage trigger into the `•••` panel; same minimal-widening rationale as
+    // the export/mention/palette state above).
+    @Binding var isUsageDashboardPresented: Bool
+    @Binding var isRunsPanelPresented: Bool
     /// M7 Slice 3b (Autonomy: scheduling/triggers) — presents `ScheduleUIView`,
-    /// same `.ainkradModal` pattern as the Runs panel below.
-    @State private var isSchedulesPresented = false
+    /// same `.ainkradModal` pattern as the Runs panel below. Owned by
+    /// `AssistantRootView`, same rationale as `isUsageDashboardPresented`.
+    @Binding var isSchedulesPresented: Bool
+    /// Export/redaction modal presented flag. Owned by `AssistantRootView`,
+    /// same rationale as `isUsageDashboardPresented`; the redaction text
+    /// (`redactionsText`) and the modal content/export flow now live there too
+    /// (`AssistantRootView+Export.swift`).
+    @Binding var isExportModalPresented: Bool
 
     /// Images attached via drag-and-drop, carried into the NEXT `session.send`
     /// call and cleared on send (or on manual removal via its chip's ✕).
@@ -55,11 +64,6 @@ struct AssistantComposerBar: View {
     @State var isMentionVisible = false
     @State var mentionQuery = ""
     @State var mentionSelectedIndex = 0
-
-    /// Export/redaction modal state. Not `private` — read/written from
-    /// `AssistantComposerBar+Export.swift` (M7 finalize Wave D, D2 file split).
-    @State var isExportModalPresented = false
-    @State var redactionsText = ""
 
     /// `•••` overflow panel state (M7 finalize follow-up: composer strip
     /// polish) — see `AssistantComposerBar+Overflow.swift`. Not `private`,
@@ -132,18 +136,6 @@ struct AssistantComposerBar: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
-        .ainkradModal(isPresented: $isUsageDashboardPresented) {
-            UsageDashboardView(tracker: environment.usageTracker, tokens: tokens)
-        }
-        .ainkradModal(isPresented: $isExportModalPresented) {
-            exportModalContent
-        }
-        .ainkradModal(isPresented: $isRunsPanelPresented) {
-            RunsPanelView(manager: environment.runManager, tokens: tokens)
-        }
-        .ainkradModal(isPresented: $isSchedulesPresented) {
-            ScheduleUIView(store: environment.scheduleStore)
-        }
         .background(
             // Tab-cycle affordance (M7 Slice 5a Task 5): swallows a plain Tab
             // keyDown to advance the active agent, but ONLY when the draft is
