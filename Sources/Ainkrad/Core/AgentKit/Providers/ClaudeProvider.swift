@@ -104,8 +104,9 @@ struct ClaudeProvider: LLMProvider {
                         }
                     }
                     continuation.finish()
-                } catch StreamingHTTPError.status(_, let body) {
-                    continuation.yield(.failed(Self.errorMessage(fromResponseBody: body)))
+                } catch StreamingHTTPError.status(let code, let body) {
+                    Log.settings.error("Claude inference \(code, privacy: .public): \(body, privacy: .public)")
+                    continuation.yield(.failed(Self.errorMessage(status: code, fromResponseBody: body)))
                     continuation.finish()
                 } catch {
                     continuation.yield(.failed("Streaming failed: \(error.localizedDescription)"))
@@ -147,24 +148,31 @@ struct ClaudeProvider: LLMProvider {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
-        var systemText = system
         var wireTools = tools
+        // `.apiKey` sends `system` as a plain string (unchanged). `.oauth` MUST send it
+        // as a block array whose FIRST block is exactly the Claude Code identity string —
+        // the subscription backend validates that block verbatim, so concatenating the
+        // caller's prompt into it (a single string) fails the check. Keep them separate.
+        let systemValue: Any
         switch credential {
         case .apiKey(let key):
             request.setValue(key, forHTTPHeaderField: "x-api-key")
+            systemValue = system
         case .oauth(let token):
             request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
             request.setValue(Self.oauthBetas, forHTTPHeaderField: "anthropic-beta")
             request.setValue("claude-code/\(Self.claudeCodeVersion)", forHTTPHeaderField: "user-agent")
             request.setValue("cli", forHTTPHeaderField: "x-app")
-            systemText = Self.claudeCodeSystemPrefix + "\n\n" + system
+            var blocks: [[String: Any]] = [["type": "text", "text": Self.claudeCodeSystemPrefix]]
+            if !system.isEmpty { blocks.append(["type": "text", "text": system]) }
+            systemValue = blocks
         }
 
         var body: [String: Any] = [
             "model": model.model,
             "max_tokens": 64000,
             "stream": true,
-            "system": systemText,
+            "system": systemValue,
             "messages": messages.map(wireMessage),
             "thinking": ["type": "adaptive", "display": "summarized"],
             "output_config": ["effort": model.effort],
@@ -202,13 +210,14 @@ struct ClaudeProvider: LLMProvider {
 
     /// Best-effort human-readable message from a non-2xx response body. Never echoes the API key
     /// (the body is the server's response, not the request — the key never appears in it).
-    private static func errorMessage(fromResponseBody body: String) -> String {
+    private static func errorMessage(status: Int, fromResponseBody body: String) -> String {
         if let data = body.data(using: .utf8),
            let envelope = try? JSONDecoder().decode(SSEEnvelope.self, from: data),
            let message = envelope.error?.message {
-            return message
+            return "Claude API \(status): \(message)"
         }
-        return "Anthropic API request failed"
+        let snippet = body.isEmpty ? "" : ": \(body.prefix(300))"
+        return "Claude API \(status)\(snippet)"
     }
 
     // MARK: - Wire types

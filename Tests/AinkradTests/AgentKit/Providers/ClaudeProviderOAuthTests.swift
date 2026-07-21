@@ -23,15 +23,19 @@ import Foundation
         #expect(betas.contains("oauth-2025-04-20"))
     }
 
-    @Test func oauthPrependsClaudeCodeSystemBlock() {
+    @Test func oauthSendsClaudeCodeSystemAsFirstBlockOfAnArray() {
         let token = OAuthToken(accessToken: "AT", refreshToken: "RT", expiresAt: Date(), scopes: [])
         let req = ClaudeProvider.makeRequest(
             messages: [], system: "MY SYSTEM", tools: [],
             model: AgentModelConfig(model: "claude-sonnet-5", effort: "high"),
             credential: .oauth(token))
-        let system = body(req)["system"] as? String ?? ""
-        #expect(system.hasPrefix("You are Claude Code, Anthropic's official CLI for Claude."))
-        #expect(system.contains("MY SYSTEM"))
+        // OAuth sends `system` as a block array; the FIRST block must be exactly the
+        // Claude Code identity string (verbatim — not concatenated with the user prompt).
+        let blocks = body(req)["system"] as? [[String: Any]] ?? []
+        #expect(blocks.first?["type"] as? String == "text")
+        #expect(blocks.first?["text"] as? String == "You are Claude Code, Anthropic's official CLI for Claude.")
+        #expect(blocks.count == 2)
+        #expect(blocks.last?["text"] as? String == "MY SYSTEM")
     }
 
     @Test func oauthRewritesSingleUnderscoreMcpToolNames() {
