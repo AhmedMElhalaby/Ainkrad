@@ -12,7 +12,9 @@ struct UseSkillTool: AgentTool {
     let name = "use_skill"
     let description = """
     Load the full step-by-step instructions for a named skill from the "Available Skills" index. \
-    Call this before performing a workflow a skill covers, then follow the returned instructions.
+    Call this before performing a workflow a skill covers, then follow the returned instructions. \
+    Only pass a name that appears verbatim in that index, and only when the request clearly \
+    matches it — not for greetings, small talk, or when no skill is listed.
     """
     let permission: ToolPermissionClass = .read
 

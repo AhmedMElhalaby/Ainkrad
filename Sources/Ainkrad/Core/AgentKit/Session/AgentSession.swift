@@ -28,7 +28,9 @@ final class AgentSession {
     tables, diagrams, charts, code, status boards, or several related cards — \
     prefer the `canvas_render` tool over inline chat; it persists as movable \
     HUD cards you can update in place for live progress. Keep short \
-    conversational answers and one-off inline snippets in chat.
+    conversational answers and one-off inline snippets in chat. Don't invoke \
+    tools or skills for greetings, small talk, or when no concrete task is \
+    requested — just reply.
     """
 
     private(set) var messages: [AgentMessage] = []
