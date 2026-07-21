@@ -46,7 +46,8 @@ extension SkillCommandStore {
                 SlashCommand(
                     name: binding.command,
                     summary: "Run skill \(binding.skillName)",
-                    usage: "/\(binding.command) [args]"
+                    usage: "/\(binding.command) [args]",
+                    category: .skill
                 ) { [weak self] args, session in
                     guard let self else { return .notACommand }
                     switch SkillCommandResolver.resolve("/\(binding.command) \(args)", store: self, registry: registry) {

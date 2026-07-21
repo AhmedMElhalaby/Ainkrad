@@ -188,7 +188,7 @@ extension AppEnvironment {
         // M7 Slice 3 (Autonomy) Task 11: `/stop` interrupts the in-flight turn.
         // `/undo` and `/retry` are already registered as builtins (Task 10).
         commandRegistry.register(SlashCommand(
-            name: "stop", summary: "Interrupt the current turn", usage: "/stop") { _, session in
+            name: "stop", summary: "Interrupt the current turn", usage: "/stop", category: .session) { _, session in
             session.interrupt()
             return .handled(note: "Interrupted.")
         })
