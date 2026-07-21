@@ -21,6 +21,9 @@ struct AssistantSettingsTabTests {
     @Test("voice tab is voice") func voice() {
         #expect(AssistantSettingsTab.voice.sections == [.voice])
     }
+    @Test("appearance tab is appearance") func appearance() {
+        #expect(AssistantSettingsTab.appearance.sections == [.appearance])
+    }
     @Test("titles and icons are set for every tab") func metadata() {
         for tab in AssistantSettingsTab.allCases {
             #expect(!tab.title.isEmpty)

@@ -4,7 +4,7 @@ import AinkradAppKit
 /// The four tabs of the Assistant settings pane. Each tab owns an ordered set
 /// of sections; only the active tab's sections render below the tab bar.
 enum AssistantSettingsTab: String, CaseIterable, Hashable {
-    case models, access, data, voice
+    case models, access, data, voice, appearance
 
     var title: String {
         switch self {
@@ -12,6 +12,7 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
         case .access: return "Access"
         case .data: return "Data"
         case .voice: return "Voice"
+        case .appearance: return "Appearance"
         }
     }
 
@@ -21,6 +22,7 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
         case .access: return "lock.shield"
         case .data: return "eye.slash"
         case .voice: return "waveform"
+        case .appearance: return "paintbrush"
         }
     }
 
@@ -32,6 +34,7 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
         case .access: return [.permissions, .sandbox]
         case .data: return [.contextPrivacy]
         case .voice: return [.voice]
+        case .appearance: return [.appearance]
         }
     }
 }
@@ -39,7 +42,7 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
 /// The individual settings sections. `.model` includes the model list, refresh,
 /// and the effort picker (one builder). `.sandbox` is `SandboxPolicyUIView`.
 enum AssistantSettingsSection: String, CaseIterable, Hashable {
-    case connections, model, permissions, sandbox, contextPrivacy, voice
+    case connections, model, permissions, sandbox, contextPrivacy, voice, appearance
 }
 
 /// A horizontal pill selector for the Assistant settings tabs, in the outer

@@ -311,60 +311,64 @@ struct SettingsOverlayView: View {
     private func appAppearanceSection(appID: String, tokens: DesignTokens) -> some View {
         let appearance = environment.appAppearanceStore
 
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+        if appID == AssistantApp.id {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
 
-            if appID == AssistantApp.id {
+                if appID == AssistantApp.id {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Surface opacity")
+                                .font(AinkradFont.display(13, weight: .medium))
+                                .foregroundStyle(tokens.foreground.opacity(0.9))
+                            Text("Lower opacity lets the workspace show through this app.")
+                                .font(AinkradFont.display(11))
+                                .foregroundStyle(tokens.foreground.opacity(0.5))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 12)
+                        HStack(spacing: 10) {
+                            AinkradSlider(
+                                value: Binding(
+                                    get: { appearance.surfaceOpacity(appID) },
+                                    set: { appearance.setSurfaceOpacity(appID, $0) }
+                                ),
+                                in: 0.3...1.0
+                            )
+                            .frame(width: 130)
+                            Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
+                                .font(AinkradFont.display(11))
+                                .foregroundStyle(tokens.foreground.opacity(0.55))
+                                .frame(width: 42, alignment: .trailing)
+                        }
+                    }
+                    .padding(14)
+                    .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+                }
+
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Surface opacity")
+                        Text("Blur")
                             .font(AinkradFont.display(13, weight: .medium))
                             .foregroundStyle(tokens.foreground.opacity(0.9))
-                        Text("Lower opacity lets the workspace show through this app.")
+                        Text("Blur the workspace revealed behind this app when it's translucent.")
                             .font(AinkradFont.display(11))
                             .foregroundStyle(tokens.foreground.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)
-                    HStack(spacing: 10) {
-                        AinkradSlider(
-                            value: Binding(
-                                get: { appearance.surfaceOpacity(appID) },
-                                set: { appearance.setSurfaceOpacity(appID, $0) }
-                            ),
-                            in: 0.3...1.0
+                    AinkradToggle(
+                        isOn: Binding(
+                            get: { appearance.blurEnabled(appID) },
+                            set: { appearance.setBlurEnabled(appID, $0) }
                         )
-                        .frame(width: 130)
-                        Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
-                            .font(AinkradFont.display(11))
-                            .foregroundStyle(tokens.foreground.opacity(0.55))
-                            .frame(width: 42, alignment: .trailing)
-                    }
+                    )
                 }
                 .padding(14)
                 .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
             }
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Blur")
-                        .font(AinkradFont.display(13, weight: .medium))
-                        .foregroundStyle(tokens.foreground.opacity(0.9))
-                    Text("Blur the workspace revealed behind this app when it's translucent.")
-                        .font(AinkradFont.display(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-                AinkradToggle(
-                    isOn: Binding(
-                        get: { appearance.blurEnabled(appID) },
-                        set: { appearance.setBlurEnabled(appID, $0) }
-                    )
-                )
-            }
-            .padding(14)
-            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         }
     }
 

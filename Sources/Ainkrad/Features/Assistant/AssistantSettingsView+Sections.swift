@@ -387,4 +387,104 @@ extension AssistantSettingsView {
             shortcuts: environment.shortcutStore,
             tokens: tokens)
     }
+
+    // MARK: - Appearance
+
+    func appearanceSection(tokens: DesignTokens) -> some View {
+        let appearance = environment.appAppearanceStore
+        let manager = environment.themeManager
+        let appID = AssistantApp.id
+
+        return VStack(alignment: .leading, spacing: 12) {
+            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens, icon: "paintbrush")
+
+            // Surface opacity
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Surface opacity")
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text("Lower opacity lets the workspace show through this app.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                HStack(spacing: 10) {
+                    AinkradSlider(
+                        value: Binding(
+                            get: { appearance.surfaceOpacity(appID) },
+                            set: { appearance.setSurfaceOpacity(appID, $0) }
+                        ),
+                        in: 0.3...1.0
+                    )
+                    .frame(width: 130)
+                    Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.55))
+                        .frame(width: 42, alignment: .trailing)
+                }
+            }
+            .padding(14)
+            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+
+            // Blur
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Blur")
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text("Blur the workspace revealed behind this app when it's translucent.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                AinkradToggle(
+                    isOn: Binding(
+                        get: { appearance.blurEnabled(appID) },
+                        set: { appearance.setBlurEnabled(appID, $0) }
+                    )
+                )
+            }
+            .padding(14)
+            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+
+            // Assistant text: font family + size (assistant-only override; nil = inherit global)
+            labeled("TEXT FONT", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: UIFontFamily.allCases,
+                    selection: Binding(
+                        get: { appearance.fontFamily(appID) ?? manager.uiFontFamily },
+                        set: { appearance.setFontFamily(appID, $0) }
+                    ),
+                    label: { fontFamilyTitle($0) })
+            }
+            labeled("TEXT SIZE", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: UIFontScale.allCases,
+                    selection: Binding(
+                        get: { appearance.fontScale(appID) ?? manager.uiFontScale },
+                        set: { appearance.setFontScale(appID, $0) }
+                    ),
+                    label: { fontScaleTitle($0) })
+            }
+            Text("Applies to the assistant's messages only. Leave matching Appearance to inherit the app-wide setting.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func fontFamilyTitle(_ family: UIFontFamily) -> String {
+        switch family {
+        case .exo2: return "Exo 2"
+        case .jetBrainsMono: return "JetBrains Mono"
+        case .system: return "System"
+        }
+    }
+
+    private func fontScaleTitle(_ scale: UIFontScale) -> String {
+        switch scale { case .small: return "Small"; case .medium: return "Medium"; case .large: return "Large" }
+    }
 }
