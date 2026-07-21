@@ -55,4 +55,24 @@ struct CommandPaletteView: View {
         guard !q.isEmpty else { return commands }
         return commands.filter { $0.name.lowercased().contains(q) || $0.summary.lowercased().contains(q) }
     }
+
+    /// Partitions a command list into ordered, non-empty sections by category.
+    /// Section order follows `CommandCategory.order`; order WITHIN a section is
+    /// the input order (i.e. registry order after filtering). Pure.
+    static func grouped(_ commands: [SlashCommand]) -> [(category: CommandCategory, commands: [SlashCommand])] {
+        CommandCategory.allCases
+            .sorted { $0.order < $1.order }
+            .compactMap { category in
+                let members = commands.filter { $0.category == category }
+                return members.isEmpty ? nil : (category, members)
+            }
+    }
+
+    /// The canonical flattened order the palette both RENDERS and NAVIGATES —
+    /// filtered, then grouped, then flattened. The composer's key-driven
+    /// selection and this view's row rendering must use this same order so the
+    /// single `selectedIndex` maps to the highlighted row. Pure.
+    static func selectionOrder(_ commands: [SlashCommand], query: String) -> [SlashCommand] {
+        grouped(filter(commands, query: query)).flatMap { $0.commands }
+    }
 }
