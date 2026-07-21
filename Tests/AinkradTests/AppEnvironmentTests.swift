@@ -142,6 +142,8 @@ final class AppEnvironmentTests {
             localModelProbe: LocalModelProbe(catalog: ModelCatalogService(http: URLSessionDataHTTPClient())),
             localModelAvailability: LocalModelAvailability(),
             authProfileStore: AuthProfileStore(persistence: persistence, secrets: secrets),
+            oauthStore: OAuthCredentialStore(persistence: persistence, secrets: secrets,
+                                             flow: ClaudeOAuthFlow(clientVersion: "test")),
             commandRegistry: CommandRegistry(builtins: []),
             assistantWorkingDirectory: FileManager.default.homeDirectoryForCurrentUser,
             workspaceFileIndex: WorkspaceFileIndex(root: FileManager.default.homeDirectoryForCurrentUser),

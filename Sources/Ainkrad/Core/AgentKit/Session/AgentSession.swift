@@ -56,6 +56,24 @@ final class AgentSession {
     /// Not part of the UI-facing contract.
     private(set) var currentTask: Task<Void, Never>?
 
+    /// Resolves the ordered credentials for a connection. Injected (as a plain
+    /// settable `var`, not an init param) so tests can drive credential
+    /// selection without a live OAuth store or network provider — production
+    /// wiring sets this in `AppEnvironment.bootstrapAgentSessionAndRuns`. `nil`
+    /// (the default) falls back to `runConversation`'s own resolution: API-key
+    /// connections build `.apiKey` credentials from `allKeys` exactly as
+    /// before this task; a `.subscription` connection with no resolver has no
+    /// other way to reach the OAuth store, so it fails cleanly with a re-auth
+    /// message rather than silently sending no credential.
+    var credentialResolver: ((Connection) async throws -> [ProviderCredential])?
+
+    /// Thrown when `runConversation` needs a subscription credential but no
+    /// `credentialResolver` was injected — every construction site outside
+    /// `bootstrapAgentSessionAndRuns`'s main session (subagent/background
+    /// sessions) doesn't wire subscription OAuth yet. Caught immediately and
+    /// turned into the same re-auth `.failed` message as a live store throw.
+    private enum CredentialResolutionError: Error { case oauthResolverUnavailable }
+
     private let providerFor: (Connection) -> LLMProvider
     private let connections: ConnectionStore
     private let config: AgentConfigStore
@@ -512,11 +530,26 @@ final class AgentSession {
             return
         }
         let allKeys = authProfiles?.keys(for: connection) ?? (connections.token(for: connection).map { [$0] } ?? [])
-        if ProviderPreset.preset(id: connection.presetID).requiresKey && allKeys.isEmpty {
+        if connection.authMode == .apiKey,
+           ProviderPreset.preset(id: connection.presetID).requiresKey, allKeys.isEmpty {
             state = .failed("No API key configured for \(connection.displayName)")
             return
         }
-        let credentials: [ProviderCredential] = (allKeys.isEmpty ? [""] : allKeys).map { .apiKey($0) }
+
+        let credentials: [ProviderCredential]
+        do {
+            if let resolver = credentialResolver {
+                credentials = try await resolver(connection)
+            } else if connection.authMode == .subscription {
+                throw CredentialResolutionError.oauthResolverUnavailable
+            } else {
+                credentials = (allKeys.isEmpty ? [""] : allKeys).map { .apiKey($0) }
+            }
+        } catch {
+            state = .failed("Your Claude subscription needs to be re-authorized. " +
+                            "Open Assistant settings and sign in again.")
+            return
+        }
 
         let contextBlock = context.assembleContext()
         let agentInstructions = agents?.active.instructions ?? ""

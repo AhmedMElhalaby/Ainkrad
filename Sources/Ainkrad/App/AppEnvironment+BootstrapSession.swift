@@ -10,6 +10,7 @@ import AinkradAppKit
 extension AppEnvironment {
     static func bootstrapAgentSessionAndRuns(
         persistence: PersistenceStore,
+        secrets: SecretStore,
         streamingHTTP: URLSessionStreamingHTTPClient,
         connectionStore: ConnectionStore,
         agentConfigStore: AgentConfigStore,
@@ -42,7 +43,8 @@ extension AppEnvironment {
         workspaceFileIndex: WorkspaceFileIndex,
         agentSession: AgentSession,
         voiceService: VoiceService,
-        menuBarPresence: MenuBarPresence
+        menuBarPresence: MenuBarPresence,
+        oauthStore: OAuthCredentialStore
     ) {
         var agentTools = agentTools
 
@@ -237,12 +239,28 @@ extension AppEnvironment {
             mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
+        // Subscription OAuth (Task 10): the main interactive session resolves a
+        // `.subscription` connection's credential through this store rather than
+        // an API key. Stored on `AppEnvironment` too (see `bootstrap()`) so the
+        // settings UI (Task 11) can drive sign-in/sign-out through the SAME
+        // instance the session reads its live credential from.
+        let oauthStore = OAuthCredentialStore(
+            persistence: persistence, secrets: secrets,
+            flow: ClaudeOAuthFlow(clientVersion: ClaudeProvider.claudeCodeVersion))
+        agentSession.credentialResolver = { [oauthStore, authProfileStore] connection in
+            if connection.authMode == .subscription {
+                return [try await oauthStore.liveCredential(for: connection)]
+            }
+            let keys = authProfileStore.keys(for: connection)
+            return (keys.isEmpty ? [""] : keys).map { .apiKey($0) }
+        }
+
         let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
         voiceService.attachSession(agentSession)
 
         return (
             subagentCoordinator, runManager, scheduleStore, scheduleRunner, triggerDispatcher, fileChangeWatcher,
-            assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence
+            assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence, oauthStore
         )
     }
 
