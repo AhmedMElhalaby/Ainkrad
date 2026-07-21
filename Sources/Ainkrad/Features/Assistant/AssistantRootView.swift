@@ -417,29 +417,37 @@ private struct WorkingIndicator: View {
     let tokens: DesignTokens
     var label: String = "Thinking"
     @Environment(\.ainkradReduceMotion) private var reduceMotion
-    @State private var pulse = false
 
     var body: some View {
         HStack(spacing: 6) {
-            HStack(spacing: 3) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(tokens.accentSecondary.opacity(0.7))
-                        .frame(width: 4, height: 4)
-                        .opacity(reduceMotion ? 1 : (pulse ? 1 : 0.25))
-                        .animation(
-                            reduceMotion ? nil
-                            : .easeInOut(duration: AinkradMotion.durationSlow)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * AinkradMotion.durationFast),
-                            value: pulse
-                        )
-                }
-            }
+            dots
             Text("\(label)…")
                 .font(AinkradFont.display(12))
                 .foregroundStyle(tokens.foreground.opacity(0.45))
         }
-        .onAppear { if !reduceMotion { pulse = true } }
+    }
+
+    // TimelineView-driven so the pulse actually runs — a one-shot `@State`
+    // toggle with `.repeatForever(.animation(value:))` frequently never starts.
+    // Same idiom as `StreamingCursor` above.
+    @ViewBuilder private var dots: some View {
+        if reduceMotion {
+            HStack(spacing: 3) { ForEach(0..<3, id: \.self) { _ in dot(0.7) } }
+        } else {
+            TimelineView(.animation) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        // ~1.6s breathe (2π·durationBase), 60° per-dot stagger.
+                        let phase = t / AinkradMotion.durationBase + Double(i) * .pi / 3
+                        dot(0.3 + 0.6 * (0.5 + 0.5 * sin(phase)))
+                    }
+                }
+            }
+        }
+    }
+
+    private func dot(_ opacity: Double) -> some View {
+        Circle().fill(tokens.accentSecondary.opacity(opacity)).frame(width: 4, height: 4)
     }
 }

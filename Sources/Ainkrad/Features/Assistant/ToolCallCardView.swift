@@ -21,7 +21,6 @@ struct ToolCallCardView: View {
     var result: ToolResultSummary?
 
     @State private var isExpanded = false
-    @State private var pulse = false
     @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     private var presentation: ToolPresentation { ToolPresentation.for(toolName: toolName) }
@@ -60,17 +59,7 @@ struct ToolCallCardView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Image(systemName: presentation.icon)
-                .font(.system(size: 11))
-                .foregroundStyle(isError ? tokens.accentTertiary : tint)
-                .opacity(isPending && !reduceMotion ? (pulse ? 1 : 0.4) : 1)
-                .animation(
-                    isPending && !reduceMotion
-                    ? .easeInOut(duration: AinkradMotion.durationSlow).repeatForever(autoreverses: true)
-                    : nil,
-                    value: pulse
-                )
-                .onAppear { if isPending && !reduceMotion { pulse = true } }
+            toolIcon
             Text(title)
                 .font(AinkradFont.display(12, weight: .semibold))
                 .foregroundStyle(tokens.foreground.opacity(0.85))
@@ -84,11 +73,30 @@ struct ToolCallCardView: View {
         }
     }
 
+    // Pending tool icon breathes via TimelineView (reliable, unlike a one-shot
+    // `@State` + `.repeatForever` toggle); static otherwise / under Reduce Motion.
+    @ViewBuilder private var toolIcon: some View {
+        if isPending && !reduceMotion {
+            TimelineView(.animation) { context in
+                let wave = 0.5 + 0.5 * sin(context.date.timeIntervalSinceReferenceDate / AinkradMotion.durationBase)
+                iconGlyph.opacity(0.4 + 0.6 * wave)
+            }
+        } else {
+            iconGlyph
+        }
+    }
+
+    private var iconGlyph: some View {
+        Image(systemName: presentation.icon)
+            .font(.system(size: 11))
+            .foregroundStyle(isError ? tokens.accentTertiary : tint)
+    }
+
     @ViewBuilder private var verdictGlyph: some View {
         if isPending {
             Text("Running…")
                 .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(reduceMotion ? 0.45 : (pulse ? 0.6 : 0.3)))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
         } else if isError {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 10)).foregroundStyle(tokens.accentTertiary)
