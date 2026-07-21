@@ -21,21 +21,41 @@ struct AssistantSettingsView: View {
     @State var testResults: [UUID: ConnectionTestResult] = [:]
     @State var testingIDs: Set<UUID> = []
     @State var hoveredConnectionID: UUID?
+    @State private var selectedTab: AssistantSettingsTab = .models
 
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                connectionsSection(tokens: tokens)
-                modelSection(tokens: tokens)
-                permissionsSection(tokens: tokens)
-                sandboxSection(tokens: tokens)
-                contextPrivacySection(tokens: tokens)
-                voiceSection(tokens: tokens)
+        VStack(alignment: .leading, spacing: 0) {
+            AssistantSettingsTabBar(selection: $selectedTab, tokens: tokens)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(selectedTab.sections, id: \.self) { section in
+                        sectionView(section, tokens: tokens)
+                    }
+                }
+                .padding(18)
+                .id(selectedTab)
+                .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
             }
-            .padding(18)
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: selectedTab)
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: AssistantSettingsSection, tokens: DesignTokens) -> some View {
+        switch section {
+        case .connections:    connectionsSection(tokens: tokens)
+        case .model:          modelSection(tokens: tokens)
+        case .permissions:    permissionsSection(tokens: tokens)
+        case .sandbox:        sandboxSection(tokens: tokens)
+        case .contextPrivacy: contextPrivacySection(tokens: tokens)
+        case .voice:          voiceSection(tokens: tokens)
+        }
     }
 }
