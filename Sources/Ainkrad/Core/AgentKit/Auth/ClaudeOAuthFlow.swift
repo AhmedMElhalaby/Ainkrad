@@ -2,7 +2,10 @@ import Foundation
 import CryptoKit
 
 enum ClaudeOAuthError: Error, Equatable {
-    case tokenEndpoint(status: Int)
+    /// Token endpoint returned a non-200. `body` is the response payload — for a
+    /// failed OAuth exchange this is an error JSON (`{"error":…,"error_description":…}`),
+    /// never a token — captured so the failure is diagnosable instead of opaque.
+    case tokenEndpoint(status: Int, body: String)
     case malformedResponse
     case allEndpointsFailed
 }
@@ -104,14 +107,22 @@ struct ClaudeOAuthFlow {
 
     private func postToken(body: [String: String], fallbackRefresh: String?) async throws -> OAuthToken {
         var lastStatus = 0
+        var lastBody = ""
         for url in Self.tokenURLs {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "content-type")
+            req.setValue("application/json", forHTTPHeaderField: "accept")
             req.setValue("claude-code/\(clientVersion)", forHTTPHeaderField: "user-agent")
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, resp) = try await transport.post(req)
-            guard resp.statusCode == 200 else { lastStatus = resp.statusCode; continue }
+            guard resp.statusCode == 200 else {
+                lastStatus = resp.statusCode
+                // Failure payload is an OAuth error JSON (no token) — keep + log it.
+                lastBody = String(data: data, encoding: .utf8) ?? ""
+                Log.settings.error("OAuth token endpoint \(url.host ?? "?", privacy: .public) → \(resp.statusCode, privacy: .public): \(lastBody, privacy: .public)")
+                continue
+            }
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let access = obj["access_token"] as? String else {
                 throw ClaudeOAuthError.malformedResponse
@@ -124,6 +135,6 @@ struct ClaudeOAuthFlow {
                               scopes: scopeStr.split(separator: " ").map(String.init))
         }
         throw lastStatus == 0 ? ClaudeOAuthError.allEndpointsFailed
-                              : ClaudeOAuthError.tokenEndpoint(status: lastStatus)
+                              : ClaudeOAuthError.tokenEndpoint(status: lastStatus, body: lastBody)
     }
 }

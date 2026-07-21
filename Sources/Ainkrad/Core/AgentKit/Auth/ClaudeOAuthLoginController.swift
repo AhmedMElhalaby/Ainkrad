@@ -84,6 +84,13 @@ final class ClaudeOAuthLoginController: ObservableObject {
         switch error {
         case LoopbackError.malformedCallback:
             return "That code or link didn't look right. Try pasting it again."
+        case ClaudeOAuthError.tokenEndpoint(let status, let body):
+            let detail = body.isEmpty ? "" : " — \(body.prefix(300))"
+            return "Sign-in failed (token endpoint \(status))\(detail)"
+        case ClaudeOAuthError.allEndpointsFailed:
+            return "Sign-in failed: couldn't reach the token endpoint."
+        case ClaudeOAuthError.malformedResponse:
+            return "Sign-in failed: unexpected token response."
         default:
             return "Sign-in failed: \(error.localizedDescription)"
         }
