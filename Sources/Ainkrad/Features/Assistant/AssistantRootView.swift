@@ -81,6 +81,14 @@ struct AssistantRootView: View {
             && environment.agentSession.state == .idle
     }
 
+    private var assistantTypography: AssistantTypography {
+        AssistantTypography.resolve(
+            family: environment.appAppearanceStore.fontFamily("assistant"),
+            scale: environment.appAppearanceStore.fontScale("assistant"),
+            globalFamily: environment.themeManager.uiFontFamily,
+            globalScale: environment.themeManager.uiFontScale)
+    }
+
     /// True during the brief `.callingTool` window before the assistant turn's
     /// `.toolUse` block is committed to `messages` — i.e. no pending card renders yet.
     /// Once the block commits, the per-message pending card takes over (Task 2).
@@ -236,7 +244,7 @@ struct AssistantRootView: View {
                         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.accentPrimary.opacity(0.18)))
                         .shadow(color: tokens.accentPrimary.opacity(0.12), radius: 6)
                 } else {
-                    AssistantMarkdownText(text: message.text, tokens: tokens)
+                    AssistantMarkdownText(text: message.text, tokens: tokens, typography: assistantTypography)
                 }
             }
 
@@ -253,7 +261,7 @@ struct AssistantRootView: View {
 
             if session.state == .streaming || !session.streamingText.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    AssistantMarkdownText(text: session.streamingText, tokens: tokens)
+                    AssistantMarkdownText(text: session.streamingText, tokens: tokens, typography: assistantTypography)
                     if session.state == .streaming {
                         StreamingCursor(tokens: tokens)
                     }

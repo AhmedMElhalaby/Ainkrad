@@ -64,3 +64,25 @@ struct AppAppearanceFontTests {
         #expect(s.fontScale("assistant") == .small)
     }
 }
+
+@Suite("Assistant typography resolver")
+struct AssistantTypographyTests {
+    @Test("nil override inherits global family and scale") func inherits() {
+        let t = AssistantTypography.resolve(family: nil, scale: nil,
+                                            globalFamily: .exo2, globalScale: .medium)
+        #expect(t.family == .exo2)
+        #expect(t.scale == UIFontScale.medium.multiplier)
+    }
+    @Test("override wins over global") func overrides() {
+        let t = AssistantTypography.resolve(family: .jetBrainsMono, scale: .large,
+                                            globalFamily: .exo2, globalScale: .small)
+        #expect(t.family == .jetBrainsMono)
+        #expect(t.scale == UIFontScale.large.multiplier)
+    }
+    @Test("partial override: family only, scale inherits") func partial() {
+        let t = AssistantTypography.resolve(family: .system, scale: nil,
+                                            globalFamily: .exo2, globalScale: .large)
+        #expect(t.family == .system)
+        #expect(t.scale == UIFontScale.large.multiplier)
+    }
+}
