@@ -76,11 +76,17 @@ struct AssistantRootView: View {
         .ainkradModal(isPresented: $isExportModalPresented) {
             exportModalContent
         }
+        // Runs/Schedules are variable-length lists — bound them to a compact
+        // centered card that scrolls internally (like Settings/Launcher),
+        // never a full-height strip. `.ainkradModal` caps width (480); this
+        // caps height.
         .ainkradModal(isPresented: $isRunsPanelPresented) {
             RunsPanelView(manager: environment.runManager, tokens: tokens)
+                .frame(maxHeight: 520)
         }
         .ainkradModal(isPresented: $isSchedulesPresented) {
             ScheduleUIView(store: environment.scheduleStore)
+                .frame(maxHeight: 520)
         }
     }
 
