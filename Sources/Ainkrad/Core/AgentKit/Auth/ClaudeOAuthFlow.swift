@@ -121,7 +121,13 @@ struct ClaudeOAuthFlow {
                 // Failure payload is an OAuth error JSON (no token) — keep + log it.
                 lastBody = String(data: data, encoding: .utf8) ?? ""
                 Log.settings.error("OAuth token endpoint \(url.host ?? "?", privacy: .public) → \(resp.statusCode, privacy: .public): \(lastBody, privacy: .public)")
-                continue
+                // Fall through to the fallback host ONLY for host/route-level
+                // problems (5xx, 404). An auth/rate response (400/401/403/429)
+                // is a definitive answer for THIS single-use code — retrying the
+                // other host can't succeed, doubles rate-limit pressure, and risks
+                // consuming the code. Stop and report it.
+                if resp.statusCode >= 500 || resp.statusCode == 404 { continue }
+                throw ClaudeOAuthError.tokenEndpoint(status: resp.statusCode, body: lastBody)
             }
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let access = obj["access_token"] as? String else {

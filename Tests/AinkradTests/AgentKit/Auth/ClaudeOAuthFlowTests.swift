@@ -49,17 +49,30 @@ private final class StubTransport: OAuthTokenTransport, @unchecked Sendable {
         #expect(stub.requests[0].value(forHTTPHeaderField: "content-type") == "application/json")
     }
 
-    @Test(.timeLimit(.minutes(1))) func exchangeFallsBackToSecondEndpointOn4xx() async throws {
+    @Test(.timeLimit(.minutes(1))) func exchangeFallsBackToSecondEndpointOn404() async throws {
         let ok = """
         {"access_token":"AT","refresh_token":"RT","expires_in":10}
         """.data(using: .utf8)!
         let stub = StubTransport()
-        stub.responses = [(Data("nope".utf8), 404), (ok, 200)]
+        stub.responses = [(Data("nope".utf8), 404), (ok, 200)]   // 404 = host/route problem → fall through
         let flow = ClaudeOAuthFlow(transport: stub, clientVersion: "2.1.74")
         let token = try await flow.exchange(code: "C", verifier: "V", state: "S")
         #expect(token.accessToken == "AT")
         #expect(stub.requests[0].url?.host == "platform.claude.com")
         #expect(stub.requests[1].url?.host == "console.anthropic.com")
+    }
+
+    @Test(.timeLimit(.minutes(1))) func exchangeDoesNotFallThroughOn429() async throws {
+        // A 429 is a definitive account-scoped answer for this single-use code —
+        // it must NOT retry the second host (only ONE request), and surfaces the body.
+        let stub = StubTransport()
+        stub.responses = [(Data(#"{"error":{"type":"rate_limit_error"}}"#.utf8), 429)]
+        let flow = ClaudeOAuthFlow(transport: stub, clientVersion: "2.1.74")
+        await #expect(throws: ClaudeOAuthError.tokenEndpoint(
+            status: 429, body: #"{"error":{"type":"rate_limit_error"}}"#)) {
+            _ = try await flow.exchange(code: "C", verifier: "V", state: "S")
+        }
+        #expect(stub.requests.count == 1)   // did NOT hit the fallback host
     }
 
     @Test(.timeLimit(.minutes(1))) func refreshKeepsOldRefreshTokenWhenResponseOmitsIt() async throws {
