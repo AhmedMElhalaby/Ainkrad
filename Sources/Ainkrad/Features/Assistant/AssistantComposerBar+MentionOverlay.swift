@@ -5,7 +5,7 @@ import AinkradAppKit
 /// (M7 finalize Wave D, D2 — extracted verbatim, no behavior change).
 extension AssistantComposerBar {
     var filteredCommands: [SlashCommand] {
-        CommandPaletteView.filter(environment.commandRegistry.all(), query: paletteQuery)
+        CommandPaletteView.selectionOrder(environment.commandRegistry.all(), query: paletteQuery)
     }
 
     var mentionMatches: [FileMatch] {

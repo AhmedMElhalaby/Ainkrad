@@ -5,6 +5,7 @@ import SwiftUI
 /// the Launcher and Workspace Overview overlay on top when summoned.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     private var isOverlayPresented: Bool {
         var presented = environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
@@ -110,7 +111,7 @@ struct RootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
         }
-        .animation(.easeOut(duration: 0.16), value: isOverlayPresented)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isOverlayPresented)
         .background(KeyboardShortcutMonitor(environment: environment, pushToTalkController: environment.voiceService.pushToTalk))
         // Each HUD overlay plays `.overlayOpen`/`.overlayClose` as it's
         // summoned/dismissed (AIN-108) — centralized here rather than in each

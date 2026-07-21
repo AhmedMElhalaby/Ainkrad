@@ -22,5 +22,6 @@ struct SlashCommand: Sendable {
     let name: String
     let summary: String
     let usage: String
+    var category: CommandCategory = .other
     let handler: @MainActor (String, AgentSession) -> CommandResult
 }

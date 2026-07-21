@@ -69,23 +69,23 @@ enum BuiltinCommands {
     static func make(runtime: RuntimeOptionsStore?, usage: UsageTracker?,
                      router: ModelRouter?, catalog: ModelCatalog?) -> [SlashCommand] {
         [
-            SlashCommand(name: "new", summary: "Start a new session", usage: "/new") { _, session in
+            SlashCommand(name: "new", summary: "Start a new session", usage: "/new", category: .session) { _, session in
                 session.reset()
                 runtime?.resetForNewSession()
                 return .handled(note: nil)
             },
-            SlashCommand(name: "reset", summary: "Start a new session", usage: "/reset") { _, session in
+            SlashCommand(name: "reset", summary: "Start a new session", usage: "/reset", category: .session) { _, session in
                 session.reset()
                 runtime?.resetForNewSession()
                 return .handled(note: nil)
             },
-            SlashCommand(name: "remember", summary: "Save a fact to memory", usage: "/remember <fact>") { args, session in
+            SlashCommand(name: "remember", summary: "Save a fact to memory", usage: "/remember <fact>", category: .memory) { args, session in
                 let fact = args.trimmingCharacters(in: .whitespaces)
                 guard !fact.isEmpty else { return .handled(note: "Usage: /remember <fact>") }
                 session.remember(fact)
                 return .handled(note: nil)
             },
-            SlashCommand(name: "model", summary: "Pin the model used for this session", usage: "/model <id>") { args, _ in
+            SlashCommand(name: "model", summary: "Pin the model used for this session", usage: "/model <id>", category: .model) { args, _ in
                 let id = args.trimmingCharacters(in: .whitespaces)
                 guard !id.isEmpty else { return .handled(note: "Usage: /model <id>") }
                 guard let runtime else { return .handled(note: "Model pinning is unavailable right now.") }
@@ -96,7 +96,7 @@ enum BuiltinCommands {
                 runtime.pinModel(id)
                 return .handled(note: "Pinned model to \(id) for this session.")
             },
-            SlashCommand(name: "think", summary: "Set the reasoning-effort level", usage: "/think <low|medium|high|max>") { args, session in
+            SlashCommand(name: "think", summary: "Set the reasoning-effort level", usage: "/think <low|medium|high|max>", category: .model) { args, session in
                 let level = args.trimmingCharacters(in: .whitespaces).lowercased()
                 guard ["low", "medium", "high", "max"].contains(level) else {
                     return .handled(note: "Usage: /think <low|medium|high|max>")
@@ -113,21 +113,21 @@ enum BuiltinCommands {
                 }
                 return .handled(note: "Reasoning effort set to \(level), but \(modelID) doesn't support adjustable effort — no effect.")
             },
-            SlashCommand(name: "verbose", summary: "Toggle verbose transcript detail", usage: "/verbose on|off") { args, _ in
+            SlashCommand(name: "verbose", summary: "Toggle verbose transcript detail", usage: "/verbose on|off", category: .info) { args, _ in
                 switch args.trimmingCharacters(in: .whitespaces).lowercased() {
                 case "on": runtime?.setVerbose(true); return .handled(note: "Verbose mode on.")
                 case "off": runtime?.setVerbose(false); return .handled(note: "Verbose mode off.")
                 default: return .handled(note: "Usage: /verbose on|off")
                 }
             },
-            SlashCommand(name: "trace", summary: "Toggle router/tool trace detail", usage: "/trace on|off") { args, _ in
+            SlashCommand(name: "trace", summary: "Toggle router/tool trace detail", usage: "/trace on|off", category: .info) { args, _ in
                 switch args.trimmingCharacters(in: .whitespaces).lowercased() {
                 case "on": runtime?.setTrace(true); return .handled(note: "Trace mode on.")
                 case "off": runtime?.setTrace(false); return .handled(note: "Trace mode off.")
                 default: return .handled(note: "Usage: /trace on|off")
                 }
             },
-            SlashCommand(name: "usage", summary: "Show token/cost usage", usage: "/usage") { _, _ in
+            SlashCommand(name: "usage", summary: "Show token/cost usage", usage: "/usage", category: .info) { _, _ in
                 guard let usage else { return .handled(note: "Usage tracking is unavailable right now.") }
                 let (cumulative, costUSD, savingsUSD) = usage.cumulative()
                 // Gate each dollar figure on `> 0` — `UsageTracker` only accumulates
@@ -147,7 +147,7 @@ enum BuiltinCommands {
             // which `SlashCommand.handler` already receives as its `session` argument —
             // that existing seam is the cleanest way to reach it, so neither command
             // needs `BuiltinCommands.make` to take an `AgentSession` dependency itself.
-            SlashCommand(name: "compact", summary: "Summarize older messages to shrink the transcript", usage: "/compact") { _, session in
+            SlashCommand(name: "compact", summary: "Summarize older messages to shrink the transcript", usage: "/compact", category: .session) { _, session in
                 // Guard against mid-turn execution: `replaceMessages` overwrites
                 // `session.messages` wholesale, so compacting while a turn is
                 // in flight (thinking/streaming/tool-calling/awaiting approval)
@@ -171,7 +171,7 @@ enum BuiltinCommands {
                 let summarizedCount = originalCount - keepRecent
                 return .handled(note: "Compacted \(summarizedCount) earlier message\(summarizedCount == 1 ? "" : "s") into a summary; kept the most recent \(keepRecent).")
             },
-            SlashCommand(name: "export", summary: "Copy the transcript to the clipboard as Markdown", usage: "/export") { _, session in
+            SlashCommand(name: "export", summary: "Copy the transcript to the clipboard as Markdown", usage: "/export", category: .info) { _, session in
                 guard !session.messages.isEmpty else { return .handled(note: "Nothing to export yet.") }
                 let rendered = ConversationExporter.export(session.messages, format: .markdown)
                 let pasteboard = NSPasteboard.general
@@ -179,7 +179,7 @@ enum BuiltinCommands {
                 pasteboard.setString(rendered, forType: .string)
                 return .handled(note: "Copied the transcript to your clipboard as Markdown (\(rendered.count) characters).")
             },
-            SlashCommand(name: "undo", summary: "Undo the last turn's file edits + transcript", usage: "/undo") { _, session in
+            SlashCommand(name: "undo", summary: "Undo the last turn's file edits + transcript", usage: "/undo", category: .session) { _, session in
                 let summary = session.undoLastTurn()
                 if !summary.irreversible.isEmpty {
                     let ran = summary.irreversible.joined(separator: " ")
@@ -191,7 +191,7 @@ enum BuiltinCommands {
                 let plural = summary.revertedEdits == 1 ? "edit" : "edits"
                 return .handled(note: "Undid the last turn — reverted \(summary.revertedEdits) file \(plural).")
             },
-            SlashCommand(name: "retry", summary: "Re-run the last user prompt", usage: "/retry") { _, session in
+            SlashCommand(name: "retry", summary: "Re-run the last user prompt", usage: "/retry", category: .session) { _, session in
                 session.retryLastTurn()
                 return .handled(note: nil)
             },
