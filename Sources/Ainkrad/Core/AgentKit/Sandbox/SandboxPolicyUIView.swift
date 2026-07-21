@@ -104,7 +104,7 @@ struct SandboxPolicyUIView: View {
         let tokens = environment.themeManager.tokens
 
         VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "SANDBOXING", tokens: tokens)
+            SettingsSectionHeader(title: "SANDBOXING", tokens: tokens, icon: "shippingbox")
 
             profileList(tokens: tokens)
 

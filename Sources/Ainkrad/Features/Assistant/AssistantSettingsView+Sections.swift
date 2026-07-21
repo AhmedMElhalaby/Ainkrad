@@ -181,6 +181,7 @@ extension AssistantSettingsView {
                     title: "No connections",
                     message: "Add a connection to choose a model."
                 )
+                .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 labeled("CONNECTION", tokens: tokens) {
                     // Keyed on connection `id` (UUID) — `Connection` isn't Hashable
