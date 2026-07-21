@@ -1,0 +1,129 @@
+import Foundation
+import CryptoKit
+
+enum ClaudeOAuthError: Error, Equatable {
+    case tokenEndpoint(status: Int)
+    case malformedResponse
+    case allEndpointsFailed
+}
+
+/// Transport seam so token exchange/refresh is unit-testable without real HTTP.
+protocol OAuthTokenTransport: Sendable {
+    func post(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
+}
+
+/// Default transport: URLSession.
+struct URLSessionTokenTransport: OAuthTokenTransport {
+    func post(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let (data, resp) = try await URLSession.shared.data(for: request)
+        return (data, resp as! HTTPURLResponse)
+    }
+}
+
+/// PKCE verifier/challenge pair (S256).
+struct PKCE {
+    let verifier: String
+    let challenge: String
+    static func generate() -> PKCE {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let verifier = Data(bytes).base64URLEncodedString()
+        let digest = SHA256.hash(data: Data(verifier.utf8))
+        let challenge = Data(digest).base64URLEncodedString()
+        return PKCE(verifier: verifier, challenge: challenge)
+    }
+}
+
+extension Data {
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+/// Pure OAuth flow for the Anthropic subscription (Claude Code client).
+struct ClaudeOAuthFlow {
+    static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+    static let redirectURI = "http://localhost:53692/callback"
+    static let scopes = "org:create_api_key user:profile user:inference"
+    static let tokenURLs = [
+        URL(string: "https://platform.claude.com/v1/oauth/token")!,
+        URL(string: "https://console.anthropic.com/v1/oauth/token")!,
+    ]
+
+    private let transport: OAuthTokenTransport
+    private let clientVersion: String
+
+    init(transport: OAuthTokenTransport = URLSessionTokenTransport(), clientVersion: String) {
+        self.transport = transport
+        self.clientVersion = clientVersion
+    }
+
+    static func authorizeURL(state: String, challenge: String) -> URL {
+        // Build query parameters with proper percent-encoding
+        let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let params: [(String, String)] = [
+            ("code", "true"),
+            ("client_id", clientID),
+            ("response_type", "code"),
+            ("redirect_uri", redirectURI),
+            ("scope", scopes),
+            ("code_challenge", challenge),
+            ("code_challenge_method", "S256"),
+            ("state", state),
+        ]
+
+        let queryString = params.map { key, value in
+            let encodedValue = value.addingPercentEncoding(withAllowedCharacters: unreserved)!
+            return "\(key)=\(encodedValue)"
+        }.joined(separator: "&")
+
+        return URL(string: "https://claude.ai/oauth/authorize?\(queryString)")!
+    }
+
+    func exchange(code: String, verifier: String, state: String) async throws -> OAuthToken {
+        try await postToken(body: [
+            "grant_type": "authorization_code",
+            "client_id": Self.clientID,
+            "code": code,
+            "state": state,
+            "redirect_uri": Self.redirectURI,
+            "code_verifier": verifier,
+        ], fallbackRefresh: nil)
+    }
+
+    func refresh(refreshToken: String) async throws -> OAuthToken {
+        try await postToken(body: [
+            "grant_type": "refresh_token",
+            "client_id": Self.clientID,
+            "refresh_token": refreshToken,
+        ], fallbackRefresh: refreshToken)
+    }
+
+    private func postToken(body: [String: String], fallbackRefresh: String?) async throws -> OAuthToken {
+        var lastStatus = 0
+        for url in Self.tokenURLs {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "content-type")
+            req.setValue("claude-code/\(clientVersion)", forHTTPHeaderField: "user-agent")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, resp) = try await transport.post(req)
+            guard resp.statusCode == 200 else { lastStatus = resp.statusCode; continue }
+            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let access = obj["access_token"] as? String else {
+                throw ClaudeOAuthError.malformedResponse
+            }
+            let refresh = (obj["refresh_token"] as? String) ?? fallbackRefresh ?? ""
+            let expiresIn = (obj["expires_in"] as? Double) ?? 3600
+            let scopeStr = (obj["scope"] as? String) ?? Self.scopes
+            return OAuthToken(accessToken: access, refreshToken: refresh,
+                              expiresAt: Date().addingTimeInterval(expiresIn),
+                              scopes: scopeStr.split(separator: " ").map(String.init))
+        }
+        throw lastStatus == 0 ? ClaudeOAuthError.allEndpointsFailed
+                              : ClaudeOAuthError.tokenEndpoint(status: lastStatus)
+    }
+}
