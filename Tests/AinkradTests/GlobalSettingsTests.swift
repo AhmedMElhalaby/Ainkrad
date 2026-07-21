@@ -77,24 +77,22 @@ final class GlobalSettingsTests {
     @Test("setUiReduceMotion updates the store and persists across a fresh load")
     func reduceMotionSetterRoundTrips() {
         let persistence = InMemoryPersistenceStore()
-        let store = GeneralSettingsStore(persistence: persistence, systemReduceMotion: false)
+        let store = GeneralSettingsStore(persistence: persistence)
         #expect(store.uiReduceMotion == false)
 
         store.setUiReduceMotion(true)
         #expect(store.uiReduceMotion == true)
         // Persisted: a store rebuilt on the same backing sees the new value.
-        #expect(GeneralSettingsStore(persistence: persistence, systemReduceMotion: false).uiReduceMotion == true)
+        #expect(GeneralSettingsStore(persistence: persistence).uiReduceMotion == true)
     }
 
     @MainActor
-    @Test("first launch with no persisted settings seeds Reduce Motion from the system flag, once")
-    func reduceMotionSeedsFromSystemOnFirstLaunchOnly() {
+    @Test("first launch defaults to motion on and never adopts the macOS Reduce Motion flag")
+    func reduceMotionNeverSeedsFromSystem() {
         let persistence = InMemoryPersistenceStore()
-        // No prior document → the seed adopts the OS preference (here: on).
-        let seeded = GeneralSettingsStore(persistence: persistence, systemReduceMotion: true)
-        #expect(seeded.uiReduceMotion == true)
-        // The seed was persisted, so a later store keeps it even though the OS
-        // flag now reads off — the app setting is the sole source of truth.
-        #expect(GeneralSettingsStore(persistence: persistence, systemReduceMotion: false).uiReduceMotion == true)
+        // No prior document → motion is ON regardless of the OS setting; the app
+        // never reads the system Reduce Motion flag. The in-app toggle is the
+        // sole source of truth.
+        #expect(GeneralSettingsStore(persistence: persistence).uiReduceMotion == false)
     }
 }
