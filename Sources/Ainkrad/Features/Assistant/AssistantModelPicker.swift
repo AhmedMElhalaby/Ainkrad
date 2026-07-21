@@ -118,8 +118,8 @@ func modelPickerSections(
 }
 
 /// Whether `refreshModels` should hit the network for a connection: skip when a
-/// fetch is already in flight, or when the last successful fetch is younger than
-/// `ttl`. Pure — unit tested without I/O.
+/// fetch is already in flight, or when the last fetch attempt (success OR
+/// failure) is younger than `ttl`. Pure — unit tested without I/O.
 func shouldFetchModels(connectionID: UUID, now: Date, lastFetch: [UUID: Date],
                        inFlight: Set<UUID>, ttl: TimeInterval) -> Bool {
     if inFlight.contains(connectionID) { return false }
@@ -135,7 +135,8 @@ func shouldFetchModels(connectionID: UUID, now: Date, lastFetch: [UUID: Date],
 final class AssistantModelPickerModel {
     var isRefreshing = false
 
-    /// Discovery cache: last successful fetch time per connection, and
+    /// Discovery cache: last fetch-attempt time per connection (recorded on any
+    /// completion, success or failure), and
     /// connections with a fetch currently in flight. Backs `shouldFetchModels`
     /// so `refreshModels` doesn't re-hit `/models` on every picker `.onAppear`
     /// / connection switch.
