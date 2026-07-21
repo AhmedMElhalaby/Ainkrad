@@ -22,8 +22,9 @@ func formattedRouterSavings(_ savings: Double?) -> String? {
 }
 
 /// The `/usage` dashboard: session + all-time token/cost/savings, plus
-/// today's token breakdown. Built entirely from Cardinal-HUD kit components
-/// (`AinkradStatRow`, `AinkradListRow`, `AinkradIconGlyph`) — no raw
+/// today's token breakdown, or a first-run empty state before anything is
+/// tracked. Built entirely from Cardinal-HUD kit components (`AinkradStatRow`,
+/// `AinkradEmptyState`, `AinkradIconGlyph`) — no raw
 /// `Text`/`.font(.headline)`/`.foregroundStyle(.secondary)` styling. Presented
 /// via `.ainkradModal` from the composer (see `AssistantComposerBar`'s usage
 /// trigger beside the model pill).
