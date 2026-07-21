@@ -1,7 +1,7 @@
 import SwiftUI
 import AinkradAppKit
 
-/// The four tabs of the Assistant settings pane. Each tab owns an ordered set
+/// The five tabs of the Assistant settings pane. Each tab owns an ordered set
 /// of sections; only the active tab's sections render below the tab bar.
 enum AssistantSettingsTab: String, CaseIterable, Hashable {
     case models, access, data, voice, appearance

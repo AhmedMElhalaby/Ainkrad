@@ -83,8 +83,8 @@ struct AssistantRootView: View {
 
     private var assistantTypography: AssistantTypography {
         AssistantTypography.resolve(
-            family: environment.appAppearanceStore.fontFamily("assistant"),
-            scale: environment.appAppearanceStore.fontScale("assistant"),
+            family: environment.appAppearanceStore.fontFamily(AssistantApp.id),
+            scale: environment.appAppearanceStore.fontScale(AssistantApp.id),
             globalFamily: environment.themeManager.uiFontFamily,
             globalScale: environment.themeManager.uiFontScale)
     }

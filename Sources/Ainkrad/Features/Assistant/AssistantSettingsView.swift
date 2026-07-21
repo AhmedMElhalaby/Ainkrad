@@ -2,9 +2,11 @@ import SwiftUI
 import AinkradAppKit
 
 /// The Assistant's Settings surface (rendered inside the BUILT-IN APPS
-/// section of `SettingsOverlayView`): Connections (API keys), Model
-/// (provider/model/effort), Permissions, and Context privacy (per-source
-/// opt-outs).
+/// section of `SettingsOverlayView`), organized into a tab shell —
+/// Models (connections + model + effort), Access (permissions + sandbox),
+/// Data (context privacy), Voice, and Appearance (surface opacity/blur +
+/// assistant text font/size). The section builders live in
+/// `AssistantSettingsView+Sections.swift`.
 struct AssistantSettingsView: View {
     // Note: not `private` — the section builders in
     // `AssistantSettingsView+Sections.swift` need access, and Swift's
