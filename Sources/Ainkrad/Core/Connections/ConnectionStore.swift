@@ -17,10 +17,11 @@ final class ConnectionStore {
     }
 
     @discardableResult
-    func addConnection(preset: ProviderPreset, displayName: String, baseURL: String, token: String) -> Connection {
+    func addConnection(preset: ProviderPreset, displayName: String, baseURL: String, token: String,
+                       authMode: AuthMode = .apiKey) -> Connection {
         let connection = Connection(
             id: UUID(), presetID: preset.id, kind: preset.kind,
-            displayName: displayName, baseURL: baseURL, createdAt: Date())
+            displayName: displayName, baseURL: baseURL, createdAt: Date(), authMode: authMode)
         if !token.isEmpty { secrets.setSecret(token, for: connection.secretID) }
         connections.append(connection)
         persist()

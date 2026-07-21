@@ -116,17 +116,34 @@ extension AssistantSettingsView {
                         newPreset = p
                         newBaseURL = p.defaultBaseURL
                         if newDisplayName.isEmpty { newDisplayName = p.displayName }
+                        // Subscription auth only applies to Claude; reset when
+                        // switching to any other preset so the key field returns.
+                        if p.kind != .claude { newAuthMode = .apiKey }
                     }
                 ),
                 label: { ProviderPreset.preset(id: $0).displayName }
             )
             .fixedSize()
 
+            // Claude can authenticate by API key OR by subscription (OAuth). The
+            // subscription path creates a keyless connection here; the user then
+            // signs in from the connection's row below.
+            if preset.kind == .claude {
+                AinkradSegmentedPicker(
+                    items: [AuthMode.apiKey, .subscription],
+                    selection: $newAuthMode,
+                    label: { $0 == .apiKey ? "API key" : "Claude subscription" }
+                )
+            }
+
             if preset.allowsBaseURLEdit {
                 NeonSecureField(text: $newBaseURL, placeholder: "Base URL", tokens: tokens)
             }
             HStack(spacing: 10) {
-                if preset.requiresKey {
+                if isNewSubscription {
+                    Text("Add, then sign in below")
+                        .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
+                } else if preset.requiresKey {
                     NeonSecureField(text: $newConnectionToken, placeholder: "API key", tokens: tokens)
                 } else {
                     Text("No API key required")
@@ -155,18 +172,24 @@ extension AssistantSettingsView {
         }
     }
 
+    /// The add-form is creating a keyless Claude subscription connection.
+    private var isNewSubscription: Bool { newPreset.kind == .claude && newAuthMode == .subscription }
+
     private var canAddConnection: Bool {
         let hasKey = !newConnectionToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasURL = !newBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return (!newPreset.requiresKey || hasKey) && hasURL
+        // Subscription connections carry no key at creation — sign-in happens after.
+        return (!newPreset.requiresKey || isNewSubscription || hasKey) && hasURL
     }
 
     private func addConnection() {
         guard canAddConnection else { return }
         let name = newDisplayName.isEmpty ? newPreset.displayName : newDisplayName
         let created = environment.connectionStore.addConnection(
-            preset: newPreset, displayName: name, baseURL: newBaseURL, token: newConnectionToken)
-        newConnectionToken = ""; newDisplayName = ""
+            preset: newPreset, displayName: name, baseURL: newBaseURL,
+            token: isNewSubscription ? "" : newConnectionToken,
+            authMode: isNewSubscription ? .subscription : .apiKey)
+        newConnectionToken = ""; newDisplayName = ""; newAuthMode = .apiKey
         modelPicker.refreshModels(for: created, environment)
     }
 
