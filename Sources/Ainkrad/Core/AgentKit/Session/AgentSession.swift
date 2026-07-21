@@ -629,8 +629,8 @@ final class AgentSession {
         do {
             for try await event in stream {
                 switch event {
-                case .thinkingDelta(let d): streamingThinking += d; state = .thinking
-                case .textDelta(let d): streamingText += d; state = .streaming
+                case .thinkingDelta(let d): streamingThinking += d; if state != .thinking { state = .thinking }
+                case .textDelta(let d): streamingText += d; if state != .streaming { state = .streaming }
                 case .toolUseStart(_, let name): state = .callingTool(name)
                 case .toolInputDelta: break
                 case .toolUseComplete(let id, let name, let input):

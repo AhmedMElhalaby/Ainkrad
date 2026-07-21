@@ -46,6 +46,87 @@ func modelOptionRowLabel(connectionName: String, model: String, isCurated: Bool)
     return "\(prefix)\(connectionName) · \(model)"
 }
 
+/// The provider swatch color for a connection's `ProviderKind` — a fixed,
+/// theme-independent brand accent (not `tokens.*`, since it identifies the
+/// PROVIDER, not the app theme) shown as the grouped picker row's leading
+/// dot. Pure.
+func providerSwatchColor(for kind: ProviderKind) -> Color {
+    switch kind {
+    case .claude: return Color(hex: "CC785C")
+    case .gemini: return Color(hex: "4285F4")
+    case .openAICompatible: return Color(hex: "10A37F")
+    }
+}
+
+/// Builds the grouped model picker's section list: an "Auto" section first
+/// (its detail names the active connection when one exists, so the row isn't
+/// bare), then one section per connection (header = its `displayName`) whose
+/// rows enrich each model with a local/cloud SF Symbol, a provider swatch, a
+/// curated (✓) marker, and reachability. Per the offline rule, a row is
+/// disabled with a "server down" detail ONLY when its connection is LOCAL
+/// (`isLocal`) and not in `reachable`; cloud connections are always enabled
+/// regardless of `reachable`'s contents. A trailing "Manage connections…"
+/// section keeps that affordance reachable and always enabled. Pure — unit
+/// tested without SwiftUI/AppEnvironment.
+func modelPickerSections(
+    connections: [Connection],
+    modelsFor: (Connection) -> [String],
+    curatedFor: (Connection) -> [String],
+    isLocal: (Connection) -> Bool,
+    reachable: Set<UUID>,
+    activeConnectionID: UUID?
+) -> [AinkradGroupedSection<AssistantConnectionModelPicker.Option>] {
+    let autoDetail = connections.first(where: { $0.id == activeConnectionID }).map { "via \($0.displayName)" }
+    var sections: [AinkradGroupedSection<AssistantConnectionModelPicker.Option>] = [
+        AinkradGroupedSection(header: "Auto", rows: [
+            AinkradGroupedRow(value: .auto, title: "Auto", detail: autoDetail, icon: "wand.and.stars")
+        ])
+    ]
+
+    for connection in connections {
+        let local = isLocal(connection)
+        let enabled = local ? reachable.contains(connection.id) : true
+        let curatedModels = curatedFor(connection)
+        let rows = modelsFor(connection).map { model -> AinkradGroupedRow<AssistantConnectionModelPicker.Option> in
+            let curated = isCuratedModel(model, curatedModels: curatedModels)
+            let detail: String
+            if !enabled {
+                detail = "server down"
+            } else {
+                var parts: [String] = []
+                if curated { parts.append("✓ curated") }
+                parts.append(local ? "local" : "cloud")
+                detail = parts.joined(separator: " · ")
+            }
+            return AinkradGroupedRow(
+                value: .pair(connection: connection.id, model: model),
+                title: model,
+                detail: detail,
+                icon: local ? "desktopcomputer" : "icloud",
+                swatch: providerSwatchColor(for: connection.kind),
+                isEnabled: enabled
+            )
+        }
+        sections.append(AinkradGroupedSection(header: connection.displayName, rows: rows))
+    }
+
+    sections.append(AinkradGroupedSection(header: "", rows: [
+        AinkradGroupedRow(value: .manage, title: AssistantConnectionModelPicker.manageLabel, icon: "gearshape")
+    ]))
+
+    return sections
+}
+
+/// Whether `refreshModels` should hit the network for a connection: skip when a
+/// fetch is already in flight, or when the last fetch attempt (success OR
+/// failure) is younger than `ttl`. Pure — unit tested without I/O.
+func shouldFetchModels(connectionID: UUID, now: Date, lastFetch: [UUID: Date],
+                       inFlight: Set<UUID>, ttl: TimeInterval) -> Bool {
+    if inFlight.contains(connectionID) { return false }
+    if let last = lastFetch[connectionID], now.timeIntervalSince(last) < ttl { return false }
+    return true
+}
+
 /// The ONE home for the Assistant's connection+model selection logic, previously
 /// duplicated in `AssistantRootView` and `AssistantSettingsView`. Consumers hold
 /// it as `@State`; methods take the `AppEnvironment` so it stays decoupled.
@@ -53,6 +134,15 @@ func modelOptionRowLabel(connectionName: String, model: String, isCurated: Bool)
 @Observable
 final class AssistantModelPickerModel {
     var isRefreshing = false
+
+    /// Discovery cache: last fetch-attempt time per connection (recorded on any
+    /// completion, success or failure), and
+    /// connections with a fetch currently in flight. Backs `shouldFetchModels`
+    /// so `refreshModels` doesn't re-hit `/models` on every picker `.onAppear`
+    /// / connection switch.
+    private var lastFetch: [UUID: Date] = [:]
+    private var inFlight: Set<UUID> = []
+    private static let discoveryTTL: TimeInterval = 300  // 5 min
 
     /// The active connection: the configured one if it still exists, else the
     /// first connection.
@@ -107,13 +197,22 @@ final class AssistantModelPickerModel {
         environment.runtimeOptionsStore.pinModel(nil)
     }
 
-    func refreshModels(for connection: Connection, _ environment: AppEnvironment) {
+    func refreshModels(for connection: Connection, _ environment: AppEnvironment, force: Bool = false) {
+        if !force && !shouldFetchModels(connectionID: connection.id, now: Date(),
+                                        lastFetch: lastFetch, inFlight: inFlight, ttl: Self.discoveryTTL) {
+            return
+        }
         let store = environment.connectionStore
         let svc = environment.modelCatalogService
         let preset = ProviderPreset.preset(id: connection.presetID)
         let key = store.token(for: connection) ?? ""
         isRefreshing = true
+        inFlight.insert(connection.id)
         Task {
+            defer {
+                lastFetch[connection.id] = Date()
+                inFlight.remove(connection.id)
+            }
             let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
                                                 apiKey: key, curatedFallback: preset.curatedModels)
             isRefreshing = false
@@ -163,30 +262,38 @@ struct AssistantConnectionModelPicker: View {
 
     /// The flattened option space: a real connection+model pair, the "Manage
     /// connections…" sentinel, or an empty placeholder when no connection exists.
-    private enum Option: Hashable {
+    /// Not `private` — the free `modelPickerSections` builder above returns
+    /// `AinkradGroupedSection<Option>` and needs to name the type.
+    enum Option: Hashable {
         case auto
         case pair(connection: UUID, model: String)
         case manage
         case empty
     }
 
-    private static let manageLabel = "Manage connections…"
+    /// Not `private` — referenced by `modelPickerSections` for the trailing
+    /// "Manage connections…" row's title.
+    static let manageLabel = "Manage connections…"
 
     var body: some View {
         let connections = environment.connectionStore.connections
         let active = model.activeConnection(environment)
+        let binding = selectionBinding(active: active)
 
-        var options: [Option] = [.auto]
-        options += connections.flatMap { connection in
-            model.modelOptions(for: connection, environment).map { Option.pair(connection: connection.id, model: $0) }
-        }
-        options.append(.manage)
+        let sections = modelPickerSections(
+            connections: connections,
+            modelsFor: { model.modelOptions(for: $0, environment) },
+            curatedFor: { ProviderPreset.preset(id: $0.presetID).curatedModels },
+            isLocal: { environment.localModelProbe.isLocal($0) },
+            reachable: environment.localModelAvailability.reachableConnectionIDs,
+            activeConnectionID: active?.id
+        )
 
         return HStack(spacing: AinkradSpacing.xs) {
-            AinkradSelect(
-                items: options,
-                selection: selectionBinding(active: active),
-                label: label,
+            AinkradGroupedSelect(
+                sections: sections,
+                selection: binding,
+                triggerLabel: label(binding.wrappedValue),
                 searchPlaceholder: "Search connections & models…"
             )
             .fixedSize()
