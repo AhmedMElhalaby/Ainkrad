@@ -44,29 +44,36 @@ struct UsageDashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
                 header
-                sectionPanel(title: "This session") {
-                    AinkradStatRow(label: "Input tokens", value: "\(tracker.session.input)")
-                    AinkradStatRow(label: "Output tokens", value: "\(tracker.session.output)")
-                    AinkradStatRow(label: "Cache read", value: "\(tracker.session.cacheRead)")
-                    AinkradStatRow(label: "Cost", value: formattedUsageCost(tracker.sessionCostUSD),
-                                  status: tracker.sessionCostUSD > 0 ? .neutral : .warning)
-                }
-                sectionPanel(title: "All time") {
-                    AinkradStatRow(label: "Input tokens", value: "\(cumulative.0.input)")
-                    AinkradStatRow(label: "Output tokens", value: "\(cumulative.0.output)")
-                    AinkradStatRow(label: "Cache read", value: "\(cumulative.0.cacheRead)")
-                    AinkradStatRow(label: "Cost", value: formattedUsageCost(cumulative.costUSD),
-                                  status: cumulative.costUSD > 0 ? .neutral : .warning)
-                    if let savings = formattedRouterSavings(cumulative.savingsUSD) {
-                        AinkradStatRow(label: "Router savings", value: savings, status: .success)
+                if Self.hasUsage(cumulative.0) {
+                    sectionPanel(title: "This session") {
+                        AinkradStatRow(label: "Input tokens", value: "\(tracker.session.input)")
+                        AinkradStatRow(label: "Output tokens", value: "\(tracker.session.output)")
+                        AinkradStatRow(label: "Cache read", value: "\(tracker.session.cacheRead)")
+                        AinkradStatRow(label: "Cost", value: formattedUsageCost(tracker.sessionCostUSD),
+                                      status: tracker.sessionCostUSD > 0 ? .neutral : .warning)
                     }
-                }
-                sectionPanel(title: "Today") {
-                    AinkradListRow(
-                        leading: { AinkradIconGlyph(systemName: "calendar", size: 22) },
-                        title: "In \(today.input) · Out \(today.output)",
-                        subtitle: today.cacheRead > 0 ? "Cache read \(today.cacheRead)" : nil,
-                        trailing: { EmptyView() }
+                    sectionPanel(title: "All time") {
+                        AinkradStatRow(label: "Input tokens", value: "\(cumulative.0.input)")
+                        AinkradStatRow(label: "Output tokens", value: "\(cumulative.0.output)")
+                        AinkradStatRow(label: "Cache read", value: "\(cumulative.0.cacheRead)")
+                        AinkradStatRow(label: "Cost", value: formattedUsageCost(cumulative.costUSD),
+                                      status: cumulative.costUSD > 0 ? .neutral : .warning)
+                        if let savings = formattedRouterSavings(cumulative.savingsUSD) {
+                            AinkradStatRow(label: "Router savings", value: savings, status: .success)
+                        }
+                    }
+                    sectionPanel(title: "Today") {
+                        AinkradStatRow(label: "Input tokens", value: "\(today.input)")
+                        AinkradStatRow(label: "Output tokens", value: "\(today.output)")
+                        AinkradStatRow(label: "Cache read", value: "\(today.cacheRead)")
+                    }
+                } else {
+                    AinkradEmptyState(
+                        icon: "gauge.with.dots.needle.67percent",
+                        title: "No usage yet",
+                        message: "Token counts and cost appear here after your first message.",
+                        actionTitle: nil,
+                        action: nil
                     )
                 }
             }
