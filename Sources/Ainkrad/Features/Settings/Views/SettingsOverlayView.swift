@@ -303,68 +303,42 @@ struct SettingsOverlayView: View {
         }
     }
 
-    /// The host-provided appearance controls appended below EVERY app's own
-    /// settings: a blur toggle for all apps (the host renders the blurred
-    /// backdrop behind a translucent pane), plus a surface-opacity slider only
-    /// for host-background apps (the Assistant — plugins own their transparency).
+    /// The host-provided appearance controls appended below every OTHER app's
+    /// own settings: a blur toggle (the host renders the blurred backdrop behind
+    /// a translucent pane). The Assistant owns its own appearance (opacity, blur,
+    /// and font) in its in-app Appearance tab, so the host block is suppressed
+    /// for it; plugins own their transparency, so they get only blur here.
     @ViewBuilder
     private func appAppearanceSection(appID: String, tokens: DesignTokens) -> some View {
         let appearance = environment.appAppearanceStore
 
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+        if appID == AssistantApp.id {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
 
-            if appID == AssistantApp.id {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Surface opacity")
+                        Text("Blur")
                             .font(AinkradFont.display(13, weight: .medium))
                             .foregroundStyle(tokens.foreground.opacity(0.9))
-                        Text("Lower opacity lets the workspace show through this app.")
+                        Text("Blur the workspace revealed behind this app when it's translucent.")
                             .font(AinkradFont.display(11))
                             .foregroundStyle(tokens.foreground.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)
-                    HStack(spacing: 10) {
-                        AinkradSlider(
-                            value: Binding(
-                                get: { appearance.surfaceOpacity(appID) },
-                                set: { appearance.setSurfaceOpacity(appID, $0) }
-                            ),
-                            in: 0.3...1.0
+                    AinkradToggle(
+                        isOn: Binding(
+                            get: { appearance.blurEnabled(appID) },
+                            set: { appearance.setBlurEnabled(appID, $0) }
                         )
-                        .frame(width: 130)
-                        Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
-                            .font(AinkradFont.display(11))
-                            .foregroundStyle(tokens.foreground.opacity(0.55))
-                            .frame(width: 42, alignment: .trailing)
-                    }
+                    )
                 }
                 .padding(14)
                 .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
             }
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Blur")
-                        .font(AinkradFont.display(13, weight: .medium))
-                        .foregroundStyle(tokens.foreground.opacity(0.9))
-                    Text("Blur the workspace revealed behind this app when it's translucent.")
-                        .font(AinkradFont.display(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-                AinkradToggle(
-                    isOn: Binding(
-                        get: { appearance.blurEnabled(appID) },
-                        set: { appearance.setBlurEnabled(appID, $0) }
-                    )
-                )
-            }
-            .padding(14)
-            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         }
     }
 

@@ -22,7 +22,7 @@ struct VoiceSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "VOICE", tokens: tokens)
+            SettingsSectionHeader(title: "VOICE", tokens: tokens, icon: "waveform")
 
             labeled("BACKEND", tokens: tokens) {
                 AinkradSelect(

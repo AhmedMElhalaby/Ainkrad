@@ -8,6 +8,7 @@ import AinkradAppKit
 struct AssistantMarkdownText: View {
     let text: String
     let tokens: DesignTokens
+    var typography: AssistantTypography = .init()
 
     var body: some View {
         VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
@@ -22,10 +23,10 @@ struct AssistantMarkdownText: View {
     private func blockView(_ block: MarkdownBlock) -> some View {
         switch block {
         case .paragraph(let src):
-            inline(src).font(AinkradFont.display(13)).foregroundStyle(tokens.foreground.opacity(0.9))
+            inline(src).font(typography.display(13)).foregroundStyle(tokens.foreground.opacity(0.9))
         case .heading(let level, let src):
             inline(src)
-                .font(AinkradFont.display(headingSize(level), weight: .semibold))
+                .font(typography.display(headingSize(level), weight: .semibold))
                 .foregroundStyle(tokens.foreground.opacity(0.95))
         case .bulletList(let items):
             VStack(alignment: .leading, spacing: 3) {
@@ -34,7 +35,7 @@ struct AssistantMarkdownText: View {
                         Text("•").foregroundStyle(tokens.accentSecondary)
                         inline(item).foregroundStyle(tokens.foreground.opacity(0.9))
                     }
-                    .font(AinkradFont.display(13))
+                    .font(typography.display(13))
                 }
             }
         case .orderedList(let items):
@@ -44,7 +45,7 @@ struct AssistantMarkdownText: View {
                         Text("\(idx + 1).").foregroundStyle(tokens.accentSecondary)
                         inline(item).foregroundStyle(tokens.foreground.opacity(0.9))
                     }
-                    .font(AinkradFont.display(13))
+                    .font(typography.display(13))
                 }
             }
         case .codeBlock(let language, let code):
