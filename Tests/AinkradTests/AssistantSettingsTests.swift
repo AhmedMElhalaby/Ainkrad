@@ -28,3 +28,39 @@ struct AssistantSettingsTabTests {
         }
     }
 }
+
+@Suite("App appearance font override")
+@MainActor
+struct AppAppearanceFontTests {
+    private func store() -> AppAppearanceStore {
+        AppAppearanceStore(persistence: InMemoryPersistenceStore())
+    }
+    @Test("font family/scale default to nil (inherit global)") func defaultsNil() {
+        let s = store()
+        #expect(s.fontFamily("assistant") == nil)
+        #expect(s.fontScale("assistant") == nil)
+    }
+    @Test("set and read back a font family override") func familyRoundTrip() {
+        let s = store()
+        s.setFontFamily("assistant", .jetBrainsMono)
+        #expect(s.fontFamily("assistant") == .jetBrainsMono)
+    }
+    @Test("set and read back a font scale override") func scaleRoundTrip() {
+        let s = store()
+        s.setFontScale("assistant", .large)
+        #expect(s.fontScale("assistant") == .large)
+    }
+    @Test("clearing back to nil restores inherit") func clears() {
+        let s = store()
+        s.setFontFamily("assistant", .system)
+        s.setFontFamily("assistant", nil)
+        #expect(s.fontFamily("assistant") == nil)
+    }
+    @Test("font override is independent of opacity/blur on the same entry") func independent() {
+        let s = store()
+        s.setSurfaceOpacity("assistant", 0.5)
+        s.setFontScale("assistant", .small)
+        #expect(s.surfaceOpacity("assistant") == 0.5)
+        #expect(s.fontScale("assistant") == .small)
+    }
+}

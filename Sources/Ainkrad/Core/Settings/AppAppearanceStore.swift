@@ -10,6 +10,10 @@ struct AppAppearanceEntry: Codable, Equatable {
     /// User override of the app's presentation, as `PluginPresentation.rawValue`.
     /// `nil` = use the bundle's declared default. Applies on next open.
     var presentationOverride: String? = nil
+    /// Per-app font overrides, as `UIFontFamily` / `UIFontScale` raw values.
+    /// `nil` = inherit the global Appearance setting.
+    var fontFamily: String? = nil
+    var fontScale: String? = nil
 }
 
 /// Per-app surface appearance, keyed by `appID` (the Assistant is one surface
@@ -85,6 +89,28 @@ final class AppAppearanceStore {
     func setPresentationOverride(_ appID: String, _ value: PluginPresentation?) {
         var entry = document.entries[appID] ?? AppAppearanceEntry()
         entry.presentationOverride = value?.rawValue
+        document.entries[appID] = entry
+        persistence.save(document)
+    }
+
+    func fontFamily(_ appID: String) -> UIFontFamily? {
+        document.entries[appID]?.fontFamily.flatMap(UIFontFamily.init(rawValue:))
+    }
+
+    func setFontFamily(_ appID: String, _ value: UIFontFamily?) {
+        var entry = document.entries[appID] ?? AppAppearanceEntry()
+        entry.fontFamily = value?.rawValue
+        document.entries[appID] = entry
+        persistence.save(document)
+    }
+
+    func fontScale(_ appID: String) -> UIFontScale? {
+        document.entries[appID]?.fontScale.flatMap(UIFontScale.init(rawValue:))
+    }
+
+    func setFontScale(_ appID: String, _ value: UIFontScale?) {
+        var entry = document.entries[appID] ?? AppAppearanceEntry()
+        entry.fontScale = value?.rawValue
         document.entries[appID] = entry
         persistence.save(document)
     }
