@@ -117,4 +117,26 @@ struct AssistantModelDashboardTests {
         #expect(formattedRouterSavings(0) == nil)
         #expect(formattedRouterSavings(nil) == nil)
     }
+
+    // MARK: - Usage dashboard first-run gate
+
+    @Test("hasUsage is false when nothing has ever been tracked")
+    func hasUsageFalseForZero() {
+        #expect(UsageDashboardView.hasUsage(.zero) == false)
+    }
+
+    @Test("hasUsage is true when input tokens exist")
+    func hasUsageTrueForInput() {
+        #expect(UsageDashboardView.hasUsage(TokenUsage(input: 1)) == true)
+    }
+
+    @Test("hasUsage is true when output tokens exist")
+    func hasUsageTrueForOutput() {
+        #expect(UsageDashboardView.hasUsage(TokenUsage(output: 1)) == true)
+    }
+
+    @Test("hasUsage is true when only cache-read tokens exist")
+    func hasUsageTrueForCacheRead() {
+        #expect(UsageDashboardView.hasUsage(TokenUsage(cacheRead: 1)) == true)
+    }
 }

@@ -31,6 +31,12 @@ struct UsageDashboardView: View {
     let tracker: UsageTracker
     let tokens: DesignTokens
 
+    /// True when any usage has ever been tracked. Gated on ALL-TIME totals so a
+    /// fresh session with prior history still shows the populated dashboard (its
+    /// legitimately-zero session numbers against real all-time figures) — only a
+    /// true first-ever run gets the empty state. Pure.
+    static func hasUsage(_ cumulative: TokenUsage) -> Bool { cumulative != .zero }
+
     var body: some View {
         let cumulative = tracker.cumulative()
         let today = tracker.today()
