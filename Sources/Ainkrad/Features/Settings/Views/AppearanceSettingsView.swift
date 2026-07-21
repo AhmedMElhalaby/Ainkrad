@@ -268,8 +268,16 @@ struct AppearanceSettingsView: View {
 struct SettingsSectionHeader: View {
     let title: String
     let tokens: DesignTokens
+    var icon: String? = nil
 
     var body: some View {
-        AinkradSectionHeader(title: title)
+        HStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+            }
+            AinkradSectionHeader(title: title)
+        }
     }
 }
