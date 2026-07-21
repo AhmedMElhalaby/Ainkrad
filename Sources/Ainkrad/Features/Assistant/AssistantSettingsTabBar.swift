@@ -41,3 +41,50 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
 enum AssistantSettingsSection: String, CaseIterable, Hashable {
     case connections, model, permissions, sandbox, contextPrivacy, voice
 }
+
+/// A horizontal pill selector for the Assistant settings tabs, in the outer
+/// Settings sidebar's HUD idiom: a chamfered fill with targeting brackets on
+/// the selected pill. Icon-and-label pills; selection animates via
+/// `AinkradMotion.hover`, gated on Reduce Motion.
+struct AssistantSettingsTabBar: View {
+    @Binding var selection: AssistantSettingsTab
+    let tokens: DesignTokens
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(AssistantSettingsTab.allCases, id: \.self) { tab in
+                pill(tab)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func pill(_ tab: AssistantSettingsTab) -> some View {
+        let isSelected = selection == tab
+        return Button { selection = tab } label: {
+            HStack(spacing: 7) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isSelected ? tokens.accentSecondary : tokens.foreground.opacity(0.55))
+                Text(tab.title)
+                    .font(AinkradFont.display(12, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.6))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(
+                ChamferShape(cut: AinkradRadius.md)
+                    .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : tokens.surfaceElevated.opacity(0.3))
+            )
+            .overlay(
+                TargetingBrackets(length: 6)
+                    .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.2)
+                    .padding(1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: selection)
+    }
+}
