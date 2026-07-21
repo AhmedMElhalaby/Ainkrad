@@ -516,7 +516,7 @@ final class AgentSession {
             state = .failed("No API key configured for \(connection.displayName)")
             return
         }
-        let keys = allKeys.isEmpty ? [""] : allKeys
+        let credentials: [ProviderCredential] = (allKeys.isEmpty ? [""] : allKeys).map { .apiKey($0) }
 
         let contextBlock = context.assembleContext()
         let agentInstructions = agents?.active.instructions ?? ""
@@ -525,7 +525,7 @@ final class AgentSession {
         let provider = providerFor(connection)
 
         var currentModel = resolved.modelConfig
-        var currentApiKey = keys[0]
+        var currentCredential = credentials[0]
         var didOpeningFailover = false
 
         while true {
@@ -537,14 +537,14 @@ final class AgentSession {
             let outcome: TurnOutcome
             if !didOpeningFailover {
                 let models = failoverModels(primary: currentModel.model, connectionID: connection.id)
-                let (result, usedModel, usedKey) = await runOneTurnWithFailover(
-                    provider: provider, system: system, model: currentModel, models: models, keys: keys)
+                let (result, usedModel, usedCredential) = await runOneTurnWithFailover(
+                    provider: provider, system: system, model: currentModel, models: models, credentials: credentials)
                 outcome = result
                 currentModel = AgentModelConfig(model: usedModel, effort: currentModel.effort)
-                currentApiKey = usedKey
+                currentCredential = usedCredential
                 didOpeningFailover = true
             } else {
-                outcome = await runOneTurn(provider: provider, system: system, model: currentModel, apiKey: currentApiKey)
+                outcome = await runOneTurn(provider: provider, system: system, model: currentModel, credential: currentCredential)
             }
 
             switch outcome {
@@ -615,7 +615,7 @@ final class AgentSession {
     }
 
     private func runOneTurn(provider: LLMProvider, system: String,
-                            model: AgentModelConfig, apiKey: String) async -> TurnOutcome {
+                            model: AgentModelConfig, credential: ProviderCredential) async -> TurnOutcome {
         state = .thinking
         streamingText = ""
         streamingThinking = ""
@@ -625,7 +625,7 @@ final class AgentSession {
         var turnUsage = TokenUsage.zero
 
         let stream = provider.send(messages: messages, system: system,
-                                   tools: allowedSchemas(), model: model, apiKey: apiKey)
+                                   tools: allowedSchemas(), model: model, credential: credential)
         do {
             for try await event in stream {
                 switch event {
@@ -675,33 +675,34 @@ final class AgentSession {
     /// key)` this call settled on.
     private func runOneTurnWithFailover(
         provider: LLMProvider, system: String, model: AgentModelConfig,
-        models: [String], keys: [String]
-    ) async -> (TurnOutcome, model: String, apiKey: String) {
+        models: [String], credentials: [ProviderCredential]
+    ) async -> (TurnOutcome, model: String, credential: ProviderCredential) {
+        let keys = credentials.map { _ in "" }
         guard var current = FailoverController.nextAttempt(
             models: models, keys: keys, failedModel: nil, failedKeyIndex: nil, errorKind: .providerError
         ) else {
-            return (.failed("no candidates configured"), model.model, keys.first ?? "")
+            return (.failed("no candidates configured"), model.model, credentials.first ?? .apiKey(""))
         }
 
-        let maxAttempts = max(models.count * keys.count, 1)
+        let maxAttempts = max(models.count * credentials.count, 1)
         var lastOutcome: TurnOutcome = .failed("no candidates configured")
         for _ in 0..<maxAttempts {
             let attemptModel = AgentModelConfig(model: current.model, effort: model.effort)
             let outcome = await runOneTurn(provider: provider, system: system,
-                                           model: attemptModel, apiKey: keys[current.keyIndex])
+                                           model: attemptModel, credential: credentials[current.keyIndex])
             guard case .failed(let message) = outcome, let kind = FailoverController.classify(message) else {
-                return (outcome, current.model, keys[current.keyIndex])
+                return (outcome, current.model, credentials[current.keyIndex])
             }
             lastOutcome = outcome
             guard let next = FailoverController.nextAttempt(
                 models: models, keys: keys,
                 failedModel: current.model, failedKeyIndex: current.keyIndex, errorKind: kind
             ) else {
-                return (outcome, current.model, keys[current.keyIndex])
+                return (outcome, current.model, credentials[current.keyIndex])
             }
             current = next
         }
-        return (lastOutcome, current.model, keys[current.keyIndex])
+        return (lastOutcome, current.model, credentials[current.keyIndex])
     }
 
     private func execute(_ call: ToolCall) async -> ToolResult {

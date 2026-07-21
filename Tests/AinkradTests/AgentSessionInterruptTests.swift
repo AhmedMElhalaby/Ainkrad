@@ -135,7 +135,7 @@ private final class ScriptedApprovalProvider: LLMProvider {
     private var turnIndex = 0
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         turnIndex += 1
         let isFirstTurn = turnIndex == 1
         return AsyncThrowingStream { cont in

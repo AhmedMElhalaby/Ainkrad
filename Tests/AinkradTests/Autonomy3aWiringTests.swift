@@ -59,7 +59,7 @@ struct Autonomy3aWiringTests {
     @MainActor
     final class StubProvider: LLMProvider {
         func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-                  model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+                  model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
             AsyncThrowingStream { $0.finish() }
         }
     }

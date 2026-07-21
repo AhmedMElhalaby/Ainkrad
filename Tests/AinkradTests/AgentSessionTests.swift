@@ -16,10 +16,10 @@ final class FakeLLMProvider: LLMProvider {
         self.script = script
     }
 
-    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema], model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema], model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         wasCalled = true
         lastSystem = system
-        lastApiKey = apiKey
+        if case let .apiKey(k) = credential { lastApiKey = k }
         let events = script
         return AsyncThrowingStream { continuation in
             for event in events {

@@ -13,12 +13,12 @@ struct ClaudeProvider: LLMProvider {
         system: String,
         tools: [AgentToolSchema],
         model: AgentModelConfig,
-        apiKey: String
+        credential: ProviderCredential
     ) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = Self.makeRequest(messages: messages, system: system, tools: tools, model: model, apiKey: apiKey)
+                    let request = Self.makeRequest(messages: messages, system: system, tools: tools, model: model, credential: credential)
                     let bytes = try await http.post(request)
 
                     var stopReason: String?
@@ -123,18 +123,25 @@ struct ClaudeProvider: LLMProvider {
 
     // MARK: - Request building
 
-    private static func makeRequest(
+    nonisolated static func makeRequest(
         messages: [AgentMessage],
         system: String,
         tools: [AgentToolSchema],
         model: AgentModelConfig,
-        apiKey: String
+        credential: ProviderCredential
     ) -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
+
+        switch credential {
+        case .apiKey(let key):
+            request.setValue(key, forHTTPHeaderField: "x-api-key")
+        case .oauth(let token):
+            request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            // OAuth mimicry (system prompt/beta headers) added in Task 9.
+        }
 
         var body: [String: Any] = [
             "model": model.model,
@@ -155,7 +162,7 @@ struct ClaudeProvider: LLMProvider {
         return request
     }
 
-    private static func wireMessage(_ message: AgentMessage) -> [String: Any] {
+    nonisolated private static func wireMessage(_ message: AgentMessage) -> [String: Any] {
         let blocks: [[String: Any]] = message.content.map { block in
             switch block {
             case .text(let t):
