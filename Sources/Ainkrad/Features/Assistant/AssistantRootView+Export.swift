@@ -2,17 +2,23 @@ import AppKit
 import SwiftUI
 import AinkradAppKit
 
-/// Export/redaction flow for `AssistantComposerBar` (M7 finalize Wave D, D2 —
-/// extracted verbatim, no behavior change). The strip entry point now lives in
-/// the `•••` overflow panel (`AssistantComposerBar+Overflow.swift`), which sets
-/// `isExportModalPresented` directly; this extension owns the modal + export.
-extension AssistantComposerBar {
+/// Export/redaction flow for `AssistantRootView` (relocated from
+/// `AssistantComposerBar+Export.swift` so the modal presents over the full
+/// Assistant surface instead of the composer strip — see
+/// `AssistantRootView.swift`'s `.ainkradModal` block. Extracted verbatim, no
+/// behavior change). The strip entry point still lives in the `•••` overflow
+/// panel (`AssistantComposerBar+Overflow.swift`), which sets
+/// `isExportModalPresented` through its `@Binding`; this extension owns the
+/// modal + export.
+extension AssistantRootView {
     /// Redaction/confirm modal content. Rendering + writing happens on
     /// confirm (`performExport`): `ConversationExporter.export` runs with the
     /// user's comma-separated redaction strings, the result is copied to the
     /// clipboard AND written to a user-chosen file via `NSSavePanel`.
     var exportModalContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let tokens = environment.themeManager.tokens
+
+        return VStack(alignment: .leading, spacing: 12) {
             Text("Export conversation")
                 .font(AinkradFont.display(14, weight: .semibold))
                 .foregroundStyle(tokens.foreground)
@@ -35,7 +41,7 @@ extension AssistantComposerBar {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
 
-        let rendered = ConversationExporter.export(session.messages, format: .markdown, redactions: redactions)
+        let rendered = ConversationExporter.export(environment.agentSession.messages, format: .markdown, redactions: redactions)
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
