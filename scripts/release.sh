@@ -27,6 +27,14 @@
 #   DEVELOPER_DIR      Overrides the Xcode used. Defaults to Xcode-beta if present
 #                      (this project currently needs the macOS 27 beta SDK).
 #
+# Release checklist:
+#   Before cutting a release, verify every first-party plugin's `AinkradAPIVersion`
+#   ∈ [GenerationSupport.minSupported … GenerationSupport.current] and its
+#   project.yml SDK `revision:` == the host's `revision:`.
+#   On any AinkradAppKit revision bump, do a CLEAN build (wipe DerivedData) — the
+#   resilient ABI makes stale gen-N DerivedData produce spurious
+#   `unsafeMutableAddressor`/witness-table link errors.
+#
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
