@@ -23,7 +23,7 @@ struct ProviderToolRequestTests {
         ]
         let stream = provider.send(messages: messages, system: "sys", tools: [schema],
                                    model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
-                                   apiKey: "k")
+                                   credential: .apiKey("k"))
         for try await _ in stream {}   // drives the request; capture protocol records the body
 
         let body = RequestCaptureProtocol.captured!

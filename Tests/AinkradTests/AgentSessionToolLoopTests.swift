@@ -9,7 +9,7 @@ private final class ScriptedProvider: LLMProvider {
     private(set) var sendCount = 0
     init(_ turns: [[AgentEvent]]) { self.turns = turns }
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         sendCount += 1
         let batch = turns.isEmpty ? [] : turns.removeFirst()
         return AsyncThrowingStream { cont in

@@ -47,7 +47,7 @@ struct Autonomy3aWiringTests {
             providerFor: { (_: Connection) -> LLMProvider in Autonomy3aWiringTests.StubProvider() },
             connections: connections, agentConfigStore: agentConfigStore,
             agentContextService: agentContextService, agentPermissionStore: agentPermissionStore,
-            agentStore: agentStore)
+            agentStore: agentStore, credentialResolver: { _ in [] })
 
         let child = makeSession(profile, registry, "claude-opus-4-8", [])
         #expect(child.unattendedForTesting == true)
@@ -59,7 +59,7 @@ struct Autonomy3aWiringTests {
     @MainActor
     final class StubProvider: LLMProvider {
         func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-                  model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+                  model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
             AsyncThrowingStream { $0.finish() }
         }
     }

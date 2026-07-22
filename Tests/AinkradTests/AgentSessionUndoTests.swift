@@ -27,7 +27,7 @@ final class MultiEditStubProvider: LLMProvider {
     }
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         callCount += 1
         let isFollowUp = messages.last?.content.contains { if case .toolResult = $0 { return true }; return false } ?? false
         let path = path
@@ -65,7 +65,7 @@ final class EditAndTerminalStubProvider: LLMProvider {
     }
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         let isFollowUp = messages.last?.content.contains { if case .toolResult = $0 { return true }; return false } ?? false
         let path = path, oldString = oldString, newString = newString
         return AsyncThrowingStream { cont in

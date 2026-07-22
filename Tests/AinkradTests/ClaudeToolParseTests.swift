@@ -27,7 +27,7 @@ struct ClaudeToolParseTests {
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "read it")],
                                          system: "s", tools: [],
                                          model: AgentModelConfig(model: "claude-opus-4-8", effort: "xhigh"),
-                                         apiKey: "k") {
+                                         credential: .apiKey("k")) {
             events.append(e)
         }
 

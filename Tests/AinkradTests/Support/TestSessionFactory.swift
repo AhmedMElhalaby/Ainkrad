@@ -12,7 +12,7 @@ import Foundation
 @MainActor
 private final class NoopProvider: LLMProvider {
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }
 }
@@ -66,10 +66,10 @@ final class RecordingProvider: LLMProvider {
     init(script: [AgentEvent]) { self.script = script }
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         callCount += 1
         lastModel = model
-        lastApiKey = apiKey
+        if case let .apiKey(k) = credential { lastApiKey = k }
         let events = script
         return AsyncThrowingStream { continuation in
             for event in events { continuation.yield(event) }
@@ -134,7 +134,7 @@ final class SlowStubProvider: LLMProvider {
     private var continuation: CheckedContinuation<Void, Never>?
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         released = false
         return AsyncThrowingStream { cont in
             Task { @MainActor in
@@ -184,7 +184,7 @@ final class EditOnceStubProvider: LLMProvider {
     }
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         turnIndex += 1
         let isFirstTurn = turnIndex == 1
         let path = path
@@ -219,7 +219,7 @@ final class ReadOnceStubProvider: LLMProvider {
     }
 
     func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-              model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
         turnIndex += 1
         let isFirstTurn = turnIndex == 1
         let path = path

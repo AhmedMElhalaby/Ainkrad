@@ -10,6 +10,7 @@ import AinkradAppKit
 extension AppEnvironment {
     static func bootstrapAgentSessionAndRuns(
         persistence: PersistenceStore,
+        secrets: SecretStore,
         streamingHTTP: URLSessionStreamingHTTPClient,
         connectionStore: ConnectionStore,
         agentConfigStore: AgentConfigStore,
@@ -42,7 +43,8 @@ extension AppEnvironment {
         workspaceFileIndex: WorkspaceFileIndex,
         agentSession: AgentSession,
         voiceService: VoiceService,
-        menuBarPresence: MenuBarPresence
+        menuBarPresence: MenuBarPresence,
+        oauthStore: OAuthCredentialStore
     ) {
         var agentTools = agentTools
 
@@ -63,6 +65,23 @@ extension AppEnvironment {
             }
         }
 
+        // Subscription OAuth: ONE credential resolver, shared by the main session AND
+        // every subagent/background session — so a `.subscription` connection resolves
+        // its bearer token everywhere, not just the main interactive session. Created
+        // here (above the runners) so the subagent/background session factories can
+        // capture it. Also returned so the settings UI drives sign-in through the same
+        // `oauthStore` the sessions read their live credential from.
+        let oauthStore = OAuthCredentialStore(
+            persistence: persistence, secrets: secrets,
+            flow: ClaudeOAuthFlow(clientVersion: ClaudeProvider.claudeCodeVersion))
+        let credentialResolver: (Connection) async throws -> [ProviderCredential] = { [oauthStore, authProfileStore] connection in
+            if connection.authMode == .subscription {
+                return [try await oauthStore.liveCredential(for: connection)]
+            }
+            let keys = authProfileStore.keys(for: connection)
+            return (keys.isEmpty ? [""] : keys).map { .apiKey($0) }
+        }
+
         // M7 Slice 3 (Autonomy) Task 11 — wires the whole 3a subsystem live:
         // `spawn_subagent` delegates through `SubagentCoordinator` to the PRODUCTION
         // `AgentSessionSubagentRunner`, whose `makeSession` seam (Task 6's deferred
@@ -77,7 +96,8 @@ extension AppEnvironment {
             makeSession: AppEnvironment.makeSubagentSession(
                 providerFor: providerFor, connections: connectionStore,
                 agentConfigStore: agentConfigStore, agentContextService: agentContextService,
-                agentPermissionStore: agentPermissionStore, agentStore: agentStore))
+                agentPermissionStore: agentPermissionStore, agentStore: agentStore,
+                credentialResolver: credentialResolver))
         let subagentCoordinator = SubagentCoordinator(runner: subagentRunner, maxConcurrent: 4)
         agentTools.append(SpawnSubagentTool(coordinator: subagentCoordinator, agents: agentStore))
         // M7 Slice 3b (Autonomy: scheduling/triggers) — Slice 6 is merged on this
@@ -138,7 +158,7 @@ extension AppEnvironment {
                 // guessing — `AgentSession.effectiveMode()` then simply falls back
                 // to the workspace's own mode, never a wider or crashing path.
                 let permissionModeOverride = posture.flatMap { AgentPermissionMode(rawValue: $0.permissionMode) }
-                return AgentSession(
+                let session = AgentSession(
                     providerFor: providerFor, connections: connectionStore, config: agentConfigStore,
                     context: agentContextService, registry: backgroundToolRegistry, permissions: agentPermissionStore,
                     agents: agentStore, editJournal: editJournal, unattended: true,
@@ -148,6 +168,8 @@ extension AppEnvironment {
                     candidatesProvider: candidatesProvider,
                     isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) },
                     permissionModeOverride: permissionModeOverride)
+                session.credentialResolver = credentialResolver   // subscription works in background runs too
+                return session
             }),
             notifier: runNotifier, maxConcurrent: 2)
 
@@ -237,12 +259,18 @@ extension AppEnvironment {
             mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
+        // Subscription OAuth: the main interactive session resolves a `.subscription`
+        // connection's credential through the SAME shared resolver as the subagent and
+        // background sessions (built above). `oauthStore` is returned so the settings
+        // UI drives sign-in/sign-out through the instance the sessions read from.
+        agentSession.credentialResolver = credentialResolver
+
         let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
         voiceService.attachSession(agentSession)
 
         return (
             subagentCoordinator, runManager, scheduleStore, scheduleRunner, triggerDispatcher, fileChangeWatcher,
-            assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence
+            assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence, oauthStore
         )
     }
 
@@ -271,12 +299,13 @@ extension AppEnvironment {
         agentConfigStore: AgentConfigStore,
         agentContextService: AgentContextService,
         agentPermissionStore: AgentPermissionStore,
-        agentStore: AgentStore
+        agentStore: AgentStore,
+        credentialResolver: @escaping (Connection) async throws -> [ProviderCredential]
     ) -> @MainActor (AgentProfile, AgentToolRegistry, String, Set<String>) -> AgentSession {
         { profile, registry, model, sandboxAllowList in
             let pinned = RuntimeOptionsStore(persistence: InMemoryPersistenceStore())
             pinned.pinModel(model)
-            return AgentSession(
+            let session = AgentSession(
                 providerFor: providerFor,
                 connections: connections,
                 config: agentConfigStore,
@@ -300,6 +329,8 @@ extension AppEnvironment {
                 sandboxAllowList: sandboxAllowList,
                 agentAllowList: nil,
                 runtime: pinned)
+            session.credentialResolver = credentialResolver   // subscription works in subagents too
+            return session
         }
     }
 }

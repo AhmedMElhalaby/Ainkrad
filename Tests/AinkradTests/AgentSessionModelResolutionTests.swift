@@ -131,7 +131,7 @@ struct AgentSessionModelResolutionTests {
     private final class TwoModelFailoverProvider: LLMProvider {
         private(set) var calledModels: [String] = []
         func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-                  model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+                  model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
             calledModels.append(model.model)
             let events: [AgentEvent] = model.model == "model-a"
                 ? [.failed("529 overloaded_error")]
@@ -183,7 +183,7 @@ struct AgentSessionModelResolutionTests {
         final class BadRequestProvider: LLMProvider {
             private(set) var callCount = 0
             func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-                      model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+                      model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
                 callCount += 1
                 return AsyncThrowingStream { continuation in
                     continuation.yield(.failed("400 bad request: invalid_request_error"))
