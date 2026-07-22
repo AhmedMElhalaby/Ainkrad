@@ -13,11 +13,19 @@ struct ClaudeProvider: LLMProvider {
     private nonisolated static let oauthBetas =
         "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"
 
-    /// Subscription billing classifier rejects single-underscore `mcp_` names (400).
+    /// Ainkrad names MCP tools `mcp/<server>/<tool>`; the subscription backend expects
+    /// Claude Code's `mcp__<server>__<tool>` form (a `/`-named tool is rejected by the
+    /// billing classifier with a 400). Applied OUTBOUND on the OAuth path only — to the
+    /// tool schemas AND to echoed assistant `tool_use` block names.
     nonisolated static func oauthWireToolName(_ name: String) -> String {
-        name.hasPrefix("mcp_") && !name.hasPrefix("mcp__")
-            ? "mcp__" + name.dropFirst("mcp_".count)
-            : name
+        name.hasPrefix("mcp/") ? name.replacingOccurrences(of: "/", with: "__") : name
+    }
+
+    /// Inverse of `oauthWireToolName`, applied INBOUND to the `tool_use` names the model
+    /// returns, so the registry lookup and the stored transcript keep Ainkrad's original
+    /// `mcp/<server>/<tool>` names. (Assumes server/tool segments contain no `__`.)
+    nonisolated static func oauthOriginalToolName(_ name: String) -> String {
+        name.hasPrefix("mcp__") ? name.replacingOccurrences(of: "__", with: "/") : name
     }
 
     func send(
@@ -27,7 +35,8 @@ struct ClaudeProvider: LLMProvider {
         model: AgentModelConfig,
         credential: ProviderCredential
     ) -> AsyncThrowingStream<AgentEvent, Error> {
-        AsyncThrowingStream { continuation in
+        let isOAuth: Bool = { if case .oauth = credential { return true } else { return false } }()
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let request = Self.makeRequest(messages: messages, system: system, tools: tools, model: model, credential: credential)
@@ -50,7 +59,10 @@ struct ClaudeProvider: LLMProvider {
                             if envelope.contentBlock?.type == "tool_use",
                                let index = envelope.index,
                                let id = envelope.contentBlock?.id,
-                               let name = envelope.contentBlock?.name {
+                               let wireName = envelope.contentBlock?.name {
+                                // Map the wire name (`mcp__…` on OAuth) back to Ainkrad's
+                                // original `mcp/…` so the registry lookup + transcript match.
+                                let name = isOAuth ? Self.oauthOriginalToolName(wireName) : wireName
                                 toolBlocks[index] = (id, name, "")
                                 continuation.yield(.toolUseStart(id: id, name: name))
                             }
@@ -149,6 +161,7 @@ struct ClaudeProvider: LLMProvider {
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
         var wireTools = tools
+        let isOAuth: Bool = { if case .oauth = credential { return true } else { return false } }()
         // `.apiKey` sends `system` as a plain string (unchanged). `.oauth` MUST send it
         // as a block array whose FIRST block is exactly the Claude Code identity string —
         // the subscription backend validates that block verbatim, so concatenating the
@@ -173,17 +186,15 @@ struct ClaudeProvider: LLMProvider {
             "max_tokens": 64000,
             "stream": true,
             "system": systemValue,
-            "messages": messages.map(wireMessage),
+            "messages": messages.map { Self.wireMessage($0, isOAuth: isOAuth) },
             "thinking": ["type": "adaptive", "display": "summarized"],
             "output_config": ["effort": model.effort],
         ]
         if !wireTools.isEmpty {
-            let renameNames: Bool = { if case .oauth = credential { return true } else { return false } }()
             body["tools"] = wireTools.map {
-                // Tool-name rewriting is OAuth-only: subscription billing classifies by `mcp__` names.
-                // Incoming tool_use names from the model already arrive in `mcp__` form and the
-                // registry lookup uses the original name, so no inverse mapping is needed here.
-                ["name": renameNames ? Self.oauthWireToolName($0.name) : $0.name,
+                // OAuth-only: rewrite `mcp/…` schema names to the `mcp__…` wire form the
+                // subscription billing classifier expects (see `oauthWireToolName`).
+                ["name": isOAuth ? Self.oauthWireToolName($0.name) : $0.name,
                  "description": $0.description,
                  "input_schema": $0.parameters.toFoundationObject()]
             }
@@ -192,13 +203,15 @@ struct ClaudeProvider: LLMProvider {
         return request
     }
 
-    nonisolated private static func wireMessage(_ message: AgentMessage) -> [String: Any] {
+    nonisolated private static func wireMessage(_ message: AgentMessage, isOAuth: Bool) -> [String: Any] {
         let blocks: [[String: Any]] = message.content.map { block in
             switch block {
             case .text(let t):
                 return ["type": "text", "text": t]
             case .toolUse(let id, let name, let input):
-                return ["type": "tool_use", "id": id, "name": name, "input": input.toFoundationObject()]
+                // Echoed assistant tool_use must carry the SAME wire name the schema used.
+                let wire = isOAuth ? Self.oauthWireToolName(name) : name
+                return ["type": "tool_use", "id": id, "name": wire, "input": input.toFoundationObject()]
             case .toolResult(let toolUseID, let content, let isError):
                 return ["type": "tool_result", "tool_use_id": toolUseID, "content": content, "is_error": isError]
             case .image(let mediaType, let base64):
