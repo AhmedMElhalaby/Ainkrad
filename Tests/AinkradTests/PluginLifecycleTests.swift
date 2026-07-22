@@ -14,7 +14,7 @@ struct PluginLifecycleTests {
         let b = dir.appendingPathComponent("hello.bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: b, withIntermediateDirectories: true)
         let info: [String: Any] = ["AinkradAppID": "hello", "AinkradDisplayName": "Hello",
-            "AinkradIconSymbol": "app", "AinkradAPIVersion": 1, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
+            "AinkradIconSymbol": "app", "AinkradAPIVersion": 7, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: b.appendingPathComponent("Info.plist"))
         let zip = dir.appendingPathComponent("hello.bundle.zip")
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
