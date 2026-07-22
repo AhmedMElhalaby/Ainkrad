@@ -35,15 +35,7 @@ struct AssistantHistorySidebar: View {
                 .font(AinkradFont.display(11, weight: .medium)).kerning(1.5)
                 .foregroundStyle(tokens.foreground.opacity(0.5))
             Spacer()
-            Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 12))
-                    .foregroundStyle(tokens.foreground.opacity(0.7))
-                    .padding(6)
-                    .background(Circle().fill(tokens.surfaceElevated.opacity(0.6)))
-            }
-            .buttonStyle(.plain)
-            .help("New chat")
+            HoverNewChatButton(tokens: tokens, action: onNewChat)
         }
     }
 
@@ -69,6 +61,27 @@ struct AssistantHistorySidebar: View {
     }
 }
 
+private struct HoverNewChatButton: View {
+    let tokens: DesignTokens
+    var action: () -> Void
+    @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 12))
+                .foregroundStyle(tokens.foreground.opacity(isHovering ? 0.9 : 0.6))
+                .padding(6)
+                .background(Circle().fill(tokens.surfaceElevated.opacity(isHovering ? 0.75 : 0.5)))
+        }
+        .buttonStyle(.plain)
+        .help("New chat")
+        .onHover { isHovering = $0 }
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
+    }
+}
+
 private struct HistoryRow: View {
     let session: SavedSession
     let isActive: Bool
@@ -79,28 +92,39 @@ private struct HistoryRow: View {
     @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 6) {
-                Text(session.title.isEmpty ? "New chat" : session.title)
-                    .font(AinkradFont.display(12))
-                    .foregroundStyle(tokens.foreground.opacity(isActive ? 1 : 0.75))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if isHovering {
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 10))
-                            .foregroundStyle(tokens.accentTertiary.opacity(0.9))
+        ZStack(alignment: .trailing) {
+            Button(action: onSelect) {
+                HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session.title.isEmpty ? "New chat" : session.title)
+                            .font(AinkradFont.display(12))
+                            .foregroundStyle(tokens.foreground.opacity(isActive ? 1 : 0.75))
+                            .lineLimit(1)
+                        Text(session.updatedAt, format: .relative(presentation: .named))
+                            .font(AinkradFont.mono(10))
+                            .foregroundStyle(tokens.foreground.opacity(0.4))
+                            .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                    .help("Delete chat")
+                    Spacer(minLength: 4)
                 }
+                .padding(.horizontal, 9).padding(.vertical, 7)
+                .background(ChamferShape(cut: AinkradRadius.sm)
+                    .fill(tokens.accentPrimary.opacity(isActive ? 0.16 : (isHovering ? 0.08 : 0))))
             }
-            .padding(.horizontal, 9).padding(.vertical, 7)
-            .background(ChamferShape(cut: AinkradRadius.sm)
-                .fill(tokens.accentPrimary.opacity(isActive ? 0.16 : (isHovering ? 0.08 : 0))))
+            .buttonStyle(.plain)
+
+            if isHovering {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10))
+                        .foregroundStyle(tokens.accentTertiary.opacity(0.9))
+                        .padding(.trailing, 9)
+                }
+                .buttonStyle(.plain)
+                .help("Delete chat")
+                .transition(reduceMotion ? .identity : .opacity)
+            }
         }
-        .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
