@@ -19,9 +19,10 @@ struct GeminiProvider: LLMProvider {
         system: String,
         tools: [AgentToolSchema],
         model: AgentModelConfig,
-        apiKey: String
+        credential: ProviderCredential
     ) -> AsyncThrowingStream<AgentEvent, Error> {
-        AsyncThrowingStream { continuation in
+        let apiKey: String = { if case let .apiKey(k) = credential { return k } else { return "" } }()
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let request = Self.makeRequest(baseURL: baseURL, messages: messages, system: system,

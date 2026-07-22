@@ -1,5 +1,9 @@
 import Foundation
 
+/// How a connection authenticates. `apiKey` uses the Keychain token at `secretID`;
+/// `subscription` uses an OAuth bearer token owned by `OAuthCredentialStore`.
+enum AuthMode: String, Codable, Sendable, Hashable { case apiKey, subscription }
+
 /// A configured provider connection — a provider *instance*. The secret (API
 /// token) is NOT stored here; it lives in the Keychain under `secretID`.
 /// Multiple connections of the same kind are allowed (e.g. OpenRouter + Groq).
@@ -10,21 +14,24 @@ struct Connection: Codable, Equatable, Identifiable {
     var displayName: String
     var baseURL: String
     var createdAt: Date
+    var authMode: AuthMode = .apiKey
 
     /// Keychain id for this connection's token.
     var secretID: String { "connection.\(id.uuidString)" }
 
-    init(id: UUID, presetID: String, kind: ProviderKind, displayName: String, baseURL: String, createdAt: Date) {
+    init(id: UUID, presetID: String, kind: ProviderKind, displayName: String,
+         baseURL: String, createdAt: Date, authMode: AuthMode = .apiKey) {
         self.id = id
         self.presetID = presetID
         self.kind = kind
         self.displayName = displayName
         self.baseURL = baseURL
         self.createdAt = createdAt
+        self.authMode = authMode
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, presetID, kind, displayName, baseURL, createdAt, provider
+        case id, presetID, kind, displayName, baseURL, createdAt, provider, authMode
     }
 
     /// Tolerant decode: new records carry `presetID`/`kind`/`baseURL`; legacy
@@ -35,6 +42,7 @@ struct Connection: Codable, Equatable, Identifiable {
         id = try c.decode(UUID.self, forKey: .id)
         displayName = try c.decode(String.self, forKey: .displayName)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
+        authMode = try c.decodeIfPresent(AuthMode.self, forKey: .authMode) ?? .apiKey
 
         if let presetID = try c.decodeIfPresent(String.self, forKey: .presetID) {
             self.presetID = presetID
@@ -62,6 +70,7 @@ struct Connection: Codable, Equatable, Identifiable {
         try c.encode(displayName, forKey: .displayName)
         try c.encode(baseURL, forKey: .baseURL)
         try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(authMode, forKey: .authMode)
     }
 }
 

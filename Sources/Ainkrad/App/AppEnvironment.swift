@@ -110,6 +110,12 @@ final class AppEnvironment {
     /// `candidatesProvider` (bootstrap) — see `LocalModelAvailability`.
     let localModelAvailability: LocalModelAvailability
     let authProfileStore: AuthProfileStore
+    /// Subscription OAuth (Task 10): the store the main `agentSession`'s
+    /// `credentialResolver` reads a live `.subscription` credential from —
+    /// retained here (not just a `bootstrapAgentSessionAndRuns` local) so the
+    /// settings UI (Task 11) can drive sign-in/sign-out through the SAME
+    /// instance the session resolves credentials against.
+    let oauthStore: OAuthCredentialStore
     let commandRegistry: CommandRegistry
     /// The root directory `workspaceFileIndex` was built from — persisted via
     /// `AssistantWorkspaceSettings`, defaulting to the home directory. Task 22b's
@@ -234,6 +240,7 @@ final class AppEnvironment {
         localModelProbe: LocalModelProbe,
         localModelAvailability: LocalModelAvailability,
         authProfileStore: AuthProfileStore,
+        oauthStore: OAuthCredentialStore,
         commandRegistry: CommandRegistry,
         assistantWorkingDirectory: URL,
         workspaceFileIndex: WorkspaceFileIndex,
@@ -293,6 +300,7 @@ final class AppEnvironment {
         self.localModelProbe = localModelProbe
         self.localModelAvailability = localModelAvailability
         self.authProfileStore = authProfileStore
+        self.oauthStore = oauthStore
         self.commandRegistry = commandRegistry
         self.assistantWorkingDirectory = assistantWorkingDirectory
         self.workspaceFileIndex = workspaceFileIndex
@@ -368,9 +376,10 @@ final class AppEnvironment {
 
         let (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
-            fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence
+            fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
+            oauthStore
         ) = bootstrapAgentSessionAndRuns(
-            persistence: persistence, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
+            persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
             agentPermissionStore: agentPermissionStore, agentStore: agentStore, editJournal: editJournal,
             memoryService: memoryService, modelRouter: modelRouter, executionRouter: executionRouter,
@@ -429,6 +438,7 @@ final class AppEnvironment {
             localModelProbe: localModelProbe,
             localModelAvailability: localModelAvailability,
             authProfileStore: authProfileStore,
+            oauthStore: oauthStore,
             commandRegistry: commandRegistry,
             assistantWorkingDirectory: assistantWorkingDirectory,
             workspaceFileIndex: workspaceFileIndex,

@@ -78,7 +78,7 @@ struct TokenUsageParsingTests {
                                       baseURL: "https://generativelanguage.googleapis.com/v1beta")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-            model: AgentModelConfig(model: "gemini-2.5-flash", effort: "xhigh"), apiKey: "k") { out.append(e) }
+            model: AgentModelConfig(model: "gemini-2.5-flash", effort: "xhigh"), credential: .apiKey("k")) { out.append(e) }
 
         let usageEvents: [TokenUsage] = out.compactMap { if case .usage(let u) = $0 { return u }; return nil }
         #expect(usageEvents.count == 1)
@@ -109,7 +109,7 @@ struct TokenUsageParsingTests {
                                       baseURL: "https://generativelanguage.googleapis.com/v1beta")
         var out: [AgentEvent] = []
         for try await e in provider.send(messages: [AgentMessage(role: .user, text: "hi")], system: "sys", tools: [],
-            model: AgentModelConfig(model: "gemini-2.5-flash", effort: "xhigh"), apiKey: "k") { out.append(e) }
+            model: AgentModelConfig(model: "gemini-2.5-flash", effort: "xhigh"), credential: .apiKey("k")) { out.append(e) }
 
         let usageEvents: [TokenUsage] = out.compactMap { if case .usage(let u) = $0 { return u }; return nil }
         #expect(usageEvents.count == 1)

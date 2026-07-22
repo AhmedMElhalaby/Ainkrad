@@ -18,6 +18,7 @@ struct AssistantSettingsView: View {
     @State var newBaseURL: String = ProviderPreset.preset(id: "openai").defaultBaseURL
     @State var newDisplayName: String = ""
     @State var newConnectionToken = ""
+    @State var newAuthMode: AuthMode = .apiKey
     @State var revealedConnectionIDs: Set<UUID> = []
     @State var modelPicker = AssistantModelPickerModel()
     @State var testResults: [UUID: ConnectionTestResult] = [:]

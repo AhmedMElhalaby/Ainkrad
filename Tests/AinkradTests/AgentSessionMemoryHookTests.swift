@@ -8,7 +8,7 @@ struct AgentSessionMemoryHookTests {
     /// Never invoked: /remember is intercepted before any provider work starts.
     private struct UnusedProvider: LLMProvider {
         func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
-                  model: AgentModelConfig, apiKey: String) -> AsyncThrowingStream<AgentEvent, Error> {
+                  model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
             AsyncThrowingStream { $0.finish() }
         }
     }
