@@ -31,7 +31,9 @@ enum PluginValidator {
         guard AinkradAppKit.isCompatible(bundleAPIVersion: metadata.apiVersion,
                                          minSupported: minSupportedAPIVersion,
                                          current: AinkradAppKit.apiVersion) else {
-            return .failure(PluginRejection(reason: "API version \(metadata.apiVersion) unsupported"))
+            return .failure(PluginRejection(reason:
+                "built against generation \(metadata.apiVersion); this host supports " +
+                "\(minSupportedAPIVersion)\u{2013}\(AinkradAppKit.apiVersion) — update the app"))
         }
         return .success(())
     }

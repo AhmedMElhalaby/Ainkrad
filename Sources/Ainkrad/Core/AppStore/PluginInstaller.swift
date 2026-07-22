@@ -84,7 +84,7 @@ final class PluginInstaller {
             throw AppStoreError.invalidBundle("no readable .bundle in archive")
         }
         guard metadata.appID == entry.appID else { throw AppStoreError.invalidBundle("appID mismatch") }
-        if case .failure(let rej) = PluginValidator.validate(metadata, infoDictionary: infoDict, minSupportedAPIVersion: 1) {
+        if case .failure(let rej) = PluginValidator.validate(metadata, infoDictionary: infoDict, minSupportedAPIVersion: GenerationSupport.minSupported) {
             throw AppStoreError.invalidBundle(rej.reason)
         }
 

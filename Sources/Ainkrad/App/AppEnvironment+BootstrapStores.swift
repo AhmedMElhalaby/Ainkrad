@@ -64,7 +64,7 @@ extension AppEnvironment {
         let agentActionHub = AgentActionRegistryHub()
         let pluginLaunchHub = PluginLaunchHub()
         let appAppearanceStore = AppAppearanceStore(persistence: persistence)
-        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: 4) { appID, declaredPresentation in
+        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: GenerationSupport.minSupported) { appID, declaredPresentation in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager,
                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
