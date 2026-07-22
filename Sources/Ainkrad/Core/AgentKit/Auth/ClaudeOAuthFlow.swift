@@ -29,7 +29,10 @@ struct PKCE {
     let challenge: String
     static func generate() -> PKCE {
         var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        // A CSPRNG failure must never silently yield a weak/zero verifier (that would
+        // defeat PKCE). It effectively never fails on macOS; crash rather than proceed.
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        precondition(status == errSecSuccess, "PKCE: SecRandomCopyBytes failed (\(status))")
         let verifier = Data(bytes).base64URLEncodedString()
         let digest = SHA256.hash(data: Data(verifier.utf8))
         let challenge = Data(digest).base64URLEncodedString()
