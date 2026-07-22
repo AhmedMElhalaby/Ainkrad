@@ -14,7 +14,7 @@ enum AgentContentBlock: Equatable, Sendable {
 }
 
 struct AgentMessage: Equatable, Sendable {
-    enum Role: String, Sendable { case user, assistant }
+    enum Role: String, Sendable, Codable { case user, assistant }
     var role: Role
     var content: [AgentContentBlock]
 

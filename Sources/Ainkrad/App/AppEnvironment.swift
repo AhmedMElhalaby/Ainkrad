@@ -76,6 +76,8 @@ final class AppEnvironment {
     let editJournal: EditJournal
     let subagentCoordinator: SubagentCoordinator
     let runManager: RunManager
+    /// Persisted history of Assistant chats, surfaced by the block's history sidebar.
+    let assistantSessionStore: AssistantSessionStore
     /// M7 Slice 3b (Autonomy: scheduling/triggers) — the persisted `AgentSchedule`s
     /// the `ScheduleUIView` create/edit list reads/writes, `scheduleRunner` (time
     /// triggers) and `fileChangeWatcher`+`triggerDispatcher` (event triggers) fire
@@ -223,6 +225,7 @@ final class AppEnvironment {
         editJournal: EditJournal,
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
+        assistantSessionStore: AssistantSessionStore,
         scheduleStore: ScheduleStore,
         scheduleRunner: ScheduleRunner,
         triggerDispatcher: TriggerDispatcher,
@@ -282,6 +285,7 @@ final class AppEnvironment {
         self.editJournal = editJournal
         self.subagentCoordinator = subagentCoordinator
         self.runManager = runManager
+        self.assistantSessionStore = assistantSessionStore
         self.scheduleStore = scheduleStore
         self.scheduleRunner = scheduleRunner
         self.triggerDispatcher = triggerDispatcher
@@ -371,8 +375,9 @@ final class AppEnvironment {
             discoveredModelsStore: discoveredModelsStore)
 
         let (
-            subagentCoordinator, runManager, scheduleStore, scheduleRunner, triggerDispatcher, fileChangeWatcher,
-            assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence, oauthStore
+            subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
+            fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
+            oauthStore
         ) = bootstrapAgentSessionAndRuns(
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
@@ -418,6 +423,7 @@ final class AppEnvironment {
             editJournal: editJournal,
             subagentCoordinator: subagentCoordinator,
             runManager: runManager,
+            assistantSessionStore: assistantSessionStore,
             scheduleStore: scheduleStore,
             scheduleRunner: scheduleRunner,
             triggerDispatcher: triggerDispatcher,
