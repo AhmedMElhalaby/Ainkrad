@@ -16,6 +16,7 @@ struct AssistantRootView: View {
     var showsHeader: Bool = true
     var autoFocusComposer: Bool = false
     @State private var draft = ""
+    @State private var isSidebarVisible = false
     @State private var isThinkingExpanded = true
     @State private var modelPicker = AssistantModelPickerModel()
     @State private var hoveredTurnIndex: Int?
@@ -30,7 +31,36 @@ struct AssistantRootView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
         let session = environment.agentSession
+        let store = environment.assistantSessionStore
 
+        HStack(spacing: 0) {
+            if showsHeader && isSidebarVisible {
+                AssistantHistorySidebar(
+                    store: store,
+                    tokens: tokens,
+                    onNewChat: {
+                        store.syncActive(messages: session.messages)
+                        store.startNewSession()
+                        session.reset()
+                    },
+                    onSelect: { id in
+                        store.syncActive(messages: session.messages)
+                        session.replaceMessages(store.activate(id))
+                    }
+                )
+                .transition(reduceMotion ? .identity : .move(edge: .leading))
+            }
+            chatColumn(session: session, tokens: tokens)
+        }
+        .onChange(of: session.messages) { _, newValue in
+            environment.assistantSessionStore.syncActive(messages: newValue)
+        }
+    }
+
+    // MARK: - Chat column
+
+    @ViewBuilder
+    private func chatColumn(session: AgentSession, tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if showsHeader {
                 header(tokens: tokens)
@@ -90,21 +120,19 @@ struct AssistantRootView: View {
         }
     }
 
-    // MARK: - Header (new chat only)
+    // MARK: - Header (sidebar toggle)
 
     private func header(tokens: DesignTokens) -> some View {
-        let session = environment.agentSession
-
-        return HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            HoverSidebarToggle(tokens: tokens) {
+                withAnimation(reduceMotion ? nil : AinkradMotion.present) {
+                    isSidebarVisible.toggle()
+                }
+            }
             Spacer(minLength: 0)
-            newChatButton(session: session, tokens: tokens)
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
-    }
-
-    private func newChatButton(session: AgentSession, tokens: DesignTokens) -> some View {
-        HoverNewChatButton(tokens: tokens) { session.reset() }
     }
 
     // MARK: - Transcript
@@ -362,8 +390,8 @@ struct AssistantRootView: View {
 
 }
 
-/// New-chat control with a hover highlight (motion is first-class in the HUD).
-private struct HoverNewChatButton: View {
+/// Leading history-sidebar toggle with a hover highlight (motion is first-class in the HUD).
+private struct HoverSidebarToggle: View {
     let tokens: DesignTokens
     let action: () -> Void
     @State private var isHovering = false
@@ -371,14 +399,14 @@ private struct HoverNewChatButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "square.and.pencil")
+            Image(systemName: "sidebar.left")
                 .font(.system(size: 12))
                 .foregroundStyle(tokens.foreground.opacity(isHovering ? 0.9 : 0.6))
                 .padding(6)
                 .background(Circle().fill(tokens.surfaceElevated.opacity(isHovering ? 0.75 : 0.5)))
         }
         .buttonStyle(.plain)
-        .help("New chat")
+        .help("Toggle history")
         .onHover { isHovering = $0 }
         .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
