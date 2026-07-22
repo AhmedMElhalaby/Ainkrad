@@ -38,6 +38,7 @@ struct AssistantRootView: View {
                 AssistantHistorySidebar(
                     store: store,
                     tokens: tokens,
+                    surfaceOpacity: environment.appAppearanceStore.surfaceOpacity("assistant"),
                     onNewChat: {
                         store.syncActive(messages: session.messages)
                         store.startNewSession()
