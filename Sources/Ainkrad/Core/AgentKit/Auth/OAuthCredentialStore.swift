@@ -55,15 +55,26 @@ final class OAuthCredentialStore {
         guard token.isExpiring(now: now()) else { return token }
 
         let key = connectionID.uuidString
-        if let existing = inFlight[key] { return try await existing.value }
-        let task = Task<OAuthToken, Error> { [flow] in
-            try await flow.refresh(refreshToken: token.refreshToken)
+        do {
+            let refreshed: OAuthToken
+            if let existing = inFlight[key] {
+                refreshed = try await existing.value
+            } else {
+                let task = Task<OAuthToken, Error> { [flow] in
+                    try await flow.refresh(refreshToken: token.refreshToken)
+                }
+                inFlight[key] = task
+                defer { inFlight[key] = nil }
+                refreshed = try await task.value
+                store(refreshed, for: connectionID, source: account(for: connectionID)?.source ?? .freshLogin)
+            }
+            return refreshed
+        } catch ClaudeOAuthError.tokenEndpoint(status: 429, _) {
+            // Rate-limited refresh (spec §8): the credential is still valid — keep using
+            // it, don't force re-auth. The token may be within the refresh skew but not
+            // yet actually expired; let the inference attempt proceed on it.
+            return token
         }
-        inFlight[key] = task
-        defer { inFlight[key] = nil }
-        let refreshed = try await task.value
-        store(refreshed, for: connectionID, source: account(for: connectionID)?.source ?? .freshLogin)
-        return refreshed
     }
 
     private func writeToken(_ token: OAuthToken, for connectionID: UUID) {

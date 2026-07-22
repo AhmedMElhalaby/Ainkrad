@@ -27,6 +27,22 @@ import Foundation
                                           scopes: ["user:inference"])))
     }
 
+    @Test(.timeLimit(.minutes(1))) func rateLimitedRefreshKeepsExistingCredential() async throws {
+        let now = Date(timeIntervalSince1970: 1000)
+        let rateLimited = Data(#"{"error":{"type":"rate_limit_error"}}"#.utf8)
+        let (store, _) = makeStore(now: now, transportResponses: [(rateLimited, 429)])
+        let conn = Connection(id: UUID(), presetID: "claude", kind: .claude,
+                              displayName: "Claude", baseURL: "https://api.anthropic.com",
+                              createdAt: now, authMode: .subscription)
+        let existing = OAuthToken(accessToken: "AT", refreshToken: "RT",
+                                  expiresAt: now.addingTimeInterval(10),   // within skew → triggers refresh
+                                  scopes: ["user:inference"])
+        store.store(existing, for: conn.id, source: .freshLogin)
+        // Refresh 429s → keep the existing credential (spec §8), do NOT throw / force re-auth.
+        let cred = try await store.liveCredential(for: conn)
+        #expect(cred == .oauth(existing))
+    }
+
     @Test(.timeLimit(.minutes(1))) func expiringTokenRefreshesAndPersistsRotatedToken() async throws {
         let now = Date(timeIntervalSince1970: 1000)
         let refreshed = """
