@@ -76,4 +76,13 @@ import Foundation
         let (reopened, _) = makeStore(persistence)
         #expect(reopened.results(for: "survive").count == 1)
     }
+
+    @Test func reopenedStoreSurfacesActiveMessagesForRestore() {
+        let persistence = InMemoryPersistenceStore()
+        let (store, _) = makeStore(persistence)
+        store.syncActive(messages: [AgentMessage(role: .user, text: "restore me"),
+                                    AgentMessage(role: .assistant, text: "ok")])
+        let (reopened, _) = makeStore(persistence)
+        #expect(reopened.activeMessages.map(\.text) == ["restore me", "ok"])
+    }
 }

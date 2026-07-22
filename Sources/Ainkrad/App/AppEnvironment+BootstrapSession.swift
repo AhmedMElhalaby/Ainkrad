@@ -243,6 +243,13 @@ extension AppEnvironment {
             mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
+        // Restore the last-active persisted session into the live session so a
+        // returning user sees their previous conversation — and so the first edit
+        // after launch doesn't overwrite the saved transcript with an empty one.
+        if !assistantSessionStore.activeMessages.isEmpty {
+            agentSession.replaceMessages(assistantSessionStore.activeMessages)
+        }
+
         let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
         voiceService.attachSession(agentSession)
 

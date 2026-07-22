@@ -8,7 +8,6 @@ struct AssistantHistorySidebar: View {
     var onSelect: (UUID) -> Void
 
     @State private var query = ""
-    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

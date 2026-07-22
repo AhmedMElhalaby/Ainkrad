@@ -46,6 +46,12 @@ final class AssistantSessionStore {
         if sessions.isEmpty { seedActive() } else { save() }
     }
 
+    /// Messages of the currently-active session — used at launch to restore the
+    /// live AgentSession so the first edit doesn't clobber the saved transcript.
+    var activeMessages: [AgentMessage] {
+        sessions.first(where: { $0.id == activeID })?.messages ?? []
+    }
+
     func results(for query: String) -> [SavedSession] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return sessions }
