@@ -17,8 +17,8 @@ final class ModelCatalogService {
         self.http = http
     }
 
-    func models(kind: ProviderKind, baseURL: String, apiKey: String, curatedFallback: [String]) async -> [String] {
-        await modelsResult(kind: kind, baseURL: baseURL, apiKey: apiKey, curatedFallback: curatedFallback).models
+    func models(kind: ProviderKind, baseURL: String, credential: ProviderCredential, curatedFallback: [String]) async -> [String] {
+        await modelsResult(kind: kind, baseURL: baseURL, credential: credential, curatedFallback: curatedFallback).models
     }
 
     /// Same as `models(...)`, but also signals whether the returned list was
@@ -26,8 +26,8 @@ final class ModelCatalogService {
     /// returned due to an invalid request, non-2xx response, transport error,
     /// or empty parse (`isLive == false`). Callers should only treat the list
     /// as authoritative (e.g. for reconciling a selected model) when `isLive`.
-    func modelsResult(kind: ProviderKind, baseURL: String, apiKey: String, curatedFallback: [String]) async -> (models: [String], isLive: Bool) {
-        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, apiKey: apiKey) else {
+    func modelsResult(kind: ProviderKind, baseURL: String, credential: ProviderCredential, curatedFallback: [String]) async -> (models: [String], isLive: Bool) {
+        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, credential: credential) else {
             return (curatedFallback, false)
         }
         do {
@@ -44,8 +44,8 @@ final class ModelCatalogService {
         }
     }
 
-    func test(kind: ProviderKind, baseURL: String, apiKey: String) async -> ConnectionTestResult {
-        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, apiKey: apiKey) else {
+    func test(kind: ProviderKind, baseURL: String, credential: ProviderCredential) async -> ConnectionTestResult {
+        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, credential: credential) else {
             return ConnectionTestResult(ok: false, message: "Invalid base URL")
         }
         do {
@@ -69,26 +69,34 @@ final class ModelCatalogService {
         baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
     }
 
-    private static func listRequest(kind: ProviderKind, baseURL: String, apiKey: String) -> URLRequest? {
+    /// Builds the `/models` discovery request. Auth depends on BOTH the provider
+    /// kind and the credential: a subscription (`.oauth`) connection is keyless, so
+    /// it authenticates with `authorization: Bearer <token>` — the same header the
+    /// live `/v1/messages` OAuth path uses — NOT an (empty) `x-api-key`, which would
+    /// 401 and silently drop discovery back to the curated fallback.
+    private static func listRequest(kind: ProviderKind, baseURL: String, credential: ProviderCredential) -> URLRequest? {
         let base = trim(baseURL)
+        guard let url = URL(string: base + "/models") else { return nil }
+        var r = URLRequest(url: url)
         switch kind {
         case .openAICompatible:
-            guard let url = URL(string: base + "/models") else { return nil }
-            var r = URLRequest(url: url)
-            if !apiKey.isEmpty { r.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization") }
-            return r
+            switch credential {
+            case .apiKey(let key): if !key.isEmpty { r.setValue("Bearer \(key)", forHTTPHeaderField: "authorization") }
+            case .oauth(let token): r.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            }
         case .claude:
-            guard let url = URL(string: base + "/models") else { return nil }
-            var r = URLRequest(url: url)
-            r.setValue(apiKey, forHTTPHeaderField: "x-api-key")
             r.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            return r
+            switch credential {
+            case .apiKey(let key): r.setValue(key, forHTTPHeaderField: "x-api-key")
+            case .oauth(let token): r.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            }
         case .gemini:
-            guard let url = URL(string: base + "/models") else { return nil }
-            var r = URLRequest(url: url)
-            r.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
-            return r
+            switch credential {
+            case .apiKey(let key): r.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+            case .oauth(let token): r.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            }
         }
+        return r
     }
 
     /// Returns `nil` when the body couldn't be parsed at all (unexpected shape),
