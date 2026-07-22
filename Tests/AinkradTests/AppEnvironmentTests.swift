@@ -81,7 +81,7 @@ final class AppEnvironmentTests {
                     providerFor: { _ in ClaudeProvider(http: URLSessionStreamingHTTPClient()) },
                     connections: connectionStore, agentConfigStore: agentConfigStore,
                     agentContextService: agentContextService, agentPermissionStore: agentPermissionStore,
-                    agentStore: agentStore)))
+                    agentStore: agentStore, credentialResolver: { _ in [] })))
         let runManager = RunManager(
             persistence: persistence,
             runner: BackgroundRunRunner(makeSession: { _ in agentSession }))
