@@ -56,7 +56,7 @@ struct PluginLoaderTests {
             PluginInfoKey.appID: "hello",
             PluginInfoKey.displayName: "Hello",
             PluginInfoKey.iconSymbol: "hand.wave",
-            PluginInfoKey.apiVersion: 1,
+            PluginInfoKey.apiVersion: 7,
             PluginInfoKey.principalClass: "DoesNotExist",
             "CFBundleExecutable": "hello",
         ]
@@ -73,7 +73,7 @@ struct PluginLoaderTests {
         let result = loader().loadAll(from: [dir])
         #expect(result.apps.isEmpty)
         #expect(result.failures.count == 1)
-        #expect(result.failures[0].reason.contains("API version 999"))
+        #expect(result.failures[0].reason.contains("999"))
     }
 
     @Test("a bundle missing a required key is skipped")
