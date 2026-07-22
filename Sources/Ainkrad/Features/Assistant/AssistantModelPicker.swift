@@ -205,7 +205,7 @@ final class AssistantModelPickerModel {
         let store = environment.connectionStore
         let svc = environment.modelCatalogService
         let preset = ProviderPreset.preset(id: connection.presetID)
-        let key = store.token(for: connection) ?? ""
+        let oauthStore = environment.oauthStore
         isRefreshing = true
         inFlight.insert(connection.id)
         Task {
@@ -213,8 +213,18 @@ final class AssistantModelPickerModel {
                 lastFetch[connection.id] = Date()
                 inFlight.remove(connection.id)
             }
+            // A subscription connection is keyless — resolve its OAuth bearer (with
+            // refresh) so discovery hits `/models` authenticated. If no token is
+            // stored yet (not signed in), fall through with an empty key, which
+            // leaves the curated fallback in place. API-key connections use their key.
+            let credential: ProviderCredential
+            if connection.authMode == .subscription {
+                credential = (try? await oauthStore.liveCredential(for: connection)) ?? .apiKey("")
+            } else {
+                credential = .apiKey(store.token(for: connection) ?? "")
+            }
             let result = await svc.modelsResult(kind: connection.kind, baseURL: connection.baseURL,
-                                                apiKey: key, curatedFallback: preset.curatedModels)
+                                                credential: credential, curatedFallback: preset.curatedModels)
             isRefreshing = false
             // Persist ONLY a genuinely live list into the shared store — a curated
             // fallback is already the default, so storing it would be redundant and

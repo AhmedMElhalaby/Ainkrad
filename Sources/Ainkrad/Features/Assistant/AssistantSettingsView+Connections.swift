@@ -162,11 +162,19 @@ extension AssistantSettingsView {
     }
 
     private func testConnection(_ connection: Connection) {
-        let key = environment.connectionStore.token(for: connection) ?? ""
         let svc = environment.modelCatalogService
+        let oauthStore = environment.oauthStore
         testingIDs.insert(connection.id)
         Task {
-            let result = await svc.test(kind: connection.kind, baseURL: connection.baseURL, apiKey: key)
+            // Keyless subscription connections authenticate discovery/test with their
+            // OAuth bearer, not an (empty) API key — mirrors the model picker's refresh.
+            let credential: ProviderCredential
+            if connection.authMode == .subscription {
+                credential = (try? await oauthStore.liveCredential(for: connection)) ?? .apiKey("")
+            } else {
+                credential = .apiKey(environment.connectionStore.token(for: connection) ?? "")
+            }
+            let result = await svc.test(kind: connection.kind, baseURL: connection.baseURL, credential: credential)
             testResults[connection.id] = result
             testingIDs.remove(connection.id)
         }
