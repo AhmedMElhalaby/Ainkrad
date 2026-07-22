@@ -56,7 +56,7 @@ struct PluginLoaderTests {
             PluginInfoKey.appID: "hello",
             PluginInfoKey.displayName: "Hello",
             PluginInfoKey.iconSymbol: "hand.wave",
-            PluginInfoKey.apiVersion: 1,
+            PluginInfoKey.apiVersion: 7,
             PluginInfoKey.principalClass: "DoesNotExist",
             "CFBundleExecutable": "hello",
         ]

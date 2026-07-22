@@ -15,7 +15,7 @@ final class PluginLoader {
     private let makeHostServices: (String, PluginPresentation) -> HostServices
 
     init(signaturePolicy: PluginSignaturePolicy,
-         minSupportedAPIVersion: Int = 1,
+         minSupportedAPIVersion: Int = GenerationSupport.minSupported,
          makeHostServices: @escaping (String, PluginPresentation) -> HostServices) {
         self.signaturePolicy = signaturePolicy
         self.minSupportedAPIVersion = minSupportedAPIVersion

@@ -23,7 +23,7 @@ struct PluginLifecycleTests {
     }
     private func entry(_ v: String, url: URL, sha: String) -> CatalogEntry {
         CatalogEntry(appID: "hello", displayName: "Hello", icon: "app", description: "", version: v,
-                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/hello")
+                     apiVersion: 7, downloadURL: url, sha256: sha, sourceRepo: "o/hello")
     }
     private func hello(_ url: URL) -> RegisteredApp {
         RegisteredApp(id: "hello", displayName: "Hello", icon: "app", isEnabledByDefault: true,
