@@ -550,6 +550,11 @@ final class AgentSession {
                             "Open Assistant settings and sign in again.")
             return
         }
+        // A resolver that yields no credentials would otherwise crash the subscript below.
+        guard let firstCredential = credentials.first else {
+            state = .failed("No credentials available for \(connection.displayName).")
+            return
+        }
 
         let contextBlock = context.assembleContext()
         let agentInstructions = agents?.active.instructions ?? ""
@@ -558,7 +563,7 @@ final class AgentSession {
         let provider = providerFor(connection)
 
         var currentModel = resolved.modelConfig
-        var currentCredential = credentials[0]
+        var currentCredential = firstCredential
         var didOpeningFailover = false
 
         while true {

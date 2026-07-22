@@ -160,7 +160,7 @@ struct ClaudeProvider: LLMProvider {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
-        var wireTools = tools
+        let wireTools = tools
         let isOAuth: Bool = { if case .oauth = credential { return true } else { return false } }()
         // `.apiKey` sends `system` as a plain string (unchanged). `.oauth` MUST send it
         // as a block array whose FIRST block is exactly the Claude Code identity string —
