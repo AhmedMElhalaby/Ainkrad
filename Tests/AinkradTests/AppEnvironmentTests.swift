@@ -85,6 +85,7 @@ final class AppEnvironmentTests {
         let runManager = RunManager(
             persistence: persistence,
             runner: BackgroundRunRunner(makeSession: { _ in agentSession }))
+        let assistantSessionStore = AssistantSessionStore(persistence: persistence)
         let scheduleStore = ScheduleStore(persistence: persistence)
         let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
         let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)
@@ -128,6 +129,7 @@ final class AppEnvironmentTests {
             editJournal: editJournal,
             subagentCoordinator: subagentCoordinator,
             runManager: runManager,
+            assistantSessionStore: assistantSessionStore,
             scheduleStore: scheduleStore,
             scheduleRunner: scheduleRunner,
             triggerDispatcher: triggerDispatcher,

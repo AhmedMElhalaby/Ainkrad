@@ -34,6 +34,7 @@ extension AppEnvironment {
     ) -> (
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
+        assistantSessionStore: AssistantSessionStore,
         scheduleStore: ScheduleStore,
         scheduleRunner: ScheduleRunner,
         triggerDispatcher: TriggerDispatcher,
@@ -151,6 +152,11 @@ extension AppEnvironment {
             }),
             notifier: runNotifier, maxConcurrent: 2)
 
+        // Persisted history of Assistant chats, surfaced by the block's history
+        // sidebar (Assistant session-history-sidebar Task 4) — one instance shared
+        // via `AppEnvironment`, same pattern as `runManager`/`scheduleStore` above.
+        let assistantSessionStore = AssistantSessionStore(persistence: persistence)
+
         // M7 Slice 7: menu-bar presence wraps the SAME `runManager` above via
         // `RunManagerMenuBarAdapter`, so the status-item popover's run list is
         // always in lockstep with the Runs surface and any background trigger.
@@ -241,8 +247,8 @@ extension AppEnvironment {
         voiceService.attachSession(agentSession)
 
         return (
-            subagentCoordinator, runManager, scheduleStore, scheduleRunner, triggerDispatcher, fileChangeWatcher,
-            assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence
+            subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
+            fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence
         )
     }
 
