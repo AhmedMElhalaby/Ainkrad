@@ -112,6 +112,35 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
 
+  AinkradDevHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/AinkradDevHost
+    dependencies:
+      # Not yet consumed (starts in Task 3), but the Dev Host is a real host
+      # that will load plugins, so it must own the one dynamic copy of the
+      # SDK, exactly like the `Ainkrad` target — see that target's comment.
+      - package: AinkradAppKit
+        embed: true
+        link: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.devhost
+        GENERATE_INFOPLIST_FILE: YES
+
+  AinkradDevHostTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AinkradDevHostTests
+    dependencies:
+      - target: AinkradDevHost
+        embed: false
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
   HelloPlugin:
     type: bundle
     platform: macOS
@@ -146,3 +175,15 @@ schemes:
       config: Debug
       targets:
         - AinkradTests
+
+  AinkradDevHost:
+    build:
+      targets:
+        AinkradDevHost: all
+        AinkradDevHostTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - AinkradDevHostTests
