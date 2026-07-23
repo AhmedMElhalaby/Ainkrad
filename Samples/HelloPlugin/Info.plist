@@ -13,6 +13,6 @@
     <key>AinkradAppID</key><string>hello</string>
     <key>AinkradDisplayName</key><string>Hello</string>
     <key>AinkradIconSymbol</key><string>hand.wave</string>
-    <key>AinkradAPIVersion</key><integer>1</integer>
+    <key>AinkradAPIVersion</key><integer>7</integer>
 </dict>
 </plist>
