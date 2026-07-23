@@ -5,7 +5,8 @@ import AinkradHostRuntime
 /// Renders the current `DevHostModel.State`. `.loaded` renders the plugin's
 /// own root view via its `makeRootView` factory, honoring the bundle's
 /// declared presentation; `.empty`/`.invalid` render a minimal placeholder.
-/// Deliberately minimal — the log pane + rejection banner land in Task 4.
+/// The log pane + validation banner are separate views composed alongside
+/// this one in `DevHostApp` — see `ValidationBanner`, `LogPaneView`.
 struct PluginStageView: View {
     let state: DevHostModel.State
 
