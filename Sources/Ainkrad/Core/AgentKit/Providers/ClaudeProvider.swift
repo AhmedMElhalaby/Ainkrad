@@ -205,7 +205,7 @@ struct ClaudeProvider: LLMProvider {
     }
 
     nonisolated private static func wireMessage(_ message: AgentMessage, isOAuth: Bool) -> [String: Any] {
-        let blocks: [[String: Any]] = message.content.map { block in
+        let blocks: [[String: Any]] = message.wireContent.map { block in
             switch block {
             case .text(let t):
                 return ["type": "text", "text": t]
@@ -217,6 +217,9 @@ struct ClaudeProvider: LLMProvider {
                 return ["type": "tool_result", "tool_use_id": toolUseID, "content": content, "is_error": isError]
             case .image(let mediaType, let base64):
                 return ["type": "image", "source": ["type": "base64", "media_type": mediaType, "data": base64]]
+            case .thinking:
+                // Unreachable: `wireContent` strips `.thinking` before this switch runs.
+                preconditionFailure(".thinking must never reach the wire — use wireContent")
             }
         }
         return ["role": message.role.rawValue, "content": blocks]

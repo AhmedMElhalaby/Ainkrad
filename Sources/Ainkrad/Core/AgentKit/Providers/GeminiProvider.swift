@@ -118,7 +118,7 @@ struct GeminiProvider: LLMProvider {
     /// Maps one `AgentMessage` to a Gemini `content` object. Assistant → "model".
     nonisolated private static func wireContent(_ message: AgentMessage) -> [String: Any] {
         let role = message.role == .assistant ? "model" : "user"
-        let parts: [[String: Any]] = message.content.map { block in
+        let parts: [[String: Any]] = message.wireContent.map { block in
             switch block {
             case .text(let t):
                 return ["text": t]
@@ -129,6 +129,9 @@ struct GeminiProvider: LLMProvider {
                 return ["functionResponse": ["name": toolUseID, "response": ["result": content]]]
             case .image(let mediaType, let base64):
                 return ["inlineData": ["mimeType": mediaType, "data": base64]]
+            case .thinking:
+                // Unreachable: `wireContent` strips `.thinking` before this switch runs.
+                preconditionFailure(".thinking must never reach the wire — use wireContent")
             }
         }
         return ["role": role, "parts": parts]

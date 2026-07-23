@@ -151,7 +151,7 @@ struct OpenAICompatibleProvider: LLMProvider {
         var toolResults: [[String: Any]] = []
         var contentParts: [[String: Any]] = []
         var hasImage = false
-        for block in message.content {
+        for block in message.wireContent {
             switch block {
             case .text(let t):
                 texts.append(t)
@@ -165,6 +165,9 @@ struct OpenAICompatibleProvider: LLMProvider {
             case .image(let mediaType, let base64):
                 hasImage = true
                 contentParts.append(["type": "image_url", "image_url": ["url": "data:\(mediaType);base64,\(base64)"]])
+            case .thinking:
+                // Unreachable: `wireContent` strips `.thinking` before this switch runs.
+                preconditionFailure(".thinking must never reach the wire — use wireContent")
             }
         }
         var out: [[String: Any]] = []
