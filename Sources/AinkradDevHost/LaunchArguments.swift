@@ -1,10 +1,19 @@
 import Foundation
 
-// `Result`'s `Failure` generic parameter requires `Error` conformance.
-// The brief's interface calls for a plain `String` usage message as the
-// failure value, so this narrow, additive conformance lets `String` be used
-// directly as that message without introducing a bespoke error type.
-extension String: @retroactive Error {}
+/// Failure case for `LaunchArguments.parse` — a dedicated error type instead
+/// of a bare `String`, so this module doesn't need a project-wide
+/// `String: Error` conformance just to satisfy `Result`'s `Failure`
+/// requirement.
+enum LaunchArgumentsError: Error, CustomStringConvertible, Equatable {
+    case usage(String)
+
+    var description: String {
+        switch self {
+        case .usage(let message):
+            return message
+        }
+    }
+}
 
 /// Parsed launch arguments for `AinkradDevHost` — the dev-only host that
 /// loads a single plugin bundle (specified via `--bundle`) for local
@@ -15,7 +24,7 @@ struct LaunchArguments {
 
     private static let usage = "usage: AinkradDevHost --bundle <path> [--generation N]"
 
-    static func parse(_ arguments: [String]) -> Result<LaunchArguments, String> {
+    static func parse(_ arguments: [String]) -> Result<LaunchArguments, LaunchArgumentsError> {
         var bundlePath: String?
         var generationValue: Int?
 
@@ -24,12 +33,12 @@ struct LaunchArguments {
             let argument = arguments[index]
             switch argument {
             case "--bundle":
-                guard index + 1 < arguments.count else { return .failure(usage) }
+                guard index + 1 < arguments.count else { return .failure(.usage(usage)) }
                 bundlePath = arguments[index + 1]
                 index += 2
             case "--generation":
-                guard index + 1 < arguments.count else { return .failure(usage) }
-                guard let generation = Int(arguments[index + 1]) else { return .failure(usage) }
+                guard index + 1 < arguments.count else { return .failure(.usage(usage)) }
+                guard let generation = Int(arguments[index + 1]) else { return .failure(.usage(usage)) }
                 generationValue = generation
                 index += 2
             default:
@@ -37,7 +46,7 @@ struct LaunchArguments {
             }
         }
 
-        guard let bundlePath else { return .failure(usage) }
+        guard let bundlePath else { return .failure(.usage(usage)) }
         return .success(LaunchArguments(bundleURL: URL(fileURLWithPath: bundlePath), generation: generationValue))
     }
 }

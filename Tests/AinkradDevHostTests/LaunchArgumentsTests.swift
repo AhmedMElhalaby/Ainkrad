@@ -34,7 +34,8 @@ struct LaunchArgumentsTests {
         switch result {
         case .success:
             Issue.record("expected failure for missing --bundle")
-        case .failure(let message):
+        case .failure(let error):
+            let message = String(describing: error)
             #expect(message.contains("usage:"))
             #expect(message.contains("--bundle"))
         }
@@ -46,8 +47,8 @@ struct LaunchArgumentsTests {
         switch result {
         case .success:
             Issue.record("expected failure for non-integer --generation")
-        case .failure(let message):
-            #expect(message.contains("usage:"))
+        case .failure(let error):
+            #expect(String(describing: error).contains("usage:"))
         }
     }
 }
