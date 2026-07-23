@@ -4,7 +4,7 @@ import Foundation
 /// store notifies it on every save so a later engine can observe changes. The
 /// document envelope's `schemaVersion` + `updatedAt` are the versioning basis
 /// for conflict resolution.
-protocol SyncEngine: AnyObject {
+public protocol SyncEngine: AnyObject {
     /// Called after a document is written, with the encoded envelope bytes.
     func documentDidChange(id: String, data: Data)
     /// Begins syncing (e.g. at launch). No-op in M2.
@@ -12,7 +12,8 @@ protocol SyncEngine: AnyObject {
 }
 
 /// The default engine: does nothing. Keeps call sites unconditional.
-final class NoOpSyncEngine: SyncEngine {
-    func documentDidChange(id: String, data: Data) {}
-    func start() {}
+public final class NoOpSyncEngine: SyncEngine {
+    public init() {}
+    public func documentDidChange(id: String, data: Data) {}
+    public func start() {}
 }

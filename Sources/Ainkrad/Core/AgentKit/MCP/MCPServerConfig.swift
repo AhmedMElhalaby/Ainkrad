@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// How Ainkrad talks to a configured MCP server.
 enum MCPTransportKind: String, Codable, Equatable {

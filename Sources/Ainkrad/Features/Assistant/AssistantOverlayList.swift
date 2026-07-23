@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Shared presentation shell for the composer's floating overlays — the
 /// `@`-mention list and the `/`-command palette. Both render their rows through

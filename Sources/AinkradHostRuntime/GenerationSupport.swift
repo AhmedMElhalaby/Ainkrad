@@ -4,7 +4,7 @@ import AinkradAppKit
 /// A plugin's declared `AinkradAPIVersion` must fall in `[minSupported ... current]`.
 /// `current` tracks the embedded SDK; `minSupported` advances only when a
 /// deprecation window closes (see SDK Generation Contract design).
-enum GenerationSupport {
-    static let current = AinkradAppKit.apiVersion   // 7
-    static let minSupported = 7                     // first resilient-ABI generation
+public enum GenerationSupport {
+    public static let current = AinkradAppKit.apiVersion   // 7
+    public static let minSupported = 7                     // first resilient-ABI generation
 }

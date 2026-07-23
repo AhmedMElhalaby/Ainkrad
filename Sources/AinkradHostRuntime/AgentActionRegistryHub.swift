@@ -8,7 +8,7 @@ import AinkradAppKit
 /// unregister. The write-side sibling of `AgentContextRegistryHub`.
 @MainActor
 @Observable
-final class AgentActionRegistryHub {
+public final class AgentActionRegistryHub {
     private struct Entry {
         let appID: String
         let actionID: String
@@ -16,20 +16,22 @@ final class AgentActionRegistryHub {
     }
     private var entries: [AgentActionToken: Entry] = [:]
 
-    func register(appID: String, actionID: String,
+    public init() {}
+
+    public func register(appID: String, actionID: String,
                   handler: @escaping @MainActor (String) async -> AgentActionResult) -> AgentActionToken {
         let token = AgentActionToken()
         entries[token] = Entry(appID: appID, actionID: actionID, handler: handler)
         return token
     }
 
-    func remove(_ token: AgentActionToken) { entries[token] = nil }
+    public func remove(_ token: AgentActionToken) { entries[token] = nil }
 
     /// Invoke the handler registered for `actionID`. Returns nil when none is
     /// registered (e.g. the owning plugin isn't installed/open). First match
     /// wins — actionIDs are namespaced ("terminal.echo", "gitmage.git_op") so a
     /// collision across apps is not expected.
-    func invoke(actionID: String, input: String) async -> AgentActionResult? {
+    public func invoke(actionID: String, input: String) async -> AgentActionResult? {
         guard let entry = entries.values.first(where: { $0.actionID == actionID }) else { return nil }
         return await entry.handler(input)
     }

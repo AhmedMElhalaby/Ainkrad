@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 @testable import Ainkrad
 @testable import AinkradAppKit
+import AinkradHostRuntime
 
 /// A minimal `AinkradApp` conformance for exercising `RegisteredApp.plugin(...)`
 /// directly (the loader's fixtures are binary-less, so the factory is never

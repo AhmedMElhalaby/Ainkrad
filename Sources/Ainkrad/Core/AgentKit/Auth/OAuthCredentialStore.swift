@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Auth/OAuthCredentialStore.swift
 import Foundation
+import AinkradHostRuntime
 
 /// `@MainActor` façade for subscription OAuth: persists token VALUES in the
 /// Keychain (via `SecretStore`, JSON-encoded blob under `oauthSecretID`), tracks

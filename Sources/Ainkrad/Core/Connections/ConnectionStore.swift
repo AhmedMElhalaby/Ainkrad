@@ -1,5 +1,6 @@
 import Observation
 import Foundation
+import AinkradHostRuntime
 
 /// Owns the list of `Connection`s and mediates their secrets. Metadata is
 /// persisted as a document; tokens go to the `SecretStore` (Keychain) only.

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 struct AgentPermissionDocument: PersistableDocument {
     static let documentID = "agent-permissions"

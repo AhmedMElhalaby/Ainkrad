@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Resolves the on-disk layout for skills (global, app-managed):
 ///   Skills/<name>/SKILL.md            installed (marketplace) or local

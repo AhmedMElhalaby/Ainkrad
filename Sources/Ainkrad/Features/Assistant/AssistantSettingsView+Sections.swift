@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 extension AssistantSettingsView {
     // MARK: - Model

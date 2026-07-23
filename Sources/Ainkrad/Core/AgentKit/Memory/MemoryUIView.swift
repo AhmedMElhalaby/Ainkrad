@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// View-model for `MemoryUIView`: owns the three files' in-progress drafts
 /// and the save/undo actions, kept separate from the view body so the

@@ -1,5 +1,6 @@
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("Sky profile — per-theme character")
 struct SkyProfileTests {

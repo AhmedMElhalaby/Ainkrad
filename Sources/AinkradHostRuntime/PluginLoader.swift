@@ -9,12 +9,12 @@ import protocol AinkradAppKit.AinkradApp
 /// into `RegisteredApp`s. Every failure is isolated: it is logged, recorded,
 /// and skipped — the host always finishes loading whatever it can.
 @MainActor
-final class PluginLoader {
+public final class PluginLoader {
     private let signaturePolicy: PluginSignaturePolicy
     private let minSupportedAPIVersion: Int
     private let makeHostServices: (String, PluginPresentation) -> HostServices
 
-    init(signaturePolicy: PluginSignaturePolicy,
+    public init(signaturePolicy: PluginSignaturePolicy,
          minSupportedAPIVersion: Int = GenerationSupport.minSupported,
          makeHostServices: @escaping (String, PluginPresentation) -> HostServices) {
         self.signaturePolicy = signaturePolicy
@@ -22,7 +22,7 @@ final class PluginLoader {
         self.makeHostServices = makeHostServices
     }
 
-    func loadAll(from directories: [URL]) -> (apps: [RegisteredApp], failures: [PluginLoadFailure]) {
+    public func loadAll(from directories: [URL]) -> (apps: [RegisteredApp], failures: [PluginLoadFailure]) {
         var apps: [RegisteredApp] = []
         var failures: [PluginLoadFailure] = []
         for dir in directories {
@@ -56,7 +56,7 @@ final class PluginLoader {
 
     /// Loads and validates a single bundle into a `RegisteredApp`. Public so the
     /// installer can register a freshly-installed bundle without a relaunch.
-    func loadBundle(at url: URL) -> Result<RegisteredApp, PluginRejection> {
+    public func loadBundle(at url: URL) -> Result<RegisteredApp, PluginRejection> {
         guard let bundle = Bundle(url: url) else { return .failure(PluginRejection(reason: "not a bundle")) }
         guard let info = bundle.infoDictionary else { return .failure(PluginRejection(reason: "missing Info.plist")) }
 
@@ -94,7 +94,7 @@ extension RegisteredApp {
     /// host services. Plugins are enabled by default; the registry override
     /// still applies.
     @MainActor
-    static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices, presentation: PluginPresentation) -> RegisteredApp {
+    public static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices, presentation: PluginPresentation) -> RegisteredApp {
         RegisteredApp(
             id: app.id,
             displayName: app.displayName,

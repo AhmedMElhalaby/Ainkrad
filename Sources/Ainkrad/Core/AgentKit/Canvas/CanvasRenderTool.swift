@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Canvas/CanvasRenderTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// The agent renders/updates visual output as canvas elements. This tool ONLY
 /// draws UI from structured data — it executes nothing and touches no files or

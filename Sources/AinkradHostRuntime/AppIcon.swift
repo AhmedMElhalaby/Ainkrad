@@ -1,19 +1,19 @@
 /// The user's app-icon COLOR setting. `.auto` follows the current theme.
 /// Persisted as `GlobalSettings.appIconChoice` (v1 `blue`/`purple` still decode).
-enum AppIconChoice: String, Codable, CaseIterable { case auto, blue, purple }
+public enum AppIconChoice: String, Codable, CaseIterable { case auto, blue, purple }
 
 /// The user's app-icon APPEARANCE setting. `.system` follows the Dock's
 /// light/dark; `.light`/`.dark` pin one variant.
-enum AppIconAppearance: String, Codable, CaseIterable { case system, light, dark }
+public enum AppIconAppearance: String, Codable, CaseIterable { case system, light, dark }
 
 /// A concrete resolved icon color family (never `.auto`). Its rawValue is the
 /// resource-name prefix (`blue`/`purple`).
-enum AppIconColor: String, CaseIterable { case blue, purple }
+public enum AppIconColor: String, CaseIterable { case blue, purple }
 
 /// Pure mapping from the user's settings + theme + current system appearance to
 /// the bundled composed `.icns` resource base-name. AppKit-free and unit-tested.
-enum AppIconResolver {
-    static func color(for choice: AppIconChoice, theme: Theme) -> AppIconColor {
+public enum AppIconResolver {
+    public static func color(for choice: AppIconChoice, theme: Theme) -> AppIconColor {
         switch choice {
         case .auto:   return theme.iconColorFamily
         case .blue:   return .blue
@@ -21,7 +21,7 @@ enum AppIconResolver {
         }
     }
 
-    static func isDark(_ appearance: AppIconAppearance, systemDark: Bool) -> Bool {
+    public static func isDark(_ appearance: AppIconAppearance, systemDark: Bool) -> Bool {
         switch appearance {
         case .system: return systemDark
         case .light:  return false
@@ -29,7 +29,7 @@ enum AppIconResolver {
         }
     }
 
-    static func resourceName(for choice: AppIconChoice, theme: Theme,
+    public static func resourceName(for choice: AppIconChoice, theme: Theme,
                              appearance: AppIconAppearance, systemDark: Bool) -> String {
         let family = color(for: choice, theme: theme).rawValue
         return "\(family)-\(isDark(appearance, systemDark: systemDark) ? "dark" : "light")"

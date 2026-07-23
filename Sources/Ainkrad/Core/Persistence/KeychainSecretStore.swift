@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import AinkradHostRuntime
 
 /// `SecretStore` backed by the macOS Keychain (generic password items).
 /// Each secret is one item keyed by `(service, account=id)`.

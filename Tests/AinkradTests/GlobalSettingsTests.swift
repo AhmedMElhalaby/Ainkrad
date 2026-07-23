@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("GlobalSettings")
 final class GlobalSettingsTests {

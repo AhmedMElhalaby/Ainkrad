@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/MCP/HTTPSSETransport.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Streamable-HTTP/SSE MCP transport for remote servers. HTTPS is enforced at
 /// `start()`. Auth header *values* come from config/SecretStore and are only

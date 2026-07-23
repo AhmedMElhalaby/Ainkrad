@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/AgentTool.swift
 import Foundation
+import AinkradHostRuntime
 
 struct AgentToolSchema: Sendable, Equatable {
     let name: String

@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Replays the transcript's `canvas_render` tool calls to rebuild a `CanvasModel`
 /// from scratch. The canvas view itself never persists mutations directly — the

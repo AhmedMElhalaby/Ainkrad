@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The menu-bar popover: the SAME Assistant surface as ⌘⇧Space, plus live run
 /// status and a quick Agent/model switch. Complements — does not replace —

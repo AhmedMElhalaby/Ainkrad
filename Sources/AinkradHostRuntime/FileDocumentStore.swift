@@ -5,22 +5,22 @@ import Foundation
 /// A file that fails to decode is quarantined (renamed aside) and treated as
 /// absent, so a single corrupt document can never crash launch or block the
 /// rest of persistence. A write-through cache serves repeat reads.
-final class FileDocumentStore: PersistenceStore {
+public final class FileDocumentStore: PersistenceStore {
     private let rootURL: URL
     private let fileManager: FileManager
     private var cache: [String: any PersistableDocument] = [:]
 
     /// Optional sync seam; notified after each successful write. Not owned.
-    weak var syncEngine: SyncEngine?
+    public weak var syncEngine: SyncEngine?
 
-    init(rootURL: URL, fileManager: FileManager = .default) {
+    public init(rootURL: URL, fileManager: FileManager = .default) {
         self.rootURL = rootURL
         self.fileManager = fileManager
         try? fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
     }
 
     /// `~/Library/Application Support/<bundle-id>/Documents`.
-    static func defaultDocumentsURL() -> URL {
+    public static func defaultDocumentsURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
@@ -30,7 +30,7 @@ final class FileDocumentStore: PersistenceStore {
 
     /// Drops the in-memory cache. Call after files are written out of band
     /// (e.g. after an import) so subsequent loads read fresh from disk.
-    func clearCache() { cache.removeAll() }
+    public func clearCache() { cache.removeAll() }
 
     private func fileURL(for id: String) -> URL {
         rootURL.appendingPathComponent("\(id).json")
@@ -48,7 +48,7 @@ final class FileDocumentStore: PersistenceStore {
         let payload: JSONValue
     }
 
-    func load<T: PersistableDocument>(_ type: T.Type) -> T? {
+    public func load<T: PersistableDocument>(_ type: T.Type) -> T? {
         if let cached = cache[T.documentID] as? T { return cached }
         let url = fileURL(for: T.documentID)
         guard fileManager.fileExists(atPath: url.path) else { return nil }
@@ -89,7 +89,7 @@ final class FileDocumentStore: PersistenceStore {
         return value
     }
 
-    func save<T: PersistableDocument>(_ document: T) {
+    public func save<T: PersistableDocument>(_ document: T) {
         let envelope = SaveEnvelope(
             schemaVersion: T.currentSchemaVersion, updatedAt: Date(), payload: document)
         guard let data = try? PersistenceCoding.encoder.encode(envelope) else {
@@ -109,7 +109,7 @@ final class FileDocumentStore: PersistenceStore {
     /// envelope, without needing the document's Swift type. `nil` if absent or
     /// unreadable. Used by one-time migrations that must move a document whose
     /// type no longer lives in the host.
-    func rawPayloadData(forID id: String) -> Data? {
+    public func rawPayloadData(forID id: String) -> Data? {
         let url = fileURL(for: id)
         guard fileManager.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url),
@@ -123,7 +123,7 @@ final class FileDocumentStore: PersistenceStore {
     /// one-time migrations moving a document whose type no longer lives in
     /// the host (e.g. settings that have since moved to an App Store
     /// plugin).
-    func saveRawPayload(_ payload: JSONValue, forID id: String, schemaVersion: Int) {
+    public func saveRawPayload(_ payload: JSONValue, forID id: String, schemaVersion: Int) {
         let envelope = RawEnvelope(schemaVersion: schemaVersion, updatedAt: Date(), payload: payload)
         guard let data = try? PersistenceCoding.encoder.encode(envelope) else {
             Log.persistence.error("Failed to encode raw payload for \(id, privacy: .public)")
@@ -138,7 +138,7 @@ final class FileDocumentStore: PersistenceStore {
         }
     }
 
-    func delete<T: PersistableDocument>(_ type: T.Type) {
+    public func delete<T: PersistableDocument>(_ type: T.Type) {
         cache[T.documentID] = nil
         try? fileManager.removeItem(at: fileURL(for: T.documentID))
     }

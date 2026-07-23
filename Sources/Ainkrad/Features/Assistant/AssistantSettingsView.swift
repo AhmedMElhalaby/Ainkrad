@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Assistant's Settings surface (rendered inside the BUILT-IN APPS
 /// section of `SettingsOverlayView`), organized into a tab shell —

@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Leading history-sidebar toggle with a hover highlight (motion is first-class in the HUD).
 struct HoverSidebarToggle: View {

@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Settings → App Icon: manual picker for the running app's Dock icon.
 /// COLOR (Auto/Blue/Purple; Auto follows the theme) and APPEARANCE

@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Manages configured MCP servers (`mcp-servers.json`) plus their secrets.
 ///

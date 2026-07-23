@@ -3,19 +3,34 @@ import SwiftUI
 /// Semantic color tokens for one theme. Views read these — never a raw hex
 /// literal — so a view is automatically correct in both themes. See
 /// WorkShop/Ainkrad/06 Brand/Color Tokens.md for the source values.
-struct DesignTokens: Equatable {
-    let background: Color
-    let surface: Color
-    let surfaceElevated: Color
-    let accentPrimary: Color
-    let accentSecondary: Color
-    let accentTertiary: Color
-    let foreground: Color
-    let success: Color
-    let warning: Color
-    let danger: Color
+public struct DesignTokens: Equatable, Sendable {
+    public let background: Color
+    public let surface: Color
+    public let surfaceElevated: Color
+    public let accentPrimary: Color
+    public let accentSecondary: Color
+    public let accentTertiary: Color
+    public let foreground: Color
+    public let success: Color
+    public let warning: Color
+    public let danger: Color
 
-    static let neonBlue = DesignTokens(
+    public init(background: Color, surface: Color, surfaceElevated: Color,
+                accentPrimary: Color, accentSecondary: Color, accentTertiary: Color,
+                foreground: Color, success: Color, warning: Color, danger: Color) {
+        self.background = background
+        self.surface = surface
+        self.surfaceElevated = surfaceElevated
+        self.accentPrimary = accentPrimary
+        self.accentSecondary = accentSecondary
+        self.accentTertiary = accentTertiary
+        self.foreground = foreground
+        self.success = success
+        self.warning = warning
+        self.danger = danger
+    }
+
+    public static let neonBlue = DesignTokens(
         background: Color(hex: "0A0E17"),
         surface: Color(hex: "111827"),
         surfaceElevated: Color(hex: "1A2233"),
@@ -28,7 +43,7 @@ struct DesignTokens: Equatable {
         danger: Color(hex: "F85149")
     )
 
-    static let cyberPurple = DesignTokens(
+    public static let cyberPurple = DesignTokens(
         background: Color(hex: "080814"),
         surface: Color(hex: "141420"),
         surfaceElevated: Color(hex: "1F182E"),
@@ -47,7 +62,7 @@ struct DesignTokens: Equatable {
     // Dracula — deepened background (official #282A36 becomes the `surface`)
     // so the vivid purple/pink accents glow; tertiary corrected to the
     // canonical Dracula green (success), not cyan.
-    static let dracula = DesignTokens(
+    public static let dracula = DesignTokens(
         background: Color(hex: "1A1B23"),
         surface: Color(hex: "282A36"),
         surfaceElevated: Color(hex: "343746"),
@@ -63,7 +78,7 @@ struct DesignTokens: Equatable {
     // Nord — polar-night background pushed darker than nord0 (which becomes
     // `surface`) so the frost accents stop looking washed out; accents lifted
     // toward luminous frost while staying in the Nord blue family.
-    static let nord = DesignTokens(
+    public static let nord = DesignTokens(
         background: Color(hex: "1B2029"),
         surface: Color(hex: "2E3440"),
         surfaceElevated: Color(hex: "3B4252"),
@@ -78,7 +93,7 @@ struct DesignTokens: Equatable {
 
     // Tokyo Night — background nudged darker; tertiary corrected to the
     // canonical Tokyo Night green (success) rather than cyan.
-    static let tokyoNight = DesignTokens(
+    public static let tokyoNight = DesignTokens(
         background: Color(hex: "15161F"),
         surface: Color(hex: "1A1B26"),
         surfaceElevated: Color(hex: "24283B"),
@@ -93,7 +108,7 @@ struct DesignTokens: Equatable {
 
     // Gruvbox — "hard dark" background (bg0_h) so the warm orange/yellow
     // accents read against a properly dark base.
-    static let gruvbox = DesignTokens(
+    public static let gruvbox = DesignTokens(
         background: Color(hex: "1D2021"),
         surface: Color(hex: "282828"),
         surfaceElevated: Color(hex: "3C3836"),
@@ -109,7 +124,7 @@ struct DesignTokens: Equatable {
     // Solarized Dark — accent blue brightened for presence and, crucially,
     // the foreground lifted off base0 (#93A1A1, famously low-contrast) to a
     // legible bright tone while keeping the Solarized cast.
-    static let solarizedDark = DesignTokens(
+    public static let solarizedDark = DesignTokens(
         background: Color(hex: "002B36"),
         surface: Color(hex: "073642"),
         surfaceElevated: Color(hex: "0E4A5A"),
@@ -126,7 +141,7 @@ struct DesignTokens: Equatable {
     /// unchanged when `color` is `nil` — see AIN-143 (custom accent color).
     /// `DesignTokens`' fields are all `let`, so this builds a new instance
     /// rather than mutating in place.
-    func overridingAccentPrimary(_ color: Color?) -> DesignTokens {
+    public func overridingAccentPrimary(_ color: Color?) -> DesignTokens {
         guard let color else { return self }
         return DesignTokens(
             background: background,

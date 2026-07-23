@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// A payload-carrying enum with a hand-written `Codable` conformance (M7 Wave
 /// B): a future case this build doesn't know yet must decode to `.unknown`

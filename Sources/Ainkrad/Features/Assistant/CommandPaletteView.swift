@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// `/`-triggered slash-command palette: the fuzzy-filtered `CommandRegistry.all()`
 /// list, GROUPED into ordered category sections, rendered through the shared

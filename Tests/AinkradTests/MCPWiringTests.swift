@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Task 10: proves the wiring contract AppEnvironment relies on — without touching
 /// AppEnvironment itself (which spins up real subsystems) — using the same injectable

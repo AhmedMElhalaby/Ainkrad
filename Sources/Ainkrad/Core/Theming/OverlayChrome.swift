@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Shared visual language for the summonable HUD overlays — Launcher,
 /// Settings, App Store, Workspace Overview, Quit. Centralizing the backdrop

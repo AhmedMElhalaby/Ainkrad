@@ -1,66 +1,66 @@
 /// How the Launcher (⌘K) lays out apps — a vertical list (spotlight-style,
 /// the default) or a grid of icon tiles. Toggled in Settings → General.
-enum LauncherViewMode: String, Codable, CaseIterable, Sendable {
+public enum LauncherViewMode: String, Codable, CaseIterable, Sendable {
     case list
     case grid
-    var label: String { self == .list ? "List" : "Grid" }
+    public var label: String { self == .list ? "List" : "Grid" }
 }
 
 /// App-wide settings persisted through `SettingsStore`. `theme` defaults to
 /// `.neonBlue` on first launch (see ADR-0006 Theming Approach). Decoding
 /// tolerates payloads written before/after fields changed — a missing `theme`
 /// falls back to the default.
-struct GlobalSettings: PersistableDocument {
-    static let documentID = "global-settings"
-    var theme: Theme = .neonBlue
-    var appIconChoice: AppIconChoice = .auto
-    var appIconAppearance: AppIconAppearance = .system
-    var launcherViewMode: LauncherViewMode = .list
-    var confirmBeforeQuit: Bool = true
-    var uiFontScale: UIFontScale = .medium
-    var uiFontFamily: UIFontFamily = .exo2
+public struct GlobalSettings: PersistableDocument {
+    public static let documentID = "global-settings"
+    public var theme: Theme = .neonBlue
+    public var appIconChoice: AppIconChoice = .auto
+    public var appIconAppearance: AppIconAppearance = .system
+    public var launcherViewMode: LauncherViewMode = .list
+    public var confirmBeforeQuit: Bool = true
+    public var uiFontScale: UIFontScale = .medium
+    public var uiFontFamily: UIFontFamily = .exo2
     /// A user-picked accent override, as a 6-digit RRGGBB hex string (no
     /// `#`). `nil` means "use the current theme's accent" — see AIN-143.
-    var accentColorHex: String? = nil
+    public var accentColorHex: String? = nil
     /// Shows the full-screen status bar (clock/network/battery) in the top
     /// title strip while in full-screen — see AIN-109. Has no effect in
     /// windowed mode.
-    var showFullScreenStatusBar: Bool = true
+    public var showFullScreenStatusBar: Bool = true
     /// Whether UI sound effects (open/close/install/etc — see AIN-108) play
     /// at all. Muting takes effect immediately, on the very next sound.
-    var soundEnabled: Bool = true
+    public var soundEnabled: Bool = true
     /// Playback volume (0...1) for UI sound effects — see AIN-108.
-    var soundVolume: Double = 0.7
+    public var soundVolume: Double = 0.7
     /// Per-event enable switches, keyed by `UISound.rawValue`. A missing key
     /// means "enabled" — only explicit opt-outs are stored, so legacy docs and
     /// future events need no migration.
-    var soundEventEnabled: [String: Bool] = [:]
+    public var soundEventEnabled: [String: Bool] = [:]
     /// Per-event effect overrides, keyed by `UISound.rawValue`, valued by the
     /// chosen effect's `UISound.rawValue`. A missing key means "play the
     /// event's own sound". An unknown value (e.g. an effect removed in a later
     /// build) is ignored at read time and falls back to the event's own sound.
-    var soundEventEffects: [String: String] = [:]
+    public var soundEventEffects: [String: String] = [:]
     /// Master switch for the ambient sky's motion (Settings → Living Sky).
     /// Off freezes every effect in place; the scene stays, the motion stops.
-    var skyMotionEnabled: Bool = true
+    public var skyMotionEnabled: Bool = true
     /// Ambient-sky animation speed multiplier, clamped by `SkySettingsStore`
     /// to 0.5…1.5.
-    var skyMotionSpeed: Double = 1.0
+    public var skyMotionSpeed: Double = 1.0
     /// Per-effect switches, keyed by `SkyEffect.rawValue`. A missing key
     /// means "enabled" — only explicit opt-outs are stored, so legacy docs
     /// and future effects need no migration.
-    var skyEffectEnabled: [String: Bool] = [:]
+    public var skyEffectEnabled: [String: Bool] = [:]
     /// Background opacity (0.3…1.0) of the summonable HUD overlays
     /// (Launcher / Settings / App Store / Workspace Overview / Quit). Below 1
     /// the blurred workspace behind shows through the panel.
-    var overlayBackgroundOpacity: Double = 0.94
+    public var overlayBackgroundOpacity: Double = 0.94
     /// Frost the overlay panel with a blur material behind its tint.
-    var overlayBlurEnabled: Bool = true
+    public var overlayBlurEnabled: Bool = true
     /// AINKRAD-controlled motion preference, independent of the macOS
     /// system-level Reduce Motion toggle. Default false = motion on.
-    var uiReduceMotion: Bool = false
+    public var uiReduceMotion: Bool = false
 
-    init(theme: Theme = .neonBlue,
+    public init(theme: Theme = .neonBlue,
          appIconChoice: AppIconChoice = .auto,
          appIconAppearance: AppIconAppearance = .system,
          launcherViewMode: LauncherViewMode = .list,
@@ -100,7 +100,7 @@ struct GlobalSettings: PersistableDocument {
         self.uiReduceMotion = uiReduceMotion
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         theme = try container.decodeIfPresent(Theme.self, forKey: .theme) ?? .neonBlue
         appIconChoice = try container.decodeIfPresent(AppIconChoice.self, forKey: .appIconChoice) ?? .auto

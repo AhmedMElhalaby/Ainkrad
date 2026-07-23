@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import AinkradHostRuntime
 
 /// Owns the Settings → General section: the full-screen status bar toggle
 /// (AIN-109) and the sound effects toggle/volume (AIN-108). Loads from

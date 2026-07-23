@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 private struct StubService: TranscriptionService {
     let tag: String

@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Overflow panel for `AssistantComposerBar` (Wave 3 Task 7).
 ///

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Persisted root directory for the `@`-mention file index (M7 Slice 5c Task 22).
 /// Defaults to the user's home directory until a later folder-picker (Task 22b,

@@ -5,18 +5,20 @@ import Foundation
 /// one). `requestOpen` asks the host to open the target's pane. Mirrors the
 /// AgentContext/Action hub shape (shared, `@MainActor`).
 @MainActor
-final class PluginLaunchHub {
+public final class PluginLaunchHub {
     private var pending: [String: String] = [:]
     private var openHandler: ((String) -> Void)?
 
+    public init() {}
+
     /// Wired once in bootstrap to open a pane via the WorkspaceManager.
-    func setOpenHandler(_ handler: @escaping (String) -> Void) { openHandler = handler }
+    public func setOpenHandler(_ handler: @escaping (String) -> Void) { openHandler = handler }
 
-    func enqueue(target appID: String, payload: String?) { pending[appID] = payload }
+    public func enqueue(target appID: String, payload: String?) { pending[appID] = payload }
 
-    func requestOpen(_ appID: String) { openHandler?(appID) }
+    public func requestOpen(_ appID: String) { openHandler?(appID) }
 
-    func takePending(for appID: String) -> String? {
+    public func takePending(for appID: String) -> String? {
         defer { pending[appID] = nil }
         return pending[appID]
     }

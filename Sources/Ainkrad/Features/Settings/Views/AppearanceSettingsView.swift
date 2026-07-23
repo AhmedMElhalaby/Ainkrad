@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Ainkrad → Appearance section: a theme picker bound to `ThemeManager`.
 /// Selecting a theme applies tokens immediately, with no Save button. The

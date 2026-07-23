@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 @testable import Ainkrad
 import AinkradAppKit
+import AinkradHostRuntime
 
 @Suite("HostServices theme")
 @MainActor

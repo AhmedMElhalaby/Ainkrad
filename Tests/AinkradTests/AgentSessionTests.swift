@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import AinkradAppKit
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// A scripted `LLMProvider` double. `send` records whether it was invoked and
 /// replays a fixed event script regardless of arguments.

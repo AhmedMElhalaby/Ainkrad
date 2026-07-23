@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// `LLMProvider` conformer that streams from any OpenAI-compatible
 /// `POST {baseURL}/chat/completions` endpoint (OpenAI, OpenRouter, Groq,

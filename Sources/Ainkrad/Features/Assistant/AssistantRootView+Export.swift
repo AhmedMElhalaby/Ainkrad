@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Export/redaction flow for `AssistantRootView` (relocated from
 /// `AssistantComposerBar+Export.swift` so the modal presents over the full

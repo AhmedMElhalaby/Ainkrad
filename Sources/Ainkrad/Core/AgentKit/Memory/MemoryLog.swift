@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// The reviewable audit trail of every write to the host-internal memory
 /// files (USER.md, MEMORY.md, AGENTS.md): who/what triggered the write, what

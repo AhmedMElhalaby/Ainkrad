@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// M7 Slice 8 (Voice) facade: composes the on-device + provider transcription
 /// backends behind `TranscriptionBackendSelector`, then wires the push-to-talk

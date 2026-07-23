@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 struct AgentModelConfig: Equatable, Sendable {
     var model: String          // e.g. "claude-opus-4-8" / "gpt-5" / "gemini-2.5-pro"

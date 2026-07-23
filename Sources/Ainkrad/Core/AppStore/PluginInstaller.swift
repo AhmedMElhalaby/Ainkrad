@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import AinkradAppKit
+import AinkradHostRuntime
 
 enum AppStoreError: Error, Equatable {
     case download(String)

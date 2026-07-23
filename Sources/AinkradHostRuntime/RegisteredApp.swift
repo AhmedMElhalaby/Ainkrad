@@ -3,7 +3,7 @@ import AinkradAppKit
 import protocol AinkradAppKit.AinkradApp
 
 /// Where a registered app comes from.
-enum AppSource: Equatable {
+public enum AppSource: Equatable {
     case builtIn
     case plugin(url: URL, apiVersion: Int)
 }
@@ -11,29 +11,51 @@ enum AppSource: Equatable {
 /// The host-side value the registry holds — the single representation both
 /// compiled-in `BuiltInApp`s and dynamically-loaded `AinkradApp` bundles map
 /// into. View factories are closures so the concrete app type never leaks.
-struct RegisteredApp: Identifiable {
-    let id: String
-    let displayName: String
-    let icon: String
+public struct RegisteredApp: Identifiable {
+    public let id: String
+    public let displayName: String
+    public let icon: String
     /// Short App Store description for built-ins (which have no catalog entry).
     /// Empty for plugins — their description comes from the catalog. Defaulted
     /// so existing construction sites are unaffected.
-    var summary: String = ""
-    let isEnabledByDefault: Bool
-    let source: AppSource
-    let makeRootView: @MainActor () -> AnyView
-    let makeSettingsView: @MainActor () -> AnyView
-    let chromeFill: @MainActor () -> Color?
+    public var summary: String = ""
+    public let isEnabledByDefault: Bool
+    public let source: AppSource
+    public let makeRootView: @MainActor () -> AnyView
+    public let makeSettingsView: @MainActor () -> AnyView
+    public let chromeFill: @MainActor () -> Color?
     /// How the app's window should be presented (Slice 3): tiled into the
     /// workspace layout (`.pane`, the default) or summoned as a floating
     /// host overlay (`.overlay`) that auto-dismisses when any app opens.
-    var presentation: PluginPresentation = .pane
+    public var presentation: PluginPresentation = .pane
+
+    public init(id: String, displayName: String, icon: String, summary: String = "",
+                isEnabledByDefault: Bool, source: AppSource,
+                makeRootView: @escaping @MainActor () -> AnyView,
+                makeSettingsView: @escaping @MainActor () -> AnyView,
+                chromeFill: @escaping @MainActor () -> Color?,
+                presentation: PluginPresentation = .pane) {
+        self.id = id
+        self.displayName = displayName
+        self.icon = icon
+        self.summary = summary
+        self.isEnabledByDefault = isEnabledByDefault
+        self.source = source
+        self.makeRootView = makeRootView
+        self.makeSettingsView = makeSettingsView
+        self.chromeFill = chromeFill
+        self.presentation = presentation
+    }
 }
 
 /// A bundle the loader skipped, surfaced for the later App Store UI.
-struct PluginLoadFailure: Equatable {
-    let url: URL
-    let reason: String
+public struct PluginLoadFailure: Equatable {
+    public let url: URL
+    public let reason: String
+    public init(url: URL, reason: String) {
+        self.url = url
+        self.reason = reason
+    }
 }
 
 extension RegisteredApp {
@@ -41,7 +63,7 @@ extension RegisteredApp {
     /// binding it to its scoped host services. `source == .builtIn`, so the
     /// registry gives it priority over any same-id plugin.
     @MainActor
-    static func builtIn(
+    public static func builtIn(
         _ app: any AinkradApp.Type,
         isEnabledByDefault: Bool = true,
         summary: String = "",

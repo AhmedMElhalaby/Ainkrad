@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/MCP/MCPClient.swift
 import Foundation
+import AinkradHostRuntime
 
 /// One JSON-RPC client per configured MCP server. Owns the transport, performs
 /// the MCP handshake, and correlates requests to responses by id. Malformed

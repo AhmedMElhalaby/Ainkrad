@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// How a connection authenticates. `apiKey` uses the Keychain token at `secretID`;
 /// `subscription` uses an OAuth bearer token owned by `OAuthCredentialStore`.

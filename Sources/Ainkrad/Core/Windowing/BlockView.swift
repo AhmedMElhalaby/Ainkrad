@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// One pane: a floating, rounded panel over the sky — HUD header (neon
 /// tile art, Exo 2 title, magnify, styled ×) above the hosted app content.

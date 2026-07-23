@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Transport whose `start()` always throws — used to make a server's connect fail
 /// deterministically (no dependence on timing/timeouts).

@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradHostRuntime
 
 /// A summonable HUD overlay hosting the Assistant surface (bound to the shared
 /// `AgentSession`) so the user can ask from anywhere: streaming, gated tools,

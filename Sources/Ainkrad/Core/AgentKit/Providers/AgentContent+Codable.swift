@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 // Manual Codable for the block enum — associated values need an explicit
 // discriminator. Mirrors the wire shape loosely but is an internal on-disk

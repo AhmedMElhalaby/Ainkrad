@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Assistant Block's content: a transcript bound to the host's single
 /// `AgentSession`, a collapsible "thinking" disclosure, and a composer. Reads

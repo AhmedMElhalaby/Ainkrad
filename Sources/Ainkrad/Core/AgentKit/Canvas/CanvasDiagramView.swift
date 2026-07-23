@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import AppKit
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Which concrete branch `CanvasDiagramView` will render for a given element.
 /// A pure, synchronous seam over the kind/body dispatch logic so the routing

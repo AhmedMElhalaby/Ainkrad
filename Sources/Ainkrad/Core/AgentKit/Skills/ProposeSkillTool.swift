@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Skills/ProposeSkillTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Lets the agent DRAFT a reusable skill after a gnarly task. The draft lands in
 /// `_proposed/` (`SkillRegistry.propose`) and never influences behaviour until

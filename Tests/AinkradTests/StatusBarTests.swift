@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Pure formatters + models behind the full-screen status bar (AIN-109):
 /// `NetworkStatus`, `BatteryInfo`, `StatusClock`, and the

@@ -1,5 +1,6 @@
 import Foundation
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the fifth block: subagent

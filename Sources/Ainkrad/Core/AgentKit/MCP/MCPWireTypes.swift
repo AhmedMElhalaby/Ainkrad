@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 enum MCPError: Error, Equatable {
     case transport(String)

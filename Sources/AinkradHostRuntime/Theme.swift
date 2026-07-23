@@ -2,7 +2,7 @@
 /// (Neon Blue, Cyber Purple) are the brand themes; the rest are well-known
 /// palettes ported to full app themes (they drive both the app UI and the
 /// terminal's Match-Theme colors). See UI Style Guidelines.
-enum Theme: String, Codable, CaseIterable {
+public enum Theme: String, Codable, CaseIterable {
     case neonBlue
     case cyberPurple
     case dracula
@@ -11,7 +11,7 @@ enum Theme: String, Codable, CaseIterable {
     case gruvbox
     case solarizedDark
 
-    var tokens: DesignTokens {
+    public var tokens: DesignTokens {
         switch self {
         case .neonBlue: return .neonBlue
         case .cyberPurple: return .cyberPurple
@@ -24,7 +24,7 @@ enum Theme: String, Codable, CaseIterable {
     }
 
     /// Human-readable name for the theme picker.
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .neonBlue: return "Neon Blue"
         case .cyberPurple: return "Cyber Purple"
@@ -38,7 +38,7 @@ enum Theme: String, Codable, CaseIterable {
 
     /// Which app-icon color family this theme uses when the App Icon color is
     /// set to Auto. See App Icon Picker v2 — Design.
-    var iconColorFamily: AppIconColor {
+    public var iconColorFamily: AppIconColor {
         switch self {
         case .cyberPurple, .dracula: return .purple
         case .neonBlue, .nord, .tokyoNight, .gruvbox, .solarizedDark: return .blue
@@ -49,7 +49,7 @@ enum Theme: String, Codable, CaseIterable {
     /// `tokens`; this tunes *emphasis* so each theme's sky reads distinctly —
     /// Gruvbox a warm ember-forward sunset, Nord a cool misty calm — without
     /// rewriting any effect. See `SkyProfile`.
-    var skyProfile: SkyProfile {
+    public var skyProfile: SkyProfile {
         switch self {
         //                             aurora, embers, mist, fireflies, rays
         case .neonBlue:     return SkyProfile(1.00, 0.90, 0.90, 1.00, 1.00)
@@ -67,14 +67,14 @@ enum Theme: String, Codable, CaseIterable {
 /// Every field scales an effect's baseline strength; `1.0` is unchanged, so
 /// `.neutral` reproduces the original look. Colors are unaffected — those come
 /// from `DesignTokens` — this is purely how loud each effect plays.
-struct SkyProfile: Equatable, Hashable {
-    let aurora: Double
-    let embers: Double
-    let mist: Double
-    let fireflies: Double
-    let lightRays: Double
+public struct SkyProfile: Equatable, Hashable, Sendable {
+    public let aurora: Double
+    public let embers: Double
+    public let mist: Double
+    public let fireflies: Double
+    public let lightRays: Double
 
-    init(_ aurora: Double, _ embers: Double, _ mist: Double,
+    public init(_ aurora: Double, _ embers: Double, _ mist: Double,
          _ fireflies: Double, _ lightRays: Double) {
         self.aurora = aurora
         self.embers = embers
@@ -83,5 +83,5 @@ struct SkyProfile: Equatable, Hashable {
         self.lightRays = lightRays
     }
 
-    static let neutral = SkyProfile(1, 1, 1, 1, 1)
+    public static let neutral = SkyProfile(1, 1, 1, 1, 1)
 }

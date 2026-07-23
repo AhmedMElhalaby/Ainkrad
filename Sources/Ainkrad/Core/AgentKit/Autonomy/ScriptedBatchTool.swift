@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Autonomy/ScriptedBatchTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// `AgentTool` that batches multiple steps into one sandboxed script run
 /// (collapses a multi-step pipeline into a single pass), routed through

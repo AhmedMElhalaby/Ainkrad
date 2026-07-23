@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Docked approval bar shown just above the composer while a tool call awaits
 /// the user's decision. The operation's details (identity/summary/diff) stay in
@@ -65,7 +66,7 @@ private struct ToolCardButton: View {
         Button(action: action) {
             Text(title)
                 .font(AinkradFont.display(12, weight: filled ? .semibold : .regular))
-                .foregroundStyle(filled ? tint.contrastingText : tint.opacity(isHovering ? 1 : 0.85))
+                .foregroundStyle(filled ? tint.hostContrastingText : tint.opacity(isHovering ? 1 : 0.85))
                 .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(
                     ChamferShape(cut: AinkradRadius.sm)

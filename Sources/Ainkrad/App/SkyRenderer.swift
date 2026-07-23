@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradHostRuntime
 
 extension Color {
     /// Linear blend in sRGB toward `other` (`t` clamped to 0…1). Used to

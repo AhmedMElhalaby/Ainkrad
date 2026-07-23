@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 struct CanvasModel: Codable, Equatable, Sendable {
     static let schemaVersion = 1

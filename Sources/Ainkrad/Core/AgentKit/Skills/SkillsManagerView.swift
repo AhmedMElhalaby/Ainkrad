@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// View-model for `SkillsManagerView`. Owns the local-skill editor drafts and
 /// the bind/unbind flow; kept separate from the view body so the

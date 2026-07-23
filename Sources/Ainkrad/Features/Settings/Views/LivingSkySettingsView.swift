@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Settings → Living Sky: the master animate switch, a speed control, and a
 /// switch per ambient-sky effect. Bound to `SkySettingsStore`, persisted

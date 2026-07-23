@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Installs / uninstalls skill catalog items. Skills are markdown assets: fetch
 /// the SKILL.md, validate it, write it to Skills/<appID>/, and record installed
