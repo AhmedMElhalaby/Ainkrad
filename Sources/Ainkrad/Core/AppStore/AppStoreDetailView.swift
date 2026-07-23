@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The App Store's per-app detail page (AIN-147): large icon, name, author,
 /// version, long description, screenshot gallery, links, and the primary
@@ -36,6 +37,12 @@ struct AppStoreDetailView: View {
                     Text(informationLine)
                         .font(.system(size: 11))
                         .foregroundStyle(tokens.foreground.opacity(0.5))
+                }
+                if let secretKeys = requiredSecretKeys {
+                    VStack(alignment: .leading, spacing: 8) {
+                        AinkradSectionHeader(title: "Requires Secrets")
+                        requiredSecretsRow(secretKeys)
+                    }
                 }
                 if let screenshots = entry?.screenshots, !screenshots.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -97,7 +104,17 @@ struct AppStoreDetailView: View {
         switch row.kind {
         case .builtIn: return "Built-in"
         case .plugin: return "Plugin"
+        case .mcpServer: return "MCP Server"
         }
+    }
+
+    /// Secret env/header key NAMES the MCP server needs (never values — those
+    /// are supplied later in the MCP manager). `nil` for non-MCP rows or an
+    /// MCP entry that needs no secrets.
+    private var requiredSecretKeys: [String]? {
+        guard let mcp = entry?.mcp else { return nil }
+        let keys = mcp.envKeys + mcp.headerKeys
+        return keys.isEmpty ? nil : keys
     }
 
     /// `version · author · kind` — author omitted when nil/empty.
@@ -155,6 +172,19 @@ struct AppStoreDetailView: View {
                 Image(systemName: systemImage).foregroundStyle(tint.opacity(0.7))
             } else {
                 AinkradSpinner()
+            }
+        }
+    }
+
+    // MARK: - MCP required secrets
+
+    /// The secret KEY NAMES this MCP server needs — never values. Shown as
+    /// chips so the user knows what to add in the MCP manager before
+    /// enabling it there; values are entered in Settings → MCP Servers, not here.
+    private func requiredSecretsRow(_ keys: [String]) -> some View {
+        HStack(spacing: 8) {
+            ForEach(keys, id: \.self) { key in
+                AinkradChip(label: key, systemName: "key.fill")
             }
         }
     }

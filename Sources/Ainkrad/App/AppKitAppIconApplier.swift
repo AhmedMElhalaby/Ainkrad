@@ -1,4 +1,5 @@
 import AppKit
+import AinkradHostRuntime
 
 /// Real `AppIconApplying`: sets the running app's Dock icon to the composed
 /// `.icns` resolved from the user's color + appearance settings and (for Auto)

@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradHostRuntime
 
 /// Slice 3's floating host overlay for `.overlay`-presentation plugin apps —
 /// summoned from the Launcher instead of tiling into the workspace layout.

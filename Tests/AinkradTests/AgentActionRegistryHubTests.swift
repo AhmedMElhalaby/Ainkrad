@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import AinkradAppKit
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor
 @Suite("AgentActionRegistryHub")

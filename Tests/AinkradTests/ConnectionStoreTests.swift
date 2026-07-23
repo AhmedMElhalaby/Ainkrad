@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("ConnectionStore")
 final class ConnectionStoreTests {
@@ -27,6 +28,21 @@ final class ConnectionStoreTests {
         let doc = persistence.load(ConnectionsDocument.self)
         #expect(doc?.connections.count == 1)
         #expect(doc?.connections.first?.displayName == "Work")
+    }
+
+    @Test("adding a subscription connection sets authMode and stores no token")
+    @MainActor func addSubscriptionConnectionIsKeyless() {
+        let store = makeStore()
+        let claude = ProviderPreset.preset(id: "claude")
+        let connection = store.addConnection(
+            preset: claude, displayName: "Claude", baseURL: claude.defaultBaseURL,
+            token: "", authMode: .subscription)
+
+        #expect(connection.authMode == .subscription)
+        #expect(store.token(for: connection) == nil)   // keyless — no secret written
+        // authMode round-trips through the persisted document.
+        let doc = persistence.load(ConnectionsDocument.self)
+        #expect(doc?.connections.first?.authMode == .subscription)
     }
 
     @Test("connections survive a fresh store (metadata reloads; secret stays in keychain)")

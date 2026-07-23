@@ -3,6 +3,7 @@ import Foundation
 import CryptoKit
 import SwiftUI
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor
 struct PluginLifecycleTests {
@@ -14,16 +15,18 @@ struct PluginLifecycleTests {
         let b = dir.appendingPathComponent("hello.bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: b, withIntermediateDirectories: true)
         let info: [String: Any] = ["AinkradAppID": "hello", "AinkradDisplayName": "Hello",
-            "AinkradIconSymbol": "app", "AinkradAPIVersion": 1, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
+            "AinkradIconSymbol": "app", "AinkradAPIVersion": 7, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: b.appendingPathComponent("Info.plist"))
         let zip = dir.appendingPathComponent("hello.bundle.zip")
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         p.arguments = ["-c", "-k", dir.appendingPathComponent("hello.bundle").path, zip.path]; try p.run(); p.waitUntilExit()
         return try Data(contentsOf: zip)
     }
+    // `author`/non-empty `description` required to pass `StorePolicy` at
+    // install intake (see PluginInstallerStorePolicyTests).
     private func entry(_ v: String, url: URL, sha: String) -> CatalogEntry {
-        CatalogEntry(appID: "hello", displayName: "Hello", icon: "app", description: "", version: v,
-                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/hello")
+        CatalogEntry(appID: "hello", displayName: "Hello", icon: "app", description: "Test fixture plugin.", version: v,
+                     apiVersion: 7, downloadURL: url, sha256: sha, sourceRepo: "o/hello", author: "Ainkrad")
     }
     private func hello(_ url: URL) -> RegisteredApp {
         RegisteredApp(id: "hello", displayName: "Hello", icon: "app", isEnabledByDefault: true,

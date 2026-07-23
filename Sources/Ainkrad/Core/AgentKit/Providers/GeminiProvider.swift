@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Providers/GeminiProvider.swift
 import Foundation
+import AinkradHostRuntime
 
 /// `LLMProvider` conformer for Google's native Gemini API
 /// (`POST {baseURL}/models/{model}:streamGenerateContent?alt=sse`). Gemini has
@@ -19,15 +20,17 @@ struct GeminiProvider: LLMProvider {
         system: String,
         tools: [AgentToolSchema],
         model: AgentModelConfig,
-        apiKey: String
+        credential: ProviderCredential
     ) -> AsyncThrowingStream<AgentEvent, Error> {
-        AsyncThrowingStream { continuation in
+        let apiKey: String = { if case let .apiKey(k) = credential { return k } else { return "" } }()
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let request = Self.makeRequest(baseURL: baseURL, messages: messages, system: system,
                                                    tools: tools, model: model, apiKey: apiKey)
                     let bytes = try await http.post(request)
                     var finishReason: String?
+                    var latestUsage: TokenUsage?
 
                     for try await payload in SSEParser.events(from: bytes) {
                         guard let data = payload.data(using: .utf8) else { continue }
@@ -36,6 +39,13 @@ struct GeminiProvider: LLMProvider {
                         if let message = chunk.error?.message {
                             continuation.yield(.failed(message))
                             continue
+                        }
+                        // usageMetadata is cumulative-so-far and may arrive on a final chunk with
+                        // empty `candidates` — parse it independent of the candidates guard below
+                        // so that chunk isn't dropped, and keep only the latest (last-wins) value
+                        // instead of summing per chunk (AgentSession sums `.usage` events).
+                        if let json = JSONValue.parse(payload), let usage = Self.usage(from: json) {
+                            latestUsage = usage
                         }
                         guard let candidate = chunk.candidates?.first else { continue }
                         for part in candidate.content?.parts ?? [] {
@@ -51,6 +61,9 @@ struct GeminiProvider: LLMProvider {
                         }
                         if let reason = candidate.finishReason { finishReason = reason }
                     }
+                    if let usage = latestUsage {
+                        continuation.yield(.usage(usage))
+                    }
                     continuation.yield(.done(stopReason: finishReason))
                     continuation.finish()
                 } catch StreamingHTTPError.status(_, let body) {
@@ -63,6 +76,17 @@ struct GeminiProvider: LLMProvider {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    // MARK: - Usage parsing
+
+    /// `usageMetadata.promptTokenCount`/`candidatesTokenCount` (+ `cachedContentTokenCount`).
+    /// The `GenerateContentChunk` Decodable has no usage field, so this reads the raw JSON.
+    nonisolated static func usage(from json: JSONValue) -> TokenUsage? {
+        guard let meta = json["usageMetadata"] else { return nil }
+        func int(_ k: String) -> Int { if case .number(let n)? = meta[k] { return Int(n) }; return 0 }
+        return TokenUsage(input: int("promptTokenCount"), output: int("candidatesTokenCount"),
+                          cacheRead: int("cachedContentTokenCount"), cacheWrite: 0)
     }
 
     // MARK: - Request building
@@ -92,7 +116,7 @@ struct GeminiProvider: LLMProvider {
     }
 
     /// Maps one `AgentMessage` to a Gemini `content` object. Assistant → "model".
-    private static func wireContent(_ message: AgentMessage) -> [String: Any] {
+    nonisolated private static func wireContent(_ message: AgentMessage) -> [String: Any] {
         let role = message.role == .assistant ? "model" : "user"
         let parts: [[String: Any]] = message.content.map { block in
             switch block {
@@ -103,9 +127,16 @@ struct GeminiProvider: LLMProvider {
             case .toolResult(let toolUseID, let content, _):
                 // toolUseID == the function name (see class doc).
                 return ["functionResponse": ["name": toolUseID, "response": ["result": content]]]
+            case .image(let mediaType, let base64):
+                return ["inlineData": ["mimeType": mediaType, "data": base64]]
             }
         }
         return ["role": role, "parts": parts]
+    }
+
+    /// Test-only hook exposing `wireContent(_:)`'s `"parts"` array for a single message.
+    nonisolated static func wireContentForTesting(_ message: AgentMessage) -> [[String: Any]] {
+        wireContent(message)["parts"] as? [[String: Any]] ?? []
     }
 
     private static func errorMessage(fromResponseBody body: String) -> String {

@@ -1,6 +1,7 @@
 import Testing
 @testable import Ainkrad
 @testable import AinkradAppKit
+import AinkradHostRuntime
 
 struct PluginValidatorTests {
     private func meta(id: String = "hello", api: Int = 1) -> PluginBundleMetadata {
@@ -33,7 +34,7 @@ struct PluginValidatorTests {
     @Test("unsupported API version is rejected")
     func metadataBadAPI() {
         let r = PluginValidator.validate(meta(api: 999), infoDictionary: info(), minSupportedAPIVersion: 1)
-        if case .failure(let rej) = r { #expect(rej.reason.contains("API version 999")) }
+        if case .failure(let rej) = r { #expect(rej.reason.contains("999")) }
         else { Issue.record("expected failure") }
     }
 
@@ -56,5 +57,26 @@ struct PluginValidatorTests {
         let r = PluginValidator.validate(meta(), infoDictionary: info(""), minSupportedAPIVersion: 1)
         if case .failure(let rej) = r { #expect(rej.reason == "missing CFBundleExecutable") }
         else { Issue.record("expected failure") }
+    }
+}
+
+@Suite struct PluginValidatorRangeTests {
+    private func meta(api: Int) -> PluginBundleMetadata {
+        PluginBundleMetadata(appID: "sample", displayName: "S", iconSymbol: "star",
+                             apiVersion: api, principalClassName: "P")
+    }
+    private let info: [String: Any] = ["CFBundleExecutable": "Sample"]
+
+    @Test func belowMinIsRejectedWithRangeMessage() {
+        let r = PluginValidator.validate(meta(api: 5), infoDictionary: info,
+                                         minSupportedAPIVersion: GenerationSupport.minSupported)
+        guard case .failure(let rej) = r else { Issue.record("expected failure"); return }
+        #expect(rej.reason.contains("\(GenerationSupport.minSupported)"))
+        #expect(rej.reason.contains("\(GenerationSupport.current)"))
+    }
+    @Test func inRangeSucceeds() {
+        let r = PluginValidator.validate(meta(api: GenerationSupport.current), infoDictionary: info,
+                                         minSupportedAPIVersion: GenerationSupport.minSupported)
+        #expect((try? r.get()) != nil)
     }
 }

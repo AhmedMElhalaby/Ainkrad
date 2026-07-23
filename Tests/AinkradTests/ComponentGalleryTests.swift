@@ -1,6 +1,7 @@
 import Testing
 import AinkradAppKit
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("Gallery theme injection")
 struct ComponentGalleryTests {

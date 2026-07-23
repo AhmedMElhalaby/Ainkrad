@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/GitOpTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Dispatches a git operation to the Git Mage plugin over the v3 action seam.
 /// The plugin's handler is a thin adapter over its `GitRepositoryClient` actor

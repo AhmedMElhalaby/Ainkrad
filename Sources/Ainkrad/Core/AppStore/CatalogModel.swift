@@ -7,6 +7,46 @@ struct ManifestLink: Codable, Equatable {
     let url: URL
 }
 
+/// Discriminates what kind of installable item a `CatalogEntry` represents.
+/// Absent on decode (all pre-existing catalog JSON) → defaults to `.plugin`,
+/// preserving current behavior for every catalog published before MCP/skill
+/// marketplace support existed.
+enum CatalogItemKind: String, Codable, Equatable {
+    case plugin
+    case mcpServer
+    case skill
+}
+
+/// The fields needed to configure an MCP server from a catalog entry. Only
+/// required secret *keys* (names) are declared here — never secret values;
+/// actual values are supplied by the user at install time and stored via the
+/// existing secrets store.
+struct MCPCatalogDescriptor: Codable, Equatable {
+    let transport: MCPTransportKind
+    let command: String?
+    let args: [String]
+    let url: URL?
+    let envKeys: [String]
+    let headerKeys: [String]
+
+    init(transport: MCPTransportKind, command: String? = nil, args: [String] = [],
+         url: URL? = nil, envKeys: [String] = [], headerKeys: [String] = []) {
+        self.transport = transport
+        self.command = command
+        self.args = args
+        self.url = url
+        self.envKeys = envKeys
+        self.headerKeys = headerKeys
+    }
+}
+
+/// Points at a raw `SKILL.md` asset for a `.skill` catalog entry — a
+/// markdown file, not a zip/`dlopen`-loaded plugin bundle. For `.skill`
+/// entries, `CatalogEntry.downloadURL`/`sha256` are unused.
+struct SkillCatalogDescriptor: Codable, Equatable {
+    let contentURL: URL
+}
+
 /// One installable app in the catalog, assembled from a repo's latest release.
 ///
 /// `author`/`longDescription`/`screenshots`/`links` (AIN-147) are additive
@@ -14,6 +54,10 @@ struct ManifestLink: Codable, Equatable {
 /// memberwise initializer and when decoding a pre-AIN-147 cached catalog
 /// JSON that has no such keys — so existing callers/persisted caches are
 /// unaffected.
+///
+/// `kind`/`skill` are additive too: `kind` defaults to `.plugin` and `skill`
+/// to `nil` when decoding a pre-existing (kind-less) catalog entry, so
+/// existing plugin-only catalogs keep decoding unchanged.
 struct CatalogEntry: Equatable, Identifiable, Codable {
     var id: String { appID }
     let appID: String
@@ -29,11 +73,20 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
     let longDescription: String?
     let screenshots: [URL]
     let links: [ManifestLink]
+    /// Defaults to `.plugin` (both here and on decode) so pre-MCP/skill catalog
+    /// entries — which have no `kind` field — are unaffected.
+    let kind: CatalogItemKind
+    /// Only populated for `.mcpServer` entries; `nil` otherwise.
+    let mcp: MCPCatalogDescriptor?
+    /// Only populated for `.skill` entries; `nil` otherwise.
+    let skill: SkillCatalogDescriptor?
 
     init(appID: String, displayName: String, icon: String, description: String, version: String,
          apiVersion: Int, downloadURL: URL, sha256: String, sourceRepo: String,
          author: String? = nil, longDescription: String? = nil,
-         screenshots: [URL] = [], links: [ManifestLink] = []) {
+         screenshots: [URL] = [], links: [ManifestLink] = [],
+         kind: CatalogItemKind = .plugin, mcp: MCPCatalogDescriptor? = nil,
+         skill: SkillCatalogDescriptor? = nil) {
         self.appID = appID
         self.displayName = displayName
         self.icon = icon
@@ -47,11 +100,15 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
         self.longDescription = longDescription
         self.screenshots = screenshots
         self.links = links
+        self.kind = kind
+        self.mcp = mcp
+        self.skill = skill
     }
 
     enum CodingKeys: String, CodingKey {
         case appID, displayName, icon, description, version, apiVersion, downloadURL, sha256, sourceRepo
         case author, longDescription, screenshots, links
+        case kind, mcp, skill
     }
 
     init(from decoder: Decoder) throws {
@@ -69,6 +126,32 @@ struct CatalogEntry: Equatable, Identifiable, Codable {
         longDescription = try c.decodeIfPresent(String.self, forKey: .longDescription)
         screenshots = try c.decodeIfPresent([URL].self, forKey: .screenshots) ?? []
         links = try c.decodeIfPresent([ManifestLink].self, forKey: .links) ?? []
+        kind = try c.decodeIfPresent(CatalogItemKind.self, forKey: .kind) ?? .plugin
+        mcp = try c.decodeIfPresent(MCPCatalogDescriptor.self, forKey: .mcp)
+        skill = try c.decodeIfPresent(SkillCatalogDescriptor.self, forKey: .skill)
+    }
+}
+
+extension CatalogEntry {
+    /// An MCP catalog entry is valid iff it carries a descriptor with a
+    /// launch target matching its transport (HTTPS url for httpSSE, command
+    /// for stdio). Malformed/incomplete entries are rejected here so a
+    /// single bad catalog entry can be skipped (logged) rather than crashing
+    /// the whole catalog load.
+    var isValidMCPEntry: Bool {
+        guard kind == .mcpServer, let mcp else { return false }
+        switch mcp.transport {
+        case .stdio: return (mcp.command?.isEmpty == false)
+        case .httpSSE: return mcp.url?.scheme?.lowercased() == "https"
+        }
+    }
+
+    /// True iff this entry is a well-formed `.skill` entry (has a descriptor).
+    /// A `.skill`-kind entry missing its descriptor is malformed and should
+    /// be treated as skippable rather than fatal, mirroring existing catalog
+    /// skip behavior for other malformed entries.
+    var isValidSkillEntry: Bool {
+        kind == .skill && skill != nil
     }
 }
 

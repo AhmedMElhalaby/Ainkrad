@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 struct UISoundTests {
     @Test("resourceName is a stable, centralized mapping to the bundled wav base-name")

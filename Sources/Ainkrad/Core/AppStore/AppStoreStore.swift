@@ -88,6 +88,7 @@ final class AppStoreStore {
             let reg = registeredByID[id]
             let entry = catalogByID[id]
             let isBuiltIn = reg?.source == .builtIn
+            let kind: AppStoreRowKind = entry?.kind == .mcpServer ? .mcpServer : (isBuiltIn ? .builtIn : .plugin)
             installedRows.append(AppStoreRow(
                 id: id,
                 displayName: reg?.displayName ?? entry?.displayName ?? id,
@@ -99,7 +100,7 @@ final class AppStoreStore {
                 installedVersion: installedDoc[id]?.version,
                 status: updates.contains(id) ? .updateAvailable : .installed,
                 isEnabled: registry.isEnabled(id),
-                kind: isBuiltIn ? .builtIn : .plugin,
+                kind: kind,
                 isManaged: installedDoc[id] != nil,
                 author: entry?.author))
         }
@@ -109,7 +110,8 @@ final class AppStoreStore {
             availableRows.append(AppStoreRow(
                 id: entry.appID, displayName: entry.displayName, icon: entry.icon,
                 description: entry.description, catalogVersion: entry.version,
-                installedVersion: nil, status: .available, isEnabled: false, kind: .plugin,
+                installedVersion: nil, status: .available, isEnabled: false,
+                kind: entry.kind == .mcpServer ? .mcpServer : .plugin,
                 isManaged: false, author: entry.author))
         }
 

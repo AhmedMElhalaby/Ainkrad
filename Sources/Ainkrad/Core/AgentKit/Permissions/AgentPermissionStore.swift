@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 struct AgentPermissionDocument: PersistableDocument {
     static let documentID = "agent-permissions"
@@ -57,6 +58,17 @@ final class AgentPermissionStore {
     func setMode(_ mode: AgentPermissionMode) {
         document.perWorkspace[currentWorkspaceID().uuidString] = mode
         persistence.save(document)
+    }
+
+    /// Advance the current workspace's mode: ask -> autoApprove -> fullAuto -> ask.
+    func cycle() {
+        let next: AgentPermissionMode
+        switch mode {
+        case .ask: next = .autoApprove
+        case .autoApprove: next = .fullAuto
+        case .fullAuto: next = .ask
+        }
+        setMode(next)
     }
 
     func setGateReads(_ value: Bool) {

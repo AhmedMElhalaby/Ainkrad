@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Masked API-key entry with a reveal (eye) toggle. Thin adapter over the kit's
 /// `AinkradSecureField` (which already carries the reveal toggle + chamfer focus

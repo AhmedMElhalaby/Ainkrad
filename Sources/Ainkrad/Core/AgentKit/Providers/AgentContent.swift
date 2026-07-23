@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// One structured block of a turn. Tool use requires structured content, so a
 /// message is a sequence of these rather than a bare string. A `tool_result`
@@ -8,10 +9,13 @@ enum AgentContentBlock: Equatable, Sendable {
     case text(String)
     case toolUse(id: String, name: String, input: JSONValue)
     case toolResult(toolUseID: String, content: String, isError: Bool)
+    /// An attached image. `mediaType` is a sniffed MIME type (e.g. `image/png`);
+    /// `base64` is the raw file bytes, base64-encoded (see `ImageAttachment`).
+    case image(mediaType: String, base64: String)
 }
 
 struct AgentMessage: Equatable, Sendable {
-    enum Role: String, Sendable { case user, assistant }
+    enum Role: String, Sendable, Codable { case user, assistant }
     var role: Role
     var content: [AgentContentBlock]
 

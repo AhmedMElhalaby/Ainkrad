@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 struct AgentModelConfig: Equatable, Sendable {
     var model: String          // e.g. "claude-opus-4-8" / "gpt-5" / "gemini-2.5-pro"
@@ -12,5 +13,6 @@ enum AgentEvent: Equatable, Sendable {
     case toolInputDelta(id: String, partialJSON: String)
     case toolUseComplete(id: String, name: String, input: JSONValue)
     case done(stopReason: String?)
+    case usage(TokenUsage)
     case failed(String)
 }

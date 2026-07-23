@@ -17,8 +17,8 @@ final class ModelCatalogService {
         self.http = http
     }
 
-    func models(kind: ProviderKind, baseURL: String, apiKey: String, curatedFallback: [String]) async -> [String] {
-        await modelsResult(kind: kind, baseURL: baseURL, apiKey: apiKey, curatedFallback: curatedFallback).models
+    func models(kind: ProviderKind, baseURL: String, credential: ProviderCredential, curatedFallback: [String]) async -> [String] {
+        await modelsResult(kind: kind, baseURL: baseURL, credential: credential, curatedFallback: curatedFallback).models
     }
 
     /// Same as `models(...)`, but also signals whether the returned list was
@@ -26,28 +26,32 @@ final class ModelCatalogService {
     /// returned due to an invalid request, non-2xx response, transport error,
     /// or empty parse (`isLive == false`). Callers should only treat the list
     /// as authoritative (e.g. for reconciling a selected model) when `isLive`.
-    func modelsResult(kind: ProviderKind, baseURL: String, apiKey: String, curatedFallback: [String]) async -> (models: [String], isLive: Bool) {
-        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, apiKey: apiKey) else {
+    func modelsResult(kind: ProviderKind, baseURL: String, credential: ProviderCredential, curatedFallback: [String]) async -> (models: [String], isLive: Bool) {
+        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, credential: credential) else {
             return (curatedFallback, false)
         }
         do {
             let (data, response) = try await http.data(for: request)
             guard (200...299).contains(response.statusCode) else { return (curatedFallback, false) }
-            let parsed = Self.parseModels(kind: kind, data: data)
-            return parsed.isEmpty ? (curatedFallback, false) : (parsed, true)
+            // A well-formed response is authoritative even when it lists zero models
+            // (the provider genuinely has none) — return it live so callers show the
+            // real (possibly empty) set rather than the curated fallback. Only a
+            // parse failure (nil) falls back to curated.
+            guard let parsed = Self.parseModels(kind: kind, data: data) else { return (curatedFallback, false) }
+            return (parsed, true)
         } catch {
             return (curatedFallback, false)
         }
     }
 
-    func test(kind: ProviderKind, baseURL: String, apiKey: String) async -> ConnectionTestResult {
-        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, apiKey: apiKey) else {
+    func test(kind: ProviderKind, baseURL: String, credential: ProviderCredential) async -> ConnectionTestResult {
+        guard let request = Self.listRequest(kind: kind, baseURL: baseURL, credential: credential) else {
             return ConnectionTestResult(ok: false, message: "Invalid base URL")
         }
         do {
             let (data, response) = try await http.data(for: request)
             if (200...299).contains(response.statusCode) {
-                let count = Self.parseModels(kind: kind, data: data).count
+                let count = (Self.parseModels(kind: kind, data: data) ?? []).count
                 return ConnectionTestResult(ok: true, message: count > 0 ? "Connected · \(count) models" : "Connected")
             }
             // Body is the server's response — never contains the request key —
@@ -65,36 +69,51 @@ final class ModelCatalogService {
         baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
     }
 
-    private static func listRequest(kind: ProviderKind, baseURL: String, apiKey: String) -> URLRequest? {
+    /// Builds the `/models` discovery request. Auth depends on BOTH the provider
+    /// kind and the credential: a subscription (`.oauth`) connection is keyless, so
+    /// it authenticates with `authorization: Bearer <token>` — the same header the
+    /// live `/v1/messages` OAuth path uses — NOT an (empty) `x-api-key`, which would
+    /// 401 and silently drop discovery back to the curated fallback.
+    private static func listRequest(kind: ProviderKind, baseURL: String, credential: ProviderCredential) -> URLRequest? {
         let base = trim(baseURL)
+        guard let url = URL(string: base + "/models") else { return nil }
+        var r = URLRequest(url: url)
         switch kind {
         case .openAICompatible:
-            guard let url = URL(string: base + "/models") else { return nil }
-            var r = URLRequest(url: url)
-            if !apiKey.isEmpty { r.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization") }
-            return r
+            switch credential {
+            case .apiKey(let key): if !key.isEmpty { r.setValue("Bearer \(key)", forHTTPHeaderField: "authorization") }
+            case .oauth(let token): r.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            }
         case .claude:
-            guard let url = URL(string: base + "/models") else { return nil }
-            var r = URLRequest(url: url)
-            r.setValue(apiKey, forHTTPHeaderField: "x-api-key")
             r.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            return r
+            switch credential {
+            case .apiKey(let key): r.setValue(key, forHTTPHeaderField: "x-api-key")
+            case .oauth(let token): r.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            }
         case .gemini:
-            guard let url = URL(string: base + "/models") else { return nil }
-            var r = URLRequest(url: url)
-            r.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
-            return r
+            switch credential {
+            case .apiKey(let key): r.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+            case .oauth(let token): r.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "authorization")
+            }
         }
+        return r
     }
 
-    private static func parseModels(kind: ProviderKind, data: Data) -> [String] {
+    /// Returns `nil` when the body couldn't be parsed at all (unexpected shape),
+    /// distinguished from a well-formed response that genuinely lists zero models
+    /// (`[]`). Callers use that difference to decide between a curated fallback
+    /// (parse failure — we don't know) and an authoritative empty list (the
+    /// provider really has no models, e.g. an Ollama with nothing pulled).
+    private static func parseModels(kind: ProviderKind, data: Data) -> [String]? {
         switch kind {
         case .openAICompatible, .claude:
             struct List: Decodable { struct Item: Decodable { let id: String }; let data: [Item]? }
-            return (try? JSONDecoder().decode(List.self, from: data))?.data?.map(\.id) ?? []
+            guard let list = try? JSONDecoder().decode(List.self, from: data) else { return nil }
+            return list.data?.map(\.id) ?? []
         case .gemini:
             struct List: Decodable { struct Item: Decodable { let name: String }; let models: [Item]? }
-            return (try? JSONDecoder().decode(List.self, from: data))?.models?.map {
+            guard let list = try? JSONDecoder().decode(List.self, from: data) else { return nil }
+            return list.models?.map {
                 $0.name.hasPrefix("models/") ? String($0.name.dropFirst("models/".count)) : $0.name
             } ?? []
         }

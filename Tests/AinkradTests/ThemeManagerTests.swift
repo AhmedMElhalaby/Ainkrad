@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import SwiftUI
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("ThemeManager")
 final class ThemeManagerTests {

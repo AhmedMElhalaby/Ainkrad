@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor
 struct AppStoreServiceTests {
@@ -28,7 +29,11 @@ struct AppStoreServiceTests {
             pluginsDir: URL(fileURLWithPath: "/tmp/p"), pluginDataDir: URL(fileURLWithPath: "/tmp/d"),
             retainedDataDir: URL(fileURLWithPath: "/tmp/r"),
             persistence: store, registry: registry, loadBundle: { _ in .failure(PluginRejection(reason: "x")) })
-        let svc = AppStoreService(catalog: catalog, installer: installer, persistence: store)
+        let mcpInstaller = MCPServerInstaller(
+            configStore: MCPServerConfigStore(persistence: store, secrets: InMemorySecretStore()),
+            persistence: store)
+        let svc = AppStoreService(catalog: catalog, installer: installer, mcpInstaller: mcpInstaller,
+                                   persistence: store)
         #expect(svc.availableUpdates().map(\.appID) == ["hello"])
         #expect(svc.installedApps().keys.sorted() == ["fresh", "hello"])
     }

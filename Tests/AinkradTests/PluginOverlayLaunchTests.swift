@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import AinkradAppKit
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Slice 3: `.overlay`-presentation apps are summoned as a floating host
 /// overlay instead of tiling into the workspace layout; `.pane` apps (the

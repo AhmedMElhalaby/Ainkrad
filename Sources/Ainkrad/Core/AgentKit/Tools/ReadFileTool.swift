@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/ReadFileTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Reads a UTF-8 text file at an absolute path. Any path is allowed (per the
 /// Slice-2a decision); the approval HUD, not a path sandbox, is the gate.

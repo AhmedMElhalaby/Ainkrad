@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// A serializable pane tree. A node is a leaf (`appID` set) or a split
 /// (`axis`/`fractions`/`children` set). Panel identity is NOT persisted —

@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 struct HostServicesScopingTests {
     @Test("an app cannot read another app's documents")

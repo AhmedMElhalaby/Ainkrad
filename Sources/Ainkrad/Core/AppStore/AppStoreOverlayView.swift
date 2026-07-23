@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The App Store HUD overlay — browse the catalog and install / update /
 /// uninstall / enable apps. Same HUD language as the Launcher / Settings.

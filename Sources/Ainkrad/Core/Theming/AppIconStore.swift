@@ -1,4 +1,5 @@
 import Observation
+import AinkradHostRuntime
 
 /// Owns the user's app-icon color + appearance settings: loads them from
 /// `GlobalSettings`, persists changes (preserving other settings), and drives

@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Settings overlay — the third summonable panel (⌘, or the Launcher's
 /// Settings entry), in the same HUD language as the Launcher and Workspace
@@ -39,6 +40,10 @@ struct SettingsOverlayView: View {
         case livingSky
         case appIcon
         case shortcuts
+        case memory
+        case mcp
+        case lsp
+        case skills
         case app(String)
     }
 
@@ -132,6 +137,10 @@ struct SettingsOverlayView: View {
                 sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
                 sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
                 sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
+                sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
+                sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
+                sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
+                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles", tokens: tokens)
 
                 groupLabel("APPEARANCE", tokens: tokens)
                     .padding(.top, 12)
@@ -255,6 +264,26 @@ struct SettingsOverlayView: View {
             AppIconSettingsView()
         case .shortcuts:
             ShortcutsSettingsView()
+        case .memory:
+            if let memoryService = environment.memoryService {
+                MemoryUIView(service: memoryService)
+            } else {
+                AinkradEmptyState(
+                    icon: "brain",
+                    title: "Memory unavailable",
+                    message: "The assistant's memory index couldn't be opened this launch, so it's running memory-less for now. Restart Ainkrad to try again."
+                )
+            }
+        case .mcp:
+            MCPManagerView(configStore: environment.mcpServerRegistry.configStore, registry: environment.mcpServerRegistry)
+        case .lsp:
+            LSPConfigView(registry: environment.lspServerRegistry)
+        case .skills:
+            SkillsManagerView(
+                registry: environment.skillRegistry,
+                commands: environment.skillCommandStore,
+                resyncCommands: { environment.resyncSkillCommands() }
+            )
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is
@@ -275,68 +304,42 @@ struct SettingsOverlayView: View {
         }
     }
 
-    /// The host-provided appearance controls appended below EVERY app's own
-    /// settings: a blur toggle for all apps (the host renders the blurred
-    /// backdrop behind a translucent pane), plus a surface-opacity slider only
-    /// for host-background apps (the Assistant — plugins own their transparency).
+    /// The host-provided appearance controls appended below every OTHER app's
+    /// own settings: a blur toggle (the host renders the blurred backdrop behind
+    /// a translucent pane). The Assistant owns its own appearance (opacity, blur,
+    /// and font) in its in-app Appearance tab, so the host block is suppressed
+    /// for it; plugins own their transparency, so they get only blur here.
     @ViewBuilder
     private func appAppearanceSection(appID: String, tokens: DesignTokens) -> some View {
         let appearance = environment.appAppearanceStore
 
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+        if appID == AssistantApp.id {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
 
-            if appID == AssistantApp.id {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Surface opacity")
+                        Text("Blur")
                             .font(AinkradFont.display(13, weight: .medium))
                             .foregroundStyle(tokens.foreground.opacity(0.9))
-                        Text("Lower opacity lets the workspace show through this app.")
+                        Text("Blur the workspace revealed behind this app when it's translucent.")
                             .font(AinkradFont.display(11))
                             .foregroundStyle(tokens.foreground.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)
-                    HStack(spacing: 10) {
-                        AinkradSlider(
-                            value: Binding(
-                                get: { appearance.surfaceOpacity(appID) },
-                                set: { appearance.setSurfaceOpacity(appID, $0) }
-                            ),
-                            in: 0.3...1.0
+                    AinkradToggle(
+                        isOn: Binding(
+                            get: { appearance.blurEnabled(appID) },
+                            set: { appearance.setBlurEnabled(appID, $0) }
                         )
-                        .frame(width: 130)
-                        Text("\(Int(appearance.surfaceOpacity(appID) * 100))%")
-                            .font(AinkradFont.display(11))
-                            .foregroundStyle(tokens.foreground.opacity(0.55))
-                            .frame(width: 42, alignment: .trailing)
-                    }
+                    )
                 }
                 .padding(14)
                 .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
             }
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Blur")
-                        .font(AinkradFont.display(13, weight: .medium))
-                        .foregroundStyle(tokens.foreground.opacity(0.9))
-                    Text("Blur the workspace revealed behind this app when it's translucent.")
-                        .font(AinkradFont.display(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-                AinkradToggle(
-                    isOn: Binding(
-                        get: { appearance.blurEnabled(appID) },
-                        set: { appearance.setBlurEnabled(appID, $0) }
-                    )
-                )
-            }
-            .padding(14)
-            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         }
     }
 

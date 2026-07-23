@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Validates the `ConnectionStore` interaction the Assistant Connections
 /// settings UI performs (add / reveal / remove a provider API key). The

@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Ainkrad → Appearance section: a theme picker bound to `ThemeManager`.
 /// Selecting a theme applies tokens immediately, with no Save button. The
@@ -29,6 +30,9 @@ struct AppearanceSettingsView: View {
                 typographySection(tokens: tokens)
                     .padding(.top, 8)
 
+                motionSection(tokens: tokens)
+                    .padding(.top, 8)
+
                 overlaysSection(tokens: tokens)
                     .padding(.top, 8)
             }
@@ -56,6 +60,24 @@ struct AppearanceSettingsView: View {
             labeled("ACCENT COLOR", tokens: tokens) {
                 accentColorRow(tokens: tokens, manager: manager)
             }
+        }
+    }
+
+    // MARK: - Motion (Ainkrad-controlled, independent of the macOS system flag)
+
+    private func motionSection(tokens: DesignTokens) -> some View {
+        let store = environment.generalSettingsStore
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "MOTION", tokens: tokens)
+
+            labeled("REDUCE MOTION", tokens: tokens) {
+                segmented([true, false], selected: store.uiReduceMotion, tokens: tokens,
+                          title: { $0 ? "On" : "Off" }, action: { store.setUiReduceMotion($0) })
+            }
+            Text("Turns off transitions, parallax, blinking cursors, and other animation across Ainkrad. Independent of the macOS system Reduce Motion setting.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -242,13 +264,21 @@ struct AppearanceSettingsView: View {
 /// delegates to the kit's `AinkradSectionHeader` — which renders its own accent
 /// tick + uppercased tracked title from the injected theme/typography — so the
 /// `(title:tokens:)` call sites (this file, SettingsOverlayView,
-/// AssistantSettingsView) cascade unchanged. `tokens` is now unused: the kit
-/// reads its palette from the environment.
+/// AssistantSettingsView) cascade unchanged. `tokens` is used to tint the
+/// optional leading icon.
 struct SettingsSectionHeader: View {
     let title: String
     let tokens: DesignTokens
+    var icon: String? = nil
 
     var body: some View {
-        AinkradSectionHeader(title: title)
+        HStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+            }
+            AinkradSectionHeader(title: title)
+        }
     }
 }

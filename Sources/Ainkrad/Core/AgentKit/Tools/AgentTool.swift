@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/AgentTool.swift
 import Foundation
+import AinkradHostRuntime
 
 struct AgentToolSchema: Sendable, Equatable {
     let name: String
@@ -7,7 +8,7 @@ struct AgentToolSchema: Sendable, Equatable {
     let parameters: JSONValue   // JSON Schema object
 }
 
-enum ToolPermissionClass: Sendable { case read, write }
+enum ToolPermissionClass: Sendable { case read, write, memory }
 
 struct ToolResult: Sendable, Equatable {
     let content: String

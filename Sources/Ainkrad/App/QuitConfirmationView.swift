@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The in-app HUD shown before Ainkrad actually quits — summoned by
 /// `QuitCoordinator.isConfirming` from ⌘Q, the app menu's Quit, or the

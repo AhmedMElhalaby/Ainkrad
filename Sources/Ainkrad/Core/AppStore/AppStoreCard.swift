@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// One catalog/app card: icon, name, version line, description, and a trailing
 /// action area driven by `row.status` + whether it is busy. Tapping the
@@ -38,6 +39,7 @@ struct AppStoreCard: View {
                         }
                         Spacer()
                         if row.status == .updateAvailable { AinkradBadge(text: "UPDATE", status: .warning) }
+                        else if row.kind == .mcpServer { AinkradBadge(text: "MCP", status: .success) }
                         else if isDevPlugin { AinkradBadge(text: "DEV", status: .neutral) }
                     }
 

@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("GlobalSettings")
 final class GlobalSettingsTests {
@@ -66,5 +67,33 @@ final class GlobalSettingsTests {
         #expect(decoded.uiFontScale == .medium)
         #expect(decoded.uiFontFamily == .exo2)
         #expect(decoded.accentColorHex == nil)
+    }
+
+    @Test("reduce-motion defaults to off (motion on) with no prior write")
+    func reduceMotionDefaultsOff() {
+        #expect(GlobalSettings().uiReduceMotion == false)
+    }
+
+    @MainActor
+    @Test("setUiReduceMotion updates the store and persists across a fresh load")
+    func reduceMotionSetterRoundTrips() {
+        let persistence = InMemoryPersistenceStore()
+        let store = GeneralSettingsStore(persistence: persistence)
+        #expect(store.uiReduceMotion == false)
+
+        store.setUiReduceMotion(true)
+        #expect(store.uiReduceMotion == true)
+        // Persisted: a store rebuilt on the same backing sees the new value.
+        #expect(GeneralSettingsStore(persistence: persistence).uiReduceMotion == true)
+    }
+
+    @MainActor
+    @Test("first launch defaults to motion on and never adopts the macOS Reduce Motion flag")
+    func reduceMotionNeverSeedsFromSystem() {
+        let persistence = InMemoryPersistenceStore()
+        // No prior document → motion is ON regardless of the OS setting; the app
+        // never reads the system Reduce Motion flag. The in-app toggle is the
+        // sole source of truth.
+        #expect(GeneralSettingsStore(persistence: persistence).uiReduceMotion == false)
     }
 }

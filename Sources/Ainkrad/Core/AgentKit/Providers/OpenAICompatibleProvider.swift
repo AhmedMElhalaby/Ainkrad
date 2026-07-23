@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// `LLMProvider` conformer that streams from any OpenAI-compatible
 /// `POST {baseURL}/chat/completions` endpoint (OpenAI, OpenRouter, Groq,
@@ -17,9 +18,10 @@ struct OpenAICompatibleProvider: LLMProvider {
         system: String,
         tools: [AgentToolSchema],
         model: AgentModelConfig,
-        apiKey: String
+        credential: ProviderCredential
     ) -> AsyncThrowingStream<AgentEvent, Error> {
-        AsyncThrowingStream { continuation in
+        let apiKey: String = { if case let .apiKey(k) = credential { return k } else { return "" } }()
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let request = Self.makeRequest(baseURL: baseURL, messages: messages, system: system, tools: tools, model: model, apiKey: apiKey)
@@ -35,6 +37,13 @@ struct OpenAICompatibleProvider: LLMProvider {
                         if let errorMessage = chunk.error?.message {
                             continuation.yield(.failed(errorMessage))
                             continue
+                        }
+
+                        // The usage chunk (when the endpoint honors `stream_options.include_usage`)
+                        // arrives LAST with an empty `choices` array — parse it before the
+                        // `choices.first` guard below, or it would be silently skipped.
+                        if let json = JSONValue.parse(payload), let usage = Self.usage(from: json) {
+                            continuation.yield(.usage(usage))
                         }
 
                         guard let choice = chunk.choices?.first else { continue }
@@ -80,6 +89,19 @@ struct OpenAICompatibleProvider: LLMProvider {
         }
     }
 
+    // MARK: - Usage parsing
+
+    /// The final streamed chunk's `usage` object, when the endpoint honors
+    /// `stream_options.include_usage`. Returns nil when absent — that chunk simply
+    /// never arrives for endpoints that don't support it, which must never be an error.
+    nonisolated static func usage(from json: JSONValue) -> TokenUsage? {
+        guard let u = json["usage"] else { return nil }
+        func int(_ k: String) -> Int { if case .number(let n)? = u[k] { return Int(n) }; return 0 }
+        var cacheRead = 0
+        if case .number(let n)? = u["prompt_tokens_details"]?["cached_tokens"] { cacheRead = Int(n) }
+        return TokenUsage(input: int("prompt_tokens"), output: int("completion_tokens"), cacheRead: cacheRead, cacheWrite: 0)
+    }
+
     // MARK: - Request building
 
     private static func makeRequest(
@@ -106,6 +128,9 @@ struct OpenAICompatibleProvider: LLMProvider {
             "model": model.model,
             "stream": true,
             "messages": wireMessages,
+            // Best-effort: not every OpenAI-compatible endpoint (OpenRouter/Groq/
+            // DeepSeek/Ollama/LM Studio) honors this — absent usage is never an error.
+            "stream_options": ["include_usage": true],
         ]
         if !tools.isEmpty {
             body["tools"] = tools.map {
@@ -120,29 +145,48 @@ struct OpenAICompatibleProvider: LLMProvider {
 
     /// One `AgentMessage` can expand into multiple OpenAI wire messages: an
     /// assistant turn with tool calls, then one `role:"tool"` message per result.
-    private static func wireMessages(for message: AgentMessage) -> [[String: Any]] {
+    nonisolated private static func wireMessages(for message: AgentMessage) -> [[String: Any]] {
         var texts: [String] = []
         var toolCalls: [[String: Any]] = []
         var toolResults: [[String: Any]] = []
+        var contentParts: [[String: Any]] = []
+        var hasImage = false
         for block in message.content {
             switch block {
-            case .text(let t): texts.append(t)
+            case .text(let t):
+                texts.append(t)
+                contentParts.append(["type": "text", "text": t])
             case .toolUse(let id, let name, let input):
                 let args = String(decoding: (try? JSONSerialization.data(withJSONObject: input.toFoundationObject())) ?? Data("{}".utf8), as: UTF8.self)
                 toolCalls.append(["id": id, "type": "function",
                                   "function": ["name": name, "arguments": args]])
             case .toolResult(let toolUseID, let content, _):
                 toolResults.append(["role": "tool", "tool_call_id": toolUseID, "content": content])
+            case .image(let mediaType, let base64):
+                hasImage = true
+                contentParts.append(["type": "image_url", "image_url": ["url": "data:\(mediaType);base64,\(base64)"]])
             }
         }
         var out: [[String: Any]] = []
         if message.role == .assistant, !toolCalls.isEmpty {
             out.append(["role": "assistant", "content": texts.joined(), "tool_calls": toolCalls])
+        } else if hasImage {
+            // A message carrying an image must use the array content form —
+            // plain string `content` has no way to embed an image_url part.
+            out.append(["role": message.role.rawValue, "content": contentParts])
         } else if !texts.isEmpty || toolResults.isEmpty {
             out.append(["role": message.role.rawValue, "content": texts.joined()])
         }
         out.append(contentsOf: toolResults)
         return out
+    }
+
+    /// Test-only hook exposing the array-content form of `wireMessages(for:)` for a
+    /// single message — the `"content"` array carrying `{"type":"text"|"image_url",...}`
+    /// parts. Returns an empty array for text-only messages (those still wire as a
+    /// plain string, not this array form).
+    nonisolated static func wireContentForTesting(_ message: AgentMessage) -> [[String: Any]] {
+        wireMessages(for: message).first?["content"] as? [[String: Any]] ?? []
     }
 
     /// Best-effort human-readable message from a non-2xx response body. Never echoes the API key

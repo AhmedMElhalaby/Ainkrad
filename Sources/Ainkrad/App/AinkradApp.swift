@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 // Named `AinkradHostApp` (not `AinkradApp`) so the identifier doesn't collide
 // with `AinkradAppKit.AinkradApp` — the SDK protocol plugin bundles conform
@@ -19,6 +20,7 @@ struct AinkradHostApp: App {
         let environment = AppEnvironment.bootstrap()
         _environment = State(initialValue: environment)
         appDelegate.quitCoordinator = environment.quitCoordinator
+        appDelegate.menuBarController = environment.menuBarController
     }
 
     var body: some Scene {

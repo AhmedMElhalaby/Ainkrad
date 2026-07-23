@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Settings → General: the full-screen status bar toggle (AIN-109). Sound
 /// effects now live in their own `SoundSettingsView` section. Bound to
