@@ -98,8 +98,11 @@ final class PluginInstaller {
         // all (`author == nil`) predates the author/description requirement, so
         // refreshing or installing it must not newly fail on those listing
         // fields. Integrity, generation, icon, and base-metadata checks still
-        // apply. New submissions always carry an author (via `ainkrad publish`),
-        // so they get the full policy.
+        // apply. `ainkrad publish` now refuses to publish any bundle that
+        // fails StorePolicy (author/description required), so a NEW
+        // submission can never reach the catalog author-less — a nil author
+        // here can only mean a genuinely legacy entry, never a submission
+        // that skipped the check.
         if entry.author == nil {
             issues.removeAll { $0.code == "missing-author" || $0.code == "missing-description" }
         }
