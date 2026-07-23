@@ -92,7 +92,17 @@ final class PluginInstaller {
             metadata: metadata, infoDictionary: infoDict,
             author: entry.author, description: entry.description, iconSymbol: entry.icon,
             declaredSHA256: entry.sha256, computedSHA256: digest)
-        let issues = StorePolicy.check(manifest: manifest, minSupported: GenerationSupport.minSupported, current: GenerationSupport.current)
+        var issues = StorePolicy.check(manifest: manifest, minSupported: GenerationSupport.minSupported, current: GenerationSupport.current)
+        // Grandfather legacy catalog entries published before store-listing
+        // completeness existed: an entry whose manifest carried no `author` at
+        // all (`author == nil`) predates the author/description requirement, so
+        // refreshing or installing it must not newly fail on those listing
+        // fields. Integrity, generation, icon, and base-metadata checks still
+        // apply. New submissions always carry an author (via `ainkrad publish`),
+        // so they get the full policy.
+        if entry.author == nil {
+            issues.removeAll { $0.code == "missing-author" || $0.code == "missing-description" }
+        }
         if let first = issues.first { throw AppStoreError.invalidBundle(first.message) }
 
         // 5. Atomic move into place (replace any prior install).

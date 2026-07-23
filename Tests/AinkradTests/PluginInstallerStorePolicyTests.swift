@@ -42,8 +42,8 @@ struct PluginInstallerStorePolicyTests {
                     makeRootView: { AnyView(EmptyView()) }, makeSettingsView: { AnyView(EmptyView()) }, chromeFill: { nil })) })
     }
 
-    @Test("a catalog entry missing a required store field (author) is rejected with StorePolicy's message")
-    func missingAuthorRejected() async throws {
+    @Test("a NEW submission with an empty author is rejected with StorePolicy's message")
+    func emptyAuthorRejected() async throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         let src = root.appendingPathComponent("src"); try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
         let (zip, sha) = try makeBundleZip(appID: "hello", dir: src)
@@ -52,10 +52,12 @@ struct PluginInstallerStorePolicyTests {
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore()); registry.install(builtIn: [])
         let installer = makeInstaller(http: http, root: root, registry: registry)
 
-        // Catalog entry has no author — StorePolicy must reject at intake.
+        // Author is PRESENT but empty ("") — a new submission that failed to
+        // provide the value. This is NOT the legacy `author == nil` case, so it
+        // is not grandfathered; StorePolicy must reject it at intake.
         let entry = CatalogEntry(appID: "hello", displayName: "hello", icon: "app", description: "A helpful plugin.",
                                  version: "1.0.0", apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/hello",
-                                 author: nil)
+                                 author: "")
 
         // Same info dict the installer parses from the real unpacked bundle
         // (built by `makeBundleZip` above), so the base-validation layer of
@@ -67,7 +69,7 @@ struct PluginInstallerStorePolicyTests {
         let expectedMessage = StorePolicy.check(
             manifest: StoreManifestInput(
                 metadata: try PluginBundleMetadata.parse(infoDictionary: info).get(),
-                infoDictionary: info, author: nil, description: "A helpful plugin.", iconSymbol: "app",
+                infoDictionary: info, author: "", description: "A helpful plugin.", iconSymbol: "app",
                 declaredSHA256: sha, computedSHA256: sha),
             minSupported: GenerationSupport.minSupported, current: GenerationSupport.current
         ).first?.message
@@ -77,6 +79,31 @@ struct PluginInstallerStorePolicyTests {
         }
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Plugins/hello.bundle").path))
         #expect(registry.allApps.isEmpty)
+    }
+
+    @Test("a legacy catalog entry with no author (author == nil) is grandfathered and still installs")
+    func legacyEntryWithoutAuthorIsGrandfathered() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let src = root.appendingPathComponent("src"); try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        let (zip, sha) = try makeBundleZip(appID: "hello", dir: src)
+        let url = URL(string: "https://e/hello.bundle.zip")!
+        let http = StubHTTPClient(responses: [url: .success(try Data(contentsOf: zip))])
+        let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore()); registry.install(builtIn: [])
+        let installer = makeInstaller(http: http, root: root, registry: registry)
+
+        // Pre-completeness catalog entry: no author field at all, empty
+        // description — exactly the shape a catalog published before store
+        // listings required these fields would carry. It must still install:
+        // the author/description checks are grandfathered away for `author == nil`,
+        // while integrity/generation/icon/base checks still applied and passed.
+        let entry = CatalogEntry(appID: "hello", displayName: "hello", icon: "app", description: "",
+                                 version: "1.0.0", apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/hello",
+                                 author: nil)
+
+        try await installer.install(entry)
+
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Plugins/hello.bundle").path))
+        #expect(registry.allApps.map(\.id) == ["hello"])
     }
 
     @Test("a valid first-party bundle carrying author/description/icon still installs")
