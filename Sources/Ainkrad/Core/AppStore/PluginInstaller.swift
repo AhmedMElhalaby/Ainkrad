@@ -48,9 +48,9 @@ final class PluginInstaller {
         do { data = try await http.get(entry.downloadURL) }
         catch { throw AppStoreError.download(String(describing: error)) }
 
-        // 2. Verify integrity BEFORE unpacking.
+        // 2. Compute integrity digest (compared via StorePolicy in step 4,
+        //    alongside the other store-review checks).
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        guard digest == entry.sha256.lowercased() else { throw AppStoreError.checksumMismatch }
 
         // 3. Unpack into a temp dir.
         let work = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -85,9 +85,15 @@ final class PluginInstaller {
             throw AppStoreError.invalidBundle("no readable .bundle in archive")
         }
         guard metadata.appID == entry.appID else { throw AppStoreError.invalidBundle("appID mismatch") }
-        if case .failure(let rej) = PluginValidator.validate(metadata, infoDictionary: infoDict, minSupportedAPIVersion: GenerationSupport.minSupported) {
-            throw AppStoreError.invalidBundle(rej.reason)
-        }
+
+        // Same StorePolicy the store review / CLI run, so "passes review" is
+        // defined by one shared authority (host, store, and CLI all agree).
+        let manifest = StoreManifestInput(
+            metadata: metadata, infoDictionary: infoDict,
+            author: entry.author, description: entry.description, iconSymbol: entry.icon,
+            declaredSHA256: entry.sha256, computedSHA256: digest)
+        let issues = StorePolicy.check(manifest: manifest, minSupported: GenerationSupport.minSupported, current: GenerationSupport.current)
+        if let first = issues.first { throw AppStoreError.invalidBundle(first.message) }
 
         // 5. Atomic move into place (replace any prior install).
         let dest = pluginsDir.appendingPathComponent("\(entry.appID).bundle")

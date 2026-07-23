@@ -22,9 +22,11 @@ struct PluginLifecycleTests {
         p.arguments = ["-c", "-k", dir.appendingPathComponent("hello.bundle").path, zip.path]; try p.run(); p.waitUntilExit()
         return try Data(contentsOf: zip)
     }
+    // `author`/non-empty `description` required to pass `StorePolicy` at
+    // install intake (see PluginInstallerStorePolicyTests).
     private func entry(_ v: String, url: URL, sha: String) -> CatalogEntry {
-        CatalogEntry(appID: "hello", displayName: "Hello", icon: "app", description: "", version: v,
-                     apiVersion: 7, downloadURL: url, sha256: sha, sourceRepo: "o/hello")
+        CatalogEntry(appID: "hello", displayName: "Hello", icon: "app", description: "Test fixture plugin.", version: v,
+                     apiVersion: 7, downloadURL: url, sha256: sha, sourceRepo: "o/hello", author: "Ainkrad")
     }
     private func hello(_ url: URL) -> RegisteredApp {
         RegisteredApp(id: "hello", displayName: "Hello", icon: "app", isEnabledByDefault: true,
