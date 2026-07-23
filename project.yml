@@ -118,9 +118,14 @@ targets:
     sources:
       - path: Sources/AinkradDevHost
     dependencies:
-      # Not yet consumed (starts in Task 3), but the Dev Host is a real host
-      # that will load plugins, so it must own the one dynamic copy of the
-      # SDK, exactly like the `Ainkrad` target — see that target's comment.
+      # The shared plugin runtime (loader, RegisteredApp, HostServicesImpl,
+      # theming/persistence/AgentKit hubs it depends on) — see Sources/AinkradHostRuntime.
+      # Static lib: no link:false here (that's only for TEST targets, see
+      # AinkradTests's comment below) — the app target must link it normally.
+      - target: AinkradHostRuntime
+      # The Dev Host is a real host that will load plugins, so it must own
+      # the one dynamic copy of the SDK, exactly like the `Ainkrad` target —
+      # see that target's comment.
       - package: AinkradAppKit
         embed: true
         link: true
@@ -137,6 +142,19 @@ targets:
     dependencies:
       - target: AinkradDevHost
         embed: false
+      # AinkradHostRuntime is a STATIC library, already baked into the
+      # AinkradDevHost binary. `link: false` here only gets the target-
+      # dependency build order + the .swiftmodule search path so
+      # `import AinkradHostRuntime` type-checks — it must NOT also link the
+      # static archive a second time into this bundle (double-link lesson,
+      # see AinkradTests's identical comment for the full story).
+      - target: AinkradHostRuntime
+        link: false
+      # AinkradAppKit is linked here for the same reason as AinkradTests:
+      # it's a separate dynamic library two hops from this bundle's
+      # -bundle_loader, so tests that reference its symbols directly (e.g.
+      # PluginInfoKey, PluginValidation) fail to link without this.
+      - package: AinkradAppKit
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
