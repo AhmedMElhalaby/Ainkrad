@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/LSP/LSPStdioTransport.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Spawns a local language-server subprocess and speaks Content-Length-framed
 /// JSON-RPC over its stdio. Structurally a copy of MCP's `StdioTransport` —

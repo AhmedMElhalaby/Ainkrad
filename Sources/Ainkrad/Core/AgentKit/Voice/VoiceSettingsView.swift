@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Assistant Settings "VOICE" section: backend (on-device/provider),
 /// push-to-talk mode, auto-send, provider opt-in (connection + model +

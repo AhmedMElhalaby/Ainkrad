@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/MCP/MCPToolAdapter.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Presents one discovered MCP tool to the LLM as a native `AgentTool`. Names
 /// are namespaced `mcp/<server>/<tool>` to avoid collisions across servers and

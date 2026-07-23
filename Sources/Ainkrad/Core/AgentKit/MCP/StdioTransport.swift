@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/MCP/StdioTransport.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Spawns a local MCP server subprocess and speaks newline-delimited JSON-RPC
 /// over its stdio. Mirrors the `Process`+`Pipe` pattern used by `RunTerminalTool`

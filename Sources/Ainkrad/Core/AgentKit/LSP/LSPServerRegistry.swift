@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/LSP/LSPServerRegistry.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Connection health for one (language, workspace-root) LSP session.
 enum LSPHealth: Equatable {

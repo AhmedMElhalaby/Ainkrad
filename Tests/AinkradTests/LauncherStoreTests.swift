@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import AinkradAppKit
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("LauncherStore")
 @MainActor

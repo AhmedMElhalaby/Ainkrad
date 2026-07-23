@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Live Canvas: agent-rendered elements as movable/resizable layered HUD
 /// cards with hover + parallax. The user can rearrange/pin/dismiss; layout

@@ -1,5 +1,6 @@
 import AinkradAppKit
 import SwiftUI
+import AinkradHostRuntime
 
 struct AssistantHistorySidebar: View {
     let store: AssistantSessionStore

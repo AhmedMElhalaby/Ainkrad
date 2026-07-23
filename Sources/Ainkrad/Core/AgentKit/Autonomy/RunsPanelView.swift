@@ -1,6 +1,7 @@
 // Sources/Ainkrad/Core/AgentKit/Autonomy/RunsPanelView.swift
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The live Runs monitor (M7 Slice 3 Task 11): queue/active/history across
 /// every origin (chat, schedule, event), per-run status + streaming last log

@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// `LLMProvider` conformer that streams from `POST https://api.anthropic.com/v1/messages`.
 struct ClaudeProvider: LLMProvider {

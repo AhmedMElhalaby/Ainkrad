@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/LSP/LSPWireTypes.swift
 import Foundation
+import AinkradHostRuntime
 
 /// A single LSP diagnostic, flattened from the wire's `Range` shape (which
 /// nests `start`/`end` positions) down to the single `start` position plus

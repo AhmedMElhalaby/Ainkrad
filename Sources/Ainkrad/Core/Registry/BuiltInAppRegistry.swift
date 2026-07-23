@@ -1,4 +1,5 @@
 import Observation
+import AinkradHostRuntime
 
 /// Single source of truth for which apps exist and are enabled. Hybrid: apps
 /// are installed once after `AppEnvironment` exists, mixing compiled-in apps

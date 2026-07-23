@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import Observation
+import AinkradHostRuntime
 
 /// Observable CRUD + geometry store for the agent canvas, one `CanvasModel`
 /// per `sessionKey`. Every mutation round-trips through `persistence.save`

@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Non-secret metadata for multi-key auth profiles: the ORDERED list of Keychain-alias
 /// labels registered per connection id. The actual key VALUES never live here — they are

@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Skills/UseSkillTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Loads one skill's full instructions on demand (progressive disclosure). The
 /// model discovers skill names via the index context source (Task 5), then

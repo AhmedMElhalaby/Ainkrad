@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Task 10 — the testable seam for `runConversation`'s credential resolution
 /// is `AgentSession.credentialResolver`, an injectable closure that stands in

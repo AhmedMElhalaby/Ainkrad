@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// One catalog/app card: icon, name, version line, description, and a trailing
 /// action area driven by `row.status` + whether it is busy. Tapping the

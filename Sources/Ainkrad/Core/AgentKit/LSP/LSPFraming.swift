@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/LSP/LSPFraming.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Content-Length framing (LSP's wire format, RFC-7230-style header block) —
 /// unlike MCP's newline-delimited JSON, a message is `Content-Length: <N>\r\n\r\n`

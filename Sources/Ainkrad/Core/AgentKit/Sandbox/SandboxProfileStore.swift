@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// Decodes one array element of `SandboxProfileDocument.userDefined` without letting a
 /// single malformed profile fail the whole array. `SandboxProfile.init(from:)` (Task 1)

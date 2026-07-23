@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Router/RouterOutcomeStore.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Per-(difficulty, model) counters the router learns from: successes, failures, and
 /// explicit user overrides (the user manually picked this model for this difficulty).

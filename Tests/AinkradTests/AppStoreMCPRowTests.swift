@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Mirrors `FakeAppStoreService` from `AppStoreStoreTests.swift` (file-private
 /// there) so this suite doesn't depend on cross-file visibility of a test fake.

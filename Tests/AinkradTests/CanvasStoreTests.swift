@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("CanvasStore")
 @MainActor

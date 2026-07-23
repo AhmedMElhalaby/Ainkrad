@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Installs / uninstalls MCP-server catalog items. No download and no `dlopen`:
 /// installing records a disabled+untrusted `MCPServerConfig` (secret key names

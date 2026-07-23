@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("Domain document conformance")
 struct DocumentConformanceTests {

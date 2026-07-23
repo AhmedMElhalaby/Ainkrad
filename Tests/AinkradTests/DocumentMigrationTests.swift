@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// v2 renamed the field `title` -> `name`. The migrator maps the old key.
 private struct MigratableDoc: PersistableDocument {

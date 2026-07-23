@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("LSPClient", .timeLimit(.minutes(1)))
 struct LSPClientTests {

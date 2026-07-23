@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// One parsed chart data point: a label and its non-negative value.
 struct CanvasChartBar: Equatable, Sendable {

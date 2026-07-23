@@ -1,5 +1,6 @@
 import Foundation
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Publishes the always-loaded memory set (USER.md / MEMORY.md / AGENTS.md,
 /// size-capped by `MemoryStore.alwaysLoadedSet`) as a single workspace-context

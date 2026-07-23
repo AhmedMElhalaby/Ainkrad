@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 private struct CountingService: TranscriptionService {
     func transcribe(audio: Data, fileName: String, localeIdentifier: String?) async throws -> TranscriptionResult {

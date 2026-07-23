@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/LSP/LSPServerConfig.swift
 import Foundation
+import AinkradHostRuntime
 
 /// One configured language server: the language it serves, the command/args to launch it
 /// (found either via PATH autodetection or hand-entered by the user), and the file globs

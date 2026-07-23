@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import Ainkrad
 import AinkradAppKit
+import AinkradHostRuntime
 
 private final class FakeDocs: PluginDocumentStore {
     var storage: [String: Data] = [:]

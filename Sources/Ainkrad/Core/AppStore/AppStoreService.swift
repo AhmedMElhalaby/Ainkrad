@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// The single entry point the UI (AIN-136) will call: refresh the catalog,
 /// install/uninstall, list what's installed, and detect updates.

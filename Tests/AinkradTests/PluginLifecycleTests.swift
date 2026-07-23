@@ -3,6 +3,7 @@ import Foundation
 import CryptoKit
 import SwiftUI
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor
 struct PluginLifecycleTests {

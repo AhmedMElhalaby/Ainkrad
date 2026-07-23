@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 private final class FakeDataHTTPClient: DataHTTPClient, @unchecked Sendable {
     var captured: URLRequest?

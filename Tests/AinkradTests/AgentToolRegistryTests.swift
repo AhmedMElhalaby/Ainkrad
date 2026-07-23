@@ -1,5 +1,6 @@
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor
 private struct EchoTool: AgentTool {

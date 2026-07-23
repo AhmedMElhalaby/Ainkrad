@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The five tabs of the Assistant settings pane. Each tab owns an ordered set
 /// of sections; only the active tab's sections render below the tab bar.

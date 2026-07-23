@@ -1,5 +1,6 @@
 import Foundation
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Injects a cheap index (name + description) of the active skills into the
 /// agent's context each turn via `AgentContextRegistryHub`. Full instructions

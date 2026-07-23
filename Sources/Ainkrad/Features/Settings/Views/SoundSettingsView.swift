@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Settings → Sound: the sound-effects master toggle + volume (AIN-108) and
 /// per-event cue configuration. Split out of General into its own section so

@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Subscription (Claude OAuth) auth controls for a single Claude connection —
 /// an auth-method switch (API key vs. subscription), "Sign in with Claude"

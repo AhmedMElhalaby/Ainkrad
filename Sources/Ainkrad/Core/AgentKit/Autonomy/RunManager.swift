@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// The `@Observable` engine that owns `AgentRun`s end-to-end: a queue, a
 /// bounded active/running set, terminal history, pause/stop, best-effort

@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// One-time import of M1's `UserDefaults`-backed settings into the new
 /// file-based document store. Runs at bootstrap before the domain stores are

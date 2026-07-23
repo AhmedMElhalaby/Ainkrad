@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradHostRuntime
 
 /// Accumulates virtual sky-time as the integral of the user's speed setting,
 /// so changing speed ramps the motion smoothly instead of teleporting the

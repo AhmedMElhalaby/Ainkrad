@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// DEBUG-only design-system showcase: every SDK scale + component, rendered
 /// across all 7 themes via a local theme switcher. Reachable from the

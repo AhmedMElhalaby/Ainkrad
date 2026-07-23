@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/RunTerminalTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Runs a shell command through the `ExecutionRouter` (M7 Slice 6) — the
 /// router picks the backend + `SandboxProfile` for this tool's `trustTier`.

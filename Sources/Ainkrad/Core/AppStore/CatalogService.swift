@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Persisted snapshot of the last successfully-fetched catalog (offline fallback).
 struct CatalogCacheDocument: PersistableDocument {

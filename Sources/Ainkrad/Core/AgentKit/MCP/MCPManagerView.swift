@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Cardinal-HUD Settings surface for configured MCP servers: a list of
 /// configured servers (health, enable/trust toggles, per-secret fields,

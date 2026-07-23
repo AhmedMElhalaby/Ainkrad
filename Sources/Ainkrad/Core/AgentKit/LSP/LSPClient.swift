@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/LSP/LSPClient.swift
 import Foundation
+import AinkradHostRuntime
 
 /// One JSON-RPC client per running language server. Owns the transport,
 /// performs the LSP `initialize`/`initialized` handshake, tracks document

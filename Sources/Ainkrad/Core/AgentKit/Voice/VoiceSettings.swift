@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 struct VoiceSettingsDocument: PersistableDocument {
     static let documentID = "voice-settings"

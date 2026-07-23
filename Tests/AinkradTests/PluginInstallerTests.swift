@@ -4,6 +4,7 @@ import CryptoKit
 import SwiftUI
 @testable import Ainkrad
 @testable import AinkradAppKit
+import AinkradHostRuntime
 
 @MainActor
 struct PluginInstallerTests {

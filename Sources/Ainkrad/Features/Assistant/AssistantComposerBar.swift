@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Assistant composer: one seamless neon surface (soft elevated fill) with a
 /// bottom control strip holding the connection·model pill, the compact
@@ -303,7 +304,7 @@ private struct SendButton: View {
         Button(action: action) {
             Image(systemName: "arrow.up")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(enabled ? tokens.accentSecondary.contrastingText : tokens.foreground.opacity(0.3))
+                .foregroundStyle(enabled ? tokens.accentSecondary.hostContrastingText : tokens.foreground.opacity(0.3))
                 .frame(width: Self.footprint, height: Self.footprint)
                 .background(ChamferShape(cut: 6).fill(enabled ? tokens.accentSecondary.opacity(0.9) : tokens.surfaceElevated.opacity(0.5)))
                 .contentShape(ChamferShape(cut: 6))

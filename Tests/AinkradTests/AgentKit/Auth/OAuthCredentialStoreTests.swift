@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor @Suite struct OAuthCredentialStoreTests {
     private func makeStore(now: Date, transportResponses: [(Data, Int)]) -> (OAuthCredentialStore, InMemorySecretStore) {

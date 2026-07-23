@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradHostRuntime
 
 /// The neon app-icon shown in the Launcher, Workspace overview, tile-mode chips,
 /// the Block header, App Store, and Settings rows. Drawn live from the active

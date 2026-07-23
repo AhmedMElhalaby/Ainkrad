@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Memory/MemoryWriteTool.swift
 import Foundation
+import AinkradHostRuntime
 
 struct MemoryWriteTool: AgentTool {
     let service: MemoryService

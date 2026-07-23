@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradHostRuntime
 
 /// An assistant-scoped typography value: the font family + size multiplier the
 /// assistant transcript body renders with. It combines the per-assistant

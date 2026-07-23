@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Pure mapping from `PushToTalkController.Status` to the indicator's visual
 /// state — kept separate from `RecordingIndicatorView` so it's unit-testable

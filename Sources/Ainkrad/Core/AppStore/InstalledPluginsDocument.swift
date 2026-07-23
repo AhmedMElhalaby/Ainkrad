@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// What is installed and at which version — the source of truth for update
 /// detection and uninstall. (Enabled/disabled state stays in RegistryStateDocument.)

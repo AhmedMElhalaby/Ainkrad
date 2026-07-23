@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("EditQuality / EditFileTool degradation")
 @MainActor

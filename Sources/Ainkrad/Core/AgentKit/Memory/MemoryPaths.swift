@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// Resolves the on-disk layout of the host-internal memory subsystem: the
 /// three markdown files, the SQLite index, the user profile, and per-session

@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Providers/GeminiProvider.swift
 import Foundation
+import AinkradHostRuntime
 
 /// `LLMProvider` conformer for Google's native Gemini API
 /// (`POST {baseURL}/models/{model}:streamGenerateContent?alt=sse`). Gemini has

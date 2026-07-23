@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 private struct NoOpCatalogSource: CatalogSource {
     func fetchCatalog() async throws -> [CatalogEntry] { [] }

@@ -1,6 +1,7 @@
 import Testing
 @testable import Ainkrad
 @testable import AinkradAppKit
+import AinkradHostRuntime
 
 struct PluginValidatorTests {
     private func meta(id: String = "hello", api: Int = 1) -> PluginBundleMetadata {

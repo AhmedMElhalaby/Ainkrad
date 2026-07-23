@@ -8,6 +8,7 @@
 // `resolveWithPin`/`resolveTrivialNoPin` helpers for the model-resolution tests.
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @MainActor
 private final class NoopProvider: LLMProvider {

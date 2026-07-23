@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// The status-driven action controls — Install / Update / Enable / Disable /
 /// Uninstall, plus the busy affordance — shared by `AppStoreCard` and

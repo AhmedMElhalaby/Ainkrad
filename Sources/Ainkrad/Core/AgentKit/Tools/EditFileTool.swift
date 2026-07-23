@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/EditFileTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Find/replace file editor. `old_string` must match exactly once. Empty
 /// `old_string` on a non-existent path creates the file. Any path is allowed;

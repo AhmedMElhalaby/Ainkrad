@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Autonomy/SpawnSubagentTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// `AgentTool` that delegates one or more scoped sub-tasks to parallel child
 /// agents via `SubagentCoordinator`. Parses the LLM-supplied JSON input

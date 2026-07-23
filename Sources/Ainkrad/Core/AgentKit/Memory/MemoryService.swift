@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// The single facade over the host-internal memory subsystem: composes
 /// `MemoryStore` (file I/O), `MemoryIndex` (FTS search), and `MemoryLogStore`

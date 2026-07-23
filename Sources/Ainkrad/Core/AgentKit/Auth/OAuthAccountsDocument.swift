@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 enum OAuthSource: String, Codable, Sendable { case freshLogin, claudeCodeImport }
 

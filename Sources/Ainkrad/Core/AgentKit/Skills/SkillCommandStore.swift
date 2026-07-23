@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// One `/name` → skill binding. `command` is the bare name typed after `/`
 /// (never includes the slash itself); `skillName` is the bound `Skill.name`.

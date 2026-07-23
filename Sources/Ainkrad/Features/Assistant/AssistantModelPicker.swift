@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Whether the composer's model pill should show the "Auto" badge — i.e. the
 /// router is resolving the model each turn rather than a user pin winning

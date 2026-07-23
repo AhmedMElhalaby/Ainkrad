@@ -1,6 +1,7 @@
 // Sources/Ainkrad/Core/AgentKit/Agents/AgentStore.swift
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 struct AgentsDocument: PersistableDocument {
     static let documentID = "agents"

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Settings → Keyboard: view + rebind the six named shortcuts, with conflict
 /// detection and reset-to-defaults (AIN-144). The positional/structural

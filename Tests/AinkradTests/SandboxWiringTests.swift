@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// M7 Slice 6 Task 12: proves the wiring in `AppEnvironment.bootstrap()` —
 /// all backends registered by their own kind, and `RunTerminalTool` still

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AinkradHostRuntime
 
 /// The floating-island hero artwork at the center of an empty workspace
 /// (AIN-107, "Living Island"). Renders the static painted artwork for the

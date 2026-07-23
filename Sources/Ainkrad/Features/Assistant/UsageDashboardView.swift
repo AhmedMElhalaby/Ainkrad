@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// "$x.xxxx" when `cost` is a genuine, known figure; "cost unknown" when it's
 /// non-positive — `UsageTracker.record` only accumulates cost when

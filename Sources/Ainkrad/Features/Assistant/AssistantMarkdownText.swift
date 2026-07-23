@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Renders assistant transcript text as markdown blocks. Prose/heading/list
 /// items resolve inline markdown via `AttributedString`; fenced code reuses

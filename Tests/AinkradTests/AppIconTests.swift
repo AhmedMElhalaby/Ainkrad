@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 struct ThemeIconFamilyTests {
     @Test("every theme maps to its locked icon color family")

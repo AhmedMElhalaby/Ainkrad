@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/MCP/MCPTransport.swift
 import Foundation
+import AinkradHostRuntime
 
 /// A bidirectional JSON-RPC message pipe to one MCP server. Framing is the
 /// transport's concern; `MCPClient` only sees decoded `JSONValue` messages.

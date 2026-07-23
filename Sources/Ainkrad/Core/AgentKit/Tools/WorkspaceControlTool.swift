@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Tools/WorkspaceControlTool.swift
 import Foundation
+import AinkradHostRuntime
 
 /// Host-native tool that drives the workspace layer via `WorkspaceManager`.
 /// Scoped to the manager's existing verbs. `deleteWorkspace` is irreversible.

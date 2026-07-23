@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Cardinal-HUD Settings surface for configured language servers: a
 /// per-language list (command/args/file-globs, enabled toggle, live

@@ -9,6 +9,7 @@ import Foundation
 import AppKit
 import Testing
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// A scripted `LLMProvider` double, mirroring `AgentSessionToolLoopTests`'
 /// file-private `ScriptedProvider` — kept local here so this file doesn't take

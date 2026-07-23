@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 
 /// Inline transcript card for a tool call. In `.awaitingApproval` it shows the
 /// preview (with a diff for edits) and Approve/Deny; committed calls render a

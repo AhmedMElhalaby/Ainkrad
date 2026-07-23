@@ -1,6 +1,7 @@
 // Sources/Ainkrad/Core/AgentKit/Usage/UsageTracker.swift
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// Persisted usage ledger: cumulative tokens/cost across all sessions, router
 /// savings vs. always-premium, and a per-day breakdown keyed by `yyyy-MM-dd`.

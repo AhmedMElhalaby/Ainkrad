@@ -1,5 +1,6 @@
 // Sources/Ainkrad/Core/AgentKit/Memory/MemorySearchTool.swift
 import Foundation
+import AinkradHostRuntime
 
 struct MemorySearchTool: AgentTool {
     let service: MemoryService
