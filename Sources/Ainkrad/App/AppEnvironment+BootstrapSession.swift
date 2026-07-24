@@ -9,6 +9,16 @@ import AinkradHostRuntime
 /// `@`-mention file index, the main `agentSession`, and `voiceService`. Pure
 /// value-construction, mirroring `bootstrap()`'s original order exactly.
 extension AppEnvironment {
+    /// `web_fetch`/`web_search` are read-class (auto-approve) network-egress
+    /// tools. They stay ONLY in the foreground interactive registry; every
+    /// UNATTENDED registry (spawned subagents + background/schedule/trigger
+    /// runs) excludes them, so no autonomous run performs un-gated network
+    /// access. (The foreground main session keeps them, gated by the read
+    /// approval policy with the user present.)
+    static func isUnattendedNetworkTool(_ tool: any AgentTool) -> Bool {
+        tool is WebFetchTool || tool is WebSearchTool
+    }
+
     static func bootstrapAgentSessionAndRuns(
         persistence: PersistenceStore,
         secrets: SecretStore,
@@ -92,7 +102,7 @@ extension AppEnvironment {
         // gate) with its router-resolved model PINNED (no router/candidatesProvider
         // passed to the child, so it never re-routes per tool-loop turn).
         let subagentRunner = AgentSessionSubagentRunner(
-            allTools: agentTools, agents: agentStore, router: modelRouter,
+            allTools: agentTools.filter { !AppEnvironment.isUnattendedNetworkTool($0) }, agents: agentStore, router: modelRouter,
             executionRouter: executionRouter,
             candidatesProvider: candidatesProvider,
             makeSession: AppEnvironment.makeSubagentSession(
@@ -137,7 +147,9 @@ extension AppEnvironment {
         // looking at — a cross-session split-brain. The foreground
         // `agentToolRegistry` above keeps `canvas_render`; only this background
         // copy drops it.
-        var backgroundAgentTools = agentTools.filter { !($0 is CanvasRenderTool) }
+        var backgroundAgentTools = agentTools.filter {
+            !($0 is CanvasRenderTool) && !AppEnvironment.isUnattendedNetworkTool($0)
+        }
         if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
             backgroundAgentTools[idx] = RunTerminalTool(
                 actionHub: agentActionHub, router: executionRouter, trustTier: .background)

@@ -69,6 +69,11 @@ extension AppEnvironment {
             RunTerminalTool(actionHub: agentActionHub, router: executionRouter),
             GitOpTool(actionHub: agentActionHub),
         ]
+        // M8 web tools (read-class, gated like reads). web_fetch uses a
+        // redirect-validating client so a 302 to a private host is never
+        // dispatched; web_search hits a fixed Brave endpoint (key in SecretStore).
+        agentTools.append(WebFetchTool(http: RedirectValidatingHTTPClient()))
+        agentTools.append(WebSearchTool(backend: BraveSearchBackend(secrets: secrets, http: URLSessionDataHTTPClient())))
         if let memoryService {
             _ = agentContextHub.register(appID: "host.memory") {
                 MemoryContextSource.snapshot(from: memoryService)
