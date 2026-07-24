@@ -39,41 +39,49 @@ extension AppEnvironment {
             return AnyView(MenuBarPopoverView(presence: environment.menuBarPresence).environment(environment))
         }
 
-        // Kick the local-reachability cache: an immediate refresh so the very
-        // first turn already reflects reality (best-effort — a turn started
-        // before this completes just sees the cache's initial empty state,
-        // which is safe: local candidates are dropped, not hung on), then a
-        // 30s repeating loop so a server started/stopped mid-session is
-        // picked up without requiring a model-picker visit. Runs for the
-        // process lifetime of `environment`, mirroring other bootstrap-owned
-        // background loops in this app (e.g. sound/theme observers).
-        Task { [weak connectionStore, weak localModelProbe] in
-            while !Task.isCancelled {
-                guard let connectionStore, let localModelProbe else { return }
-                await localModelAvailability.refresh(
-                    connections: connectionStore.connections, probe: localModelProbe,
-                    tokenFor: { connectionStore.token(for: $0) })
-                try? await Task.sleep(for: .seconds(30))
+        // Launch-time external I/O (local-model probes, MCP connect, LSP
+        // autodetect) is skipped when the app is hosting a test bundle: under
+        // `xcodebuild test` these otherwise hang the shared process on network
+        // timeouts / a TCC prompt, starving the tests. See
+        // `AppEnvironment.isRunningUnderTests`. Guarded as one block since all
+        // three are the same "background external I/O off the launch path" class.
+        if !AppEnvironment.isRunningUnderTests {
+            // Kick the local-reachability cache: an immediate refresh so the very
+            // first turn already reflects reality (best-effort — a turn started
+            // before this completes just sees the cache's initial empty state,
+            // which is safe: local candidates are dropped, not hung on), then a
+            // 30s repeating loop so a server started/stopped mid-session is
+            // picked up without requiring a model-picker visit. Runs for the
+            // process lifetime of `environment`, mirroring other bootstrap-owned
+            // background loops in this app (e.g. sound/theme observers).
+            Task { [weak connectionStore, weak localModelProbe] in
+                while !Task.isCancelled {
+                    guard let connectionStore, let localModelProbe else { return }
+                    await localModelAvailability.refresh(
+                        connections: connectionStore.connections, probe: localModelProbe,
+                        tokenFor: { connectionStore.token(for: $0) })
+                    try? await Task.sleep(for: .seconds(30))
+                }
             }
-        }
 
-        // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
-        // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
-        // launch itself must never block on a slow or down server, so this is fired
-        // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
-        // Tools/trust populate as servers come up; a down server just never appears.
-        Task { [weak mcpServerRegistry] in
-            await mcpServerRegistry?.connectEnabled()
-        }
+            // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
+            // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
+            // launch itself must never block on a slow or down server, so this is fired
+            // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
+            // Tools/trust populate as servers come up; a down server just never appears.
+            Task { [weak mcpServerRegistry] in
+                await mcpServerRegistry?.connectEnabled()
+            }
 
-        // Seed autodetected LSP servers off the launch path: `autodetect()` shells out to
-        // `which` once per known server (a handful of `Process` spawns), so it runs inside
-        // this unawaited `Task` rather than synchronously in `bootstrap()`. `seedIfEmpty`
-        // is a no-op once the user has any configs (from a prior autodetect or a manual
-        // edit in the LSP config UI), so this only ever does something on first launch.
-        Task { [weak lspServerRegistry] in
-            let configs = LSPServerRegistry.autodetect()
-            await lspServerRegistry?.seedIfEmpty(with: configs)
+            // Seed autodetected LSP servers off the launch path: `autodetect()` shells out to
+            // `which` once per known server (a handful of `Process` spawns), so it runs inside
+            // this unawaited `Task` rather than synchronously in `bootstrap()`. `seedIfEmpty`
+            // is a no-op once the user has any configs (from a prior autodetect or a manual
+            // edit in the LSP config UI), so this only ever does something on first launch.
+            Task { [weak lspServerRegistry] in
+                let configs = LSPServerRegistry.autodetect()
+                await lspServerRegistry?.seedIfEmpty(with: configs)
+            }
         }
 
         // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
