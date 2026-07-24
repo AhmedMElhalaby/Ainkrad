@@ -59,6 +59,7 @@ struct AssistantSettingsView: View {
         case .permissions:    permissionsSection(tokens: tokens)
         case .sandbox:        sandboxSection(tokens: tokens)
         case .contextPrivacy: contextPrivacySection(tokens: tokens)
+        case .web:            webSection(tokens: tokens)
         case .voice:          voiceSection(tokens: tokens)
         case .appearance:     appearanceSection(tokens: tokens)
         }

@@ -50,6 +50,7 @@ final class AppEnvironment {
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
     let appAppearanceStore: AppAppearanceStore
+    let webSearchSettingsStore: WebSearchSettingsStore
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
@@ -220,6 +221,7 @@ final class AppEnvironment {
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
         appAppearanceStore: AppAppearanceStore,
+        webSearchSettingsStore: WebSearchSettingsStore,
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
@@ -280,6 +282,7 @@ final class AppEnvironment {
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
+        self.webSearchSettingsStore = webSearchSettingsStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
         self.agentContextHub = agentContextHub
@@ -359,7 +362,7 @@ final class AppEnvironment {
         let (
             persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
-            appAppearanceStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
+            appAppearanceStore, webSearchSettingsStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
         ) = bootstrapCoreStores(rootURL: rootURL, defaults: defaults)
 
@@ -418,6 +421,7 @@ final class AppEnvironment {
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
+            webSearchSettingsStore: webSearchSettingsStore,
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,

@@ -216,6 +216,15 @@ extension AssistantSettingsView {
         }
     }
 
+    // MARK: - Web
+
+    func webSection(tokens: DesignTokens) -> some View {
+        WebToolsSettingsView(
+            settings: environment.webSearchSettingsStore,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
     // MARK: - Voice
 
     func voiceSection(tokens: DesignTokens) -> some View {
