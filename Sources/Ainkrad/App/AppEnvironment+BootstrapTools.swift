@@ -108,6 +108,17 @@ extension AppEnvironment {
         let canvasStore = CanvasStore(persistence: persistence)
         agentTools.append(CanvasRenderTool(store: canvasStore))
 
+        // M8 code-search tools (read-class). Share the assistant workspace root,
+        // resolved live so a folder change is reflected without re-registering —
+        // same derivation as the @-mention index in bootstrapSession.
+        let searchRootProvider: @MainActor () -> URL = { [persistence] in
+            persistence.load(AssistantWorkspaceSettings.self)
+                .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
+                ?? FileManager.default.homeDirectoryForCurrentUser
+        }
+        agentTools.append(GrepTool(rootProvider: searchRootProvider))
+        agentTools.append(GlobTool(rootProvider: searchRootProvider))
+
         return (sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore)
     }
 
