@@ -316,7 +316,7 @@ struct AssistantRootView: View {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(tokens.accentTertiary)
+                    .foregroundStyle(tokens.danger)
                 Text("Something went wrong")
                     .font(AinkradFont.display(12, weight: .semibold))
                     .foregroundStyle(tokens.foreground.opacity(0.85))
@@ -335,9 +335,9 @@ struct AssistantRootView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         .overlay(alignment: .leading) {
-            Rectangle().fill(tokens.accentTertiary).frame(width: 2)
+            Rectangle().fill(tokens.danger).frame(width: 2)
         }
-        .shadow(color: tokens.accentTertiary.opacity(0.14), radius: 7)
+        .shadow(color: tokens.danger.opacity(0.14), radius: 7)
     }
 
 }

@@ -18,7 +18,7 @@ struct TimelineRailGutter: View {
                 .frame(width: 1)
                 .frame(maxHeight: .infinity)
             TimelineNodeMarker(status: status, tint: tokens.accentPrimary,
-                               errorColor: tokens.accentTertiary, reduceMotion: reduceMotion)
+                               errorColor: tokens.danger, reduceMotion: reduceMotion)
                 .padding(.top, 3)
         }
         .frame(width: 10)
