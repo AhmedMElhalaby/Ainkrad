@@ -68,6 +68,7 @@ extension AppEnvironment {
             WorkspaceControlTool(workspaces: workspaceManager),
             RunTerminalTool(actionHub: agentActionHub, router: executionRouter),
             GitOpTool(actionHub: agentActionHub),
+            TodoWriteTool(),
         ]
         // M8 web tools (read-class, gated like reads). web_fetch uses a
         // redirect-validating client so a 302 to a private host is never

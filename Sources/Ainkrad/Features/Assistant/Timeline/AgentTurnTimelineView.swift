@@ -68,6 +68,9 @@ struct AgentTurnTimelineView: View {
                 diff: nil,
                 tokens: tokens,
                 result: payload.result)
+        case .todo(let items):
+            TodoChecklistView(items: items, tokens: tokens)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

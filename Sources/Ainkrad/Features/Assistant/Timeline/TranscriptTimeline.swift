@@ -20,6 +20,7 @@ struct TurnStep: Identifiable, Equatable {
         case thinking(String)
         case text(String)
         case tool(ToolStepPayload)
+        case todo([TodoItem])
     }
     let id: String
     let kind: Kind
@@ -85,6 +86,16 @@ enum TranscriptTimelineBuilder {
                     currentSteps.append(TurnStep(id: "\(index)-\(blockIndex)", kind: .text(t),
                                                  status: .done, duration: nil, tokens: nil))
                 case .toolUse(let id, let name, let input):
+                    if name == "todo_write" {
+                        // Reconstruct the live checklist positionally: keep only the
+                        // LATEST todo_write in this turn so the node updates in place
+                        // rather than stacking. Remove any prior todo step, then append.
+                        currentSteps.removeAll { if case .todo = $0.kind { return true } else { return false } }
+                        currentSteps.append(TurnStep(id: "todo-\(turnStartIndex ?? index)",
+                            kind: .todo(TodoItem.list(from: input)),
+                            status: .done, duration: nil, tokens: nil))
+                        break
+                    }
                     let result = ToolResultLookup.summary(forToolUseID: id, after: index, in: messages)
                     let status: StepStatus = result.isPending ? .running : (result.isError ? .error : .done)
                     currentSteps.append(TurnStep(id: id,
