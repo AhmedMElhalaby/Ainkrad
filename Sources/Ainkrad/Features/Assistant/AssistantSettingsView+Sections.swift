@@ -180,6 +180,8 @@ extension AssistantSettingsView {
                        subtitle: "Recent output from open Terminal Blocks.", store: settingsStore)
             privacyRow(tokens: tokens, kind: "git", title: "Git status",
                        subtitle: "Branch, staged/unstaged changes, and recent commits.", store: settingsStore)
+            privacyRow(tokens: tokens, kind: "repo-instructions", title: "Repo instruction files",
+                       subtitle: "CLAUDE.md / AGENTS.md found in the working repo.", store: settingsStore)
         }
     }
 

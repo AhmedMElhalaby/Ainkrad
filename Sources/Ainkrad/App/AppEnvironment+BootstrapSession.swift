@@ -248,6 +248,16 @@ extension AppEnvironment {
         // directory walk, without ever touching the index off its required actor.
         Task { workspaceFileIndex.refresh() }
 
+        // Repo-instruction files (CLAUDE.md / AGENTS.md walked up from the active
+        // workspace root) as a DISTINCT context source from the host's own
+        // USER/MEMORY/AGENTS memory. mtime-cached inside the loader; the hub polls
+        // it each turn, gated by `AgentContextSettingsStore` via its `kind`. Same
+        // register-a-closure pattern as `MemoryContextSource`.
+        let repoInstructionsLoader = RepoInstructionsLoader(root: assistantWorkingDirectory)
+        _ = agentContextService.hub.register(appID: "host.repo-instructions") {
+            repoInstructionsLoader.snapshot()
+        }
+
         // Skill `/name` commands (Task 11): registered after the builtins, through
         // the same seam skill commands are documented to use — `register(_:)`
         // never lets a skill-bound name overwrite a builtin (`SkillCommandStore`
