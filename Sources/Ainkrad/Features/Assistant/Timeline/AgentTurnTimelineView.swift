@@ -12,6 +12,10 @@ struct AgentTurnTimelineView: View {
     let reduceMotion: Bool
 
     @State private var expandedThinking: Set<String> = []
+    /// The text step currently hovered, keyed by step id — drives the per-step
+    /// hover-to-copy affordance (restored from the pre-timeline bubble, which
+    /// showed a copy button on hovered assistant turns).
+    @State private var hoveredTextStep: String?
     /// Drives the one-shot staggered entrance. Held as view state keyed to the
     /// turn's `.id`, so committed turns cascade in once and don't replay on the
     /// frequent re-renders during streaming.
@@ -48,6 +52,14 @@ struct AgentTurnTimelineView: View {
             }
         case .text(let text):
             AssistantMarkdownText(text: text, tokens: tokens, typography: typography)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .topTrailing) {
+                    AssistantTurnCopyButton(text: text, isVisible: hoveredTextStep == step.id)
+                        .padding(.trailing, 2)
+                }
+                .onHover { isHovering in
+                    hoveredTextStep = isHovering ? step.id : (hoveredTextStep == step.id ? nil : hoveredTextStep)
+                }
         case .tool(let payload):
             ToolCallCardView(
                 toolName: payload.name,

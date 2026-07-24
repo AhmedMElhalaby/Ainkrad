@@ -19,7 +19,6 @@ struct AssistantRootView: View {
     @State private var draft = ""
     @State private var isSidebarVisible = false
     @State private var modelPicker = AssistantModelPickerModel()
-    @State private var hoveredTurnIndex: Int?
     // Not `private` — read from `AssistantRootView+Export.swift`.
     @Environment(\.ainkradToastCenter) var toastCenter
     @State private var isUsageDashboardPresented = false
@@ -185,7 +184,7 @@ struct AssistantRootView: View {
                         ForEach(TranscriptTimelineBuilder.build(from: session.messages)) { item in
                             switch item {
                             case .userBubble(let index, let message):
-                                bubble(for: message, at: index, in: session.messages, tokens: tokens)
+                                bubble(for: message, tokens: tokens)
                                     .id(index)
                                     .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                             case .agentTurn(let id, let steps):
@@ -253,43 +252,21 @@ struct AssistantRootView: View {
         }
     }
 
+    /// Renders a user prompt bubble: its text (right-aligned chamfer) and any
+    /// attached image chips. Agent turns render through `AgentTurnTimelineView`,
+    /// so this is only ever called for `.userBubble` items — the old assistant
+    /// tool-card / hover-copy paths moved to the timeline.
     @ViewBuilder
-    private func bubble(for message: AgentMessage, at index: Int, in messages: [AgentMessage], tokens: DesignTokens) -> some View {
+    private func bubble(for message: AgentMessage, tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty {
                 textBubble(for: message, tokens: tokens)
             }
-
             ForEach(Array(message.content.enumerated()), id: \.offset) { _, block in
-                if case .toolUse(let id, let name, _) = block {
-                    let result = ToolResultLookup.summary(forToolUseID: id, after: index, in: messages)
-                    ToolCallCardView(
-                        toolName: name,
-                        title: ToolPresentation.humanize(name),
-                        summary: result.text,
-                        diff: nil,
-                        tokens: tokens,
-                        result: result
-                    )
-                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
-                }
                 if case .image(let mediaType, let base64) = block {
                     imageChip(mediaType: mediaType, base64: base64, tokens: tokens)
                 }
             }
-        }
-        .overlay(alignment: .topTrailing) {
-            if message.role == .assistant && !message.text.isEmpty {
-                AssistantTurnCopyButton(text: message.text, isVisible: hoveredTurnIndex == index)
-                    .padding(.trailing, 2)
-            }
-        }
-        .onHover { isHovering in
-            // Only assistant turns with text show the hover copy button, so
-            // only they drive the hovered-turn state — no dead writes for user
-            // bubbles (which have no overlay).
-            guard message.role == .assistant, !message.text.isEmpty else { return }
-            hoveredTurnIndex = isHovering ? index : (hoveredTurnIndex == index ? nil : hoveredTurnIndex)
         }
     }
 
