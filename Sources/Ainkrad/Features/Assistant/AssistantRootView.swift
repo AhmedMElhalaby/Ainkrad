@@ -208,14 +208,22 @@ struct AssistantRootView: View {
                         }
 
                         if case .awaitingApproval(let pending) = session.state {
-                            ToolCallCardView(
-                                toolName: pending.call.name,
-                                title: pending.preview.title,
-                                summary: pending.preview.summary,
-                                diff: pending.preview.diff,
-                                tokens: tokens,
-                                pendingApproval: true
-                            )
+                            // Render the pending tool as an in-rail node (running
+                            // marker + spine), so an approval reads as the current
+                            // step of the timeline. The Approve/Deny/Always buttons
+                            // stay in the docked AssistantApprovalBar below.
+                            HStack(alignment: .top, spacing: 10) {
+                                TimelineRailGutter(status: .running, tokens: tokens, reduceMotion: reduceMotion)
+                                ToolCallCardView(
+                                    toolName: pending.call.name,
+                                    title: pending.preview.title,
+                                    summary: pending.preview.summary,
+                                    diff: pending.preview.diff,
+                                    tokens: tokens,
+                                    pendingApproval: true
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             .id("approval")
                             .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
