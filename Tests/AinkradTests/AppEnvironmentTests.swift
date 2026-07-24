@@ -112,6 +112,7 @@ final class AppEnvironmentTests {
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
+            webSearchSettingsStore: WebSearchSettingsStore(persistence: persistence),
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,

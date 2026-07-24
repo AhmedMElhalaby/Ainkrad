@@ -19,6 +19,9 @@ struct AssistantSettingsTabTests {
     @Test("data tab is context privacy") func data() {
         #expect(AssistantSettingsTab.data.sections == [.contextPrivacy])
     }
+    @Test("web tab is web") func web() {
+        #expect(AssistantSettingsTab.web.sections == [.web])
+    }
     @Test("voice tab is voice") func voice() {
         #expect(AssistantSettingsTab.voice.sections == [.voice])
     }
