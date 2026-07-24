@@ -183,10 +183,18 @@ struct AssistantRootView: View {
                         .padding(.top, 60)
                 } else {
                     VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
-                        ForEach(Array(session.messages.enumerated()), id: \.offset) { index, message in
-                            bubble(for: message, at: index, in: session.messages, tokens: tokens)
-                                .id(index)
-                                .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
+                        ForEach(TranscriptTimelineBuilder.build(from: session.messages)) { item in
+                            switch item {
+                            case .userBubble(let index, let message):
+                                bubble(for: message, at: index, in: session.messages, tokens: tokens)
+                                    .id(index)
+                                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
+                            case .agentTurn(let id, let steps):
+                                AgentTurnTimelineView(steps: steps, tokens: tokens,
+                                                      typography: assistantTypography, reduceMotion: reduceMotion)
+                                    .id(id)
+                                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
+                            }
                         }
 
                         if session.state == .thinking || session.state == .streaming
