@@ -18,7 +18,6 @@ struct AssistantRootView: View {
     var autoFocusComposer: Bool = false
     @State private var draft = ""
     @State private var isSidebarVisible = false
-    @State private var isThinkingExpanded = true
     @State private var modelPicker = AssistantModelPickerModel()
     @State private var hoveredTurnIndex: Int?
     // Not `private` — read from `AssistantRootView+Export.swift`.
@@ -199,7 +198,11 @@ struct AssistantRootView: View {
 
                         if session.state == .thinking || session.state == .streaming
                             || isCallingToolWithoutCard(session) {
-                            streamingBubble(session: session, tokens: tokens)
+                            LiveStepView(streamingText: session.streamingText,
+                                         streamingThinking: session.streamingThinking,
+                                         isStreaming: session.state == .streaming,
+                                         tokens: tokens, typography: assistantTypography,
+                                         reduceMotion: reduceMotion)
                                 .id("streaming")
                                 .transition(reduceMotion ? .identity : .opacity)
                         }
@@ -320,52 +323,6 @@ struct AssistantRootView: View {
             }
 
             if !isUser { Spacer(minLength: 40) }
-        }
-    }
-
-    @ViewBuilder
-    private func streamingBubble(session: AgentSession, tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !session.streamingThinking.isEmpty {
-                thinkingDisclosure(session: session, tokens: tokens)
-            }
-
-            if session.state == .streaming || !session.streamingText.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    AssistantMarkdownText(text: session.streamingText, tokens: tokens, typography: assistantTypography)
-                    if session.state == .streaming {
-                        StreamingCursor(tokens: tokens)
-                    }
-                }
-            } else if session.streamingThinking.isEmpty {
-                WorkingIndicator(tokens: tokens)
-            }
-        }
-        .padding(.vertical, 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func thinkingDisclosure(session: AgentSession, tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(reduceMotion ? nil : AinkradMotion.present) { isThinkingExpanded.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: isThinkingExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9))
-                    Text("Thinking")
-                        .font(AinkradFont.display(11, weight: .medium))
-                        .kerning(1)
-                }
-                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
-            }
-            .buttonStyle(.plain)
-
-            if isThinkingExpanded {
-                Text(session.streamingThinking)
-                    .font(AinkradFont.mono(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
-            }
         }
     }
 

@@ -94,3 +94,60 @@ struct AgentTurnTimelineView: View {
         }
     }
 }
+
+/// The in-flight turn's tail node: a pulsing `.running` rail node whose body is
+/// the live streaming thinking/text (with a cursor), falling back to a working
+/// indicator before any output arrives. Visually identical to a committed
+/// running node so the hand-off to the settled rail is seamless.
+struct LiveStepView: View {
+    let streamingText: String
+    let streamingThinking: String
+    let isStreaming: Bool
+    let tokens: DesignTokens
+    let typography: AssistantTypography
+    let reduceMotion: Bool
+    @State private var thinkingExpanded = true
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack(alignment: .top) {
+                Rectangle().fill(tokens.accentPrimary.opacity(0.25)).frame(width: 1).frame(maxHeight: .infinity)
+                TimelineNodeMarker(status: .running, tint: tokens.accentPrimary,
+                                   errorColor: tokens.accentTertiary, reduceMotion: reduceMotion)
+                    .padding(.top, 3)
+            }
+            .frame(width: 10)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if !streamingThinking.isEmpty { liveThinking }
+                if isStreaming || !streamingText.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        AssistantMarkdownText(text: streamingText, tokens: tokens, typography: typography)
+                        if isStreaming { StreamingCursor(tokens: tokens) }
+                    }
+                } else if streamingThinking.isEmpty {
+                    WorkingIndicator(tokens: tokens)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var liveThinking: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(reduceMotion ? nil : AinkradMotion.present) { thinkingExpanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: thinkingExpanded ? "chevron.down" : "chevron.right").font(.system(size: 9))
+                    Text("Thinking").font(AinkradFont.display(11, weight: .medium)).kerning(1)
+                }
+                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+            }
+            .buttonStyle(.plain)
+            if thinkingExpanded {
+                Text(streamingThinking).font(AinkradFont.mono(11)).foregroundStyle(tokens.foreground.opacity(0.5))
+            }
+        }
+    }
+}
