@@ -76,6 +76,6 @@ private struct ToolCardButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
     }
 }

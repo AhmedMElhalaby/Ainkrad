@@ -600,7 +600,7 @@ final class AgentSession {
                 recordSettlement(success: true, resolved: resolved, usedModel: currentModel.model)
                 settled()
                 return
-            case .toolCalls(let calls, let assistantText):
+            case .toolCalls(let calls, let assistantText, let thinking):
                 iterations += 1
                 if iterations > maxToolIterations {
                     messages.append(AgentMessage(role: .assistant,
@@ -610,8 +610,10 @@ final class AgentSession {
                     settled()
                     return
                 }
-                // Commit the assistant turn (text + tool_use blocks).
-                var assistantBlocks: [AgentContentBlock] = assistantText.isEmpty ? [] : [.text(assistantText)]
+                // Commit the assistant turn (thinking + text + tool_use blocks).
+                var assistantBlocks: [AgentContentBlock] = []
+                if !thinking.isEmpty { assistantBlocks.append(.thinking(thinking)) }
+                if !assistantText.isEmpty { assistantBlocks.append(.text(assistantText)) }
                 assistantBlocks.append(contentsOf: calls.map { .toolUse(id: $0.id, name: $0.name, input: $0.input) })
                 messages.append(AgentMessage(role: .assistant, content: assistantBlocks))
 
@@ -649,7 +651,7 @@ final class AgentSession {
     private enum TurnOutcome {
         case completed
         case failed(String)
-        case toolCalls([ToolCall], assistantText: String)
+        case toolCalls([ToolCall], assistantText: String, thinking: String)
     }
 
     private func runOneTurn(provider: LLMProvider, system: String,
@@ -685,11 +687,14 @@ final class AgentSession {
 
         if let failure { return .failed(failure) }
         if !pendingCalls.isEmpty {
-            return .toolCalls(pendingCalls, assistantText: streamingText)
+            return .toolCalls(pendingCalls, assistantText: streamingText, thinking: streamingThinking)
         }
-        // No tool calls: commit any assistant text, then settle.
+        // No tool calls: commit any assistant text (with leading thinking), then settle.
         if !streamingText.isEmpty {
-            messages.append(AgentMessage(role: .assistant, text: streamingText))
+            var blocks: [AgentContentBlock] = []
+            if !streamingThinking.isEmpty { blocks.append(.thinking(streamingThinking)) }
+            blocks.append(.text(streamingText))
+            messages.append(AgentMessage(role: .assistant, content: blocks))
             return .completed
         }
         // Empty text. A clean `.done` (tool-less/text-less end_turn) settles to
