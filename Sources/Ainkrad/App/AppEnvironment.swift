@@ -51,6 +51,9 @@ final class AppEnvironment {
     let generalSettingsStore: GeneralSettingsStore
     let appAppearanceStore: AppAppearanceStore
     let webSearchSettingsStore: WebSearchSettingsStore
+    /// Assistant session-share (M8) — writes self-contained HTML share artifacts
+    /// to disk and tracks their metadata, backing the composer's "Share…" flow.
+    let sessionShareStore: SessionShareStore
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
@@ -242,6 +245,7 @@ final class AppEnvironment {
         generalSettingsStore: GeneralSettingsStore,
         appAppearanceStore: AppAppearanceStore,
         webSearchSettingsStore: WebSearchSettingsStore,
+        sessionShareStore: SessionShareStore,
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
@@ -307,6 +311,7 @@ final class AppEnvironment {
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
         self.webSearchSettingsStore = webSearchSettingsStore
+        self.sessionShareStore = sessionShareStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
         self.agentContextHub = agentContextHub
@@ -390,7 +395,7 @@ final class AppEnvironment {
         let (
             persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
-            appAppearanceStore, webSearchSettingsStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
+            appAppearanceStore, webSearchSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
         ) = bootstrapCoreStores(rootURL: rootURL, defaults: defaults)
 
@@ -452,6 +457,7 @@ final class AppEnvironment {
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
             webSearchSettingsStore: webSearchSettingsStore,
+            sessionShareStore: sessionShareStore,
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,

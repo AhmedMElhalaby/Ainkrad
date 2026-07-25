@@ -16,13 +16,16 @@ extension AssistantComposerBar {
         AinkradIconButton(systemName: "ellipsis", size: AssistantComposerBar.controlHeight, tooltip: "More") {
             isOverflowVisible.toggle()
         }
-        .ainkradFloatingPanel(isPresented: $isOverflowVisible, maxHeight: 120) {
+        .ainkradFloatingPanel(isPresented: $isOverflowVisible, maxHeight: 170) {
             VStack(alignment: .leading, spacing: 0) {
                 OverflowRow(icon: "gauge.with.dots.needle.67percent", title: "Usage & cost", tokens: tokens) {
                     isOverflowVisible = false; isUsageDashboardPresented = true
                 }
                 OverflowRow(icon: "square.and.arrow.up", title: "Export…", tokens: tokens) {
                     isOverflowVisible = false; isExportModalPresented = true
+                }
+                OverflowRow(icon: "link", title: "Share…", tokens: tokens) {
+                    isOverflowVisible = false; isShareModalPresented = true
                 }
             }
             .padding(AinkradSpacing.xs)

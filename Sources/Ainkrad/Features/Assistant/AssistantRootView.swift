@@ -23,6 +23,7 @@ struct AssistantRootView: View {
     @Environment(\.ainkradToastCenter) var toastCenter
     @State private var isUsageDashboardPresented = false
     @State var isExportModalPresented = false
+    @State var isShareModalPresented = false
     @State private var isRunsPanelPresented = false
     @State private var isSchedulesPresented = false
     @State var redactionsText = ""
@@ -102,7 +103,8 @@ struct AssistantRootView: View {
                 isUsageDashboardPresented: $isUsageDashboardPresented,
                 isRunsPanelPresented: $isRunsPanelPresented,
                 isSchedulesPresented: $isSchedulesPresented,
-                isExportModalPresented: $isExportModalPresented
+                isExportModalPresented: $isExportModalPresented,
+                isShareModalPresented: $isShareModalPresented
             )
         }
         .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
@@ -118,6 +120,9 @@ struct AssistantRootView: View {
         }
         .ainkradModal(isPresented: $isExportModalPresented) {
             exportModalContent
+        }
+        .ainkradModal(isPresented: $isShareModalPresented) {
+            shareModalContent
         }
         // Runs/Schedules are variable-length lists — bound them to a compact
         // centered card that scrolls internally (like Settings/Launcher),
