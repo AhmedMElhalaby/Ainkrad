@@ -49,7 +49,8 @@ struct DockerBackend: ExecutionBackend {
             executable: resolved,
             arguments: args,
             workingDir: workspace,
-            timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds))
+            timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds),
+            onOutput: request.onOutput, controller: request.processController)
     }
 
     /// Resolves the docker binary: `dockerPath` if executable, else the first

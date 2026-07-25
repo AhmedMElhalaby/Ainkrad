@@ -27,6 +27,16 @@ struct RunTerminalTool: AgentTool {
     /// `timeoutSeconds`. `nil` (the default) defers entirely to the
     /// profile's own timeout. Existing tests assign `tool.timeout = 1`.
     var timeout: TimeInterval? = nil
+    /// Optional live-output sink (terminal-streaming): when set, each drained
+    /// output snapshot is published to the ACTIVE tool call (the session calls
+    /// `toolStream.begin(call.id)` at the pre-tool interception point). Nil keeps
+    /// the pre-streaming capture-only behavior byte-identical.
+    var toolStream: ToolStreamStore? = nil
+    /// Force-kill handle for the live child process (terminal-streaming): when
+    /// set, threaded into the `ExecutionRequest` so `SandboxProcessRunner.run`
+    /// registers the spawned `Process` and `AgentSession.interrupt()` can kill
+    /// it. Nil keeps the pre-Task-5 behavior byte-identical.
+    var processController: TerminalProcessController? = nil
 
     let name = "run_terminal"
     let description = "Run a shell command in a working directory and return its combined stdout+stderr and exit code."
@@ -63,9 +73,28 @@ struct RunTerminalTool: AgentTool {
         }
         if let override = timeout { profile.resourceLimits.timeoutSeconds = Int(override) } // test seam
 
+        // Bridge background-queue snapshots to the MainActor store. `toolStream`
+        // is @MainActor; capture it in a Sendable box that hops each snapshot.
+        let sink = toolStream
+        // Capture the active call id ONCE, before execute() runs any awaits.
+        // The session's pre-tool seam calls `toolStream.begin(call.id)` before
+        // `execute` starts, so `activeID` is this call's id at this point. Binding
+        // each snapshot to that id means a stale background-queue hop that lands
+        // on the MainActor after `finish` + a successor `begin` (whose id no
+        // longer matches `active`) is dropped instead of contaminating the next
+        // call's buffer.
+        let activeID = sink?.activeID
+        var onOutput: (@Sendable (String) -> Void)? = nil
+        if sink != nil, let activeID {
+            onOutput = { snapshot in
+                Task { @MainActor in sink?.appendActive("$ \(command)\n\(snapshot)", for: activeID) }
+            }
+        }
         let result: ExecutionResult
         do {
-            result = try await backend.run(ExecutionRequest(command: command, workingDir: workingDir, profile: profile))
+            result = try await backend.run(ExecutionRequest(
+                command: command, workingDir: workingDir, profile: profile, onOutput: onOutput,
+                processController: processController))
         } catch {
             return ToolResult(content: "$ \(command)\n[blocked: \(error)]", isError: true)
         }

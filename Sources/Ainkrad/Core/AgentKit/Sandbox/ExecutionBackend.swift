@@ -8,6 +8,23 @@ struct ExecutionRequest: Sendable {
     let command: String        // shell command line (runner wraps with the backend's argv)
     let workingDir: String?
     let profile: SandboxProfile
+    /// Optional live-output sink: invoked (on a background queue) with the
+    /// cumulative combined stdout+stderr snapshot after each drained chunk. Nil
+    /// (the default) is byte-identical to the pre-streaming capture-only path.
+    var onOutput: (@Sendable (String) -> Void)? = nil
+    /// Optional handle that lets the caller force-kill the live child process
+    /// (e.g. on user interrupt) once it's registered by `SandboxProcessRunner.run`.
+    var processController: TerminalProcessController? = nil
+
+    init(command: String, workingDir: String?, profile: SandboxProfile,
+         onOutput: (@Sendable (String) -> Void)? = nil,
+         processController: TerminalProcessController? = nil) {
+        self.command = command
+        self.workingDir = workingDir
+        self.profile = profile
+        self.onOutput = onOutput
+        self.processController = processController
+    }
 }
 
 /// The fully-captured outcome of one execution. See the streaming open item

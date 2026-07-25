@@ -35,6 +35,7 @@ struct SSHBackend: ExecutionBackend {
         // a second, independent bound on top of that.
         return await runner.run(executable: sshPath, arguments: args,
                                 workingDir: nil,
-                                timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds))
+                                timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds),
+                                onOutput: request.onOutput, controller: request.processController)
     }
 }
