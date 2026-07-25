@@ -7,6 +7,10 @@ import Foundation
 final class MenuBarPresence {
     private let runs: MenuBarRunSource
     var isPopoverOpen = false
+    /// Remote channel presence: `true` while `RemoteChannelService.status ==
+    /// .listening` (surfaced via `RemoteChannelPresence.isListening`). Drives the
+    /// status-item "listening" indicator; off by default since the channel is.
+    var remoteChannelListening = false
 
     init(runs: MenuBarRunSource) { self.runs = runs }
 
