@@ -21,6 +21,7 @@ struct TurnStep: Identifiable, Equatable {
         case text(String)
         case tool(ToolStepPayload)
         case todo([TodoItem])
+        case plan(PlanArtifact)
     }
     let id: String
     let kind: Kind
@@ -86,6 +87,16 @@ enum TranscriptTimelineBuilder {
                     currentSteps.append(TurnStep(id: "\(index)-\(blockIndex)", kind: .text(t),
                                                  status: .done, duration: nil, tokens: nil))
                 case .toolUse(let id, let name, let input):
+                    if name == "present_plan", let plan = PlanArtifact.from(input) {
+                        // Keep only the LATEST present_plan in this turn so the node
+                        // updates in place rather than stacking. Remove any prior plan
+                        // step, then append. Stable id keeps SwiftUI diffing it as the
+                        // same node across revisions.
+                        currentSteps.removeAll { if case .plan = $0.kind { return true } else { return false } }
+                        currentSteps.append(TurnStep(id: "plan-\(turnStartIndex ?? index)",
+                            kind: .plan(plan), status: .done, duration: nil, tokens: nil))
+                        break
+                    }
                     if name == "todo_write" {
                         // Reconstruct the live checklist positionally: keep only the
                         // LATEST todo_write in this turn so the node updates in place
