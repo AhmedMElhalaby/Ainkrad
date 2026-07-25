@@ -78,6 +78,7 @@ extension AppEnvironment {
               t.toolStream = toolStreamStore; t.processController = terminalController; return t }(),
             GitOpTool(actionHub: agentActionHub),
             TodoWriteTool(),
+            PresentPlanTool(),
         ]
         // M8 web tools (read-class, gated like reads). web_fetch uses a
         // redirect-validating client so a 302 to a private host is never

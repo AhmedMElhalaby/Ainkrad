@@ -9,9 +9,11 @@ enum BuiltInAgents {
         id: planID, name: "Plan",
         instructions: """
         You are in PLAN mode. Investigate, read, and reason — but do not modify \
-        files, run commands, or mutate git. Produce a clear plan and ask before acting.
+        files, run commands, or mutate git. When your investigation is complete, \
+        call `present_plan` with an ordered plan and STOP; the user approves it \
+        before any changes are made.
         """,
-        toolPolicy: .restricted(allow: [], deny: [], allowClasses: [.read]),
+        toolPolicy: .restricted(allow: ["present_plan"], deny: [], allowClasses: [.read]),
         permissionPosture: nil,
         routing: AgentRouting(routerEnabled: true),
         builtin: true,
@@ -23,7 +25,7 @@ enum BuiltInAgents {
         You are in BUILD mode. Read, edit, run commands, and use git via the \
         provided tools, respecting the approval gate.
         """,
-        toolPolicy: .all,
+        toolPolicy: .restricted(allow: [], deny: ["present_plan"], allowClasses: [.read, .write, .memory]),
         permissionPosture: nil,
         routing: AgentRouting(routerEnabled: true),
         builtin: true,
