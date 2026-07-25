@@ -91,6 +91,15 @@ final class AgentSession {
     /// edits are tracked to revert), matching pre-Task-10 behavior.
     private let editJournal: EditJournal?
 
+    /// Checkpoint & Rewind Task 5 — durable capture/restore coordinator, consulted
+    /// at the pre-tool interception point in `execute(_:)` (step 1, before the tool
+    /// actually runs) and driven by `restoreCheckpoint(_:mode:)`/`/rewind`. `nil`
+    /// (the default) means no checkpointing: `execute` skips the capture call
+    /// entirely, byte-identical to pre-Task-5 behavior. Settable via
+    /// `setCheckpointer(_:)` for the production `/rewind` and bootstrap wiring
+    /// (Tasks 6/8), not just tests.
+    private var checkpointer: CheckpointCoordinator?
+
     /// M7 Slice 3b Task 21 — the resolved `SandboxProfile.toolAllowList` for this
     /// session's trust tier (subagent/background/scheduled), when the sandbox
     /// compose layer applies. `nil` (the default) means "no sandbox layer" —
@@ -172,6 +181,7 @@ final class AgentSession {
         memory: MemoryService? = nil,
         agents: AgentStore? = nil,
         editJournal: EditJournal? = nil,
+        checkpointer: CheckpointCoordinator? = nil,
         unattended: Bool = false,
         sandboxAllowList: Set<String>? = nil,
         agentAllowList: Set<String>? = nil,
@@ -196,6 +206,7 @@ final class AgentSession {
         self.memory = memory
         self.agents = agents
         self.editJournal = editJournal
+        self.checkpointer = checkpointer
         self.unattended = unattended
         self.sandboxAllowList = sandboxAllowList
         self.agentAllowList = agentAllowList
@@ -378,6 +389,59 @@ final class AgentSession {
         _ = undoLastTurn()
         send(prompt)
     }
+
+    /// Restores workspace state (and, for `.conversation`/`.both`, truncates the
+    /// transcript back to the checkpoint's turn boundary). The durable-checkpoint
+    /// counterpart to `undoLastTurn()`, driven by `/rewind` (Task 6). Returns the
+    /// `CheckpointCoordinator.RestoreOutcome` (`nil` when no checkpointer is wired)
+    /// so callers (`/rewind`) can surface a restore failure instead of silently
+    /// swallowing it — see `CheckpointCoordinator.RestoreOutcome`.
+    @discardableResult
+    func restoreCheckpoint(_ checkpoint: Checkpoint, mode: CheckpointCoordinator.RestoreMode) async -> CheckpointCoordinator.RestoreOutcome? {
+        guard let checkpointer else { return nil }
+        let outcome = await checkpointer.restore(checkpoint, mode: mode)
+        let truncateTo = outcome.transcriptIndex
+        if truncateTo >= 0, truncateTo <= messages.count {
+            let cut = cleanTranscriptBoundary(upTo: truncateTo)
+            messages.removeLast(messages.count - cut)
+        }
+        return outcome
+    }
+
+    /// Finds the closest safe cut index at-or-before `target` that never leaves a
+    /// dangling `tool_use` at the end of the truncated transcript. `Checkpoint.
+    /// transcriptIndex` is captured AFTER the assistant message carrying a
+    /// `tool_use` block was appended but BEFORE its `tool_result` (the pre-tool
+    /// interception point in `execute(_:)`) — truncating to exactly that index
+    /// would leave a trailing assistant message with an unmatched `tool_use`,
+    /// which the next provider `send` rejects. Walks backward past any such
+    /// trailing assistant message(s) until the cut lands on a clean boundary (a
+    /// user message, or an assistant message with no dangling `tool_use`).
+    private func cleanTranscriptBoundary(upTo target: Int) -> Int {
+        var cut = max(0, min(target, messages.count))
+        while cut > 0 {
+            let last = messages[cut - 1]
+            guard last.role == .assistant,
+                  last.content.contains(where: { if case .toolUse = $0 { return true }; return false })
+            else { break }
+            cut -= 1
+        }
+        return cut
+    }
+
+    /// Appends a system-authored note to the transcript outside of a normal turn —
+    /// used by `/rewind`'s async restore `Task` (Fix #2) to surface a restore
+    /// failure that only becomes known after the command handler already returned
+    /// its synchronous "in progress" note.
+    func appendSystemNote(_ text: String) {
+        messages.append(AgentMessage(role: .assistant, text: text))
+    }
+
+    /// Production `/rewind` and bootstrap wiring (Tasks 6/8) call these — not
+    /// test-only despite the historically test-flavored name pattern elsewhere
+    /// in this file.
+    func setCheckpointer(_ c: CheckpointCoordinator) { checkpointer = c }
+    func activeCheckpointer() -> CheckpointCoordinator? { checkpointer }
 
     func reset() {
         currentTask?.cancel()
@@ -815,6 +879,8 @@ final class AgentSession {
         }
 
         state = .callingTool(call.name)
+        // Pre-tool interception point (shared seam): step 1 — durable checkpoint before a mutating tool.
+        await checkpointer?.captureIfMutating(call: call, tool: tool)
         return await registry.run(call)
     }
 
