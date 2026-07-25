@@ -91,6 +91,8 @@ struct AssistantRootView: View {
                 .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             }
 
+            SkillSuggestionChip(session: session, tokens: tokens)
+
             AssistantComposerBar(
                 session: session,
                 tokens: tokens,

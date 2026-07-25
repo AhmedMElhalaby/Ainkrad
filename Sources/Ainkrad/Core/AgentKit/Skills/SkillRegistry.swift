@@ -25,6 +25,9 @@ struct SkillProposal: Equatable, Identifiable {
     let skill: Skill?
     let issues: [SkillValidationIssue]
     let error: String?
+    /// True when an active skill of the same name already exists — this draft
+    /// REVISES it (approving overwrites) rather than adding a new skill.
+    let isRevision: Bool
 }
 
 /// Loads, validates, and dedups the active skill set from disk. The markdown
@@ -184,14 +187,17 @@ final class SkillRegistry {
                 text = try String(contentsOf: url, encoding: .utf8)
             } catch {
                 return SkillProposal(name: name, skill: nil, issues: [],
-                                     error: "unreadable or not valid UTF-8: \(error.localizedDescription)")
+                                     error: "unreadable or not valid UTF-8: \(error.localizedDescription)",
+                                     isRevision: self.skill(named: name) != nil)
             }
             do {
                 let skill = try SkillParser.parse(text, source: .proposed)
                 return SkillProposal(name: name, skill: skill,
-                                     issues: SkillValidator.validate(skill), error: nil)
+                                     issues: SkillValidator.validate(skill), error: nil,
+                                     isRevision: self.skill(named: name) != nil)
             } catch {
-                return SkillProposal(name: name, skill: nil, issues: [], error: String(describing: error))
+                return SkillProposal(name: name, skill: nil, issues: [], error: String(describing: error),
+                                     isRevision: self.skill(named: name) != nil)
             }
         }
     }
