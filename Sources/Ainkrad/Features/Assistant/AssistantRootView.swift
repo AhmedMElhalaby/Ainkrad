@@ -231,7 +231,9 @@ struct AssistantRootView: View {
                                     summary: pending.preview.summary,
                                     diff: pending.preview.diff,
                                     tokens: tokens,
-                                    pendingApproval: true
+                                    pendingApproval: true,
+                                    fileDiff: pending.preview.fileDiff,
+                                    rejectedHunkIDs: Binding(get: { session.rejectedHunkIDs }, set: { session.setRejectedHunkIDs($0) })
                                 )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
