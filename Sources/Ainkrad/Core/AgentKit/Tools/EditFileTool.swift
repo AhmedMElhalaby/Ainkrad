@@ -108,36 +108,30 @@ struct EditFileTool: AgentTool {
         return ToolApprovalPreview(
             title: edit.original.isEmpty ? "Create file" : "Edit file",
             summary: path,
-            diff: UnifiedDiff.make(old: edit.original, new: edit.updated, path: path))
+            diff: UnifiedDiff.make(old: edit.original, new: edit.updated, path: path),
+            fileDiff: DiffEngine.compute(old: edit.original, new: edit.updated, path: path, context: 3))
     }
 }
 
 /// Minimal line-level unified diff for the approval card. Not a full LCS diff —
 /// it brackets the changed region, which is sufficient for a find/replace edit.
 enum UnifiedDiff {
+    /// Renders a per-hunk unified diff (one `@@` header per changed region),
+    /// delegating hunk computation to `DiffEngine` so multiple separated edits
+    /// each get their own hunk instead of one over-wide bracket.
     static func make(old: String, new: String, path: String) -> String {
-        let oldLines = old.isEmpty ? [] : old.components(separatedBy: "\n")
-        let newLines = new.isEmpty ? [] : new.components(separatedBy: "\n")
-
-        // Common prefix / suffix of unchanged lines.
-        var prefix = 0
-        while prefix < oldLines.count, prefix < newLines.count, oldLines[prefix] == newLines[prefix] {
-            prefix += 1
-        }
-        var suffix = 0
-        while suffix < (oldLines.count - prefix), suffix < (newLines.count - prefix),
-              oldLines[oldLines.count - 1 - suffix] == newLines[newLines.count - 1 - suffix] {
-            suffix += 1
-        }
-
+        let diff = DiffEngine.compute(old: old, new: new, path: path, context: 2)
         var out = ["--- \(path)", "+++ \(path)"]
-        let context = 2
-        let ctxStart = max(0, prefix - context)
-        for i in ctxStart..<prefix { out.append(" " + oldLines[i]) }
-        for i in prefix..<(oldLines.count - suffix) { out.append("-" + oldLines[i]) }
-        for i in prefix..<(newLines.count - suffix) { out.append("+" + newLines[i]) }
-        let ctxEnd = min(oldLines.count, (oldLines.count - suffix) + context)
-        for i in (oldLines.count - suffix)..<ctxEnd { out.append(" " + oldLines[i]) }
+        for hunk in diff.hunks {
+            out.append("@@ -\(hunk.oldStart),\(hunk.oldCount) +\(hunk.newStart),\(hunk.newCount) @@")
+            for line in hunk.lines {
+                switch line.kind {
+                case .context: out.append(" " + line.text)
+                case .deletion: out.append("-" + line.text)
+                case .insertion: out.append("+" + line.text)
+                }
+            }
+        }
         return out.joined(separator: "\n")
     }
 }

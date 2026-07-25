@@ -20,6 +20,10 @@ struct ToolCallCardView: View {
     var pendingApproval: Bool = false
     /// Present for committed transcript cards; nil for the approval card.
     var result: ToolResultSummary?
+    /// Structured diff for rich hunk review; when present with `pendingApproval`,
+    /// the card renders `DiffReviewView` instead of the raw diff text.
+    var fileDiff: FileDiff? = nil
+    var rejectedHunkIDs: Binding<Set<Int>>? = nil
 
     @State private var isExpanded = false
     @State private var isHovering = false
@@ -45,7 +49,11 @@ struct ToolCallCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            if showsBody { codeBlock }
+            if pendingApproval, let fileDiff, let rejectedHunkIDs, !fileDiff.hunks.isEmpty {
+                DiffReviewView(fileDiff: fileDiff, rejectedHunkIDs: rejectedHunkIDs, tokens: tokens)
+            } else if showsBody {
+                codeBlock
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

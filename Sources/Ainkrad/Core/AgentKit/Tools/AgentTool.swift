@@ -26,6 +26,16 @@ struct ToolApprovalPreview: Sendable, Equatable {
     let title: String
     let summary: String
     let diff: String?
+    /// Structured diff for rich hunk-level review (edit_file only). `nil` for
+    /// every other tool — the card falls back to the `diff`/`summary` string.
+    let fileDiff: FileDiff?
+
+    init(title: String, summary: String, diff: String?, fileDiff: FileDiff? = nil) {
+        self.title = title
+        self.summary = summary
+        self.diff = diff
+        self.fileDiff = fileDiff
+    }
 }
 
 enum ToolError: Error, Equatable { case message(String) }

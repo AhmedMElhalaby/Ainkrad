@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// The tool-use agent loop: owns the transcript, in-flight streaming buffers,
 /// the tool registry, and the per-turn approval gate. Runs
@@ -37,6 +38,12 @@ final class AgentSession {
     private(set) var state: State = .idle
     private(set) var streamingText: String = ""
     private(set) var streamingThinking: String = ""
+
+    /// Hunk ids the user has toggled to REJECT on the pending edit_file approval.
+    /// Reset whenever a new approval is parked; read by `approve()` to rebuild a
+    /// partial edit. Empty = accept the whole edit (unchanged behavior).
+    private(set) var rejectedHunkIDs: Set<Int> = []
+    func setRejectedHunkIDs(_ ids: Set<Int>) { rejectedHunkIDs = ids }
 
     /// Token usage accumulated from the most recently completed turn's `.usage`
     /// events. Consumed by `UsageTracker` (Task 9) to compute per-turn cost.
@@ -183,7 +190,7 @@ final class AgentSession {
     /// byte-identical to before this seam existed.
     private let permissionModeOverride: AgentPermissionMode?
 
-    private enum ApprovalOutcome { case approved, denied(String) }
+    private enum ApprovalOutcome { case approved, approvedWithReplacement(JSONValue), denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
 
     init(
@@ -310,7 +317,28 @@ final class AgentSession {
             permissions.addToAllowlist(pending.call.name)
         }
         approvalContinuation = nil
-        cont.resume(returning: .approved)
+        if case .awaitingApproval(let pending) = state,
+           pending.call.name == "edit_file",
+           let fileDiff = pending.preview.fileDiff, !rejectedHunkIDs.isEmpty {
+            let newInput = Self.rewriteEditForPartialApproval(
+                input: pending.call.input, fileDiff: fileDiff, rejecting: rejectedHunkIDs)
+            cont.resume(returning: .approvedWithReplacement(newInput))
+        } else {
+            cont.resume(returning: .approved)
+        }
+    }
+
+    /// Rewrites an edit_file call so ONLY accepted hunks apply: `old_string` becomes
+    /// the full original file and `new_string` the reconstructed content. Returns the
+    /// input unchanged when nothing is rejected (keeps the original find/replace).
+    static func rewriteEditForPartialApproval(input: JSONValue, fileDiff: FileDiff,
+                                              rejecting rejected: Set<Int>) -> JSONValue {
+        guard !rejected.isEmpty else { return input }
+        let reconstructed = PartialEdit.reconstruct(fileDiff, rejecting: rejected)
+        guard case .object(var obj) = input else { return input }
+        obj["old_string"] = .string(fileDiff.original)
+        obj["new_string"] = .string(reconstructed)
+        return .object(obj)
     }
 
     /// Resume a parked approval by denying it; `reason` is fed back to the model
@@ -879,6 +907,12 @@ final class AgentSession {
             }
         }
 
+        // The call actually run below. A partial-hunk approval rewrites the
+        // edit_file input (accepted hunks only) but MUST still flow through the
+        // shared pre-tool seam (checkpoint → PreToolUse → stream → PostToolUse),
+        // so we rebind here and fall through rather than running it early.
+        var effectiveCall = call
+
         if decision == .requireApproval {
             // Unattended gate (M7 Slice 3): a headless run (subagent/background/
             // scheduled) has no HUD to resolve an approval, so parking on the
@@ -893,6 +927,7 @@ final class AgentSession {
                     isError: true)
             }
             let preview = tool.approvalPreview(call.input)
+            rejectedHunkIDs = []            // fresh selection per approval
             state = .awaitingApproval(PendingApproval(call: call, preview: preview))
             let outcome = await withCheckedContinuation { (cont: CheckedContinuation<ApprovalOutcome, Never>) in
                 approvalContinuation = cont
@@ -900,19 +935,25 @@ final class AgentSession {
             if case .denied(let reason) = outcome {
                 return ToolResult(content: reason, isError: true)
             }
+            if case .approvedWithReplacement(let newInput) = outcome {
+                // Apply only accepted hunks — but still run through the shared
+                // seam below so the checkpoint/hooks/streaming fire exactly as
+                // they do for a whole-file approval.
+                effectiveCall = ToolCall(id: call.id, name: call.name, input: newInput)
+            }
         }
 
-        state = .callingTool(call.name)
+        state = .callingTool(effectiveCall.name)
         // Pre-tool interception point (shared seam): step 1 — durable checkpoint before a mutating tool.
-        await checkpointer?.captureIfMutating(call: call, tool: tool)
+        await checkpointer?.captureIfMutating(call: effectiveCall, tool: tool)
         // step 2 — PreToolUse hooks: a non-zero hook blocks the call before it runs.
-        if let block = await hooks?.runPreToolUse(call) { return block }
+        if let block = await hooks?.runPreToolUse(effectiveCall) { return block }
         // step 3 — terminal-streaming: bracket the tool run so the live card fills.
-        toolStream?.begin(call.id)
-        let result = await registry.run(call)
-        toolStream?.finish(call.id, finalOutput: result.content)
+        toolStream?.begin(effectiveCall.id)
+        let result = await registry.run(effectiveCall)
+        toolStream?.finish(effectiveCall.id, finalOutput: result.content)
         // step 4 — PostToolUse hooks: post-process a successful result (format/lint note).
-        return await hooks?.runPostToolUse(call, result: result) ?? result
+        return await hooks?.runPostToolUse(effectiveCall, result: result) ?? result
     }
 
     /// Runs the cheap rule-based consolidation pass and notifies observers
