@@ -37,10 +37,7 @@ extension AssistantRootView {
     }
 
     func performExport() {
-        let redactions = redactionsText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        let redactions = RedactionList.parse(redactionsText)
 
         let rendered = ConversationExporter.export(environment.agentSession.messages, format: .markdown, redactions: redactions)
 

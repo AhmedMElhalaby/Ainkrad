@@ -114,6 +114,7 @@ final class AppEnvironmentTests {
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
             webSearchSettingsStore: WebSearchSettingsStore(persistence: persistence),
+            sessionShareStore: SessionShareStore(persistence: persistence),
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,

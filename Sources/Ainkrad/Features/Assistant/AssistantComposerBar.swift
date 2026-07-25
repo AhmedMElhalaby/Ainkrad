@@ -43,6 +43,10 @@ struct AssistantComposerBar: View {
     /// (`redactionsText`) and the modal content/export flow now live there too
     /// (`AssistantRootView+Export.swift`).
     @Binding var isExportModalPresented: Bool
+    /// Share modal presented flag. Owned by `AssistantRootView`, same rationale
+    /// as `isExportModalPresented`; the modal content/share flow live there too
+    /// (`AssistantRootView+Share.swift`).
+    @Binding var isShareModalPresented: Bool
 
     /// Images attached via drag-and-drop, carried into the NEXT `session.send`
     /// call and cleared on send (or on manual removal via its chip's ✕).
