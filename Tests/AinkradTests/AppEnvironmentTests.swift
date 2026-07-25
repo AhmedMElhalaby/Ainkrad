@@ -160,6 +160,10 @@ final class AppEnvironmentTests {
             canvasStore: canvasStore,
             toolStreamStore: toolStreamStore,
             toolHooksStore: ToolHooksStore(persistence: persistence),
+            customCommandStore: CustomCommandStore(paths: CustomCommandPaths(
+                userRoot: root.appendingPathComponent("Commands", isDirectory: true), projectRoot: nil)),
+            customCommandWatcher: CustomCommandWatcher(
+                directory: root.appendingPathComponent("Commands", isDirectory: true)) { },
             voiceService: voiceService
         )
 

@@ -59,7 +59,9 @@ extension AppEnvironment {
         voiceService: VoiceService,
         menuBarPresence: MenuBarPresence,
         oauthStore: OAuthCredentialStore,
-        toolHooksStore: ToolHooksStore
+        toolHooksStore: ToolHooksStore,
+        customCommandStore: CustomCommandStore,
+        customCommandWatcher: CustomCommandWatcher
     ) {
         var agentTools = agentTools
 
@@ -271,6 +273,22 @@ extension AppEnvironment {
             commandRegistry.register(command)
         }
 
+        // File-based custom slash commands (project + user). Registered AFTER skill
+        // commands so a colliding name can't shadow a skill binding; `CustomCommandStore`
+        // already refuses builtin names, and re-registration drops stale names first.
+        let customCommandStore = CustomCommandStore(paths: CustomCommandPaths(
+            userRoot: CustomCommandPaths.defaultUserRoot(),
+            projectRoot: CustomCommandPaths.projectRoot(forWorkspace: assistantWorkingDirectory)))
+        var liveCustomNames = resyncCustomCommands(
+            store: customCommandStore, registry: commandRegistry, previous: [])
+        let customCommandWatcher = CustomCommandWatcher(
+            directory: CustomCommandPaths.defaultUserRoot()) {
+                customCommandStore.reload()
+                liveCustomNames = resyncCustomCommands(
+                    store: customCommandStore, registry: commandRegistry, previous: liveCustomNames)
+            }
+        customCommandWatcher.start()
+
         // Tool Hooks (M8 assistant-tool-hooks) — the store is a live, persisted
         // CRUD surface (Task 6's settings view binds directly to this same
         // instance, returned below) and the runner consults it on every
@@ -340,7 +358,7 @@ extension AppEnvironment {
         return (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore, toolHooksStore
+            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher
         )
     }
 

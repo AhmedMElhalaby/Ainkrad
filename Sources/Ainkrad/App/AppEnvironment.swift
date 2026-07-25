@@ -175,6 +175,15 @@ final class AppEnvironment {
     /// (Task 6) that binds to it, same pattern as `toolStreamStore`/
     /// `canvasStore` above.
     let toolHooksStore: ToolHooksStore
+    /// File-based custom `/name` slash commands (project + user Markdown files) —
+    /// registered into `commandRegistry` after skill commands at bootstrap; see
+    /// `resyncCustomCommands`.
+    let customCommandStore: CustomCommandStore
+    /// Watches the user custom-commands directory and reloads/re-registers
+    /// `customCommandStore`'s bindings when a file is added/edited/removed —
+    /// retained for the process lifetime so its `DispatchSource` stays alive;
+    /// see `bootstrapAgentSessionAndRuns` for where it's started.
+    let customCommandWatcher: CustomCommandWatcher
     /// M7 Slice 8 (Voice): push-to-talk + file-transcription facade. Constructed
     /// after `agentSession` (both in `bootstrap()` and here) so
     /// `attachSession(_:)` can wire voice auto-send through the real session's
@@ -278,6 +287,8 @@ final class AppEnvironment {
         canvasStore: CanvasStore,
         toolStreamStore: ToolStreamStore,
         toolHooksStore: ToolHooksStore,
+        customCommandStore: CustomCommandStore,
+        customCommandWatcher: CustomCommandWatcher,
         voiceService: VoiceService
     ) {
         self.persistence = persistence
@@ -341,6 +352,8 @@ final class AppEnvironment {
         self.canvasStore = canvasStore
         self.toolStreamStore = toolStreamStore
         self.toolHooksStore = toolHooksStore
+        self.customCommandStore = customCommandStore
+        self.customCommandWatcher = customCommandWatcher
         self.voiceService = voiceService
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
@@ -409,7 +422,7 @@ final class AppEnvironment {
         let (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore, toolHooksStore
+            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher
         ) = bootstrapAgentSessionAndRuns(
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
@@ -484,6 +497,8 @@ final class AppEnvironment {
             canvasStore: canvasStore,
             toolStreamStore: toolStreamStore,
             toolHooksStore: toolHooksStore,
+            customCommandStore: customCommandStore,
+            customCommandWatcher: customCommandWatcher,
             voiceService: voiceService
         )
 
