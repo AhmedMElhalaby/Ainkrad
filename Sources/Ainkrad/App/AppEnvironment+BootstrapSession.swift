@@ -288,6 +288,20 @@ extension AppEnvironment {
             mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
         )
 
+        // Durable checkpoints (Checkpoint & Rewind, Task 8): the coordinator is built
+        // AFTER `agentSession` exists because its `transcriptIndex` closure needs to
+        // read back into the session (chicken/egg with passing it into the initializer
+        // above). `persistence` is the shared app store, so checkpoints saved here
+        // survive relaunch — `CheckpointCoordinator.init` loads them back from disk.
+        let checkpointCoordinator = CheckpointCoordinator(
+            sessionID: "main",
+            snapshots: WorkspaceSnapshotStore(root: WorkspaceSnapshotStore.defaultRoot()),
+            git: GitWorkingTreeSnapshotter(router: executionRouter),
+            persistence: persistence,
+            transcriptIndex: { [weak agentSession] in agentSession?.messages.count ?? 0 },
+            defaultWorkingDir: assistantWorkingDirectory.path)
+        agentSession.setCheckpointer(checkpointCoordinator)
+
         // Restore the last-active persisted session into the live session so a
         // returning user sees their previous conversation — and so the first edit
         // after launch doesn't overwrite the saved transcript with an empty one.

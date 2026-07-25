@@ -195,6 +195,33 @@ enum BuiltinCommands {
                 session.retryLastTurn()
                 return .handled(note: nil)
             },
+            SlashCommand(name: "rewind", summary: "List or restore durable checkpoints", usage: "/rewind [n] [code|chat|both]", category: .session) { args, session in
+                let list = session.activeCheckpointer()?.checkpoints() ?? []
+                let parts = args.split(separator: " ", maxSplits: 1).map(String.init)
+                guard let first = parts.first, let n = Int(first) else {
+                    guard !list.isEmpty else { return .handled(note: "No checkpoints yet.") }
+                    let lines = list.enumerated().map { "\($0.offset + 1). \($0.element.label)" }.joined(separator: "\n")
+                    return .handled(note: "Checkpoints (newest first):\n\(lines)\n\nRestore with /rewind <n> [code|chat|both].")
+                }
+                guard n >= 1, n <= list.count else { return .handled(note: "No checkpoint \(n). There are \(list.count).") }
+                let mode: CheckpointCoordinator.RestoreMode
+                switch parts.count > 1 ? parts[1].lowercased() : "both" {
+                case "code": mode = .code
+                case "chat", "conversation": mode = .conversation
+                default: mode = .both
+                }
+                let target = list[n - 1]
+                // The handler is synchronous — it cannot await the restore, so it
+                // cannot yet claim success. The `Task` surfaces a post-hoc failure
+                // note if the workspace restore actually fails (Fix #2).
+                Task { [label = target.label] in
+                    let outcome = await session.restoreCheckpoint(target, mode: mode)
+                    if outcome?.success == false {
+                        session.appendSystemNote("Rewind to \(label) (\(mode)) failed to restore the workspace — the transcript may be out of sync with your files.")
+                    }
+                }
+                return .handled(note: "Rewinding to \(n). \(target.label) (\(mode))…")
+            },
         ]
     }
 }
