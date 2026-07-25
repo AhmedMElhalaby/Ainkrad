@@ -90,6 +90,9 @@ struct AgentTurnTimelineView: View {
         case .todo(let items):
             TodoChecklistView(items: items, tokens: tokens)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        case .plan(let plan):
+            PlanCardView(plan: plan, tokens: tokens)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

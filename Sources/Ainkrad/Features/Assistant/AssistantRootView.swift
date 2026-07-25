@@ -78,6 +78,17 @@ struct AssistantRootView: View {
                     onApprove: { session.approve() }
                 )
                 .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+            } else if session.state == .idle,
+                      let plan = PlanTurnHeuristics.pendingPlan(in: session.messages) {
+                PlanApprovalBar(
+                    plan: plan,
+                    tokens: tokens,
+                    onKeepPlanning: { PlanFlow.keepPlanning(plan: plan, session: session) },
+                    onApproveBuild: {
+                        PlanFlow.approveBuild(plan: plan, session: session, store: environment.agentStore)
+                    }
+                )
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             }
 
             AssistantComposerBar(
