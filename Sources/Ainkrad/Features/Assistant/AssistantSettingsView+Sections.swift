@@ -233,6 +233,15 @@ extension AssistantSettingsView {
             tokens: tokens)
     }
 
+    // MARK: - Media
+
+    func mediaSection(tokens: DesignTokens) -> some View {
+        MediaSettingsView(
+            settings: environment.mediaSettingsStore,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
     // MARK: - Voice
 
     func voiceSection(tokens: DesignTokens) -> some View {

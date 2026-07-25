@@ -119,6 +119,12 @@ extension AppEnvironment {
         let canvasStore = CanvasStore(persistence: persistence)
         agentTools.append(CanvasRenderTool(store: canvasStore))
 
+        // Media tools (read-class, render to the Live Canvas). Key in SecretStore.
+        agentTools.append(ImageGenerateTool(
+            backend: OpenAIImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+            store: canvasStore))
+        agentTools.append(SpeakTool(synth: SystemSpeechSynthesizer()))
+
         // M8 code-search tools (read-class). Share the assistant workspace root,
         // resolved live so a folder change is reflected without re-registering —
         // same derivation as the @-mention index in bootstrapSession.
