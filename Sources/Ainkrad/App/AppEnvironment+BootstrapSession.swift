@@ -61,7 +61,9 @@ extension AppEnvironment {
         oauthStore: OAuthCredentialStore,
         toolHooksStore: ToolHooksStore,
         customCommandStore: CustomCommandStore,
-        customCommandWatcher: CustomCommandWatcher
+        customCommandWatcher: CustomCommandWatcher,
+        remoteChannelSettingsStore: RemoteChannelSettingsStore,
+        remoteChannelService: RemoteChannelService
     ) {
         var agentTools = agentTools
 
@@ -234,11 +236,22 @@ extension AppEnvironment {
             }
         }
         scheduleRunner.start()
-        // `WebhookServer` is deliberately NOT constructed here: it needs a port +
-        // bearer token (from `SecretStore`, once the user enables it in a future
-        // settings surface) and must never `start()` at launch — constructing it
-        // eagerly with a placeholder token would be a live, unauthenticated-by-
-        // default local listener. Left for the settings surface that turns it on.
+
+        // Remote channel (multi-channel Task 5): the `WebhookServer` lifecycle is
+        // owned by `RemoteChannelService`, NOT constructed eagerly. `applyEnabledState()`
+        // is fail-closed — it starts a 127.0.0.1-only listener ONLY when the user
+        // previously enabled the channel AND a bearer token exists in `SecretStore`;
+        // otherwise it is a no-op (`stop()`), so a fresh install never opens a port.
+        // Both stores are retained on `AppEnvironment` so the settings surface binds
+        // to the SAME live instances this launch-time call reads from.
+        let remoteChannelSettingsStore = RemoteChannelSettingsStore(persistence: persistence, secrets: secrets)
+        let remoteChannelService = RemoteChannelService(
+            settingsStore: remoteChannelSettingsStore, scheduleStore: scheduleStore,
+            dispatcher: triggerDispatcher, runs: runManager)
+        remoteChannelService.applyEnabledState()
+        // Seed the menu-bar presence once at launch; the settings toggle re-applies
+        // state and the view reads `service.status` reactively for its own status line.
+        menuBarPresence.remoteChannelListening = RemoteChannelPresence.isListening(remoteChannelService.status)
 
         // `@`-mention file index (M7 Slice 5c Task 22a wiring; the overlay UI itself
         // is Task 22b). No first-class "project directory" concept exists yet — default
@@ -358,7 +371,8 @@ extension AppEnvironment {
         return (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher
+            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
+            remoteChannelSettingsStore, remoteChannelService
         )
     }
 

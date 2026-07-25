@@ -165,7 +165,11 @@ final class AppEnvironmentTests {
                 userRoot: root.appendingPathComponent("Commands", isDirectory: true), projectRoot: nil)),
             customCommandWatcher: CustomCommandWatcher(
                 directory: root.appendingPathComponent("Commands", isDirectory: true)) { },
-            voiceService: voiceService
+            voiceService: voiceService,
+            remoteChannelSettingsStore: RemoteChannelSettingsStore(persistence: persistence, secrets: secrets),
+            remoteChannelService: RemoteChannelService(
+                settingsStore: RemoteChannelSettingsStore(persistence: persistence, secrets: secrets),
+                scheduleStore: scheduleStore, dispatcher: triggerDispatcher, runs: runManager)
         )
 
         #expect(environment.registry === registry)

@@ -192,6 +192,16 @@ final class AppEnvironment {
     /// `attachSession(_:)` can wire voice auto-send through the real session's
     /// `send(_:)` — voice is not a privileged input channel.
     let voiceService: VoiceService
+    /// Multi-channel Task 5: persisted config (enable flag + port) for the optional
+    /// remote channel; the bearer token lives in `SecretStore`, never here. The
+    /// settings surface binds to this SAME instance the launch-time
+    /// `applyEnabledState()` read from.
+    let remoteChannelSettingsStore: RemoteChannelSettingsStore
+    /// Multi-channel Task 5: owns the `WebhookServer` lifecycle for the remote
+    /// channel. Fail-closed — only listens (127.0.0.1) when enabled AND a token
+    /// exists. Retained here so the settings surface and menu-bar presence read
+    /// the SAME live `status`.
+    let remoteChannelService: RemoteChannelService
     /// Owns the `NSStatusItem`/popover for the app's lifetime. `var`/optional
     /// (not an `init` param) because its content closure captures `self` —
     /// it's built in `bootstrap()` right after `environment` itself exists,
@@ -293,7 +303,9 @@ final class AppEnvironment {
         toolHooksStore: ToolHooksStore,
         customCommandStore: CustomCommandStore,
         customCommandWatcher: CustomCommandWatcher,
-        voiceService: VoiceService
+        voiceService: VoiceService,
+        remoteChannelSettingsStore: RemoteChannelSettingsStore,
+        remoteChannelService: RemoteChannelService
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -360,6 +372,8 @@ final class AppEnvironment {
         self.customCommandStore = customCommandStore
         self.customCommandWatcher = customCommandWatcher
         self.voiceService = voiceService
+        self.remoteChannelSettingsStore = remoteChannelSettingsStore
+        self.remoteChannelService = remoteChannelService
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
         // so the very first `resyncSkillCommands()` call — triggered by a
@@ -427,7 +441,8 @@ final class AppEnvironment {
         let (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher
+            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
+            remoteChannelSettingsStore, remoteChannelService
         ) = bootstrapAgentSessionAndRuns(
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
@@ -505,7 +520,9 @@ final class AppEnvironment {
             toolHooksStore: toolHooksStore,
             customCommandStore: customCommandStore,
             customCommandWatcher: customCommandWatcher,
-            voiceService: voiceService
+            voiceService: voiceService,
+            remoteChannelSettingsStore: remoteChannelSettingsStore,
+            remoteChannelService: remoteChannelService
         )
 
         finalizeBootstrap(
