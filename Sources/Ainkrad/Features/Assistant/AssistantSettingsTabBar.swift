@@ -34,7 +34,7 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
     var sections: [AssistantSettingsSection] {
         switch self {
         case .models: return [.connections, .model]
-        case .access: return [.permissions, .sandbox]
+        case .access: return [.permissions, .sandbox, .toolHooks]
         case .data: return [.contextPrivacy]
         case .web: return [.web]
         case .voice: return [.voice]
@@ -46,7 +46,7 @@ enum AssistantSettingsTab: String, CaseIterable, Hashable {
 /// The individual settings sections. `.model` includes the model list, refresh,
 /// and the effort picker (one builder). `.sandbox` is `SandboxPolicyUIView`.
 enum AssistantSettingsSection: String, CaseIterable, Hashable {
-    case connections, model, permissions, sandbox, contextPrivacy, web, voice, appearance
+    case connections, model, permissions, sandbox, toolHooks, contextPrivacy, web, voice, appearance
 }
 
 /// A horizontal pill selector for the Assistant settings tabs, in the outer

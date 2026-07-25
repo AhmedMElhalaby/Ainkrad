@@ -159,6 +159,7 @@ final class AppEnvironmentTests {
             menuBarPresence: menuBarPresence,
             canvasStore: canvasStore,
             toolStreamStore: toolStreamStore,
+            toolHooksStore: ToolHooksStore(persistence: persistence),
             voiceService: voiceService
         )
 

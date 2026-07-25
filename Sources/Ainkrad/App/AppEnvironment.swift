@@ -169,6 +169,12 @@ final class AppEnvironment {
     /// instance shared by the main `agentSession`'s `RunTerminalTool` and the
     /// Assistant timeline, same pattern as `canvasStore` above.
     let toolStreamStore: ToolStreamStore
+    /// Tool Hooks (M8 assistant-tool-hooks Task 5): persisted, observable CRUD
+    /// over user-authored PreToolUse/PostToolUse hooks — one instance shared
+    /// by the main `agentSession`'s `ToolHookRunner` and the settings surface
+    /// (Task 6) that binds to it, same pattern as `toolStreamStore`/
+    /// `canvasStore` above.
+    let toolHooksStore: ToolHooksStore
     /// M7 Slice 8 (Voice): push-to-talk + file-transcription facade. Constructed
     /// after `agentSession` (both in `bootstrap()` and here) so
     /// `attachSession(_:)` can wire voice auto-send through the real session's
@@ -271,6 +277,7 @@ final class AppEnvironment {
         menuBarPresence: MenuBarPresence,
         canvasStore: CanvasStore,
         toolStreamStore: ToolStreamStore,
+        toolHooksStore: ToolHooksStore,
         voiceService: VoiceService
     ) {
         self.persistence = persistence
@@ -333,6 +340,7 @@ final class AppEnvironment {
         self.menuBarPresence = menuBarPresence
         self.canvasStore = canvasStore
         self.toolStreamStore = toolStreamStore
+        self.toolHooksStore = toolHooksStore
         self.voiceService = voiceService
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
@@ -401,7 +409,7 @@ final class AppEnvironment {
         let (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore
+            oauthStore, toolHooksStore
         ) = bootstrapAgentSessionAndRuns(
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
@@ -475,6 +483,7 @@ final class AppEnvironment {
             menuBarPresence: menuBarPresence,
             canvasStore: canvasStore,
             toolStreamStore: toolStreamStore,
+            toolHooksStore: toolHooksStore,
             voiceService: voiceService
         )
 

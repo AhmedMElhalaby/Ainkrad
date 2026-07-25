@@ -419,6 +419,27 @@ enum TestSessionFactory {
             toolStream: toolStream, terminalController: controller)
     }
 
+    /// Builds a session wired with a real `ToolHookRunner` (Tool Hooks Task 4),
+    /// plus the real `EditFileTool` so a blocked `edit_file` call can be proven
+    /// to never touch disk.
+    static func makeWithHooks(hooks: ToolHookRunner, mode: AgentPermissionMode = .fullAuto) -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let ws = UUID()
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        permissions.setMode(mode)
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude",
+                                      baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let registry = AgentToolRegistry(tools: [EditFileTool(), FakeReadFileTool()])
+        return AgentSession(
+            providerFor: { _ in RecordingProvider(script: []) },
+            connections: connections, config: config, context: context,
+            registry: registry, permissions: permissions, hooks: hooks)
+    }
+
     /// A local (free) and a premium candidate on the given connection, for the
     /// model-resolution tests.
     private static func localAndPremiumCandidates(connectionID: UUID) -> [RouterCandidate] {

@@ -58,7 +58,8 @@ extension AppEnvironment {
         agentSession: AgentSession,
         voiceService: VoiceService,
         menuBarPresence: MenuBarPresence,
-        oauthStore: OAuthCredentialStore
+        oauthStore: OAuthCredentialStore,
+        toolHooksStore: ToolHooksStore
     ) {
         var agentTools = agentTools
 
@@ -270,6 +271,19 @@ extension AppEnvironment {
             commandRegistry.register(command)
         }
 
+        // Tool Hooks (M8 assistant-tool-hooks) — the store is a live, persisted
+        // CRUD surface (Task 6's settings view binds directly to this same
+        // instance, returned below) and the runner consults it on every
+        // PreToolUse/PostToolUse call. ONLY the main interactive session below
+        // gets a runner: background (`BackgroundRunRunner` above) and subagent
+        // (`makeSubagentSession` below) sessions stay hookless this milestone —
+        // an unattended run auto-executing a user-authored shell hook is
+        // deferred, not silently granted.
+        let toolHooksStore = ToolHooksStore(persistence: persistence)
+        let toolHookRunner = ToolHookRunner(
+            store: toolHooksStore, router: executionRouter,
+            workingDir: { assistantWorkingDirectory.path })
+
         let agentSession = AgentSession(
             providerFor: providerFor,
             connections: connectionStore,
@@ -289,7 +303,8 @@ extension AppEnvironment {
             authProfiles: authProfileStore,
             candidatesProvider: candidatesProvider,
             isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) },
-            mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
+            mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false },
+            hooks: toolHookRunner
         )
 
         // Durable checkpoints (Checkpoint & Rewind, Task 8): the coordinator is built
@@ -325,7 +340,7 @@ extension AppEnvironment {
         return (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore
+            oauthStore, toolHooksStore
         )
     }
 
