@@ -110,6 +110,13 @@ final class AgentSession {
     /// cancels the Swift `Task`, matching pre-Task-5 behavior.
     private let terminalController: TerminalProcessController?
 
+    /// Tool Hooks Task 4 — PreToolUse/PostToolUse hook runner, consulted at the
+    /// pre-tool interception point in `execute(_:)` (step 2, after checkpoint
+    /// capture but before the tool runs) and the post-tool point (step 4, after
+    /// `toolStream?.finish`). `nil` (the default) means no hooks: `execute` skips
+    /// both calls entirely, byte-identical to pre-Task-4 behavior.
+    private let hooks: ToolHookRunner?
+
     /// M7 Slice 3b Task 21 — the resolved `SandboxProfile.toolAllowList` for this
     /// session's trust tier (subagent/background/scheduled), when the sandbox
     /// compose layer applies. `nil` (the default) means "no sandbox layer" —
@@ -205,7 +212,8 @@ final class AgentSession {
         candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil,
         isLocalConnection: (@MainActor (Connection) -> Bool)? = nil,
         mcpTrust: (@MainActor (String) -> Bool)? = nil,
-        permissionModeOverride: AgentPermissionMode? = nil
+        permissionModeOverride: AgentPermissionMode? = nil,
+        hooks: ToolHookRunner? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -233,6 +241,7 @@ final class AgentSession {
         self.isLocalConnection = isLocalConnection
         self.mcpTrust = mcpTrust
         self.permissionModeOverride = permissionModeOverride
+        self.hooks = hooks
     }
 
     /// `images`, when non-empty, are attached as leading `.image` content
@@ -896,11 +905,14 @@ final class AgentSession {
         state = .callingTool(call.name)
         // Pre-tool interception point (shared seam): step 1 — durable checkpoint before a mutating tool.
         await checkpointer?.captureIfMutating(call: call, tool: tool)
+        // step 2 — PreToolUse hooks: a non-zero hook blocks the call before it runs.
+        if let block = await hooks?.runPreToolUse(call) { return block }
         // step 3 — terminal-streaming: bracket the tool run so the live card fills.
         toolStream?.begin(call.id)
         let result = await registry.run(call)
         toolStream?.finish(call.id, finalOutput: result.content)
-        return result
+        // step 4 — PostToolUse hooks: post-process a successful result (format/lint note).
+        return await hooks?.runPostToolUse(call, result: result) ?? result
     }
 
     /// Runs the cheap rule-based consolidation pass and notifies observers

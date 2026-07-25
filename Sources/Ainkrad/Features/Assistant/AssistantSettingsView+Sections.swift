@@ -77,6 +77,12 @@ extension AssistantSettingsView {
         SandboxPolicyUIView(store: environment.sandboxProfileStore)
     }
 
+    // MARK: - Tool Hooks
+
+    func toolHooksSection(tokens: DesignTokens) -> some View {
+        ToolHooksSettingsView(store: environment.toolHooksStore, tokens: tokens)
+    }
+
     // MARK: - Permissions
 
     func permissionsSection(tokens: DesignTokens) -> some View {
