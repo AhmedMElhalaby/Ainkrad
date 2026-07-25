@@ -54,6 +54,32 @@ final class AgentSession {
     /// `resolveTurn` originally picked. `nil` before any turn has settled.
     private(set) var lastUsageAttributedModel: String?
 
+    /// A skill-capture hint surfaced after a complex, clean turn (Task 2).
+    /// Passive — the UI offers it; it never proposes on its own. Cleared at the
+    /// start of the next turn and on reset.
+    private(set) var pendingSkillSuggestion: SkillSuggestion?
+
+    /// Recomputes `pendingSkillSuggestion` from a settled turn. Internal so the
+    /// settle path and tests can drive it without a full turn.
+    func updateSkillSuggestion(from messages: [AgentMessage], succeeded: Bool) {
+        switch SkillReflectionAdvisor.evaluate(messages, succeeded: succeeded) {
+        case .eligible(let toolNames): pendingSkillSuggestion = SkillSuggestion(toolNames: toolNames)
+        case .notEligible: pendingSkillSuggestion = nil
+        }
+    }
+
+    /// Accepts the pending skill suggestion: sends the reflection directive as a
+    /// normal turn (so `propose_skill` runs through the usual gate) and clears the
+    /// hint. No-op when nothing is pending.
+    func acceptSkillSuggestion() {
+        guard let suggestion = pendingSkillSuggestion else { return }
+        pendingSkillSuggestion = nil
+        send(SkillReflectionDirective.build(toolNames: suggestion.toolNames))
+    }
+
+    /// Dismisses the pending suggestion without sending anything.
+    func dismissSkillSuggestion() { pendingSkillSuggestion = nil }
+
     /// Fired whenever a turn settles (the tool loop returns to `.idle` inside
     /// `runConversation`) — every-settle is the host's only reliable trigger,
     /// since there is no session-end signal. NOT fired by `reset()`'s `.idle`.
@@ -284,6 +310,9 @@ final class AgentSession {
             break
         }
 
+        // A stale hint from the previous turn must never linger into a new one.
+        pendingSkillSuggestion = nil
+
         // Turn-boundary watermark (Task 10): captured AFTER the command
         // intercept and re-entrancy guard, so only inputs that actually start
         // a new turn get a mark — a slash command returned above, and a
@@ -508,6 +537,7 @@ final class AgentSession {
         state = .idle
         streamingText = ""
         streamingThinking = ""
+        pendingSkillSuggestion = nil
     }
 
     // MARK: - Model resolution (Task 16)
@@ -961,6 +991,7 @@ final class AgentSession {
     /// `runConversation` — not `reset()`, which is a discard, not a settle).
     private func settled() {
         if let memory { MemoryConsolidator.consolidate(memory) }
+        updateSkillSuggestion(from: messages, succeeded: { if case .idle = state { return true } else { return false } }())
         onSettled?()
     }
 
