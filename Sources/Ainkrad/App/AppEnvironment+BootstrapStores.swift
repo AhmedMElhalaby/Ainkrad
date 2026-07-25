@@ -29,6 +29,7 @@ extension AppEnvironment {
         pluginLaunchHub: PluginLaunchHub,
         appAppearanceStore: AppAppearanceStore,
         webSearchSettingsStore: WebSearchSettingsStore,
+        mediaSettingsStore: MediaSettingsStore,
         sessionShareStore: SessionShareStore,
         loader: PluginLoader,
         mcpConfigStore: MCPServerConfigStore,
@@ -68,6 +69,7 @@ extension AppEnvironment {
         let pluginLaunchHub = PluginLaunchHub()
         let appAppearanceStore = AppAppearanceStore(persistence: persistence)
         let webSearchSettingsStore = WebSearchSettingsStore(persistence: persistence)
+        let mediaSettingsStore = MediaSettingsStore(persistence: persistence)
         let sessionShareStore = SessionShareStore(persistence: persistence)
         let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: GenerationSupport.minSupported) { appID, declaredPresentation in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
@@ -142,7 +144,7 @@ extension AppEnvironment {
         return (
             persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
-            appAppearanceStore, webSearchSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
+            appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
         )
     }

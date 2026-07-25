@@ -51,6 +51,7 @@ final class AppEnvironment {
     let generalSettingsStore: GeneralSettingsStore
     let appAppearanceStore: AppAppearanceStore
     let webSearchSettingsStore: WebSearchSettingsStore
+    let mediaSettingsStore: MediaSettingsStore
     /// Assistant session-share (M8) — writes self-contained HTML share artifacts
     /// to disk and tracks their metadata, backing the composer's "Share…" flow.
     let sessionShareStore: SessionShareStore
@@ -255,6 +256,7 @@ final class AppEnvironment {
         generalSettingsStore: GeneralSettingsStore,
         appAppearanceStore: AppAppearanceStore,
         webSearchSettingsStore: WebSearchSettingsStore,
+        mediaSettingsStore: MediaSettingsStore,
         sessionShareStore: SessionShareStore,
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
@@ -323,6 +325,7 @@ final class AppEnvironment {
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
         self.webSearchSettingsStore = webSearchSettingsStore
+        self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
@@ -409,7 +412,7 @@ final class AppEnvironment {
         let (
             persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
-            appAppearanceStore, webSearchSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
+            appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
         ) = bootstrapCoreStores(rootURL: rootURL, defaults: defaults)
 
@@ -472,6 +475,7 @@ final class AppEnvironment {
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
             webSearchSettingsStore: webSearchSettingsStore,
+            mediaSettingsStore: mediaSettingsStore,
             sessionShareStore: sessionShareStore,
             skySettingsStore: skySettingsStore,
             sounds: sounds,

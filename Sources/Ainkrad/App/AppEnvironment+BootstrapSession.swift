@@ -15,8 +15,11 @@ extension AppEnvironment {
     /// runs) excludes them, so no autonomous run performs un-gated network
     /// access. (The foreground main session keeps them, gated by the read
     /// approval policy with the user present.)
+    /// `image_generate` also makes paid network calls (image generation API),
+    /// so — like web_fetch/web_search — it must be stripped from unattended
+    /// registries so an unattended run can't incur paid image generation.
     static func isUnattendedNetworkTool(_ tool: any AgentTool) -> Bool {
-        tool is WebFetchTool || tool is WebSearchTool
+        tool is WebFetchTool || tool is WebSearchTool || tool is ImageGenerateTool
     }
 
     static func bootstrapAgentSessionAndRuns(
