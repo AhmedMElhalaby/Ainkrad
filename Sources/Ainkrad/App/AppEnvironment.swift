@@ -164,6 +164,11 @@ final class AppEnvironment {
     /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
     /// `runManager`/`scheduleStore` above.
     let canvasStore: CanvasStore
+    /// Terminal streaming (Task 7): the store `run_terminal`'s live stdout/stderr
+    /// lands in and `AgentTurnTimelineView` reads for the running tool card — one
+    /// instance shared by the main `agentSession`'s `RunTerminalTool` and the
+    /// Assistant timeline, same pattern as `canvasStore` above.
+    let toolStreamStore: ToolStreamStore
     /// M7 Slice 8 (Voice): push-to-talk + file-transcription facade. Constructed
     /// after `agentSession` (both in `bootstrap()` and here) so
     /// `attachSession(_:)` can wire voice auto-send through the real session's
@@ -265,6 +270,7 @@ final class AppEnvironment {
         skillCommandStore: SkillCommandStore,
         menuBarPresence: MenuBarPresence,
         canvasStore: CanvasStore,
+        toolStreamStore: ToolStreamStore,
         voiceService: VoiceService
     ) {
         self.persistence = persistence
@@ -326,6 +332,7 @@ final class AppEnvironment {
         self.skillCommandStore = skillCommandStore
         self.menuBarPresence = menuBarPresence
         self.canvasStore = canvasStore
+        self.toolStreamStore = toolStreamStore
         self.voiceService = voiceService
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
@@ -375,7 +382,8 @@ final class AppEnvironment {
             skillsRoot: skillsRoot, rootURL: rootURL, documentsRoot: documentsRoot)
 
         let (
-            sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore
+            sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
+            toolStreamStore, terminalController
         ) = bootstrapExecutionAndTools(
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
             editJournal: editJournal, workspaceManager: workspaceManager, agentActionHub: agentActionHub,
@@ -403,7 +411,8 @@ final class AppEnvironment {
             runtimeOptionsStore: runtimeOptionsStore, commandRegistry: commandRegistry,
             authProfileStore: authProfileStore, localModelProbe: localModelProbe,
             agentActionHub: agentActionHub, agentTools: agentTools, mcpServerRegistry: mcpServerRegistry,
-            skillRegistry: skillRegistry, skillCommandStore: skillCommandStore)
+            skillRegistry: skillRegistry, skillCommandStore: skillCommandStore,
+            toolStreamStore: toolStreamStore, terminalController: terminalController)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -465,6 +474,7 @@ final class AppEnvironment {
             skillCommandStore: skillCommandStore,
             menuBarPresence: menuBarPresence,
             canvasStore: canvasStore,
+            toolStreamStore: toolStreamStore,
             voiceService: voiceService
         )
 

@@ -29,7 +29,9 @@ extension AppEnvironment {
         executionRouter: ExecutionRouter,
         agentTools: [any AgentTool],
         mcpServerRegistry: MCPServerRegistry,
-        canvasStore: CanvasStore
+        canvasStore: CanvasStore,
+        toolStreamStore: ToolStreamStore,
+        terminalController: TerminalProcessController
     ) {
         // M7 Slice 6: every backend is registered by its own kind — host
         // (trusted-main only, unchanged), seatbelt (macOS sandbox-exec),
@@ -50,6 +52,12 @@ extension AppEnvironment {
         // before this backend is even attempted, and its `remoteExec` driver
         // is a fail-closed research stub (see `ModalCloudBackend`). Cloud
         // never becomes a working "just works" path from this wiring alone.
+        // Terminal streaming (Task 7): one shared store + controller for the
+        // MAIN foreground `RunTerminalTool`/`AgentSession` — live output rides
+        // into the timeline via `toolStreamStore`; `terminalController` backs
+        // `AgentSession.interrupt()`'s force-kill of the running child.
+        let toolStreamStore = ToolStreamStore()
+        let terminalController = TerminalProcessController()
         let sandboxProfileStore = SandboxProfileStore(persistence: persistence)
         let cloudCredentialsStore = CloudCredentialsStore(secrets: secrets)
         let executionRouter = ExecutionRouter(
@@ -66,7 +74,8 @@ extension AppEnvironment {
             ReadFileTool(),
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
             WorkspaceControlTool(workspaces: workspaceManager),
-            RunTerminalTool(actionHub: agentActionHub, router: executionRouter),
+            { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
+              t.toolStream = toolStreamStore; t.processController = terminalController; return t }(),
             GitOpTool(actionHub: agentActionHub),
             TodoWriteTool(),
         ]
@@ -120,7 +129,8 @@ extension AppEnvironment {
         agentTools.append(GrepTool(rootProvider: searchRootProvider))
         agentTools.append(GlobTool(rootProvider: searchRootProvider))
 
-        return (sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore)
+        return (sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
+                toolStreamStore, terminalController)
     }
 
     /// Fourth block of `bootstrap()`: Model Router / Usage / Failover

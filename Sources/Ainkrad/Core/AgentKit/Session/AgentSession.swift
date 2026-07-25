@@ -100,6 +100,16 @@ final class AgentSession {
     /// (Tasks 6/8), not just tests.
     private var checkpointer: CheckpointCoordinator?
 
+    /// Terminal Streaming Task 5 — the shared live-output buffer for streaming
+    /// tool calls, bracketed around `registry.run(call)` in `execute(_:)` (step 3).
+    /// `nil` (the default) means no streaming: `execute` skips the begin/finish
+    /// calls entirely, byte-identical to pre-Task-5 behavior.
+    private let toolStream: ToolStreamStore?
+    /// Terminal Streaming Task 5 — force-kill handle for an in-flight `run_terminal`
+    /// child, consulted by `interrupt()`. `nil` (the default) means interrupt only
+    /// cancels the Swift `Task`, matching pre-Task-5 behavior.
+    private let terminalController: TerminalProcessController?
+
     /// M7 Slice 3b Task 21 — the resolved `SandboxProfile.toolAllowList` for this
     /// session's trust tier (subagent/background/scheduled), when the sandbox
     /// compose layer applies. `nil` (the default) means "no sandbox layer" —
@@ -182,6 +192,8 @@ final class AgentSession {
         agents: AgentStore? = nil,
         editJournal: EditJournal? = nil,
         checkpointer: CheckpointCoordinator? = nil,
+        toolStream: ToolStreamStore? = nil,
+        terminalController: TerminalProcessController? = nil,
         unattended: Bool = false,
         sandboxAllowList: Set<String>? = nil,
         agentAllowList: Set<String>? = nil,
@@ -207,6 +219,8 @@ final class AgentSession {
         self.agents = agents
         self.editJournal = editJournal
         self.checkpointer = checkpointer
+        self.toolStream = toolStream
+        self.terminalController = terminalController
         self.unattended = unattended
         self.sandboxAllowList = sandboxAllowList
         self.agentAllowList = agentAllowList
@@ -318,14 +332,15 @@ final class AgentSession {
     /// left half-parked; a subsequent `send(_:)` continues with the preserved
     /// history.
     ///
-    /// Limitation: a `run_terminal` child `Process` already spawned is not
-    /// force-killed by task cancellation — its captured result is simply
-    /// discarded when the cancelled task next checks `Task.isCancelled`.
-    /// Callers running under a `RunManager` should note the possible partial
-    /// side-effect in the run log.
+    /// Terminal Streaming Task 5: a `run_terminal` child `Process` already
+    /// spawned IS force-killed here (`terminalController?.killActive()`) —
+    /// task cancellation alone only discards the in-flight `Task`'s captured
+    /// result when it next checks `Task.isCancelled`, it does not stop an
+    /// already-spawned `Process`.
     func interrupt() {
         currentTask?.cancel()
         currentTask = nil
+        terminalController?.killActive()
         if let cont = approvalContinuation {
             approvalContinuation = nil
             cont.resume(returning: .denied("interrupted"))
@@ -881,7 +896,11 @@ final class AgentSession {
         state = .callingTool(call.name)
         // Pre-tool interception point (shared seam): step 1 — durable checkpoint before a mutating tool.
         await checkpointer?.captureIfMutating(call: call, tool: tool)
-        return await registry.run(call)
+        // step 3 — terminal-streaming: bracket the tool run so the live card fills.
+        toolStream?.begin(call.id)
+        let result = await registry.run(call)
+        toolStream?.finish(call.id, finalOutput: result.content)
+        return result
     }
 
     /// Runs the cheap rule-based consolidation pass and notifies observers

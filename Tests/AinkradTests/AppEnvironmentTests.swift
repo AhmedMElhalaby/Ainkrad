@@ -93,6 +93,7 @@ final class AppEnvironmentTests {
         let fileChangeWatcher = FileChangeWatcher()
         let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
         let canvasStore = CanvasStore(persistence: persistence)
+        let toolStreamStore = ToolStreamStore()
         let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
         voiceService.attachSession(agentSession)
 
@@ -157,6 +158,7 @@ final class AppEnvironmentTests {
             skillCommandStore: SkillCommandStore(persistence: persistence),
             menuBarPresence: menuBarPresence,
             canvasStore: canvasStore,
+            toolStreamStore: toolStreamStore,
             voiceService: voiceService
         )
 

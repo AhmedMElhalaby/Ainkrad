@@ -189,7 +189,8 @@ struct AssistantRootView: View {
                                     .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                             case .agentTurn(let id, let steps):
                                 AgentTurnTimelineView(steps: steps, tokens: tokens,
-                                                      typography: assistantTypography, reduceMotion: reduceMotion)
+                                                      typography: assistantTypography, reduceMotion: reduceMotion,
+                                                      toolStream: environment.toolStreamStore)
                                     .id(id)
                                     .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                             }
