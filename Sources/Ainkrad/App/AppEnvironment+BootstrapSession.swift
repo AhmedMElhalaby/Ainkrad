@@ -42,7 +42,9 @@ extension AppEnvironment {
         agentTools: [any AgentTool],
         mcpServerRegistry: MCPServerRegistry,
         skillRegistry: SkillRegistry,
-        skillCommandStore: SkillCommandStore
+        skillCommandStore: SkillCommandStore,
+        toolStreamStore: ToolStreamStore,
+        terminalController: TerminalProcessController
     ) -> (
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
@@ -278,6 +280,8 @@ extension AppEnvironment {
             memory: memoryService,
             agents: agentStore,
             editJournal: editJournal,
+            toolStream: toolStreamStore,
+            terminalController: terminalController,
             router: modelRouter,
             usage: usageTracker,
             runtime: runtimeOptionsStore,

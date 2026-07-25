@@ -2,6 +2,20 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
+/// Chooses the text a tool card shows: while the step is running (pending) and a
+/// live buffer exists for its id, prefer the incremental stream; otherwise use
+/// the committed result text. Pure/testable — the view is a thin wrapper.
+@MainActor
+enum TimelineLiveOutput {
+    static func summary(for step: TurnStep, store: ToolStreamStore?) -> String {
+        guard case .tool(let payload) = step.kind else { return "" }
+        if step.status == .running, let live = store?.liveOutput(for: payload.toolUseID), !live.isEmpty {
+            return live
+        }
+        return payload.result.text
+    }
+}
+
 /// Renders one agent turn as a vertical rail: a leading tinted spine with a node
 /// marker per step (`TimelineRailGutter`), and the step body (thinking disclosure
 /// / markdown / tool card) to its right. Reuses `ToolCallCardView` for tool steps.
@@ -10,6 +24,10 @@ struct AgentTurnTimelineView: View {
     let tokens: DesignTokens
     let typography: AssistantTypography
     let reduceMotion: Bool
+    /// Live streaming buffers for in-flight tool calls (Task 1's store). Optional
+    /// and defaulted so existing call sites/previews compile unchanged; wired
+    /// from the Assistant root in a follow-up task.
+    var toolStream: ToolStreamStore? = nil
 
     @State private var expandedThinking: Set<String> = []
     /// The text step currently hovered, keyed by step id — drives the per-step
@@ -61,10 +79,11 @@ struct AgentTurnTimelineView: View {
                     hoveredTextStep = isHovering ? step.id : (hoveredTextStep == step.id ? nil : hoveredTextStep)
                 }
         case .tool(let payload):
+            let liveText = TimelineLiveOutput.summary(for: step, store: toolStream)
             ToolCallCardView(
                 toolName: payload.name,
                 title: ToolPresentation.humanize(payload.name),
-                summary: payload.result.text,
+                summary: liveText,
                 diff: nil,
                 tokens: tokens,
                 result: payload.result)

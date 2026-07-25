@@ -57,6 +57,7 @@ struct SeatbeltBackend: ExecutionBackend {
             executable: sandboxExecPath,
             arguments: ["-f", profileURL.path, "/bin/zsh", "-c", request.command],
             workingDir: workspace,
-            timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds))
+            timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds),
+            onOutput: request.onOutput, controller: request.processController)
     }
 }
