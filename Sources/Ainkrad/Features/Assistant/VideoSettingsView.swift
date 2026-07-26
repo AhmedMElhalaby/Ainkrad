@@ -47,6 +47,22 @@ struct VideoSettingsView: View {
         }
     }
 
+    private var providerOptions: [ProviderOption] {
+        providers.map { id in
+            let keyless = secretID(for: id) == nil
+            let configured: Bool
+            switch id {
+            case "local":  configured = !settings.document.localURL.isEmpty
+            case "custom":
+                configured = !settings.document.customBaseURL.isEmpty
+                    && !(secrets.secret(for: CustomVideoBackend.secretID) ?? "").isEmpty
+            default:
+                configured = !(secretID(for: id).flatMap { secrets.secret(for: $0) } ?? "").isEmpty
+            }
+            return ProviderOption(id: id, label: providerLabel(id), configured: configured, keyless: keyless)
+        }
+    }
+
     private func modelHint(for provider: String) -> String? {
         switch provider {
         case "luma":   return nil
@@ -61,12 +77,13 @@ struct VideoSettingsView: View {
             SettingsSectionHeader(title: "VIDEO", tokens: tokens, icon: "film")
 
             labeled("VIDEO PROVIDER", tokens: tokens) {
-                AinkradSelect(
-                    items: providers,
+                ProviderStatusList(
+                    options: providerOptions,
                     selection: Binding(
                         get: { settings.document.provider },
-                        set: { settings.setProvider($0); reloadKey() }),
-                    label: providerLabel)
+                        set: { settings.setProvider($0) }),
+                    tokens: tokens,
+                    onSelect: { _ in reloadKey() })
             }
 
             let provider = settings.document.provider

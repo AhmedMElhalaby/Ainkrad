@@ -24,6 +24,13 @@ struct MediaSettingsView: View {
     /// the rest need an API key (most offer a card-free free tier).
     private let providers = ["openai", "pollinations", "localsd", "stability", "replicate", "google", "huggingface", "custom"]
 
+    /// Named OpenAI-images-compatible endpoints for the Custom provider.
+    static let imagePresets: [EndpointPreset] = [
+        .init(label: "Together AI", baseURL: "https://api.together.xyz/v1"),
+        .init(label: "Fireworks", baseURL: "https://api.fireworks.ai/inference/v1"),
+        .init(label: "DeepInfra", baseURL: "https://api.deepinfra.com/v1/openai"),
+    ]
+
     private func providerLabel(_ id: String) -> String {
         switch id {
         case "pollinations": return "Pollinations (keyless)"
@@ -50,6 +57,24 @@ struct MediaSettingsView: View {
         }
     }
 
+    /// Provider rows with live configured status for the management list.
+    private var providerOptions: [ProviderOption] {
+        providers.map { id in
+            let keyless = secretID(for: id) == nil
+            let configured: Bool
+            switch id {
+            case "pollinations": configured = true
+            case "localsd":      configured = !settings.document.localSDURL.isEmpty
+            case "custom":
+                configured = !settings.document.customBaseURL.isEmpty
+                    && !(secrets.secret(for: CustomOpenAIImageBackend.secretID) ?? "").isEmpty
+            default:
+                configured = !(secretID(for: id).flatMap { secrets.secret(for: $0) } ?? "").isEmpty
+            }
+            return ProviderOption(id: id, label: providerLabel(id), configured: configured, keyless: keyless)
+        }
+    }
+
     /// Providers that accept a model / engine override (also the "more providers"
     /// lever for model-parameterized backends).
     private func modelHint(for provider: String) -> String? {
@@ -69,12 +94,13 @@ struct MediaSettingsView: View {
             SettingsSectionHeader(title: "MEDIA", tokens: tokens, icon: "photo")
 
             labeled("IMAGE PROVIDER", tokens: tokens) {
-                AinkradSelect(
-                    items: providers,
+                ProviderStatusList(
+                    options: providerOptions,
                     selection: Binding(
                         get: { settings.document.provider },
-                        set: { settings.setProvider($0); reloadForProvider() }),
-                    label: providerLabel)
+                        set: { settings.setProvider($0) }),
+                    tokens: tokens,
+                    onSelect: { _ in reloadForProvider() })
             }
 
             // Provider-specific configuration.
@@ -83,6 +109,10 @@ struct MediaSettingsView: View {
                 labeled("BASE URL", tokens: tokens) {
                     AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1")
                         .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                }
+                ProviderPresetChips(presets: Self.imagePresets, tokens: tokens) { preset in
+                    customBaseURL = preset.baseURL
+                    settings.setCustomBaseURL(preset.baseURL)
                 }
             }
             if let secretID = secretID(for: provider) {
