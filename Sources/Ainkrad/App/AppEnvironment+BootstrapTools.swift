@@ -84,7 +84,11 @@ extension AppEnvironment {
         // redirect-validating client so a 302 to a private host is never
         // dispatched; web_search hits a fixed Brave endpoint (key in SecretStore).
         agentTools.append(WebFetchTool(http: RedirectValidatingHTTPClient()))
-        agentTools.append(WebSearchTool(backend: BraveSearchBackend(secrets: secrets, http: URLSessionDataHTTPClient())))
+        agentTools.append(WebSearchTool(backend: RoutingWebSearchBackend(
+            persistence: persistence,
+            brave: BraveSearchBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+            duckduckgo: DuckDuckGoSearchBackend(http: URLSessionDataHTTPClient()),
+            searxngHTTP: URLSessionDataHTTPClient())))
         if let memoryService {
             _ = agentContextHub.register(appID: "host.memory") {
                 MemoryContextSource.snapshot(from: memoryService)
@@ -121,9 +125,34 @@ extension AppEnvironment {
 
         // Media tools (read-class, render to the Live Canvas). Key in SecretStore.
         agentTools.append(ImageGenerateTool(
-            backend: OpenAIImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+            backend: RoutingMediaBackend(
+                persistence: persistence,
+                secrets: secrets,
+                openai: OpenAIImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                pollinations: PollinationsImageBackend(http: URLSessionDataHTTPClient()),
+                stability: StabilityImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                replicate: ReplicateImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                google: GoogleImagenBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                huggingface: HuggingFaceImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                auxHTTP: URLSessionDataHTTPClient()),
             store: canvasStore))
-        agentTools.append(SpeakTool(synth: SystemSpeechSynthesizer()))
+        agentTools.append(VideoGenerateTool(
+            backend: RoutingVideoBackend(
+                persistence: persistence,
+                secrets: secrets,
+                replicate: ReplicateVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                luma: LumaVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                fal: FalVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                auxHTTP: URLSessionDataHTTPClient()),
+            store: canvasStore))
+        agentTools.append(SpeakTool(
+            synth: RoutingSpeechSynthesizer(
+                persistence: persistence, secrets: secrets, onDevice: SystemSpeechSynthesizer(),
+                http: URLSessionDataHTTPClient(), player: SystemAudioPlayer()),
+            producer: RoutingSpeechAudioProducer(
+                persistence: persistence, secrets: secrets, http: URLSessionDataHTTPClient(),
+                onDevice: OnDeviceSpeechAudioProducer()),
+            store: canvasStore))
 
         // M8 code-search tools (read-class). Share the assistant workspace root,
         // resolved live so a folder change is reflected without re-registering —

@@ -21,7 +21,7 @@ struct CanvasRect: Codable, Equatable, Sendable {
 /// Typed canvas element kinds. Unknown raw strings decode to `.unknown` so a
 /// document written by a newer build never crashes an older one (additive schema).
 enum CanvasElementKind: String, Codable, Sendable, CaseIterable {
-    case text, markdown, table, diagram, chart, image, code, status, card, unknown
+    case text, markdown, table, diagram, chart, image, video, audio, code, status, card, unknown
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)

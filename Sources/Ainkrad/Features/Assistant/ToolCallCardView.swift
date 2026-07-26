@@ -24,6 +24,17 @@ struct ToolCallCardView: View {
     /// the card renders `DiffReviewView` instead of the raw diff text.
     var fileDiff: FileDiff? = nil
     var rejectedHunkIDs: Binding<Set<Int>>? = nil
+    /// A `data:` image URL (e.g. from `image_generate`) rendered inline below the
+    /// row, so a generated image appears in the transcript, not only on the canvas.
+    var imageDataURL: String? = nil
+    /// Presents the inline image full-screen (handled at the window root).
+    var onOpenImage: ((NSImage) -> Void)? = nil
+    /// A `file:`/`http:` video URL (e.g. from `video_generate`) rendered inline.
+    var videoURL: String? = nil
+    /// Presents the inline video full-screen (handled at the window root).
+    var onOpenVideo: ((URL) -> Void)? = nil
+    /// A `file:` audio URL (e.g. from `speak`) rendered inline with playback + download.
+    var audioURL: String? = nil
 
     @State private var isExpanded = false
     @State private var isHovering = false
@@ -53,6 +64,15 @@ struct ToolCallCardView: View {
                 DiffReviewView(fileDiff: fileDiff, rejectedHunkIDs: rejectedHunkIDs, tokens: tokens)
             } else if showsBody {
                 codeBlock
+            }
+            if let imageDataURL {
+                GeneratedImageView(dataURL: imageDataURL, tokens: tokens, onOpen: onOpenImage)
+            }
+            if let videoURL {
+                GeneratedVideoView(urlString: videoURL, tokens: tokens, onOpen: onOpenVideo)
+            }
+            if let audioURL {
+                GeneratedAudioView(urlString: audioURL, title: "Speech", tokens: tokens)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

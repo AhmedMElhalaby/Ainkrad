@@ -7,6 +7,10 @@ import AinkradHostRuntime
 struct WebSearchSettingsDocument: PersistableDocument {
     static let documentID = "websearch.settings"
     var provider: String = "brave"
+    /// Base URL of the SearXNG instance for the keyless `searxng` provider.
+    /// Not a credential, so it lives in the document (unlike the Brave key,
+    /// which is Keychain-only). Empty means the SearXNG backend is unconfigured.
+    var searxngURL: String = ""
 }
 
 /// Backs the Assistant Settings WEB section's provider picker. Mirrors the
@@ -25,6 +29,11 @@ final class WebSearchSettingsStore {
 
     func setProvider(_ id: String) {
         document.provider = id
+        persistence.save(document)
+    }
+
+    func setSearxngURL(_ url: String) {
+        document.searxngURL = url
         persistence.save(document)
     }
 }

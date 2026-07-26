@@ -22,9 +22,16 @@ struct SystemSpeechSynthesizer: SpeechSynthesizing {
 
 struct SpeakTool: AgentTool {
     let synth: any SpeechSynthesizing
+    /// When present (with `store`), speech is rendered to a file and shown as a
+    /// downloadable audio card in the transcript, not just played. Defaulted so
+    /// existing call sites/tests compile unchanged.
+    var producer: (any SpeechAudioProducing)? = nil
+    var store: CanvasStore? = nil
+    var mediaStore = GeneratedMediaStore()
+    var player: any AudioPlaying = SystemAudioPlayer()
 
     let name = "speak"
-    let description = "Speak text aloud on the user's machine using on-device text-to-speech."
+    let description = "Speak text aloud on the user's machine using text-to-speech."
     let permission: ToolPermissionClass = .read
 
     var parametersSchema: JSONValue {
@@ -38,9 +45,27 @@ struct SpeakTool: AgentTool {
         ])
     }
 
+    @MainActor
     func execute(_ input: JSONValue) async throws -> ToolResult {
         guard let text = input["text"]?.stringValue, !text.isEmpty else {
             throw ToolError.message("speak requires non-empty \"text\".")
+        }
+        // Preferred path: render audio to a file → play it → show a downloadable
+        // audio card. Falls back to fire-and-forget playback on any failure.
+        if let producer, let store {
+            do {
+                let (data, ext) = try await producer.audio(for: text)
+                let url = try mediaStore.write(data, fileExtension: ext)
+                player.play(data)
+                let element = CanvasElement(
+                    id: UUID().uuidString, kind: .audio,
+                    title: "Speech", body: url.absoluteString)
+                let id = store.add(element)
+                return ToolResult(content: "Spoke \(text.count) characters (audio element \(id)).", isError: false)
+            } catch {
+                synth.speak(text)
+                return ToolResult(content: "Spoke \(text.count) characters.", isError: false)
+            }
         }
         synth.speak(text)
         return ToolResult(content: "Spoke \(text.count) characters.", isError: false)

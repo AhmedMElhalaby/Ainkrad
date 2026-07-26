@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 import AinkradAppKit
 import AinkradHostRuntime
 
@@ -70,6 +71,10 @@ struct CanvasElementView: View {
             return AnyView(cardBody)
         case .image:
             return AnyView(imageBody)
+        case .video:
+            return AnyView(videoBody)
+        case .audio:
+            return AnyView(audioBody)
         case .diagram, .chart:
             return AnyView(CanvasDiagramView(element: element, tokens: tokens))
         case .unknown:
@@ -139,10 +144,36 @@ struct CanvasElementView: View {
 
     @ViewBuilder
     private var imageBody: some View {
-        if let url = URL(string: element.body), url.scheme?.hasPrefix("http") == true {
+        if let nsImage = CanvasImageDecoding.dataURLImage(element.body) {
+            // `data:` URL (e.g. from `image_generate`) — decode the bytes directly;
+            // AsyncImage/URLSession does not load the `data:` scheme.
+            Image(nsImage: nsImage).resizable().scaledToFit()
+        } else if let url = URL(string: element.body), url.scheme?.hasPrefix("http") == true {
             AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { ProgressView() }
         } else {
             placeholder("Image unavailable")
+        }
+    }
+
+    @ViewBuilder
+    private var videoBody: some View {
+        if let url = URL(string: element.body), url.scheme == "file" || url.scheme?.hasPrefix("http") == true {
+            VideoPlayer(player: AVPlayer(url: url))
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .clipShape(ChamferShape(cut: AinkradRadius.md))
+        } else {
+            placeholder("Video unavailable")
+        }
+    }
+
+    @ViewBuilder
+    private var audioBody: some View {
+        if let url = URL(string: element.body), url.scheme == "file" || url.scheme?.hasPrefix("http") == true {
+            VideoPlayer(player: AVPlayer(url: url))
+                .frame(height: 44)
+                .clipShape(ChamferShape(cut: AinkradRadius.sm))
+        } else {
+            placeholder("Audio unavailable")
         }
     }
 

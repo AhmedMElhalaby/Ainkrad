@@ -19,7 +19,7 @@ extension AppEnvironment {
     /// so — like web_fetch/web_search — it must be stripped from unattended
     /// registries so an unattended run can't incur paid image generation.
     static func isUnattendedNetworkTool(_ tool: any AgentTool) -> Bool {
-        tool is WebFetchTool || tool is WebSearchTool || tool is ImageGenerateTool
+        tool is WebFetchTool || tool is WebSearchTool || tool is ImageGenerateTool || tool is VideoGenerateTool
     }
 
     static func bootstrapAgentSessionAndRuns(

@@ -26,6 +26,10 @@ struct AssistantRootView: View {
     @State var isShareModalPresented = false
     @State private var isRunsPanelPresented = false
     @State private var isSchedulesPresented = false
+    /// A generated image presented full-screen in the lightbox overlay.
+    @State private var lightboxImage: NSImage?
+    /// A generated video presented full-screen in the lightbox overlay.
+    @State private var lightboxVideoURL: URL?
     @State var redactionsText = ""
 
     var body: some View {
@@ -56,6 +60,17 @@ struct AssistantRootView: View {
         .onChange(of: session.messages) { _, newValue in
             environment.assistantSessionStore.syncActive(messages: newValue)
         }
+        .overlay {
+            if let lightboxImage {
+                ImageLightboxView(image: lightboxImage, tokens: tokens) { self.lightboxImage = nil }
+                    .transition(reduceMotion ? .identity : .opacity)
+            } else if let lightboxVideoURL {
+                VideoLightboxView(url: lightboxVideoURL, tokens: tokens) { self.lightboxVideoURL = nil }
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: lightboxImage != nil)
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: lightboxVideoURL != nil)
     }
 
     // MARK: - Chat column
@@ -208,7 +223,10 @@ struct AssistantRootView: View {
                             case .agentTurn(let id, let steps):
                                 AgentTurnTimelineView(steps: steps, tokens: tokens,
                                                       typography: assistantTypography, reduceMotion: reduceMotion,
-                                                      toolStream: environment.toolStreamStore)
+                                                      toolStream: environment.toolStreamStore,
+                                                      canvasStore: environment.canvasStore,
+                                                      onOpenImage: { lightboxImage = $0 },
+                                                      onOpenVideo: { lightboxVideoURL = $0 })
                                     .id(id)
                                     .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                             }
