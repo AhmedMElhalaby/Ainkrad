@@ -21,6 +21,18 @@ struct WebToolsSettingsView: View {
     /// keyless (no API key, no payment card); Brave needs a paid-tier key.
     private let providers = ["brave", "searxng", "duckduckgo"]
 
+    private var providerOptions: [ProviderOption] {
+        providers.map { id in
+            let configured: Bool
+            switch id {
+            case "duckduckgo": configured = true
+            case "searxng":    configured = !settings.document.searxngURL.isEmpty
+            default:           configured = !(secrets.secret(for: BraveSearchBackend.secretID) ?? "").isEmpty
+            }
+            return ProviderOption(id: id, label: providerLabel(id), configured: configured, keyless: id != "brave")
+        }
+    }
+
     private func providerLabel(_ id: String) -> String {
         switch id {
         case "searxng": return "SearXNG (keyless)"
@@ -34,12 +46,12 @@ struct WebToolsSettingsView: View {
             SettingsSectionHeader(title: "WEB", tokens: tokens, icon: "globe")
 
             labeled("SEARCH PROVIDER", tokens: tokens) {
-                AinkradSelect(
-                    items: providers,
+                ProviderStatusList(
+                    options: providerOptions,
                     selection: Binding(
                         get: { settings.document.provider },
                         set: { settings.setProvider($0) }),
-                    label: providerLabel)
+                    tokens: tokens)
             }
 
             // Provider-specific configuration.

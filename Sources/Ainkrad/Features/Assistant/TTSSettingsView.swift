@@ -25,6 +25,13 @@ struct TTSSettingsView: View {
 
     private let providers = ["onDevice", "openai", "elevenlabs", "custom"]
 
+    /// Named OpenAI-speech-compatible endpoints for the Custom provider.
+    static let ttsPresets: [EndpointPreset] = [
+        .init(label: "Groq", baseURL: "https://api.groq.com/openai/v1"),
+        .init(label: "DeepInfra", baseURL: "https://api.deepinfra.com/v1/openai"),
+        .init(label: "Lemonfox", baseURL: "https://api.lemonfox.ai/v1"),
+    ]
+
     private func providerLabel(_ id: String) -> String {
         switch id {
         case "openai":     return "OpenAI (cloud)"
@@ -43,17 +50,29 @@ struct TTSSettingsView: View {
         }
     }
 
+    private var providerOptions: [ProviderOption] {
+        providers.map { id in
+            let keyless = secretID(for: id) == nil
+            let hasKey = !(secretID(for: id).flatMap { secrets.secret(for: $0) } ?? "").isEmpty
+            let configured = id == "custom"
+                ? (hasKey && !settings.document.customBaseURL.isEmpty)
+                : (keyless || hasKey)
+            return ProviderOption(id: id, label: providerLabel(id), configured: configured, keyless: keyless)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SettingsSectionHeader(title: "TEXT TO SPEECH", tokens: tokens, icon: "waveform")
 
             labeled("VOICE PROVIDER", tokens: tokens) {
-                AinkradSelect(
-                    items: providers,
+                ProviderStatusList(
+                    options: providerOptions,
                     selection: Binding(
                         get: { settings.document.provider },
-                        set: { settings.setProvider($0); reload() }),
-                    label: providerLabel)
+                        set: { settings.setProvider($0) }),
+                    tokens: tokens,
+                    onSelect: { _ in reload() })
             }
 
             let provider = settings.document.provider
@@ -62,6 +81,10 @@ struct TTSSettingsView: View {
                     labeled("BASE URL", tokens: tokens) {
                         AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1")
                             .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    }
+                    ProviderPresetChips(presets: Self.ttsPresets, tokens: tokens) { preset in
+                        customBaseURL = preset.baseURL
+                        settings.setCustomBaseURL(preset.baseURL)
                     }
                 }
                 labeled("API KEY", tokens: tokens) {
