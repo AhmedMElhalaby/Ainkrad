@@ -12,6 +12,7 @@ struct OpenAIImageBackend: MediaBackend {
     let http: DataHTTPClient
     var baseURL: String = "https://api.openai.com/v1"
     var model: String = "gpt-image-1"
+    var size: String = "1024x1024"
 
     var isConfigured: Bool { !(secrets.secret(for: Self.secretID) ?? "").isEmpty }
 
@@ -32,7 +33,7 @@ struct OpenAIImageBackend: MediaBackend {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        let body: [String: Any] = ["model": model, "prompt": prompt, "n": 1, "size": "1024x1024"]
+        let body: [String: Any] = ["model": model, "prompt": prompt, "n": 1, "size": size]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await http.data(for: request)

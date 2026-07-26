@@ -62,7 +62,9 @@ struct AssistantSettingsView: View {
         case .contextPrivacy: contextPrivacySection(tokens: tokens)
         case .web:            webSection(tokens: tokens)
         case .media:          mediaSection(tokens: tokens)
+        case .video:          videoSection(tokens: tokens)
         case .voice:          voiceSection(tokens: tokens)
+        case .textToSpeech:   textToSpeechSection(tokens: tokens)
         case .appearance:     appearanceSection(tokens: tokens)
         }
     }

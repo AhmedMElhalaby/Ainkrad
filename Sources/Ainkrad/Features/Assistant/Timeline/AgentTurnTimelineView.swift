@@ -28,6 +28,13 @@ struct AgentTurnTimelineView: View {
     /// and defaulted so existing call sites/previews compile unchanged; wired
     /// from the Assistant root in a follow-up task.
     var toolStream: ToolStreamStore? = nil
+    /// Canvas store used to resolve an `image_generate` call's rendered image for
+    /// inline display. Optional/defaulted so existing call sites/previews compile.
+    var canvasStore: CanvasStore? = nil
+    /// Presents an inline generated image full-screen (handled at the window root).
+    var onOpenImage: ((NSImage) -> Void)? = nil
+    /// Presents an inline generated video full-screen (handled at the window root).
+    var onOpenVideo: ((URL) -> Void)? = nil
 
     @State private var expandedThinking: Set<String> = []
     /// The text step currently hovered, keyed by step id — drives the per-step
@@ -80,13 +87,27 @@ struct AgentTurnTimelineView: View {
                 }
         case .tool(let payload):
             let liveText = TimelineLiveOutput.summary(for: step, store: toolStream)
+            let imageDataURL: String? = (payload.name == "image_generate")
+                ? canvasStore.flatMap { ToolCallImageLookup.canvasImageDataURL(resultText: payload.result.text, store: $0) }
+                : nil
+            let videoURL: String? = (payload.name == "video_generate")
+                ? canvasStore.flatMap { ToolCallImageLookup.canvasVideoURL(resultText: payload.result.text, store: $0) }
+                : nil
+            let audioURL: String? = (payload.name == "speak")
+                ? canvasStore.flatMap { ToolCallImageLookup.canvasAudioURL(resultText: payload.result.text, store: $0) }
+                : nil
             ToolCallCardView(
                 toolName: payload.name,
                 title: ToolPresentation.humanize(payload.name),
                 summary: liveText,
                 diff: nil,
                 tokens: tokens,
-                result: payload.result)
+                result: payload.result,
+                imageDataURL: imageDataURL,
+                onOpenImage: onOpenImage,
+                videoURL: videoURL,
+                onOpenVideo: onOpenVideo,
+                audioURL: audioURL)
         case .todo(let items):
             TodoChecklistView(items: items, tokens: tokens)
                 .frame(maxWidth: .infinity, alignment: .leading)

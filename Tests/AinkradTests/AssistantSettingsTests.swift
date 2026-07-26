@@ -19,11 +19,11 @@ struct AssistantSettingsTabTests {
     @Test("data tab is context privacy") func data() {
         #expect(AssistantSettingsTab.data.sections == [.contextPrivacy])
     }
-    @Test("web tab is web then media") func web() {
-        #expect(AssistantSettingsTab.web.sections == [.web, .media])
+    @Test("web tab is web, media, then video") func web() {
+        #expect(AssistantSettingsTab.web.sections == [.web, .media, .video])
     }
-    @Test("voice tab is voice") func voice() {
-        #expect(AssistantSettingsTab.voice.sections == [.voice])
+    @Test("voice tab is voice then text-to-speech") func voice() {
+        #expect(AssistantSettingsTab.voice.sections == [.voice, .textToSpeech])
     }
     @Test("appearance tab is appearance") func appearance() {
         #expect(AssistantSettingsTab.appearance.sections == [.appearance])

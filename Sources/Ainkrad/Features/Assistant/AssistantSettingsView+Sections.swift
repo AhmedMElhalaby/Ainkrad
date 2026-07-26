@@ -242,6 +242,24 @@ extension AssistantSettingsView {
             tokens: tokens)
     }
 
+    // MARK: - Video
+
+    func videoSection(tokens: DesignTokens) -> some View {
+        VideoSettingsView(
+            persistence: environment.persistence,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
+    // MARK: - Text to Speech
+
+    func textToSpeechSection(tokens: DesignTokens) -> some View {
+        TTSSettingsView(
+            persistence: environment.persistence,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
     // MARK: - Voice
 
     func voiceSection(tokens: DesignTokens) -> some View {
