@@ -13,8 +13,8 @@ struct AssistantSettingsTabTests {
     @Test("models tab is connections then model") func models() {
         #expect(AssistantSettingsTab.models.sections == [.connections, .model])
     }
-    @Test("access tab is permissions, sandbox, then tool hooks") func access() {
-        #expect(AssistantSettingsTab.access.sections == [.permissions, .sandbox, .toolHooks])
+    @Test("access tab is permissions, sandbox, tool hooks, then remote channel") func access() {
+        #expect(AssistantSettingsTab.access.sections == [.permissions, .sandbox, .toolHooks, .remoteChannel])
     }
     @Test("data tab is context privacy") func data() {
         #expect(AssistantSettingsTab.data.sections == [.contextPrivacy])
