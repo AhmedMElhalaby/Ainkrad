@@ -168,6 +168,48 @@ else
   done
 fi
 
+# --- 3b. Package pins actually resolve --------------------------------------
+echo
+echo "▸ Package resolution"
+# Verify each pinned revision EXISTS UPSTREAM, not merely that a stale
+# DerivedData checkout still has it.
+#
+# A bad pin is invisible while SwiftPM has the old revision cached: the build
+# reuses it and everything looks green. That happened — a repin regex clobbered
+# Terminal's SwiftTerm revision with the AinkradAppKit SHA, and this script
+# reported a pass because the previously-resolved checkout was still on disk.
+#
+# `git ls-remote <url> <sha>` does NOT work here: it filters by ref NAME, so a
+# pinned non-tip commit always looks missing. Fetching the commit is the only
+# honest test.
+PIN_CACHE="$(mktemp -d)"
+git init -q "$PIN_CACHE"
+while read -r repo name url rev; do
+  [[ -n "$rev" ]] || continue
+  if git -C "$PIN_CACHE" fetch -q --depth=1 "$url" "$rev" 2>/dev/null; then
+    ok "$repo → $name @ ${rev:0:8}"
+  else
+    fail "$repo pins $name @ ${rev:0:8}, which does not exist in $url"
+  fi
+done < <(
+  for repo in Ainkrad AinkradKit AinkradPluginTemplate AinkradTerminal GitMage AinkradLore AinkradLeyline; do
+    dir="$SIBLINGS/$repo"; [[ "$repo" == "Ainkrad" ]] && dir="$HOST_ROOT"
+    [[ -d "$dir" ]] || continue
+    for manifest in "$dir/project.yml" "$dir/Package.swift"; do
+      [[ -f "$manifest" ]] || continue
+      python3 -c "
+import re, sys
+text = open(sys.argv[1]).read()
+pairs  = re.findall(r'url:\s*\"?([^\s\"]+)\"?[^\n]*\n\s*revision:\s*\"?([a-f0-9]{40})\"?', text)
+pairs += re.findall(r'\.package\(url:\s*\"([^\"]+)\"\s*,\s*revision:\s*\"([a-f0-9]{40})\"', text)
+for url, rev in pairs:
+    print(sys.argv[2], url.rstrip('/').split('/')[-1].replace('.git',''), url, rev)
+" "$manifest" "$repo"
+    done
+  done
+)
+rm -rf "$PIN_CACHE"
+
 # --- 4. Tests ---------------------------------------------------------------
 if [[ "$FAST" == true ]]; then
   echo
