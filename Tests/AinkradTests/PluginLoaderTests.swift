@@ -57,7 +57,7 @@ struct PluginLoaderTests {
             PluginInfoKey.appID: "hello",
             PluginInfoKey.displayName: "Hello",
             PluginInfoKey.iconSymbol: "hand.wave",
-            PluginInfoKey.apiVersion: 7,
+            PluginInfoKey.apiVersion: AinkradAppKit.apiVersion,
             PluginInfoKey.principalClass: "DoesNotExist",
             "CFBundleExecutable": "hello",
         ]
