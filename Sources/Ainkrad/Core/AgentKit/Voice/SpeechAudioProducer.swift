@@ -73,7 +73,7 @@ struct CloudSpeechAudioProducer: SpeechAudioProducing {
 /// from persistence. `onDevice` (default) renders offline; cloud providers fetch
 /// mp3. Falls back to on-device if a cloud provider is selected but unconfigured.
 struct RoutingSpeechAudioProducer: SpeechAudioProducing {
-    nonisolated(unsafe) let persistence: PersistenceStore
+    let persistence: PersistenceStore
     nonisolated(unsafe) let secrets: SecretStore
     let http: DataHTTPClient
     let onDevice: any SpeechAudioProducing

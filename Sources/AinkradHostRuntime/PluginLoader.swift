@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 import AinkradAppKit
 // Scoped import: the host's own `@main` struct is named `AinkradHostApp`
@@ -85,7 +86,19 @@ public final class PluginLoader {
         // subprocess/XPC boundary, out of scope here.
         let appType = principal.app()
         let host = makeHostServices(metadata.appID, metadata.presentation)
-        return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host, presentation: metadata.presentation))
+        // Generation 8: teardown is discovered by CAST, never required. A
+        // generation-7 bundle fails this cast and is simply left alone — which
+        // is the whole point of adding capability this way rather than as a new
+        // protocol requirement (an added requirement has no witness in an
+        // already-compiled bundle, and the bundle stops loading entirely).
+        var teardown: (@MainActor () -> Void)?
+        if let teardownable = appType as? AinkradAppTeardown.Type,
+           let identified = host as? PluginInstanceIdentity {
+            let instance = identified.instanceID
+            teardown = { teardownable.teardown(instance: instance) }
+        }
+        return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host,
+                                presentation: metadata.presentation, teardown: teardown))
     }
 }
 
@@ -94,17 +107,35 @@ extension RegisteredApp {
     /// host services. Plugins are enabled by default; the registry override
     /// still applies.
     @MainActor
-    public static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices, presentation: PluginPresentation) -> RegisteredApp {
-        RegisteredApp(
+    public static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices,
+                              presentation: PluginPresentation,
+                              teardown: (@MainActor () -> Void)? = nil) -> RegisteredApp {
+        var registered = RegisteredApp(
             id: app.id,
             displayName: app.displayName,
             icon: app.icon,
             isEnabledByDefault: true,
             source: .plugin(url: url, apiVersion: apiVersion),
-            makeRootView: { app.makeRootView(host: host) },
-            makeSettingsView: { app.makeSettingsView(host: host) },
+            // Generation 8: ONE theme delivery path.
+            //
+            // `HostServices.theme` and the SDK's `@Entry` environment keys were
+            // disjoint mechanisms carrying the same data — a plugin could read
+            // either, they were injected from different places, and nothing
+            // guaranteed they agreed. The environment wins (it is what every
+            // `AinkradAppKit` component already reads, and it is per-view, so a
+            // preview or a nested surface can override it). `HostServices.theme`
+            // is now the *injection point*: the host feeds the environment from
+            // it here, so a plugin's own scoped theme is authoritative for its
+            // subtree rather than whatever the host root happened to publish.
+            //
+            // Read inside the closure so `HostTheme`'s `@Observable` tokens stay
+            // live — a theme change re-renders the plugin, as before.
+            makeRootView: { AnyView(app.makeRootView(host: host).ainkradHostTheme(host.theme)) },
+            makeSettingsView: { AnyView(app.makeSettingsView(host: host).ainkradHostTheme(host.theme)) },
             chromeFill: { app.chromeFill(host: host) },
             presentation: presentation
         )
+        registered.teardown = teardown
+        return registered
     }
 }

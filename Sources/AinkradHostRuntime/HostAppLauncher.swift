@@ -2,8 +2,18 @@ import AinkradAppKit
 
 /// Per-app `PluginAppLauncher` handed to one plugin's HostServices. Forwards to
 /// the shared hub, tagged with this app's id (mirrors `HostContextRegistry`).
+///
+/// Also conforms to generation 8's `PluginAppLauncherResult`, so a caller can
+/// find out whether the app actually opened. `open(appID:payload:)` returns
+/// `Void`, which meant Leyline's "connect" button looked identical whether
+/// Terminal launched or was not installed at all — RC-5 (failure recorded,
+/// never surfaced) reproduced at the plugin boundary.
+///
+/// The richer method is on a SEPARATE protocol, discovered by cast, rather than
+/// added to `PluginAppLauncher` — the generation-8 freeze rule, since an added
+/// protocol requirement is the one change library evolution does not cover.
 @MainActor
-public struct HostAppLauncher: PluginAppLauncher {
+public struct HostAppLauncher: PluginAppLauncher, PluginAppLauncherResult {
     let appID: String
     unowned let hub: PluginLaunchHub
 
@@ -13,8 +23,24 @@ public struct HostAppLauncher: PluginAppLauncher {
     }
 
     public func open(appID: String, payload: String?) {
-        hub.enqueue(target: appID, payload: payload)
-        hub.requestOpen(appID)
+        _ = openReportingOutcome(appID: appID, payload: payload)
     }
+
+    public func openReportingOutcome(appID target: String, payload: String?) -> PluginLaunchOutcome {
+        // Ask the hub whether the target is actually openable BEFORE enqueuing
+        // a payload for it — a payload left pending for an app that never
+        // opens is a leak that also mis-fires if that app is installed later.
+        switch hub.availability(of: target) {
+        case .unknown:
+            return .unknownApp(target)
+        case .disabled:
+            return .disabled(target)
+        case .available:
+            hub.enqueue(target: target, payload: payload)
+            hub.requestOpen(target)
+            return .opened
+        }
+    }
+
     public func takePendingLaunch() -> String? { hub.takePending(for: appID) }
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Ainkrad loads Built-in App plugins as dynamic .bundle images from
+	     ~/Library/Application Support/com.ainkrad.app/Documents/Plugins.
+	     scripts/release.sh signs with `codesign --options runtime`, and the
+	     hardened runtime turns on dyld LIBRARY VALIDATION: it refuses to load
+	     any Mach-O not signed by the same Team ID as the host. Third-party
+	     plugins are, by definition, signed by someone else (and today are not
+	     signed at all) — so without this entitlement a correctly-signed
+	     release loads ZERO plugins and the app ships looking like it simply
+	     has no apps.
+
+	     This is a deliberate, narrow trade: authenticity of plugin code is
+	     enforced in-process by `PluginSignaturePolicy` (see
+	     Sources/AinkradHostRuntime/PluginSignaturePolicy.swift), which in
+	     Release builds requires a valid Developer-ID signature before
+	     `Bundle.load()` is ever called. dyld's check is replaced, not dropped. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

@@ -28,6 +28,12 @@ public struct RegisteredApp: Identifiable {
     /// workspace layout (`.pane`, the default) or summoned as a floating
     /// host overlay (`.overlay`) that auto-dismisses when any app opens.
     public var presentation: PluginPresentation = .pane
+    /// Releases everything this instance owns. Non-nil only for a plugin whose
+    /// app type opts into `AinkradAppTeardown` — see `RegisteredApp.plugin`.
+    ///
+    /// Defaulted to `nil` so every existing construction site (all the built-in
+    /// apps) is unaffected: teardown is opt-in at both ends.
+    public var teardown: (@MainActor () -> Void)? = nil
 
     public init(id: String, displayName: String, icon: String, summary: String = "",
                 isEnabledByDefault: Bool, source: AppSource,

@@ -149,7 +149,7 @@ struct CanvasElementView: View {
             // AsyncImage/URLSession does not load the `data:` scheme.
             Image(nsImage: nsImage).resizable().scaledToFit()
         } else if let url = URL(string: element.body), url.scheme?.hasPrefix("http") == true {
-            AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { ProgressView() }
+            AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { AinkradSpinner(size: 20) }
         } else {
             placeholder("Image unavailable")
         }

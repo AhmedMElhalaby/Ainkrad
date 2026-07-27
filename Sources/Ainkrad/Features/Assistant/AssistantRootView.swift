@@ -31,6 +31,9 @@ struct AssistantRootView: View {
     /// A generated video presented full-screen in the lightbox overlay.
     @State private var lightboxVideoURL: URL?
     @State var redactionsText = ""
+    /// Memoizes the per-turn timeline so a streamed chunk doesn't rebuild the
+    /// whole transcript — see `TranscriptTimelineCache`.
+    @State private var timelineCache = TranscriptTimelineCache()
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -213,8 +216,11 @@ struct AssistantRootView: View {
                     emptyState()
                         .padding(.top, 60)
                 } else {
-                    VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
-                        ForEach(TranscriptTimelineBuilder.build(from: session.messages)) { item in
+                    // Lazy: a long chat materialized every row's view on every
+                    // body pass, including all the markdown/diff/tool cards
+                    // scrolled far out of sight.
+                    LazyVStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+                        ForEach(timelineCache.items(for: session.messages)) { item in
                             switch item {
                             case .userBubble(let index, let message):
                                 bubble(for: message, tokens: tokens)

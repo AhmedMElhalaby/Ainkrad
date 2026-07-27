@@ -38,7 +38,31 @@ final class WorkspaceFileIndex {
         return out
     }
 
-    func refresh() {
+    /// Rebuilds the index, walking the tree **off the main actor**.
+    ///
+    /// The walk itself is `nonisolated` and always was — but the previous
+    /// caller was `Task { workspaceFileIndex.refresh() }` from a `@MainActor`
+    /// context, and an unqualified `Task` *inherits* the enclosing actor
+    /// isolation. So the comment there ("keeps bootstrap's synchronous path
+    /// from stalling") was wrong: the walk still ran on the main actor, just
+    /// one turn later. With the root defaulting to the home directory, that was
+    /// a 20,000-file enumeration of `~` blocking the first frames.
+    ///
+    /// Only the assignment comes back to the actor.
+    func refresh() async {
+        let root = self.root
+        let maxFiles = self.maxFiles
+        // A fresh `FileManager` rather than the shared instance: `FileManager`
+        // is not `Sendable`, and a per-task instance is the documented way to
+        // use one off the main thread.
+        let found = await Task.detached(priority: .utility) {
+            Self.fileURLs(under: root, fileManager: FileManager(), maxFiles: maxFiles).map(\.path)
+        }.value
+        paths = found
+    }
+
+    /// Synchronous rebuild, for tests and for callers already off the hot path.
+    func refreshSynchronously() {
         paths = Self.fileURLs(under: root, fileManager: fm, maxFiles: maxFiles).map(\.path)
     }
 

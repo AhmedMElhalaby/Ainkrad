@@ -9,7 +9,7 @@ import AinkradHostRuntime
 /// the conformers used here — `UserDefaults`-backed and in-memory — are safe to
 /// touch across the await boundary).
 struct RoutingWebSearchBackend: WebSearchBackend {
-    nonisolated(unsafe) let persistence: PersistenceStore
+    let persistence: PersistenceStore
     let brave: BraveSearchBackend
     let duckduckgo: DuckDuckGoSearchBackend
     /// HTTP client used to build the SearXNG backend on demand (its instance URL

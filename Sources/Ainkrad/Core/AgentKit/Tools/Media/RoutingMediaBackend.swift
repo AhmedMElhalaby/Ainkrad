@@ -9,7 +9,7 @@ import AinkradHostRuntime
 /// plain (non-Sendable) `AnyObject`; `nonisolated(unsafe)` mirrors the
 /// `OpenAIImageBackend.secrets` precedent.
 struct RoutingMediaBackend: MediaBackend {
-    nonisolated(unsafe) let persistence: PersistenceStore
+    let persistence: PersistenceStore
     nonisolated(unsafe) let secrets: SecretStore
     let openai: OpenAIImageBackend
     let pollinations: PollinationsImageBackend

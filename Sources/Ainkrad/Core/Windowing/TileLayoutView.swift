@@ -115,6 +115,14 @@ struct TileLayoutView: View {
                         // debounce) so its tile→full grow fills without an empty
                         // flash; all other panes keep the trailing debounce.
                         .environment(\.paneResizesImmediately, inFocus && isFocusedPane)
+                        // Generation 8: the HOST says which pane is active.
+                        // Plugins previously had to infer it — Terminal bound
+                        // the agent's context to whichever pane was created
+                        // last, so with two terminals open the assistant read
+                        // the wrong buffer, silently. Only the host knows: it
+                        // owns the layout, the focused id, focus mode and
+                        // workspace switching.
+                        .environment(\.ainkradPaneIsFocused, isFocusedPane)
                         // Every VISIBLE pane zooms into place on a Focus toggle
                         // (scale-pop, driven by `focusPop`): entering, that's the
                         // one focused pane; exiting, it's the whole split grid

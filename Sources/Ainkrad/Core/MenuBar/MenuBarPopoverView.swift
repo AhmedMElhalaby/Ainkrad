@@ -20,7 +20,15 @@ struct MenuBarPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header(tokens: tokens)
             runStatus(tokens: tokens)
-            Divider().overlay(tokens.foreground.opacity(0.06))
+            // Not `Divider()`: that draws AppKit's separator, and the design
+            // language is explicit that surfaces are seamless — no separator
+            // lines. Same fading accent rule the panes use for their one
+            // internal division.
+            LinearGradient(
+                colors: [.clear, tokens.accentPrimary.opacity(0.22), .clear],
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(height: 1)
             AssistantRootView(showsHeader: false, autoFocusComposer: true)
                 .frame(minHeight: 260, maxHeight: 360)
             quickSwitch(tokens: tokens)

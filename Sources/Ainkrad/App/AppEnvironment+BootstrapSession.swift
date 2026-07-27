@@ -259,15 +259,23 @@ extension AppEnvironment {
         // `@`-mention file index (M7 Slice 5c Task 22a wiring; the overlay UI itself
         // is Task 22b). No first-class "project directory" concept exists yet — default
         // to the home directory until a folder-picker persists a real choice.
-        let assistantWorkingDirectory = persistence.load(AssistantWorkspaceSettings.self)
+        let chosenWorkspace = persistence.load(AssistantWorkspaceSettings.self)
             .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
-            ?? FileManager.default.homeDirectoryForCurrentUser
+        let assistantWorkingDirectory = chosenWorkspace ?? FileManager.default.homeDirectoryForCurrentUser
         let workspaceFileIndex = WorkspaceFileIndex(root: assistantWorkingDirectory)
-        // `WorkspaceFileIndex` is `@MainActor`; deferring the initial `refresh()` into a
-        // `Task` (still main-actor-isolated, since it's spawned from this MainActor-only
-        // static func) keeps bootstrap's synchronous path from stalling on a large
-        // directory walk, without ever touching the index off its required actor.
-        Task { workspaceFileIndex.refresh() }
+        // Index ONLY a directory the user actually chose.
+        //
+        // The home directory is the fallback for the other consumers below
+        // (repo instructions, project commands), where it costs a couple of
+        // stats. For the file index it meant enumerating up to 20,000 files
+        // under `~` — Downloads, Library, every checkout on the machine — at
+        // every launch, to populate an `@`-mention list for a workspace the
+        // user never picked. `refresh()` is now genuinely off-actor too (see
+        // its doc comment: the old unqualified `Task` inherited main-actor
+        // isolation, so the walk never left the main thread).
+        if chosenWorkspace != nil {
+            Task { await workspaceFileIndex.refresh() }
+        }
 
         // Repo-instruction files (CLAUDE.md / AGENTS.md walked up from the active
         // workspace root) as a DISTINCT context source from the host's own

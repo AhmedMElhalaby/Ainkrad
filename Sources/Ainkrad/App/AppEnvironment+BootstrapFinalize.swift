@@ -167,6 +167,15 @@ extension AppEnvironment {
             }
         }
 
+        // Generation 8: lets `apps.openReportingOutcome` tell a plugin WHY a
+        // launch didn't happen. Leyline's "connect" used to look identical
+        // whether Terminal opened or was never installed.
+        pluginLaunchHub.setAvailabilityProvider { [weak environment] appID in
+            guard let environment else { return .available }
+            guard environment.registry.allApps.contains(where: { $0.id == appID }) else { return .unknown }
+            return environment.registry.isEnabled(appID) ? .available : .disabled
+        }
+
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")
     }
 }

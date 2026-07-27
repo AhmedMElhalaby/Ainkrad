@@ -65,6 +65,18 @@ DMG="${DIST}/Ainkrad-${VERSION}.dmg"
 echo "▸ Ainkrad ${VERSION} (${TAG})"
 echo "  Xcode: ${DEVELOPER_DIR:-$(xcode-select -p)}"
 
+# --- preflight -------------------------------------------------------------
+# The cross-repo invariants in the checklist above are no longer prose: they run
+# here. `--fast` skips the family-wide test sweep (minutes) but still asserts
+# SDK pin equality, the ABI baseline, and every plugin's API version — the three
+# things that make plugins silently vanish. Set SKIP_PREFLIGHT=1 to bypass.
+if [[ "${SKIP_PREFLIGHT:-}" != "1" ]]; then
+  "${REPO_ROOT}/scripts/preflight.sh" --fast || {
+    echo "error: preflight failed — refusing to build a release. (SKIP_PREFLIGHT=1 to override)" >&2
+    exit 1
+  }
+fi
+
 # --- build -----------------------------------------------------------------
 command -v xcodegen >/dev/null 2>&1 && { echo "▸ xcodegen generate"; xcodegen generate >/dev/null; }
 
@@ -87,8 +99,24 @@ if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   while IFS= read -r -d '' item; do
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$item"
   done < <(find "$APP_PATH/Contents/Frameworks" \( -name '*.dylib' -o -name '*.framework' \) -print0 2>/dev/null)
-  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP_PATH"
+  codesign --force --options runtime --timestamp \
+    --entitlements config/Ainkrad.entitlements \
+    --sign "$SIGN_IDENTITY" "$APP_PATH"
   codesign --verify --strict --verbose=2 "$APP_PATH"
+
+  # The hardened runtime enables dyld LIBRARY VALIDATION, which refuses to load
+  # any Mach-O not signed by the host's Team ID — i.e. every plugin. Ainkrad
+  # replaces that check with an in-process Developer-ID check
+  # (`DeveloperIDSignaturePolicy`) and disables the dyld one via the entitlement
+  # above. If that entitlement is ever dropped from the signature, the app ships
+  # loading ZERO plugins and looks like it simply has no apps — so verify it is
+  # actually present rather than trusting the file was passed.
+  if ! codesign -d --entitlements :- "$APP_PATH" 2>/dev/null \
+       | grep -q 'com.apple.security.cs.disable-library-validation'; then
+    echo "error: signed app is missing com.apple.security.cs.disable-library-validation." >&2
+    echo "       Under the hardened runtime NO plugin would load. Refusing to continue." >&2
+    exit 1
+  fi
   SIGNED=true
 else
   echo "▸ No SIGN_IDENTITY — building UNSIGNED (users right-click → Open on first launch)."
@@ -129,6 +157,17 @@ $NOTARIZED  && echo "  notarized:  yes" || echo "  notarized:  no"
 
 # --- publish ---------------------------------------------------------------
 if [[ "$PUBLISH" == true ]]; then
+  # Fail CLOSED. Building an unsigned/un-notarized dmg locally is a supported
+  # convenience; *publishing* one is not — every user who downloads it gets a
+  # Gatekeeper block and the right-click-to-open workaround trains exactly the
+  # habit that makes malware easy. `ALLOW_UNNOTARIZED_PUBLISH=1` is the explicit
+  # opt-out for a deliberate pre-release.
+  if [[ "$NOTARIZED" != true && "${ALLOW_UNNOTARIZED_PUBLISH:-}" != "1" ]]; then
+    echo "error: refusing to publish a build that is not signed AND notarized." >&2
+    echo "       signed=${SIGNED} notarized=${NOTARIZED}" >&2
+    echo "       Set SIGN_IDENTITY + notary credentials, or ALLOW_UNNOTARIZED_PUBLISH=1 to override." >&2
+    exit 1
+  fi
   command -v gh >/dev/null 2>&1 || { echo "error: --publish needs the gh CLI" >&2; exit 1; }
   ASSET="${DMG}#Ainkrad ${VERSION} (Apple Silicon).dmg"
   if gh release view "$TAG" >/dev/null 2>&1; then
