@@ -13,7 +13,7 @@ import AinkradHostRuntime
 struct PluginInstallerStorePolicyTests {
     // Build a real .bundle dir (Info.plist only) and zip it with ditto; return
     // (zipURL, sha256Hex). Mirrors `PluginInstallerTests.makeBundleZip`.
-    private func makeBundleZip(appID: String, api: Int = 7, dir: URL) throws -> (URL, String) {
+    private func makeBundleZip(appID: String, api: Int = AinkradAppKit.apiVersion, dir: URL) throws -> (URL, String) {
         let bundle = dir.appendingPathComponent("\(appID).bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
@@ -65,7 +65,7 @@ struct PluginInstallerStorePolicyTests {
         // missing-author check under test.
         let info: [String: Any] = [
             "AinkradAppID": "hello", "AinkradDisplayName": "hello", "AinkradIconSymbol": "app",
-            "AinkradAPIVersion": 7, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
+            "AinkradAPIVersion": AinkradAppKit.apiVersion, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
         let expectedMessage = StorePolicy.check(
             manifest: StoreManifestInput(
                 metadata: try PluginBundleMetadata.parse(infoDictionary: info).get(),

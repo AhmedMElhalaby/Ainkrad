@@ -83,13 +83,43 @@ make help                      # list all targets
 
 ## Install a release
 
-Grab the latest signed `.dmg` from the
-[**Releases**](https://github.com/AhmedMElhalaby/Ainkrad/releases) page, open it,
-and drag **Ainkrad** into Applications.
+**Homebrew (recommended):**
 
-> Until the app ships notarized, macOS Gatekeeper will warn on first launch —
-> right-click the app → **Open**, or allow it in
-> *System Settings → Privacy & Security*.
+```bash
+brew install --cask ahmedmelhalaby/tap/ainkrad
+```
+
+One command, and the app launches. Read the caveats it prints — they explain
+what you are trusting.
+
+**Or download directly** from the
+[**Releases**](https://github.com/AhmedMElhalaby/Ainkrad/releases) page, open the
+`.dmg`, and drag **Ainkrad** into Applications. Because the app is not notarized,
+macOS will refuse to open it until you clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Ainkrad.app"
+```
+
+(Or allow it in *System Settings → Privacy & Security* after the first blocked
+launch.)
+
+### Why it isn't notarized
+
+Notarization requires a paid Apple Developer Program membership. Until that
+exists, Ainkrad ships signed with a development certificate but unnotarized, and
+two things follow honestly from that:
+
+- macOS quarantines the download. The Homebrew cask clears that flag for you and
+  says so; a manual download needs the command above.
+- **Plugin code signatures are not verified.** A host that carries no Developer
+  ID cannot meaningfully demand one from plugins, so it accepts them and states
+  this in the App Store surface rather than pretending otherwise. Plugin
+  downloads are still checked against the catalog's SHA-256, so the bytes match
+  what was published — what is unverified is *who* published them.
+
+Both tighten automatically the day a Developer ID signature is used: the app
+verifies plugin signatures with no code change.
 
 ## Keyboard shortcuts
 

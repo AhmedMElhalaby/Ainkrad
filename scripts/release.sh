@@ -157,16 +157,33 @@ $NOTARIZED  && echo "  notarized:  yes" || echo "  notarized:  no"
 
 # --- publish ---------------------------------------------------------------
 if [[ "$PUBLISH" == true ]]; then
-  # Fail CLOSED. Building an unsigned/un-notarized dmg locally is a supported
-  # convenience; *publishing* one is not — every user who downloads it gets a
-  # Gatekeeper block and the right-click-to-open workaround trains exactly the
-  # habit that makes malware easy. `ALLOW_UNNOTARIZED_PUBLISH=1` is the explicit
-  # opt-out for a deliberate pre-release.
-  if [[ "$NOTARIZED" != true && "${ALLOW_UNNOTARIZED_PUBLISH:-}" != "1" ]]; then
-    echo "error: refusing to publish a build that is not signed AND notarized." >&2
-    echo "       signed=${SIGNED} notarized=${NOTARIZED}" >&2
-    echo "       Set SIGN_IDENTITY + notary credentials, or ALLOW_UNNOTARIZED_PUBLISH=1 to override." >&2
-    exit 1
+  # Fail CLOSED on an ACCIDENTALLY unsigned release; allow a DELIBERATE one.
+  #
+  # Publishing an un-notarized dmg has a real cost: Gatekeeper blocks it, and
+  # the user has to go to System Settings > Privacy & Security to run it. That
+  # trains exactly the habit that makes malware easy, so it must never happen
+  # by accident.
+  #
+  # But notarization requires a PAID Apple Developer Program membership, and
+  # until that exists an unsigned release is the only release possible. Refusing
+  # outright would mean shipping nothing at all. So it is permitted, loudly, and
+  # only when asked for by name: UNSIGNED_RELEASE=1 states the intent, whereas a
+  # generic "force" flag would get set once and never removed.
+  if [[ "$NOTARIZED" != true ]]; then
+    if [[ "${UNSIGNED_RELEASE:-}" != "1" ]]; then
+      echo "error: refusing to publish a build that is not signed AND notarized." >&2
+      echo "       signed=${SIGNED} notarized=${NOTARIZED}" >&2
+      echo "       With a Developer ID: set SIGN_IDENTITY + NOTARY_PROFILE." >&2
+      echo "       Without one: UNSIGNED_RELEASE=1 to publish deliberately unsigned." >&2
+      exit 1
+    fi
+    echo
+    echo "  ⚠ PUBLISHING UNSIGNED. Users will hit a Gatekeeper block and must"
+    echo "    allow the app in System Settings > Privacy & Security."
+    echo "    Plugin signatures will also NOT be verified at runtime: an"
+    echo "    unsigned host cannot demand a Developer-ID signature it has no"
+    echo "    way to produce (see PluginTrust). The App Store surface says so."
+    echo
   fi
   command -v gh >/dev/null 2>&1 || { echo "error: --publish needs the gh CLI" >&2; exit 1; }
   ASSET="${DMG}#Ainkrad ${VERSION} (Apple Silicon).dmg"

@@ -117,3 +117,50 @@ struct PluginLoadFailureSurfacingTests {
         #expect(!text.contains("Application Support"))
     }
 }
+
+/// The posture for a host that is not itself Developer-ID signed.
+///
+/// A host cannot coherently demand more of plugins than it can prove of
+/// itself. Requiring Developer-ID plugins from an unsigned build rejects every
+/// plugin and ships an app with no apps — Blocker 0 by another route.
+@Suite("Trust posture follows the host's own signature")
+struct HostTrustPostureTests {
+
+    @Test("An unsigned host does not demand Developer-ID plugins")
+    func unsignedHostAcceptsPlugins() {
+        // The test bundle is not Developer-ID signed, so this is the real
+        // answer for this process, not a stub.
+        #expect(!PluginTrust.hostIsDeveloperIDSigned())
+    }
+
+    @Test("The unverified posture accepts, and is a distinct type")
+    func unverifiedPolicyAccepts() {
+        let url = URL(fileURLWithPath: "/tmp/anything.bundle")
+        guard case .success = UnverifiedDistributionPolicy().validate(bundleURL: url) else {
+            Issue.record("unverified posture rejected a bundle")
+            return
+        }
+        // Deliberately NOT the same type as DevModeSignaturePolicy: "dev mode"
+        // and "shipped with no signing identity" are different situations and
+        // must be distinguishable in logs and in the UI.
+        #expect(!(UnverifiedDistributionPolicy() as PluginSignaturePolicy is DevModeSignaturePolicy))
+    }
+
+    @Test("isVerifyingPluginSignatures reports the truth for this build")
+    func verificationFlagMatchesPolicy() {
+        let policy = PluginTrust.policyForCurrentBuild()
+        #expect(PluginTrust.isVerifyingPluginSignatures == (policy is DeveloperIDSignaturePolicy))
+        #if DEBUG
+        // Debug is dev mode, so verification is off and the banner shows.
+        #expect(!PluginTrust.isVerifyingPluginSignatures)
+        #endif
+    }
+
+    @Test("A Developer-ID signed host would use the strict policy")
+    func strictPolicyIsReachable() {
+        // Guards the branch itself: the strict policy must still exist and
+        // carry the Developer-ID requirement, so enrolling flips the posture
+        // with no code change.
+        #expect(DeveloperIDSignaturePolicy().requirementText.contains("1.2.840.113635.100.6.1.13"))
+    }
+}

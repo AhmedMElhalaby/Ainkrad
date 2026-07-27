@@ -95,6 +95,7 @@ struct AppStoreOverlayView: View {
             } else {
                 header(tokens: tokens)
                 filterBar(tokens: tokens)
+                trustPostureBanner(tokens: tokens)
                 loadFailureBanner(tokens: tokens)
                 content(tokens: tokens)
             }
@@ -241,6 +242,37 @@ struct AppStoreOverlayView: View {
         case .all: return "All"
         case .installed: return "Installed"
         case .updates: return updateCount > 0 ? "Updates (\(updateCount))" : "Updates"
+        }
+    }
+
+    /// States plainly when plugin code is not being signature-verified.
+    ///
+    /// This build is not Developer-ID signed, so `PluginTrust` accepts any
+    /// bundle — the alternative (demanding Developer-ID plugins from a host
+    /// that has no such identity itself) rejects everything and ships an app
+    /// with no apps. That is a defensible trade, but not a silent one: the
+    /// user is trusting the catalog rather than the code, and should know it.
+    /// Hidden entirely once a Developer-ID release is cut.
+    @ViewBuilder private func trustPostureBanner(tokens: DesignTokens) -> some View {
+        if !PluginTrust.isVerifyingPluginSignatures {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "lock.open").font(.system(size: 11))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plugin signatures aren’t verified in this build")
+                        .font(AinkradFont.display(12, weight: .semibold))
+                    Text("Downloads are still checked against the catalog’s SHA-256, so the bytes match what was published — but who published them isn’t verified.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(tokens.accentSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.accentSecondary.opacity(0.10)))
+            .overlay(ChamferShape(cut: AinkradRadius.sm).strokeBorder(tokens.accentSecondary.opacity(0.35), lineWidth: 1))
+            .padding(.horizontal, 18).padding(.bottom, 8)
         }
     }
 

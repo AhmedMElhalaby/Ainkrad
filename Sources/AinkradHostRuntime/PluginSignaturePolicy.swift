@@ -115,6 +115,26 @@ public struct DeveloperIDSignaturePolicy: PluginSignaturePolicy {
     }
 }
 
+/// The posture for a build that is not itself Developer-ID signed.
+///
+/// Accepts any bundle, exactly like `DevModeSignaturePolicy`, but is a
+/// *distinct type* so the difference is visible in code, in logs, and to
+/// `PluginTrust.isVerifyingPluginSignatures`. "Dev mode" and "shipped without
+/// a signing identity" are different situations and should not share a name.
+///
+/// Integrity is still checked elsewhere: `PluginInstaller` verifies the
+/// catalog's SHA-256 before a download is unpacked. That proves the bytes
+/// match what the catalog published — not who wrote them. The honest summary
+/// is: this build trusts the catalog, not the code.
+public struct UnverifiedDistributionPolicy: PluginSignaturePolicy {
+    public init() {}
+    public func validate(bundleURL: URL) -> Result<Void, PluginRejection> {
+        Log.registry.error(
+            "Plugin signatures are NOT being verified: this host is not Developer-ID signed. Accepting \(bundleURL.lastPathComponent, privacy: .public)")
+        return .success(())
+    }
+}
+
 /// Chooses the policy the host actually runs with.
 ///
 /// This exists so the choice is made in exactly one place and cannot drift:
@@ -123,13 +143,57 @@ public struct DeveloperIDSignaturePolicy: PluginSignaturePolicy {
 /// correct `DeveloperIDSignaturePolicy` seam existing while every call site
 /// wired `DevModeSignaturePolicy`.)
 public enum PluginTrust {
-    /// The policy for this build configuration.
+    /// The policy for this build.
+    ///
+    /// Release builds require a Developer-ID signature on every plugin —
+    /// **but only when the host itself carries one.**
+    ///
+    /// A host cannot coherently demand more of plugins than it can prove of
+    /// itself. An unsigned or ad-hoc build is not a trusted distribution: it
+    /// was not signed by an identified developer, Gatekeeper did not vet it,
+    /// and anything that could replace a plugin bundle could equally replace
+    /// the app binary. Demanding Developer-ID plugins there is theatre that
+    /// buys no security, and it costs everything: with no Developer-ID
+    /// identity available, *every* plugin is rejected and the app ships
+    /// looking like it has no apps — Blocker 0 again, by a different route.
+    ///
+    /// So the posture follows the host's real signature, checked at runtime:
+    ///
+    /// * host Developer-ID signed  → require Developer-ID plugins (strict)
+    /// * host unsigned or ad-hoc   → accept, and say so loudly
+    ///
+    /// This also means the strict posture switches itself on the day a
+    /// Developer-ID release is first cut, with no code change and nothing to
+    /// remember.
     public static func policyForCurrentBuild() -> PluginSignaturePolicy {
         #if DEBUG
         return DevModeSignaturePolicy()
         #else
-        return DeveloperIDSignaturePolicy()
+        return hostIsDeveloperIDSigned()
+            ? DeveloperIDSignaturePolicy()
+            : UnverifiedDistributionPolicy()
         #endif
+    }
+
+    /// Whether plugin signatures are actually being verified in this process.
+    /// Surfaced in the App Store overlay so an unverified posture is visible
+    /// to the user rather than silent.
+    public static var isVerifyingPluginSignatures: Bool {
+        policyForCurrentBuild() is DeveloperIDSignaturePolicy
+    }
+
+    /// Whether the running host binary carries a valid Developer-ID signature.
+    ///
+    /// Asks the same question of ourselves that `DeveloperIDSignaturePolicy`
+    /// asks of a plugin, using the same requirement.
+    public static func hostIsDeveloperIDSigned() -> Bool {
+        var selfCode: SecCode?
+        guard SecCodeCopySelf([], &selfCode) == errSecSuccess, let selfCode else { return false }
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(
+                DeveloperIDSignaturePolicy().requirementText as CFString, [], &requirement) == errSecSuccess,
+              let requirement else { return false }
+        return SecCodeCheckValidity(selfCode, [], requirement) == errSecSuccess
     }
 
     /// Whether the unmanaged `DevPlugins/` sideload directory is scanned.

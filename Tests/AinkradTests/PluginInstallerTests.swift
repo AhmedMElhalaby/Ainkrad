@@ -1,3 +1,4 @@
+import AinkradAppKit
 import Testing
 import Foundation
 import CryptoKit
@@ -10,7 +11,7 @@ import AinkradHostRuntime
 struct PluginInstallerTests {
     // Build a real .bundle dir (Info.plist only) and zip it with ditto; return
     // (zipURL, sha256Hex).
-    private func makeBundleZip(appID: String, api: Int = 7, dir: URL) throws -> (URL, String) {
+    private func makeBundleZip(appID: String, api: Int = AinkradAppKit.apiVersion, dir: URL) throws -> (URL, String) {
         let bundle = dir.appendingPathComponent("\(appID).bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
@@ -237,7 +238,7 @@ struct PluginInstallerErrorPathTests {
         let bundle = src.appendingPathComponent("hello.bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = ["AinkradAppID": "hello", "AinkradDisplayName": "Hello",
-            "AinkradIconSymbol": "app", "AinkradAPIVersion": 7, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
+            "AinkradIconSymbol": "app", "AinkradAPIVersion": AinkradAppKit.apiVersion, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: bundle.appendingPathComponent("Info.plist"))
         let zip = src.appendingPathComponent("hello.bundle.zip")
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
