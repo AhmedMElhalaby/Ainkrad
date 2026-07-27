@@ -84,6 +84,7 @@ extension AppEnvironment {
               t.toolStream = toolStreamStore; t.processController = terminalController
               t.permissionMode = permissionMode; return t }(),
             GitOpTool(actionHub: agentActionHub),
+            GitPrTool(actionHub: agentActionHub),
             TodoWriteTool(),
             PresentPlanTool(),
         ]
