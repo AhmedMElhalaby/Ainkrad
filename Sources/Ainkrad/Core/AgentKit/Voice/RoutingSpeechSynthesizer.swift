@@ -26,7 +26,7 @@ struct SystemAudioPlayer: AudioPlaying {
 /// fire-and-forget (the tool doesn't await playback); the cloud path runs in a
 /// detached Task and silently falls back to on-device if unconfigured or failing.
 struct RoutingSpeechSynthesizer: SpeechSynthesizing {
-    nonisolated(unsafe) let persistence: PersistenceStore
+    let persistence: PersistenceStore
     nonisolated(unsafe) let secrets: SecretStore
     let onDevice: any SpeechSynthesizing
     let http: DataHTTPClient

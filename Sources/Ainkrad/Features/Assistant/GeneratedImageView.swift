@@ -35,11 +35,15 @@ struct GeneratedImageView: View {
                 .contentShape(Rectangle())
                 .onHover { isHovering = $0 }
                 .onTapGesture { onOpen?(d.image) }
-                .contextMenu {
-                    Button("Open Full Screen") { onOpen?(d.image) }
-                    Button("Copy Image") { copy(d.image) }
-                    Button("Download…") { download(d.data, ext: d.ext) }
-                }
+                // HUD menu, not the AppKit one — see BlockView's note.
+                .ainkradContextMenu([
+                    AinkradMenuItem(title: "Open Full Screen",
+                                    systemName: "arrow.up.left.and.arrow.down.right") { onOpen?(d.image) },
+                    AinkradMenuItem(title: "Copy Image", systemName: "doc.on.doc") { copy(d.image) },
+                    AinkradMenuItem(title: "Download…", systemName: "square.and.arrow.down") {
+                        download(d.data, ext: d.ext)
+                    },
+                ])
                 .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
         }
     }
@@ -105,11 +109,12 @@ struct GeneratedVideoView: View {
                 .overlay(ChamferShape(cut: AinkradRadius.md).stroke(tokens.accentSecondary.opacity(0.22), lineWidth: 1))
                 .overlay(alignment: .topTrailing) { actionBar(url).padding(6) }
                 .onHover { isHovering = $0 }
-                .contextMenu {
-                    Button("Open Full Screen") { onOpen?(url) }
-                    Button("Copy File") { copy(url) }
-                    Button("Download…") { download(url) }
-                }
+                .ainkradContextMenu([
+                    AinkradMenuItem(title: "Open Full Screen",
+                                    systemName: "arrow.up.left.and.arrow.down.right") { onOpen?(url) },
+                    AinkradMenuItem(title: "Copy File", systemName: "doc.on.doc") { copy(url) },
+                    AinkradMenuItem(title: "Download…", systemName: "square.and.arrow.down") { download(url) },
+                ])
         }
     }
 

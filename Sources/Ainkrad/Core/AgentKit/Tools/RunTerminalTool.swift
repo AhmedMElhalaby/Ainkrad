@@ -13,6 +13,10 @@ import AinkradHostRuntime
 @MainActor
 struct RunTerminalTool: AgentTool {
     /// Destructive substrings that force approval even in Full-auto.
+    ///
+    /// This list is a *heuristic for a confirmation prompt*, never a security
+    /// boundary — see `isIrreversible` for why, and `effectiveTier` for what
+    /// actually contains an unattended run.
     static let destructivePatterns = ["rm -rf", "rm -fr", "> /dev", "mkfs", "dd "]
 
     unowned let actionHub: AgentActionRegistryHub
@@ -21,6 +25,10 @@ struct RunTerminalTool: AgentTool {
     /// (the default) is ever eligible to route to `HostBackend` — every
     /// other tier is sandboxed by the router (see `ExecutionRouter`).
     var trustTier: TrustTier = .mainInteractive
+    /// The session's current permission mode, read per call. Nil (the default,
+    /// used by tests and by non-session callers) behaves as `.ask` — i.e. as
+    /// if a human is in the loop. See `effectiveTier`.
+    var permissionMode: (@MainActor () -> AgentPermissionMode)? = nil
     var agentPolicy: AgentExecutionPolicy? = nil
     /// Wall-clock cap on a single command. Test seam kept from the
     /// pre-router tool: when set, overrides the resolved profile's
@@ -55,6 +63,26 @@ struct RunTerminalTool: AgentTool {
         ])
     }
 
+    /// The tier this call actually routes with.
+    ///
+    /// `.mainInteractive` is the one tier that can reach `HostBackend` — an
+    /// unsandboxed `/bin/zsh -lc` with the user's full authority. That is
+    /// justified *only* because a human approves each call. Full-auto removes
+    /// the human, so it must also remove the host backend: the run is demoted
+    /// to `.background`, which `ExecutionRouter` resolves to the sandboxed
+    /// `workspace-write` profile.
+    ///
+    /// Before this, Full-auto's only backstop was `isIrreversible`'s
+    /// five-substring list, and a prompt-injected model that phrased the
+    /// command as `rm -r -f ~` (or `find ~ -delete`, or `curl x|sh`) ran it
+    /// unsandboxed with no prompt.
+    ///
+    /// Non-main tiers are already sandboxed and pass through unchanged.
+    var effectiveTier: TrustTier {
+        guard trustTier == .mainInteractive else { return trustTier }
+        return permissionMode?() == .fullAuto ? .background : trustTier
+    }
+
     func execute(_ input: JSONValue) async throws -> ToolResult {
         guard let command = input["command"]?.stringValue, !command.isEmpty else {
             throw ToolError.message("run_terminal requires a non-empty \"command\".")
@@ -67,7 +95,7 @@ struct RunTerminalTool: AgentTool {
         let backend: any ExecutionBackend
         var profile: SandboxProfile
         do {
-            (backend, profile) = try await router.route(tier: trustTier, policy: agentPolicy)
+            (backend, profile) = try await router.route(tier: effectiveTier, policy: agentPolicy)
         } catch {
             return ToolResult(content: "$ \(command)\n[blocked: \(error)]", isError: true)
         }
@@ -126,9 +154,18 @@ struct RunTerminalTool: AgentTool {
         return ToolApprovalPreview(title: "Run terminal", summary: command, diff: nil)
     }
 
+    /// Whether this call always requires human approval, in every mode.
+    ///
+    /// Delegates to `CommandRisk`, which tokenizes the command instead of
+    /// substring-matching it — see that type for the list of bypasses the old
+    /// five-element `destructivePatterns` scan missed. `destructivePatterns` is
+    /// retained as a coarse belt-and-braces pass so the new analyzer can only
+    /// ever *widen* what gets stopped, never narrow it.
     func isIrreversible(_ input: JSONValue) -> Bool {
-        let command = (input["command"]?.stringValue ?? "").lowercased()
-        return Self.destructivePatterns.contains { command.contains($0) }
+        let raw = input["command"]?.stringValue ?? ""
+        if CommandRisk.isIrreversible(raw) { return true }
+        let lowered = raw.lowercased()
+        return Self.destructivePatterns.contains { lowered.contains($0) }
     }
 
     private func echoJSON(command: String, output: String) -> String {

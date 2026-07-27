@@ -95,6 +95,7 @@ struct AppStoreOverlayView: View {
             } else {
                 header(tokens: tokens)
                 filterBar(tokens: tokens)
+                loadFailureBanner(tokens: tokens)
                 content(tokens: tokens)
             }
         }
@@ -240,6 +241,37 @@ struct AppStoreOverlayView: View {
         case .all: return "All"
         case .installed: return "Installed"
         case .updates: return updateCount > 0 ? "Updates (\(updateCount))" : "Updates"
+        }
+    }
+
+    /// Surfaces plugins that were present on disk but refused to load this
+    /// launch. Without this the failure is invisible: the loader records it and
+    /// the app simply shows fewer apps, which reads as "nothing installed"
+    /// rather than "something is wrong". Hidden entirely when nothing failed.
+    @ViewBuilder private func loadFailureBanner(tokens: DesignTokens) -> some View {
+        let failures = store.loadFailures
+        if !failures.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                    Text(failures.count == 1 ? "1 app couldn’t be loaded" : "\(failures.count) apps couldn’t be loaded")
+                        .font(AinkradFont.display(12, weight: .semibold))
+                }
+                .foregroundStyle(tokens.accentTertiary)
+                ForEach(failures, id: \.url) { failure in
+                    Text(AppStoreStore.failureText(failure))
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.accentTertiary.opacity(0.12)))
+            .overlay(ChamferShape(cut: AinkradRadius.sm).strokeBorder(tokens.accentTertiary.opacity(0.45), lineWidth: 1))
+            .padding(.horizontal, 18).padding(.bottom, 8)
         }
     }
 

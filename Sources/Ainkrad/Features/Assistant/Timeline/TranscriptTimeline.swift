@@ -44,8 +44,37 @@ enum TranscriptItem: Identifiable, Equatable {
     }
 }
 
+/// Memoizes `TranscriptTimelineBuilder.build` across renders.
+///
+/// The builder is pure, but "safe to call every render" is not the same as
+/// "cheap to call every render". `AssistantRootView.body` re-evaluates on every
+/// streamed chunk (`session.streamingText` changes), and each evaluation
+/// rebuilt the entire timeline from the entire message history — allocating a
+/// fresh `[TranscriptItem]` and every nested `[TurnStep]` per token, for a
+/// transcript that had not changed at all.
+///
+/// The messages array is compared instead. That comparison is O(transcript),
+/// but it is a scan over existing storage rather than a rebuild plus
+/// allocations, and it turns the common streaming case (messages unchanged)
+/// into a cache hit.
+///
+/// A reference type held in `@State` so it survives view-struct recreation.
+@MainActor
+final class TranscriptTimelineCache {
+    private var lastMessages: [AgentMessage]?
+    private var lastItems: [TranscriptItem] = []
+
+    func items(for messages: [AgentMessage]) -> [TranscriptItem] {
+        if let lastMessages, lastMessages == messages { return lastItems }
+        let built = TranscriptTimelineBuilder.build(from: messages)
+        lastMessages = messages
+        lastItems = built
+        return built
+    }
+}
+
 /// Groups the flat `[AgentMessage]` transcript into per-turn timelines. Pure and
-/// synchronous — safe to call every render.
+/// synchronous — but see `TranscriptTimelineCache` before calling it per render.
 enum TranscriptTimelineBuilder {
     /// A user message is a PROMPT bubble when it carries any `.text` or `.image`
     /// block. A user message with only `.toolResult` blocks is the tool-result

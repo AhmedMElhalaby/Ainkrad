@@ -431,7 +431,8 @@ final class AppEnvironment {
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
             editJournal: editJournal, workspaceManager: workspaceManager, agentActionHub: agentActionHub,
             agentContextHub: agentContextHub, memoryService: memoryService, mcpConfigStore: mcpConfigStore,
-            skillRegistry: skillRegistry)
+            skillRegistry: skillRegistry,
+            permissionMode: { [weak agentPermissionStore] in agentPermissionStore?.mode ?? .ask })
 
         let (
             modelCatalogService, agentStore, modelCatalog, modelPriceTable, routerOutcomeStore, modelRouter,

@@ -22,7 +22,13 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         memoryService: MemoryService?,
         mcpConfigStore: MCPServerConfigStore,
-        skillRegistry: SkillRegistry
+        skillRegistry: SkillRegistry,
+        // Read per tool call so the foreground `run_terminal` can demote itself
+        // off `HostBackend` when the session is unattended (Full-auto) — see
+        // `RunTerminalTool.effectiveTier`. A closure rather than the store
+        // itself: this block must not gain a dependency on the permission
+        // subsystem's shape, only on the one value it needs.
+        permissionMode: @escaping @MainActor () -> AgentPermissionMode
     ) -> (
         sandboxProfileStore: SandboxProfileStore,
         cloudCredentialsStore: CloudCredentialsStore,
@@ -75,7 +81,8 @@ extension AppEnvironment {
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
             WorkspaceControlTool(workspaces: workspaceManager),
             { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
-              t.toolStream = toolStreamStore; t.processController = terminalController; return t }(),
+              t.toolStream = toolStreamStore; t.processController = terminalController
+              t.permissionMode = permissionMode; return t }(),
             GitOpTool(actionHub: agentActionHub),
             TodoWriteTool(),
             PresentPlanTool(),

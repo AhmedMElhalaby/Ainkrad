@@ -5,7 +5,7 @@ import AinkradHostRuntime
 /// from the persisted `VideoSettingsDocument.provider` on every call. All video
 /// providers are key-based (no keyless video exists). Defaults to Replicate.
 struct RoutingVideoBackend: VideoBackend {
-    nonisolated(unsafe) let persistence: PersistenceStore
+    let persistence: PersistenceStore
     nonisolated(unsafe) let secrets: SecretStore
     let replicate: ReplicateVideoBackend
     let luma: LumaVideoBackend

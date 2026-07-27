@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// View-model for the App Store overlay. Owns all UI state and derives a flat
 /// `[AppStoreRow]` from the cached catalog + installed-state + the registry.
@@ -38,6 +39,24 @@ final class AppStoreStore {
     init(service: AppStoreServing, registry: BuiltInAppRegistry) {
         self.service = service
         self.registry = registry
+    }
+
+    /// Plugin bundles that were found on disk but refused to load this launch,
+    /// with the reason each was rejected.
+    ///
+    /// Until now this was recorded by `PluginLoader` into
+    /// `BuiltInAppRegistry.loadFailures` and read by *nothing* — so a plugin
+    /// that failed to load was indistinguishable from a plugin that was never
+    /// installed, and the app just looked like it had no apps. This is the
+    /// error channel; the App Store overlay renders it above the grid.
+    var loadFailures: [PluginLoadFailure] { registry.loadFailures }
+
+    /// A user-facing one-liner for a rejected bundle: the bundle's name (not
+    /// its full path, which is an unhelpful Application Support URL) and the
+    /// reason recorded by the loader.
+    static func failureText(_ failure: PluginLoadFailure) -> String {
+        let name = failure.url.deletingPathExtension().lastPathComponent
+        return "\(name) — \(failure.reason)"
     }
 
     /// The row for whichever app's detail page is open (AIN-147), if any.

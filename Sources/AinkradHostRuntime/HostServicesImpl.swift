@@ -7,7 +7,19 @@ import AinkradAppKit
 /// wrapper kept in sync with the theme manager, so a loaded app follows theme
 /// changes live.
 @MainActor
-public final class HostServicesImpl: HostServices {
+public final class HostServicesImpl: HostServices, PluginInstanceIdentity {
+    /// Minted here, by the host, once per instance.
+    ///
+    /// This is what replaces `ObjectIdentifier(host as AnyObject)` in the four
+    /// plugins that were hand-rolling per-host caches. `HostServices` is not
+    /// class-bound, so that expression took the address of a temporary box —
+    /// reusable after free, and therefore capable of handing a new host the
+    /// previous host's store. A UUID is a value: never recycled, never aliased.
+    ///
+    /// Conformance is on a SEPARATE protocol rather than a new `HostServices`
+    /// requirement, per the generation-8 freeze rule (see `ContractFreezeTests`).
+    public let instanceID = PluginInstanceID()
+
     public let documents: PluginDocumentStore
     public let secrets: PluginSecretStore
     public let log: PluginLogger
@@ -28,6 +40,12 @@ public final class HostServicesImpl: HostServices {
         self.log = PluginLoggerImpl(appID: appID)
         self.themeManager = themeManager
         self.theme = HostTheme(HostThemeTokens(from: themeManager.currentTheme))
+        // Publish the host's REAL status palette rather than leaving the
+        // accent-derived fallback. `HostThemeTokens` cannot carry these (it is
+        // ABI-frozen for plugins), and without them a plugin had no way to
+        // express success/warning/danger through the theme — which is why they
+        // all hardcoded system colors.
+        self.theme.updateStatusColors(HostStatusColors(from: themeManager.tokens))
         self.context = HostContextRegistry(appID: appID, hub: hub)
         self.actions = HostActionRegistry(appID: appID, hub: actionHub)
         self.apps = HostAppLauncher(appID: appID, hub: launchHub)
@@ -45,6 +63,7 @@ public final class HostServicesImpl: HostServices {
             Task { @MainActor in
                 guard let self else { return }
                 self.theme.update(HostThemeTokens(from: self.themeManager.currentTheme))
+                self.theme.updateStatusColors(HostStatusColors(from: self.themeManager.tokens))
                 self.armThemeSync()
             }
         }
@@ -121,5 +140,16 @@ extension HostThemeTokens {
             accentSecondary: t.accentSecondary, accentTertiary: t.accentTertiary,
             foreground: t.foreground
         )
+    }
+}
+
+extension HostStatusColors {
+    /// The host's own semantic palette, as published to plugins.
+    ///
+    /// `DesignTokens` carries real `success`/`warning`/`danger` values; the
+    /// plugin-facing `HostThemeTokens` deliberately does not, because it is
+    /// ABI-frozen. This is the one adapter between them.
+    init(from tokens: DesignTokens) {
+        self.init(success: tokens.success, warning: tokens.warning, danger: tokens.danger)
     }
 }
