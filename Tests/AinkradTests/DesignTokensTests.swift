@@ -1,6 +1,7 @@
 import Testing
 import SwiftUI
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("Theme")
 struct ThemeTests {

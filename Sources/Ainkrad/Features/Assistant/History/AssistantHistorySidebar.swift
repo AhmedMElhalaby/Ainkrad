@@ -1,0 +1,90 @@
+import AinkradAppKit
+import SwiftUI
+import AinkradHostRuntime
+
+struct AssistantHistorySidebar: View {
+    let store: AssistantSessionStore
+    let tokens: DesignTokens
+    /// The app's surface opacity for the Assistant pane. The sidebar paints the
+    /// SAME opacity-tinted base as the chat column so the two read as one
+    /// seamless surface at every opacity setting (no separator line, no
+    /// mismatched translucency), with only a faint elevation tint to set the
+    /// sidebar apart.
+    let surfaceOpacity: Double
+    var onNewChat: () -> Void
+    var onSelect: (UUID) -> Void
+
+    @State private var query = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+            header
+            AinkradSearchField(text: $query, placeholder: "Search")
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: AinkradSpacing.xs) {
+                    ForEach(store.results(for: query)) { session in
+                        HistoryRow(
+                            session: session,
+                            isActive: session.id == store.activeID,
+                            onSelect: { onSelect(session.id) },
+                            onDelete: { store.delete(session.id) })
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .padding(AinkradSpacing.md)
+        .frame(width: 240)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background {
+            // Same opacity-tinted base as the chat column (`AssistantRootView`),
+            // plus a faint elevation tint. The host renders the blur behind the
+            // whole pane, so this only paints the tint.
+            ZStack {
+                tokens.background.opacity(surfaceOpacity)
+                tokens.surfaceElevated.opacity(0.06)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            Text("HISTORY")
+                .font(AinkradFont.display(11, weight: .medium)).kerning(1.5)
+                .foregroundStyle(tokens.foreground.opacity(0.5))
+            Spacer()
+            AinkradIconButton(systemName: "square.and.pencil", size: 26,
+                              tooltip: "New chat", action: onNewChat)
+        }
+    }
+}
+
+private struct HistoryRow: View {
+    let session: SavedSession
+    let isActive: Bool
+    var onSelect: () -> Void
+    var onDelete: () -> Void
+    @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            AinkradListRow(
+                isSelected: isActive,
+                onTap: onSelect,
+                leading: { EmptyView() },
+                title: session.title.isEmpty ? "New chat" : session.title,
+                subtitle: session.updatedAt.formatted(.relative(presentation: .named)),
+                trailing: { EmptyView() })
+
+            if isHovering {
+                AinkradIconButton(systemName: "trash", size: 22,
+                                  tooltip: "Delete chat", action: onDelete)
+                    .padding(.trailing, AinkradSpacing.xs)
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+        }
+        .onHover { isHovering = $0 }
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: isHovering)
+    }
+}

@@ -1,4 +1,6 @@
 import SwiftUI
+import AinkradAppKit
+import AinkradHostRuntime
 
 /// The App Store's per-app detail page (AIN-147): large icon, name, author,
 /// version, long description, screenshot gallery, links, and the primary
@@ -26,15 +28,33 @@ struct AppStoreDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 backButton
                 header
-                Text(longDescriptionText)
-                    .font(.system(size: 13))
-                    .foregroundStyle(tokens.foreground.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    AinkradSectionHeader(title: "Description")
+                    Text(longDescriptionText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(tokens.foreground.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(informationLine)
+                        .font(.system(size: 11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                }
+                if let secretKeys = requiredSecretKeys {
+                    VStack(alignment: .leading, spacing: 8) {
+                        AinkradSectionHeader(title: "Requires Secrets")
+                        requiredSecretsRow(secretKeys)
+                    }
+                }
                 if let screenshots = entry?.screenshots, !screenshots.isEmpty {
-                    screenshotGallery(screenshots)
+                    VStack(alignment: .leading, spacing: 8) {
+                        AinkradSectionHeader(title: "Screenshots")
+                        screenshotGallery(screenshots)
+                    }
                 }
                 if let links = entry?.links, !links.isEmpty {
-                    linksRow(links)
+                    VStack(alignment: .leading, spacing: 8) {
+                        AinkradSectionHeader(title: "Links")
+                        linksRow(links)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -44,24 +64,18 @@ struct AppStoreDetailView: View {
     }
 
     private var backButton: some View {
-        Button(action: onBack) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
-                Text("Back")
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(tokens.foreground.opacity(0.7))
+        HStack(spacing: 8) {
+            AinkradIconButton(systemName: "chevron.left", action: onBack)
+            Text("Back")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.7))
         }
-        .buttonStyle(.plain)
         .help("Back to catalog")
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 18) {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(tokens.surfaceElevated)
-                .frame(width: 76, height: 76)
-                .overlay(Image(systemName: row.icon).font(.system(size: 32)).foregroundStyle(tokens.accentSecondary))
+            NeonAppTile(symbol: row.icon, tokens: tokens, size: 88)
             VStack(alignment: .leading, spacing: 5) {
                 Text(row.displayName)
                     .font(AinkradFont.display(20, weight: .semibold))
@@ -71,7 +85,7 @@ struct AppStoreDetailView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(tokens.foreground.opacity(0.6))
                 }
-                Text(versionLine)
+                Text(row.versionLine)
                     .font(.system(size: 11))
                     .foregroundStyle(tokens.foreground.opacity(0.5))
                 actions.padding(.top, 4)
@@ -85,20 +99,38 @@ struct AppStoreDetailView: View {
         return text.isEmpty ? " " : text
     }
 
-    private var versionLine: String {
-        switch row.status {
-        case .available: return "v\(row.catalogVersion ?? "—")"
-        case .installed: return row.installedVersion.map { "v\($0) · installed" } ?? "installed"
-        case .updateAvailable: return "v\(row.installedVersion ?? "—") → v\(row.catalogVersion ?? "—")"
+    /// A readable label for the row's provenance.
+    private var kindLabel: String {
+        switch row.kind {
+        case .builtIn: return "Built-in"
+        case .plugin: return "Plugin"
+        case .mcpServer: return "MCP Server"
         }
     }
 
+    /// Secret env/header key NAMES the MCP server needs (never values — those
+    /// are supplied later in the MCP manager). `nil` for non-MCP rows or an
+    /// MCP entry that needs no secrets.
+    private var requiredSecretKeys: [String]? {
+        guard let mcp = entry?.mcp else { return nil }
+        let keys = mcp.envKeys + mcp.headerKeys
+        return keys.isEmpty ? nil : keys
+    }
+
+    /// `version · author · kind` — author omitted when nil/empty.
+    private var informationLine: String {
+        var parts = [row.versionLine]
+        if let author = entry?.author, !author.isEmpty { parts.append(author) }
+        parts.append(kindLabel)
+        return parts.joined(separator: " · ")
+    }
+
     /// The shared Install/Update/Enable/Disable/Uninstall controls (AIN-149)
-    /// — identical to `AppStoreCard`'s, just rendered at the `.prominent`
+    /// — identical to `AppStoreCard`'s, just rendered at the `.detail`
     /// size that fits the detail header.
     private var actions: some View {
         AppStoreActionControls(
-            row: row, tokens: tokens, isBusy: isBusy, style: .prominent,
+            row: row, tokens: tokens, isBusy: isBusy, style: .detail,
             onInstall: onInstall, onUpdate: onUpdate, onUninstall: onUninstall, onToggleEnabled: onToggleEnabled)
     }
 
@@ -115,34 +147,44 @@ struct AppStoreDetailView: View {
     }
 
     private func screenshot(_ url: URL, in urls: [URL], at index: Int) -> some View {
-        Button {
-            onOpenScreenshot(urls, index)
-        } label: {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .failure:
-                    screenshotBox(systemImage: "exclamationmark.triangle", tint: tokens.accentTertiary)
-                default:
-                    screenshotBox(systemImage: nil, tint: tokens.foreground)
-                }
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().aspectRatio(contentMode: .fill)
+            case .failure:
+                screenshotBox(systemImage: "exclamationmark.triangle", tint: tokens.accentTertiary)
+            default:
+                screenshotBox(systemImage: nil, tint: tokens.foreground)
             }
-            .frame(width: 220, height: 140)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .frame(width: 260, height: 164)
+        .clipShape(ChamferShape(cut: AinkradRadius.md))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.foreground.opacity(0.1), lineWidth: 1))
+        .contentShape(ChamferShape(cut: AinkradRadius.md))
+        .onTapGesture { onOpenScreenshot(urls, index) }
         .help("View full size")
     }
 
     private func screenshotBox(systemImage: String?, tint: Color) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10).fill(tokens.surfaceElevated)
+            ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated)
             if let systemImage {
                 Image(systemName: systemImage).foregroundStyle(tint.opacity(0.7))
             } else {
-                ProgressView().controlSize(.small)
+                AinkradSpinner()
+            }
+        }
+    }
+
+    // MARK: - MCP required secrets
+
+    /// The secret KEY NAMES this MCP server needs — never values. Shown as
+    /// chips so the user knows what to add in the MCP manager before
+    /// enabling it there; values are entered in Settings → MCP Servers, not here.
+    private func requiredSecretsRow(_ keys: [String]) -> some View {
+        HStack(spacing: 8) {
+            ForEach(keys, id: \.self) { key in
+                AinkradChip(label: key, systemName: "key.fill")
             }
         }
     }
@@ -153,12 +195,7 @@ struct AppStoreDetailView: View {
         HStack(spacing: 16) {
             ForEach(links, id: \.url) { link in
                 Link(destination: link.url) {
-                    HStack(spacing: 4) {
-                        Text(link.title)
-                        Image(systemName: "arrow.up.right")
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tokens.accentSecondary)
+                    AinkradChip(label: link.title, systemName: "arrow.up.right")
                 }
             }
         }

@@ -23,14 +23,15 @@ struct ChevronMark: Shape {
 
 /// The floating "power core" shown on an empty workspace: the arch ring
 /// with the chevron inside, breathing slowly. Reduce Motion freezes the
-/// pulse at full glow.
+/// pulse at full glow — driven by Ainkrad's own motion setting, not the
+/// macOS system Reduce Motion flag.
 struct EmblemView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isBreathing = false
 
     var body: some View {
         let tokens = environment.themeManager.tokens
+        let reduceMotion = environment.generalSettingsStore.uiReduceMotion
         let pulse = reduceMotion ? 1.0 : (isBreathing ? 1.0 : 0.72)
 
         ZStack {

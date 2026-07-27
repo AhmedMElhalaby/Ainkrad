@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradHostRuntime
 
 /// Accumulates virtual sky-time as the integral of the user's speed setting,
 /// so changing speed ramps the motion smoothly instead of teleporting the
@@ -41,13 +42,28 @@ struct AmbientSkyView: View {
 
     @State private var clock = SkyClock()
 
+    /// Whether this instance animates.
+    ///
+    /// `true` for the one real sky behind the workspace — that motion is the
+    /// product, and the "Animate the sky" switch is its only authority.
+    ///
+    /// `false` for the *decorative copies*. A view cannot blur the layers
+    /// behind it, so every translucent pane with blur enabled draws its own
+    /// sky + island copy and blurs that (`BlockView`). Those copies were fully
+    /// live: N blurred panes meant N extra 30fps scenes, each ~570 Canvas
+    /// fills and 18 radial gradients — by a wide margin the most expensive
+    /// thing the app did, and all of it under a 26pt Gaussian blur where the
+    /// motion is not perceptible. The frozen branch below already existed for
+    /// the settings switch; this just lets a caller ask for it.
+    var isLive: Bool = true
+
     var body: some View {
         let tokens = environment.themeManager.tokens
         // Per-theme sky character (emphasis only — colors come from `tokens`).
         // Read `currentTheme` (observed) so a theme switch repaints the sky.
         let profile = environment.themeManager.currentTheme.skyProfile
         let sky = environment.skySettingsStore
-        let animated = sky.motionEnabled
+        let animated = sky.motionEnabled && isLive
         // Register the per-effect switches as a body-level dependency: most
         // reads happen inside the Canvas renderer closure, which @Observable
         // doesn't track — without this line, toggles wouldn't repaint the

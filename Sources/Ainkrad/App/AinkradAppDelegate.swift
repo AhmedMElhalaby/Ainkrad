@@ -12,8 +12,31 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     /// before that (e.g. a very early Dock quit) — the fallback below just
     /// lets the app quit rather than hanging with no coordinator to reply.
     var quitCoordinator: QuitCoordinator?
+    /// Wired from `AinkradHostApp.init` alongside `quitCoordinator`. Owns the
+    /// `NSStatusItem`/popover for the app's lifetime — installed here on
+    /// launch, torn down on quit (M7 Slice 7).
+    var menuBarController: MenuBarController?
+    /// Wired alongside the above. Chat-history writes are coalesced (see
+    /// `AssistantSessionStore.syncActive`), so the last few hundred
+    /// milliseconds of a transcript may still be pending when the user quits —
+    /// this is where that gets forced to disk.
+    var assistantSessionStore: AssistantSessionStore?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         quitCoordinator?.requestTerminate() ?? .terminateNow
+    }
+
+    // Cardinal HUD is a dark-only design language — force dark appearance
+    // regardless of the macOS system setting so traffic-lights, native
+    // NSVisualEffectView materials, and any other AppKit-owned chrome
+    // always render dark.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+        menuBarController?.install()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        assistantSessionStore?.flush()
+        menuBarController?.teardown()
     }
 }

@@ -4,12 +4,13 @@ import CryptoKit
 import SwiftUI
 @testable import Ainkrad
 @testable import AinkradAppKit
+import AinkradHostRuntime
 
 @MainActor
 struct PluginInstallerTests {
     // Build a real .bundle dir (Info.plist only) and zip it with ditto; return
     // (zipURL, sha256Hex).
-    private func makeBundleZip(appID: String, api: Int = 1, dir: URL) throws -> (URL, String) {
+    private func makeBundleZip(appID: String, api: Int = 7, dir: URL) throws -> (URL, String) {
         let bundle = dir.appendingPathComponent("\(appID).bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
@@ -25,9 +26,13 @@ struct PluginInstallerTests {
         return (zip, hash)
     }
 
+    // `author`/non-empty `description` are required for a catalog entry to
+    // pass `StorePolicy` (see PluginInstallerStorePolicyTests) — every
+    // fixture entry here represents a real store-listed submission, so it
+    // must carry them like a real one would.
     private func entry(appID: String, url: URL, sha: String, version: String = "1.0.0") -> CatalogEntry {
-        CatalogEntry(appID: appID, displayName: appID, icon: "app", description: "", version: version,
-                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/\(appID)")
+        CatalogEntry(appID: appID, displayName: appID, icon: "app", description: "Test fixture plugin.", version: version,
+                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/\(appID)", author: "Ainkrad")
     }
 
     private func makeInstaller(http: HTTPClient, root: URL, registry: BuiltInAppRegistry,
@@ -61,6 +66,12 @@ struct PluginInstallerTests {
         #expect(registry.allApps.map(\.id) == ["hello"])
     }
 
+    // Note: `.checksumMismatch` is no longer thrown by `install` — the sha
+    // compare now runs as one of `StorePolicy`'s checks (see Task 2 /
+    // PluginInstallerStorePolicyTests), so a mismatch surfaces as
+    // `.invalidBundle` carrying StorePolicy's message, same as any other
+    // store-review failure. `.checksumMismatch` stays in `AppStoreError`
+    // (untouched enum) but is currently unreachable from `install`.
     @Test("sha256 mismatch rejects and writes nothing")
     func checksumMismatch() async throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -70,7 +81,7 @@ struct PluginInstallerTests {
         let http = StubHTTPClient(responses: [url: .success(try Data(contentsOf: zip))])
         let registry = BuiltInAppRegistry(persistence: InMemoryPersistenceStore()); registry.install(builtIn: [])
         let installer = makeInstaller(http: http, root: root, registry: registry)
-        await #expect(throws: AppStoreError.checksumMismatch) {
+        await #expect(throws: AppStoreError.invalidBundle("Computed sha256 does not match the declared sha256.")) {
             try await installer.install(entry(appID: "hello", url: url, sha: "deadbeef"))
         }
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Plugins/hello.bundle").path))
@@ -153,8 +164,8 @@ struct PluginInstallerTests {
 struct PluginInstallerErrorPathTests {
     private func sha(_ d: Data) -> String { SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined() }
     private func entry(_ id: String, url: URL, sha: String) -> CatalogEntry {
-        CatalogEntry(appID: id, displayName: id, icon: "app", description: "", version: "1.0.0",
-                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/\(id)")
+        CatalogEntry(appID: id, displayName: id, icon: "app", description: "Test fixture plugin.", version: "1.0.0",
+                     apiVersion: 1, downloadURL: url, sha256: sha, sourceRepo: "o/\(id)", author: "Ainkrad")
     }
     private func installer(root: URL, http: HTTPClient, registry: BuiltInAppRegistry,
                            persistence: PersistenceStore, loadOK: Bool = true) -> PluginInstaller {
@@ -226,7 +237,7 @@ struct PluginInstallerErrorPathTests {
         let bundle = src.appendingPathComponent("hello.bundle/Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = ["AinkradAppID": "hello", "AinkradDisplayName": "Hello",
-            "AinkradIconSymbol": "app", "AinkradAPIVersion": 1, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
+            "AinkradIconSymbol": "app", "AinkradAPIVersion": 7, "NSPrincipalClass": "X", "CFBundleExecutable": "hello"]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: bundle.appendingPathComponent("Info.plist"))
         let zip = src.appendingPathComponent("hello.bundle.zip")
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")

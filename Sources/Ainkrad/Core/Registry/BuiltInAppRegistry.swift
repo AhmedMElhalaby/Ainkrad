@@ -1,4 +1,5 @@
 import Observation
+import AinkradHostRuntime
 
 /// Single source of truth for which apps exist and are enabled. Hybrid: apps
 /// are installed once after `AppEnvironment` exists, mixing compiled-in apps
@@ -49,6 +50,12 @@ final class BuiltInAppRegistry {
     /// (An already-loaded dylib cannot be unloaded; this only hides it.)
     func deregister(id: String) {
         guard let app = registeredApps.first(where: { $0.id == id }), app.source != .builtIn else { return }
+        // Tell the plugin it is done before dropping it. Without this, a plugin
+        // removed by the user kept its watchers, timers, open databases and
+        // file descriptors alive for the rest of the process — the SDK simply
+        // never had a way to say "you're finished". Opt-in and best-effort: a
+        // generation-7 plugin has no teardown and this is a no-op.
+        app.teardown?()
         registeredApps.removeAll { $0.id == id }
     }
 

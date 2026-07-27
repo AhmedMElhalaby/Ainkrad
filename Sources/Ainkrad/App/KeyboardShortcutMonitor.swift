@@ -10,21 +10,33 @@ import SwiftUI
 /// frontmost, and needs no Accessibility/Input Monitoring permission.
 struct KeyboardShortcutMonitor: NSViewRepresentable {
     let environment: AppEnvironment
+    /// Forward-dependency seam for AIN voice (Slice 8): `AppEnvironment` does
+    /// not yet own a `voiceService` (that lands in Task 13). Until then, the
+    /// host passes the push-to-talk controller directly so keyDown/keyUp can
+    /// drive it; Task 13 will thread this through `environment.voiceService`
+    /// instead and this parameter can fold away.
+    var pushToTalkController: PushToTalkController? = nil
 
     func makeNSView(context: Context) -> MonitoringView {
         let view = MonitoringView()
         view.environment = environment
+        view.pushToTalkController = pushToTalkController
         return view
     }
 
     func updateNSView(_ nsView: MonitoringView, context: Context) {
         nsView.environment = environment
+        nsView.pushToTalkController = pushToTalkController
     }
 
     final class MonitoringView: NSView {
         var environment: AppEnvironment?
+        /// See `KeyboardShortcutMonitor.pushToTalkController` — forward-dependency
+        /// seam until `AppEnvironment.voiceService` exists (Task 13).
+        var pushToTalkController: PushToTalkController?
         private var monitor: Any?
         private var mouseUpMonitor: Any?
+        private var keyUpMonitor: Any?
         private var fullScreenEnterObserver: NSObjectProtocol?
         private var fullScreenExitObserver: NSObjectProtocol?
         private var titlebarObservation: NSKeyValueObservation?
@@ -71,6 +83,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     }
                     return event
                 }
+                // Push-to-talk hold mode needs the key-release edge, which a
+                // keyDown monitor never sees — match on keyCode + recording
+                // state only (keyUp modifier flags are unreliable), and
+                // respect the same recorder gate as `handle` (AIN-144).
+                keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
+                    guard let self, let environment = self.environment,
+                          !environment.shortcutStore.isRecordingShortcut,
+                          let controller = self.pushToTalkController else {
+                        return event
+                    }
+                    let chord = environment.shortcutStore.chord(for: .pushToTalk)
+                    if event.keyCode == chord.keyCode, controller.status == .recording {
+                        controller.pressEnded()
+                    }
+                    return event
+                }
                 observeFullScreen(of: window)
             } else {
                 if let monitor {
@@ -80,6 +108,10 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 if let mouseUpMonitor {
                     NSEvent.removeMonitor(mouseUpMonitor)
                     self.mouseUpMonitor = nil
+                }
+                if let keyUpMonitor {
+                    NSEvent.removeMonitor(keyUpMonitor)
+                    self.keyUpMonitor = nil
                 }
                 titlebarObservation?.invalidate()
                 titlebarObservation = nil
@@ -167,6 +199,13 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // also covers the ⌥Tab Workspace Overview toggle, which used to
             // be special-cased here.
             if let action = environment.shortcutStore.bindings.action(matching: event) {
+                if action == .pushToTalk {
+                    // Forward-dependency seam (Task 13 wires the real
+                    // `environment.voiceService.pushToTalk`) — see
+                    // `pushToTalkController` above.
+                    pushToTalkController?.pressStarted()
+                    return true
+                }
                 return perform(action, in: environment)
             }
 
@@ -258,6 +297,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
                 environment.isAppStorePresented = false
+                environment.isQuickAskPresented = false
                 if environment.isLauncherPresented {
                     environment.launcherStore.query = ""
                     environment.isLauncherPresented = false
@@ -270,6 +310,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
                 environment.isAppStorePresented = false
+                environment.isQuickAskPresented = false
                 environment.isSettingsPresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
@@ -278,6 +319,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isLauncherPresented = false
                 environment.isWorkspaceOverviewPresented = false
                 environment.isSettingsPresented = false
+                environment.isQuickAskPresented = false
                 environment.isAppStorePresented.toggle()
                 window?.makeFirstResponder(nil)
                 return true
@@ -291,7 +333,19 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 environment.isLauncherPresented = false
                 environment.isSettingsPresented = false
                 environment.isAppStorePresented = false
+                environment.isQuickAskPresented = false
                 environment.isWorkspaceOverviewPresented.toggle()
+                return true
+            case .openQuickAsk:
+                environment.isWorkspaceOverviewPresented = false
+                environment.isSettingsPresented = false
+                environment.isAppStorePresented = false
+                if environment.isQuickAskPresented {
+                    environment.isQuickAskPresented = false
+                } else {
+                    environment.isLauncherPresented = false
+                    environment.isQuickAskPresented = true
+                }
                 return true
             case .closeBlock:
                 let layout = environment.workspaceManager.activeWorkspace.tileLayout
@@ -301,6 +355,13 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                     environment.sounds.play(.appClose)
                     layout.close(focusedBlockID)
                 }
+                return true
+            case .pushToTalk:
+                // Unreachable: intercepted in `handle` above before `perform`
+                // is called. Present only for switch exhaustiveness.
+                return true
+            case .cyclePermissionMode:
+                environment.agentPermissionStore.cycle()
                 return true
             }
         }

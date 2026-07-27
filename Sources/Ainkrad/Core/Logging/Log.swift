@@ -11,4 +11,6 @@ enum Log {
     static let terminal = Logger(subsystem: subsystem, category: "terminal")
     static let persistence = Logger(subsystem: subsystem, category: "persistence")
     static let appStore = Logger(subsystem: subsystem, category: "appStore")
+    static let mcp = Logger(subsystem: subsystem, category: "mcp")
+    static let lsp = Logger(subsystem: subsystem, category: "lsp")
 }

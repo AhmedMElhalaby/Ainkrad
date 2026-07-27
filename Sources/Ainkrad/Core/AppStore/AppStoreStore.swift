@@ -1,12 +1,13 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// View-model for the App Store overlay. Owns all UI state and derives a flat
 /// `[AppStoreRow]` from the cached catalog + installed-state + the registry.
 @MainActor
 @Observable
 final class AppStoreStore {
-    enum Filter: Equatable { case all, installed, updates }
+    enum Filter: CaseIterable, Hashable { case all, installed, updates }
 
     var filter: Filter = .all
     /// Live search over `rows`, composed with `filter` (AIN-148). Client-side
@@ -38,6 +39,24 @@ final class AppStoreStore {
     init(service: AppStoreServing, registry: BuiltInAppRegistry) {
         self.service = service
         self.registry = registry
+    }
+
+    /// Plugin bundles that were found on disk but refused to load this launch,
+    /// with the reason each was rejected.
+    ///
+    /// Until now this was recorded by `PluginLoader` into
+    /// `BuiltInAppRegistry.loadFailures` and read by *nothing* — so a plugin
+    /// that failed to load was indistinguishable from a plugin that was never
+    /// installed, and the app just looked like it had no apps. This is the
+    /// error channel; the App Store overlay renders it above the grid.
+    var loadFailures: [PluginLoadFailure] { registry.loadFailures }
+
+    /// A user-facing one-liner for a rejected bundle: the bundle's name (not
+    /// its full path, which is an unhelpful Application Support URL) and the
+    /// reason recorded by the loader.
+    static func failureText(_ failure: PluginLoadFailure) -> String {
+        let name = failure.url.deletingPathExtension().lastPathComponent
+        return "\(name) — \(failure.reason)"
     }
 
     /// The row for whichever app's detail page is open (AIN-147), if any.
@@ -88,16 +107,19 @@ final class AppStoreStore {
             let reg = registeredByID[id]
             let entry = catalogByID[id]
             let isBuiltIn = reg?.source == .builtIn
+            let kind: AppStoreRowKind = entry?.kind == .mcpServer ? .mcpServer : (isBuiltIn ? .builtIn : .plugin)
             installedRows.append(AppStoreRow(
                 id: id,
                 displayName: reg?.displayName ?? entry?.displayName ?? id,
                 icon: reg?.icon ?? entry?.icon ?? "app",
-                description: entry?.description ?? "",
+                // Built-ins (no catalog entry) carry their own registered
+                // summary; plugins fall back to the catalog description.
+                description: (reg?.summary).flatMap { $0.isEmpty ? nil : $0 } ?? entry?.description ?? "",
                 catalogVersion: entry?.version,
                 installedVersion: installedDoc[id]?.version,
                 status: updates.contains(id) ? .updateAvailable : .installed,
                 isEnabled: registry.isEnabled(id),
-                kind: isBuiltIn ? .builtIn : .plugin,
+                kind: kind,
                 isManaged: installedDoc[id] != nil,
                 author: entry?.author))
         }
@@ -107,7 +129,8 @@ final class AppStoreStore {
             availableRows.append(AppStoreRow(
                 id: entry.appID, displayName: entry.displayName, icon: entry.icon,
                 description: entry.description, catalogVersion: entry.version,
-                installedVersion: nil, status: .available, isEnabled: false, kind: .plugin,
+                installedVersion: nil, status: .available, isEnabled: false,
+                kind: entry.kind == .mcpServer ? .mcpServer : .plugin,
                 isManaged: false, author: entry.author))
         }
 

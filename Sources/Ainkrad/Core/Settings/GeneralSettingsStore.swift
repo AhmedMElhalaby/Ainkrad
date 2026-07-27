@@ -1,4 +1,6 @@
+import AppKit
 import Observation
+import AinkradHostRuntime
 
 /// Owns the Settings → General section: the full-screen status bar toggle
 /// (AIN-109) and the sound effects toggle/volume (AIN-108). Loads from
@@ -17,16 +19,64 @@ final class GeneralSettingsStore: SoundSettingsProviding {
     /// (missing key = the event's own sound) — see `GlobalSettings`.
     private(set) var soundEventEnabled: [String: Bool]
     private(set) var soundEventEffects: [String: String]
+    /// Overlay panel background opacity + blur (Settings → Appearance).
+    private(set) var overlayBackgroundOpacity: Double
+    private(set) var overlayBlurEnabled: Bool
+    /// Launcher (⌘K) layout — list or grid (Settings → General).
+    private(set) var launcherViewMode: LauncherViewMode
+    /// AINKRAD-controlled motion preference (independent of the macOS
+    /// system-level Reduce Motion toggle), injected into `\.ainkradReduceMotion`
+    /// at the host root. Toggled in Settings → Appearance → Motion; default
+    /// false = motion on.
+    private(set) var uiReduceMotion: Bool
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
         self.persistence = persistence
+        // Motion is app-owned only: `uiReduceMotion` is controlled solely by the
+        // in-app setting (Settings → Appearance → Motion), defaulting to motion
+        // ON. The macOS system Reduce Motion flag is intentionally never read —
+        // an accessibility user who wants the app's motion suppressed toggles it
+        // here, and the OS setting can't silently disable it.
         let settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
         self.showFullScreenStatusBar = settings.showFullScreenStatusBar
         self.soundEnabled = settings.soundEnabled
         self.soundVolume = settings.soundVolume
         self.soundEventEnabled = settings.soundEventEnabled
         self.soundEventEffects = settings.soundEventEffects
+        self.overlayBackgroundOpacity = settings.overlayBackgroundOpacity
+        self.overlayBlurEnabled = settings.overlayBlurEnabled
+        self.launcherViewMode = settings.launcherViewMode
+        self.uiReduceMotion = settings.uiReduceMotion
+    }
+
+    func setLauncherViewMode(_ mode: LauncherViewMode) {
+        launcherViewMode = mode
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.launcherViewMode = mode
+        persistence.save(settings)
+    }
+
+    func setOverlayBackgroundOpacity(_ value: Double) {
+        let clamped = min(max(value, 0.3), 1.0)
+        overlayBackgroundOpacity = clamped
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.overlayBackgroundOpacity = clamped
+        persistence.save(settings)
+    }
+
+    func setOverlayBlurEnabled(_ isOn: Bool) {
+        overlayBlurEnabled = isOn
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.overlayBlurEnabled = isOn
+        persistence.save(settings)
+    }
+
+    func setUiReduceMotion(_ isOn: Bool) {
+        uiReduceMotion = isOn
+        var settings = persistence.load(GlobalSettings.self) ?? GlobalSettings()
+        settings.uiReduceMotion = isOn
+        persistence.save(settings)
     }
 
     func setShowFullScreenStatusBar(_ isOn: Bool) {

@@ -1,10 +1,41 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import Ainkrad
 @testable import AinkradAppKit
+import AinkradHostRuntime
+
+/// A minimal `AinkradApp` conformance for exercising `RegisteredApp.plugin(...)`
+/// directly (the loader's fixtures are binary-less, so the factory is never
+/// reached end-to-end in unit tests).
+private enum StubApp: AinkradApp {
+    static let id = "stub"
+    static let displayName = "Stub"
+    static let icon = "app"
+    static func makeRootView(host: HostServices) -> AnyView { AnyView(EmptyView()) }
+    static func makeSettingsView(host: HostServices) -> AnyView { AnyView(EmptyView()) }
+}
 
 @MainActor
 struct PluginLoaderTests {
+    /// The in-memory `HostServices` the `loader()` closure builds, reused by the
+    /// factory test. `declaredPresentation` here is irrelevant to what the
+    /// factory test asserts (that test guards the factory's own `presentation:`
+    /// argument, not the host's).
+    private func stubHost(appID: String, presentation: PluginPresentation = .pane) -> HostServices {
+        HostServicesImpl(
+            appID: appID,
+            dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString),
+            secretStore: InMemorySecretStore(),
+            themeManager: ThemeManager(persistence: InMemoryPersistenceStore()),
+            hub: AgentContextRegistryHub(),
+            actionHub: AgentActionRegistryHub(),
+            launchHub: PluginLaunchHub(),
+            declaredPresentation: presentation,
+            appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore())
+        )
+    }
+
     /// Writes a `.bundle` directory with a hand-authored Info.plist (no binary,
     /// so `Bundle.load()` fails after metadata passes — enough to exercise
     /// discovery, validation, and failure isolation without compiling code).
@@ -16,13 +47,8 @@ struct PluginLoaderTests {
     }
 
     private func loader(signaturePolicy: PluginSignaturePolicy = DevModeSignaturePolicy()) -> PluginLoader {
-        PluginLoader(signaturePolicy: signaturePolicy) { appID in
-            HostServicesImpl(
-                appID: appID,
-                dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString),
-                secretStore: InMemorySecretStore(),
-                themeManager: ThemeManager(persistence: InMemoryPersistenceStore())
-            )
+        PluginLoader(signaturePolicy: signaturePolicy) { appID, declaredPresentation in
+            self.stubHost(appID: appID, presentation: declaredPresentation)
         }
     }
 
@@ -31,7 +57,7 @@ struct PluginLoaderTests {
             PluginInfoKey.appID: "hello",
             PluginInfoKey.displayName: "Hello",
             PluginInfoKey.iconSymbol: "hand.wave",
-            PluginInfoKey.apiVersion: 1,
+            PluginInfoKey.apiVersion: 7,
             PluginInfoKey.principalClass: "DoesNotExist",
             "CFBundleExecutable": "hello",
         ]
@@ -48,7 +74,7 @@ struct PluginLoaderTests {
         let result = loader().loadAll(from: [dir])
         #expect(result.apps.isEmpty)
         #expect(result.failures.count == 1)
-        #expect(result.failures[0].reason.contains("API version 999"))
+        #expect(result.failures[0].reason.contains("999"))
     }
 
     @Test("a bundle missing a required key is skipped")
@@ -122,5 +148,21 @@ struct PluginLoaderTests {
         let result = loader().loadAll(from: [dir])
         #expect(result.apps.isEmpty)
         #expect(result.failures.count == 2)   // BOTH processed — the scan never aborts early
+    }
+
+    /// Guards the value both open paths (tiling and overlay) read: the
+    /// `presentation:` argument passed to `RegisteredApp.plugin(...)` must land
+    /// in `RegisteredApp.presentation`. (The loader's own binary-less fixtures
+    /// never reach this factory, so this is asserted directly.)
+    @Test("the plugin factory propagates the declared presentation into RegisteredApp")
+    func pluginFactoryPropagatesDeclaredPresentation() {
+        let url = URL(fileURLWithPath: "/tmp/x")
+        let overlay = RegisteredApp.plugin(
+            StubApp.self, url: url, apiVersion: 4, host: stubHost(appID: "stub"), presentation: .overlay)
+        #expect(overlay.presentation == .overlay)
+
+        let pane = RegisteredApp.plugin(
+            StubApp.self, url: url, apiVersion: 4, host: stubHost(appID: "stub"), presentation: .pane)
+        #expect(pane.presentation == .pane)
     }
 }

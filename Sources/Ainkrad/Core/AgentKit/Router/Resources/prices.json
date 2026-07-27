@@ -1,0 +1,47 @@
+[
+  {
+    "id": "claude-opus-4-8",
+    "matchPrefixes": ["claude-opus"],
+    "price": { "inputPerMTok": 15, "outputPerMTok": 75, "cacheReadPerMTok": 1.5, "cacheWritePerMTok": 18.75 }
+  },
+  {
+    "id": "claude-sonnet-4-8",
+    "matchPrefixes": ["claude-sonnet"],
+    "price": { "inputPerMTok": 3, "outputPerMTok": 15, "cacheReadPerMTok": 0.3, "cacheWritePerMTok": 3.75 }
+  },
+  {
+    "id": "claude-haiku-4-8",
+    "matchPrefixes": ["claude-haiku"],
+    "price": { "inputPerMTok": 0.8, "outputPerMTok": 4, "cacheReadPerMTok": 0.08, "cacheWritePerMTok": 1 }
+  },
+  {
+    "id": "gpt-5",
+    "matchPrefixes": ["gpt-5"],
+    "price": { "inputPerMTok": 10, "outputPerMTok": 30, "cacheReadPerMTok": 1, "cacheWritePerMTok": 0 }
+  },
+  {
+    "id": "gpt-5-mini",
+    "matchPrefixes": ["gpt-5-mini"],
+    "price": { "inputPerMTok": 0.6, "outputPerMTok": 2.4, "cacheReadPerMTok": 0.06, "cacheWritePerMTok": 0 }
+  },
+  {
+    "id": "gemini-2.5-flash",
+    "matchPrefixes": ["gemini-2.5-flash"],
+    "price": { "inputPerMTok": 0.3, "outputPerMTok": 1.2, "cacheReadPerMTok": 0.03, "cacheWritePerMTok": 0 }
+  },
+  {
+    "id": "deepseek-chat",
+    "matchPrefixes": ["deepseek"],
+    "price": { "inputPerMTok": 0.27, "outputPerMTok": 1.1, "cacheReadPerMTok": 0.07, "cacheWritePerMTok": 0 }
+  },
+  {
+    "id": "llama3.2",
+    "matchPrefixes": ["llama"],
+    "price": { "inputPerMTok": 0, "outputPerMTok": 0, "cacheReadPerMTok": 0, "cacheWritePerMTok": 0 }
+  },
+  {
+    "id": "qwen2.5-coder",
+    "matchPrefixes": ["qwen"],
+    "price": { "inputPerMTok": 0, "outputPerMTok": 0, "cacheReadPerMTok": 0, "cacheWritePerMTok": 0 }
+  }
+]

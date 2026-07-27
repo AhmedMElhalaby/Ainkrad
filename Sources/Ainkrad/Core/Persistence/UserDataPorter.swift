@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 
 /// A portable bundle of the user's documents. Secrets are intentionally not
 /// included — they live in the Keychain, never in the documents directory.

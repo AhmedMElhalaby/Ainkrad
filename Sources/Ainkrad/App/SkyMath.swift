@@ -20,7 +20,7 @@ struct SkyStar: Equatable {
 /// or randomness inside: the same (index, time) always produces the same
 /// result, mirroring the discipline of the other motion code.
 enum SkyMath {
-    static let starCount = 140
+    static let starCount = 420
 
     /// Positive fractional part, used as the deterministic "hash" everywhere
     /// (also how drifting positions wrap across the sky's edges forever).
@@ -211,7 +211,7 @@ enum SkyMath {
 
     // MARK: Fireflies and bokeh
 
-    static let fireflyCount = 22
+    static let fireflyCount = 66
 
     /// One energy mote rising through the island's region, pulsing, fading
     /// in at the bottom of its column and out at the top — no pops.
@@ -400,7 +400,7 @@ enum SkyMath {
 
     // MARK: Sky moments
 
-    private static let showerInterval = 600.0   // one burst window every ~10 min
+    private static let showerInterval = 200.0   // shooting-star bursts ~3x more frequent (every ~3.3 min)
     private static let cometInterval = 480.0
     private static let surgeInterval = 300.0
     private static let shootingDuration = 0.9

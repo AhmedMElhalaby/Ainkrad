@@ -1,4 +1,6 @@
 import SwiftUI
+import AinkradAppKit
+import AinkradHostRuntime
 
 /// The Settings overlay — the third summonable panel (⌘, or the Launcher's
 /// Settings entry), in the same HUD language as the Launcher and Workspace
@@ -7,15 +9,17 @@ import SwiftUI
 /// — Direction.md.
 struct SettingsOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let onDismiss: () -> Void
 
     @State private var selection: SettingsSection
 
     /// `focusedAppID` opens the overlay directly on that app's settings —
     /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
+    /// Otherwise it lands on General — the natural top of the reordered sidebar.
     init(focusedAppID: String? = nil, onDismiss: @escaping () -> Void) {
         self.onDismiss = onDismiss
-        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .appearance)
+        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .general)
     }
 
     /// A value snapshot of a registered app for the sidebar — iterating
@@ -26,22 +30,36 @@ struct SettingsOverlayView: View {
         let id: String
         let displayName: String
         let icon: String
+        let isBuiltIn: Bool
     }
 
     private enum SettingsSection: Hashable {
         case general
+        case sound
         case appearance
         case livingSky
         case appIcon
         case shortcuts
+        case memory
+        case mcp
+        case lsp
+        case skills
         case app(String)
     }
 
     /// Only enabled apps get a settings section — a disabled app is hidden here
     /// just as it is in the Launcher (`LauncherStore` filters `enabledApps`).
     private var appEntries: [AppEntry] {
-        environment.registry.enabledApps.map { AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon) }
+        environment.registry.enabledApps.map {
+            AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon, isBuiltIn: $0.source == .builtIn)
+        }
     }
+
+    /// Apps compiled into the host (Terminal, Git Mage, …).
+    private var builtInAppEntries: [AppEntry] { appEntries.filter(\.isBuiltIn) }
+
+    /// Apps installed from the App Store as dynamic plugin bundles.
+    private var installedAppEntries: [AppEntry] { appEntries.filter { !$0.isBuiltIn } }
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -113,33 +131,61 @@ struct SettingsOverlayView: View {
     // MARK: - Sidebar
 
     private func sidebar(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            groupLabel("AINKRAD", tokens: tokens)
-            sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
-            sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
-            sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
-            sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
-            sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                groupLabel("AINKRAD", tokens: tokens)
+                sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
+                sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
+                sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
+                sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
+                sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
+                sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
+                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles",
+                           badgeCount: environment.skillRegistry.proposals().count, tokens: tokens)
 
-            groupLabel("BUILT-IN APPS", tokens: tokens)
-                .padding(.top, 12)
-            ForEach(appEntries) { app in
-                sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                groupLabel("APPEARANCE", tokens: tokens)
+                    .padding(.top, 12)
+                sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
+                sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
+                sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
+
+                if !builtInAppEntries.isEmpty {
+                    groupLabel("BUILT-IN APPS", tokens: tokens)
+                        .padding(.top, 12)
+                    ForEach(builtInAppEntries) { app in
+                        sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                    }
+                }
+
+                if !installedAppEntries.isEmpty {
+                    groupLabel("INSTALLED", tokens: tokens)
+                        .padding(.top, 12)
+                    ForEach(installedAppEntries) { app in
+                        sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                    }
+                }
             }
-
-            Spacer()
+            .padding(12)
         }
-        .padding(12)
+        .scrollContentBackground(.hidden)
         .frame(width: 208, alignment: .topLeading)
     }
 
+    /// A group header in the HUD language: a short accent tick beside an
+    /// uppercase, letter-spaced label — echoing `SettingsSectionHeader`.
     private func groupLabel(_ text: String, tokens: DesignTokens) -> some View {
-        Text(text)
-            .font(AinkradFont.mono(9, weight: .medium))
-            .kerning(2.5)
-            .foregroundStyle(tokens.foreground.opacity(0.4))
-            .padding(.horizontal, 8)
-            .padding(.bottom, 2)
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(tokens.accentSecondary.opacity(0.85))
+                .frame(width: 2, height: 9)
+                .shadow(color: tokens.accentSecondary.opacity(0.7), radius: 3)
+            Text(text)
+                .font(AinkradFont.mono(9, weight: .medium))
+                .kerning(2.5)
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+        }
+        .padding(.horizontal, 8)
+        .padding(.bottom, 2)
     }
 
     private func sidebarRow(
@@ -147,6 +193,7 @@ struct SettingsOverlayView: View {
         title: String,
         appID: String? = nil,
         systemIcon: String,
+        badgeCount: Int = 0,
         tokens: DesignTokens
     ) -> some View {
         let isSelected = selection == section
@@ -160,11 +207,14 @@ struct SettingsOverlayView: View {
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
                 Spacer(minLength: 0)
+                if badgeCount > 0 {
+                    AinkradBadge(text: "\(badgeCount)", tint: tokens.accentSecondary)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: 38)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                ChamferShape(cut: AinkradRadius.md)
                     .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
             )
             .overlay(
@@ -175,25 +225,30 @@ struct SettingsOverlayView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
     }
 
     /// App rows use the neon tile artwork (Launcher-matching); fixed sections
     /// use a tinted SF Symbol.
     @ViewBuilder
     private func rowIcon(appID: String?, systemIcon: String, isSelected: Bool, tokens: DesignTokens) -> some View {
-        let assetName = appID.map { "AppTile-\($0)-\(environment.themeManager.currentTheme.rawValue)" }
+        appTile(appID: appID, systemIcon: systemIcon, size: 22, isSelected: isSelected, tokens: tokens)
+    }
 
-        if let assetName, NSImage(named: assetName) != nil {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 22, height: 22)
+    /// Shared tile renderer: the theme's neon artwork for a registered app, or
+    /// a tinted SF Symbol fallback. Used by both sidebar rows and the app
+    /// settings identity header.
+    @ViewBuilder
+    private func appTile(appID: String?, systemIcon: String, size: CGFloat, isSelected: Bool, tokens: DesignTokens) -> some View {
+        if appID != nil {
+            // A registered app: its live neon tile, following the active theme.
+            NeonAppTile(symbol: systemIcon, tokens: tokens, size: size)
         } else {
+            // A fixed settings section (General, Sound, …): a tinted SF Symbol.
             Image(systemName: systemIcon)
-                .font(.system(size: 13))
+                .font(.system(size: size * 0.6))
                 .foregroundStyle(isSelected ? tokens.accentSecondary : tokens.foreground.opacity(0.55))
-                .frame(width: 22, height: 22)
+                .frame(width: size, height: size)
         }
     }
 
@@ -204,6 +259,8 @@ struct SettingsOverlayView: View {
         switch selection {
         case .general:
             GeneralSettingsView()
+        case .sound:
+            SoundSettingsView()
         case .appearance:
             AppearanceSettingsView()
         case .livingSky:
@@ -212,15 +269,126 @@ struct SettingsOverlayView: View {
             AppIconSettingsView()
         case .shortcuts:
             ShortcutsSettingsView()
+        case .memory:
+            if let memoryService = environment.memoryService {
+                MemoryUIView(service: memoryService)
+            } else {
+                AinkradEmptyState(
+                    icon: "brain",
+                    title: "Memory unavailable",
+                    message: "The assistant's memory index couldn't be opened this launch, so it's running memory-less for now. Restart Ainkrad to try again."
+                )
+            }
+        case .mcp:
+            MCPManagerView(configStore: environment.mcpServerRegistry.configStore, registry: environment.mcpServerRegistry)
+        case .lsp:
+            LSPConfigView(registry: environment.lspServerRegistry)
+        case .skills:
+            SkillsManagerView(
+                registry: environment.skillRegistry,
+                commands: environment.skillCommandStore,
+                resyncCommands: { environment.resyncSkillCommands() }
+            )
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is
             // open its detail falls back to blank rather than lingering.
-            if let app = environment.registry.enabledApps.first(where: { $0.id == id }) {
-                app.makeSettingsView()
+            if let app = environment.registry.enabledApps.first(where: { $0.id == id }),
+               let entry = appEntries.first(where: { $0.id == id }) {
+                VStack(alignment: .leading, spacing: 0) {
+                    appSettingsHeader(entry, tokens: tokens)
+                    app.makeSettingsView()
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    appAppearanceSection(appID: id, tokens: tokens)
+                        .padding(18)
+                    Spacer(minLength: 0)
+                }
             } else {
                 Color.clear
             }
         }
+    }
+
+    /// The host-provided appearance controls appended below every OTHER app's
+    /// own settings: a blur toggle (the host renders the blurred backdrop behind
+    /// a translucent pane). The Assistant owns its own appearance (opacity, blur,
+    /// and font) in its in-app Appearance tab, so the host block is suppressed
+    /// for it; plugins own their transparency, so they get only blur here.
+    @ViewBuilder
+    private func appAppearanceSection(appID: String, tokens: DesignTokens) -> some View {
+        let appearance = environment.appAppearanceStore
+
+        if appID == AssistantApp.id {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Blur")
+                            .font(AinkradFont.display(13, weight: .medium))
+                            .foregroundStyle(tokens.foreground.opacity(0.9))
+                        Text("Blur the workspace revealed behind this app when it's translucent.")
+                            .font(AinkradFont.display(11))
+                            .foregroundStyle(tokens.foreground.opacity(0.5))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    AinkradToggle(
+                        isOn: Binding(
+                            get: { appearance.blurEnabled(appID) },
+                            set: { appearance.setBlurEnabled(appID, $0) }
+                        )
+                    )
+                }
+                .padding(14)
+                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+            }
+        }
+    }
+
+    /// A uniform identity header above every app's own settings — its neon
+    /// tile, name, and a Built-in / Installed badge — so first-party and
+    /// store-installed apps frame consistently regardless of what each app's
+    /// `makeSettingsView` renders below.
+    private func appSettingsHeader(_ entry: AppEntry, tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                appTile(appID: entry.id, systemIcon: entry.icon, size: 34, isSelected: true, tokens: tokens)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.displayName)
+                        .font(AinkradFont.display(15, weight: .semibold))
+                        .foregroundStyle(tokens.foreground.opacity(0.95))
+                    sourceBadge(isBuiltIn: entry.isBuiltIn, tokens: tokens)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            LinearGradient(
+                colors: [.clear, tokens.accentPrimary.opacity(0.28), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 1)
+        }
+    }
+
+    private func sourceBadge(isBuiltIn: Bool, tokens: DesignTokens) -> some View {
+        Text(isBuiltIn ? "BUILT-IN" : "INSTALLED")
+            .font(AinkradFont.mono(8, weight: .medium))
+            .kerning(1.5)
+            .foregroundStyle(isBuiltIn ? tokens.accentSecondary.opacity(0.9) : tokens.accentPrimary.opacity(0.95))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill((isBuiltIn ? tokens.accentSecondary : tokens.accentPrimary).opacity(0.12))
+            )
+            .overlay(
+                Capsule().strokeBorder((isBuiltIn ? tokens.accentSecondary : tokens.accentPrimary).opacity(0.35), lineWidth: 1)
+            )
     }
 }

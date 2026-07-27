@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("KeyChord")
 struct KeyChordTests {
@@ -77,6 +78,12 @@ struct ShortcutActionDefaultsTests {
     func closeBlock() {
         #expect(ShortcutAction.closeBlock.defaultChord ==
                 KeyChord(keyCode: 13, command: true, shift: false, option: false, control: false))
+    }
+
+    @Test("openQuickAsk defaults to ⌘⇧Space (keyCode 49)")
+    func openQuickAsk() {
+        #expect(ShortcutAction.openQuickAsk.defaultChord ==
+            KeyChord(keyCode: 49, command: true, shift: true, option: false, control: false))
     }
 }
 

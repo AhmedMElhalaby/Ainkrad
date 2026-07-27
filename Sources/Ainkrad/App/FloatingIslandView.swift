@@ -1,8 +1,17 @@
 import SwiftUI
+import AppKit
+import AinkradHostRuntime
 
 /// The floating-island hero artwork at the center of an empty workspace
-/// (AIN-107, "Living Island"). Renders the original static painted artwork,
-/// selecting the Blue or Purple variant to match the active color scheme.
+/// (AIN-107, "Living Island"). Renders the static painted artwork for the
+/// active theme.
+///
+/// Each theme can ship its own painting as an asset named `Island-<Theme>`
+/// (PascalCase of the `Theme` raw value, e.g. `Island-Nord`, matching the
+/// existing `Island-NeonBlue` / `Island-CyberPurple`). When a theme has no
+/// dedicated painting yet, it falls back to whichever of the two originals is
+/// closest in spirit — so adding a themed illustration to the asset catalog is
+/// all that's needed to light it up here, no code change.
 ///
 /// Live motion (depth-parallax, ambient sway/breathe/glow, drifting
 /// particles, a reactive energy ring/flare) was previously layered on here
@@ -19,7 +28,12 @@ struct FloatingIslandView: View {
     var isVisible: Bool = true
 
     private var imageName: String {
-        switch environment.themeManager.currentTheme {
+        let theme = environment.themeManager.currentTheme
+        // A dedicated painting for this theme wins if it's in the catalog.
+        let dedicated = "Island-" + theme.rawValue.prefix(1).uppercased() + theme.rawValue.dropFirst()
+        if NSImage(named: dedicated) != nil { return dedicated }
+        // Otherwise fall back to the nearest of the two shipped originals.
+        switch theme {
         case .cyberPurple, .dracula, .tokyoNight: return "Island-CyberPurple"
         default: return "Island-NeonBlue"
         }

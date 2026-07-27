@@ -1,6 +1,7 @@
 import Testing
 import SwiftUI
 @testable import Ainkrad
+import AinkradHostRuntime
 
 /// Pixel-level regression tests for the sky's large-area gradient layers.
 /// These layers must be soft by construction — a hard edge anywhere reads

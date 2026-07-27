@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradHostRuntime
 
 @Suite("InMemorySecretStore")
 struct InMemorySecretStoreTests {
