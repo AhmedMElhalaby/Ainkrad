@@ -17,6 +17,22 @@ settings:
     DEVELOPMENT_TEAM: PSY67XNHG4
     CODE_SIGNING_REQUIRED: YES
     CODE_SIGNING_ALLOWED: YES
+    # NOTE: Release deliberately does NOT override the identity above.
+    #
+    # An earlier pass set Release to ad-hoc ("-") on the grounds that forcing
+    # "Apple Development" made the pre-sign artifact dishonest — `codesign -d`
+    # on it told you nothing about what would actually ship. That reasoning was
+    # right and the change was still wrong: it defeats the comment above.
+    # An ad-hoc binary has no designated requirement, so macOS cannot attach a
+    # saved Keychain/TCC grant to it. A locally-built Release then blocks on
+    # `KeychainSecretStore.secret(for:)` during bootstrap and never opens a
+    # window. (Found by profiling a Release build — it launched to 0% CPU with
+    # no window, and the sample pointed straight at the Keychain read.)
+    #
+    # Honesty about the pre-sign state is handled where it belongs instead:
+    # `scripts/release.sh` re-signs with the Developer-ID identity and then
+    # VERIFIES the resulting signature carries the library-validation
+    # entitlement, failing the build if it does not.
 
 packages:
   # AinkradAppKit — the Built-in App SDK (github.com/AhmedMElhalaby/AinkradAppKit).
@@ -24,7 +40,7 @@ packages:
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: 293f049393a663176cbbdb3870e8194456403d71
+    revision: e68f8365785c68b7a98b19d86b521f1d358afe00
 
 targets:
   AinkradHostRuntime:
@@ -75,6 +91,10 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ainkrad uses the microphone for push-to-talk dictation to the Assistant."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Ainkrad transcribes your dictation on-device by default."
         ENABLE_PREVIEWS: YES
+        # Required for plugin loading under the hardened runtime — see the
+        # comment in config/Ainkrad.entitlements. Without it, a Developer-ID
+        # signed release loads zero plugins.
+        CODE_SIGN_ENTITLEMENTS: config/Ainkrad.entitlements
 
   AinkradTests:
     type: bundle.unit-test

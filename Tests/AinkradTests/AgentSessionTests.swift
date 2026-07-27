@@ -90,7 +90,11 @@ struct AgentSessionTests {
         #expect(session.state == .idle)
         #expect(session.streamingText == "")
         #expect(session.streamingThinking == "")
-        #expect(session.messages.last == AgentMessage(role: .assistant, text: "Hello world"))
+        // Thinking is now persisted as a leading `.thinking` block on the
+        // committed assistant turn, so assert on the text/thinking projections
+        // rather than full-message equality (which is order-sensitive).
+        #expect(session.messages.last?.text == "Hello world")
+        #expect(session.messages.last?.thinkingText == "pondering further")
         #expect(fake.wasCalled)
         #expect(fake.lastApiKey == "sk-test-123")
     }

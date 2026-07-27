@@ -74,6 +74,10 @@ import AinkradHostRuntime
         let persistence = InMemoryPersistenceStore()
         let (store, _) = makeStore(persistence)
         store.syncActive(messages: [AgentMessage(role: .user, text: "survive")])
+        // Transcript writes are coalesced (see `AssistantSessionStore.syncActive`),
+        // so a relaunch is only faithfully simulated by doing what quitting does:
+        // `applicationWillTerminate` calls `flush()`.
+        store.flush()
         let (reopened, _) = makeStore(persistence)
         #expect(reopened.results(for: "survive").count == 1)
     }
@@ -83,6 +87,7 @@ import AinkradHostRuntime
         let (store, _) = makeStore(persistence)
         store.syncActive(messages: [AgentMessage(role: .user, text: "restore me"),
                                     AgentMessage(role: .assistant, text: "ok")])
+        store.flush()   // as quitting does — see the note in persistsAcrossInstances
         let (reopened, _) = makeStore(persistence)
         #expect(reopened.activeMessages.map(\.text) == ["restore me", "ok"])
     }

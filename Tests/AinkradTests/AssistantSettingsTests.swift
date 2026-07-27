@@ -13,14 +13,17 @@ struct AssistantSettingsTabTests {
     @Test("models tab is connections then model") func models() {
         #expect(AssistantSettingsTab.models.sections == [.connections, .model])
     }
-    @Test("access tab is permissions then sandbox") func access() {
-        #expect(AssistantSettingsTab.access.sections == [.permissions, .sandbox])
+    @Test("access tab is permissions, sandbox, then tool hooks") func access() {
+        #expect(AssistantSettingsTab.access.sections == [.permissions, .sandbox, .toolHooks])
     }
     @Test("data tab is context privacy") func data() {
         #expect(AssistantSettingsTab.data.sections == [.contextPrivacy])
     }
-    @Test("voice tab is voice") func voice() {
-        #expect(AssistantSettingsTab.voice.sections == [.voice])
+    @Test("web tab is web, media, then video") func web() {
+        #expect(AssistantSettingsTab.web.sections == [.web, .media, .video])
+    }
+    @Test("voice tab is voice then text-to-speech") func voice() {
+        #expect(AssistantSettingsTab.voice.sections == [.voice, .textToSpeech])
     }
     @Test("appearance tab is appearance") func appearance() {
         #expect(AssistantSettingsTab.appearance.sections == [.appearance])

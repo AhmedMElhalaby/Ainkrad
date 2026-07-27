@@ -97,11 +97,24 @@ struct BlockView: View {
         .background {
             if glassBlur {
                 ZStack {
-                    AmbientSkyView()
+                    // `isLive: false` — this copy exists only to be blurred at
+                    // radius 26, where 30fps starfield drift is not
+                    // perceptible. Each blurred pane was running its own full
+                    // live sky (~570 Canvas fills + 18 radial gradients per
+                    // frame), so three translucent panes cost four live skies
+                    // to render one visible one. The real sky behind the
+                    // workspace still animates; nothing the user can actually
+                    // see stopped moving.
+                    AmbientSkyView(isLive: false)
                     FloatingIslandView()
                         .frame(maxWidth: 860, maxHeight: 574)
                 }
                 .blur(radius: 26)
+                // The blurred backdrop is a pure function of theme + geometry
+                // now that it no longer animates, so let the compositor cache
+                // it as one texture instead of re-rasterizing the whole stack
+                // on every unrelated pane invalidation.
+                .drawingGroup()
             }
         }
         .clipShape(ChamferShape(cut: AinkradRadius.md))
@@ -263,29 +276,51 @@ struct BlockView: View {
             .background(tokens.surfaceElevated)
             .clipShape(Capsule())
         }
-        .contextMenu {
-            Button("Split Right") { tileLayout.split(block.id, edge: .trailing) }
-                .keyboardShortcut("d", modifiers: .command)
-            Button("Split Down") { tileLayout.split(block.id, edge: .bottom) }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
-            Button("Duplicate") { tileLayout.duplicate(block.id) }
-            Divider()
-            if let workspace {
-                Button(isInFocusMode ? "Back to Split Mode" : "Focus Mode") {
-                    tileLayout.focus(block.id)
-                    workspace.viewMode = isInFocusMode ? .split : .focus
-                    environment.sounds.play(.focusMode)
-                }
-                .keyboardShortcut("m", modifiers: .command)
-            }
-            Button("Reset Layout") { tileLayout.resetLayout() }
-            Divider()
-            Button("Close", role: .destructive) {
-                environment.sounds.play(.appClose)
-                tileLayout.close(block.id)
-            }
-            .keyboardShortcut("w", modifiers: .command)
+        // Cardinal HUD, not AppKit: `.contextMenu` renders the system menu —
+        // native chrome, native separators, native highlight — inside an
+        // interface that is deliberately not macOS-shaped. `.ainkradContextMenu`
+        // draws the same actions in the HUD language.
+        //
+        // The two `Divider()`s are gone rather than ported: the HUD menu has no
+        // separator row, and the grouping they marked (create / layout /
+        // destroy) is already carried by order plus the destructive tint on
+        // Close. The ⌘-shortcuts they carried are not lost — every one is a real
+        // key binding registered in `KeyboardShortcutMonitor`; the menu was only
+        // ever displaying them.
+        .ainkradContextMenu(blockMenuItems)
+    }
+
+    /// The pane's right-click actions, in HUD form.
+    private var blockMenuItems: [AinkradMenuItem] {
+        var items: [AinkradMenuItem] = [
+            AinkradMenuItem(title: "Split Right", systemName: "rectangle.righthalf.inset.filled") {
+                tileLayout.split(block.id, edge: .trailing)
+            },
+            AinkradMenuItem(title: "Split Down", systemName: "rectangle.bottomhalf.inset.filled") {
+                tileLayout.split(block.id, edge: .bottom)
+            },
+            AinkradMenuItem(title: "Duplicate", systemName: "plus.square.on.square") {
+                tileLayout.duplicate(block.id)
+            },
+        ]
+        if let workspace {
+            items.append(AinkradMenuItem(
+                title: isInFocusMode ? "Back to Split Mode" : "Focus Mode",
+                systemName: isInFocusMode ? "rectangle.split.2x2" : "rectangle.inset.filled"
+            ) {
+                tileLayout.focus(block.id)
+                workspace.viewMode = isInFocusMode ? .split : .focus
+                environment.sounds.play(.focusMode)
+            })
         }
+        items.append(AinkradMenuItem(title: "Reset Layout", systemName: "arrow.counterclockwise") {
+            tileLayout.resetLayout()
+        })
+        items.append(AinkradMenuItem(title: "Close", systemName: "xmark", isDestructive: true) {
+            environment.sounds.play(.appClose)
+            tileLayout.close(block.id)
+        })
+        return items
     }
 
     /// The header fill. When the app declares a window fill (e.g. Terminal's

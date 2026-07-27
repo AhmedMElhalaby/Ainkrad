@@ -77,6 +77,12 @@ extension AssistantSettingsView {
         SandboxPolicyUIView(store: environment.sandboxProfileStore)
     }
 
+    // MARK: - Tool Hooks
+
+    func toolHooksSection(tokens: DesignTokens) -> some View {
+        ToolHooksSettingsView(store: environment.toolHooksStore, tokens: tokens)
+    }
+
     // MARK: - Permissions
 
     func permissionsSection(tokens: DesignTokens) -> some View {
@@ -180,6 +186,8 @@ extension AssistantSettingsView {
                        subtitle: "Recent output from open Terminal Blocks.", store: settingsStore)
             privacyRow(tokens: tokens, kind: "git", title: "Git status",
                        subtitle: "Branch, staged/unstaged changes, and recent commits.", store: settingsStore)
+            privacyRow(tokens: tokens, kind: "repo-instructions", title: "Repo instruction files",
+                       subtitle: "CLAUDE.md / AGENTS.md found in the working repo.", store: settingsStore)
         }
     }
 
@@ -214,6 +222,42 @@ extension AssistantSettingsView {
                 .foregroundStyle(tokens.foreground.opacity(0.45))
             content()
         }
+    }
+
+    // MARK: - Web
+
+    func webSection(tokens: DesignTokens) -> some View {
+        WebToolsSettingsView(
+            settings: environment.webSearchSettingsStore,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
+    // MARK: - Media
+
+    func mediaSection(tokens: DesignTokens) -> some View {
+        MediaSettingsView(
+            settings: environment.mediaSettingsStore,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
+    // MARK: - Video
+
+    func videoSection(tokens: DesignTokens) -> some View {
+        VideoSettingsView(
+            persistence: environment.persistence,
+            secrets: environment.secrets,
+            tokens: tokens)
+    }
+
+    // MARK: - Text to Speech
+
+    func textToSpeechSection(tokens: DesignTokens) -> some View {
+        TTSSettingsView(
+            persistence: environment.persistence,
+            secrets: environment.secrets,
+            tokens: tokens)
     }
 
     // MARK: - Voice

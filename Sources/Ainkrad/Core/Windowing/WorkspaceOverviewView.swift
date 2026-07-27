@@ -19,6 +19,8 @@ struct WorkspaceOverviewView: View {
     @State private var draggedWorkspaceID: UUID?
     @State private var draggedApp: DraggedApp?
     @State private var pendingDeletion: Workspace?
+    /// The app row whose "duplicate to…" HUD popover is open, if any.
+    @State private var duplicateMenuBlockID: UUID?
     @FocusState private var focus: FocusTarget?
 
     /// A pane being dragged from the detail pane onto a workspace (to move it).
@@ -345,25 +347,21 @@ struct WorkspaceOverviewView: View {
                 workspace.tileLayout.focus(block.id)
                 onDismiss()
             }
-            Menu {
-                ForEach(manager.workspaces) { destination in
-                    Button("Duplicate to \(destination.name)") {
-                        manager.duplicateApp(block.appID, to: destination.id)
-                    }
-                }
-                Button("Duplicate to New Workspace") {
-                    let destination = manager.createWorkspace()
-                    manager.duplicateApp(block.appID, to: destination.id)
-                }
-            } label: {
-                Image(systemName: "plus.square.on.square")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(tokens.foreground.opacity(0.55))
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(tokens.surfaceElevated.opacity(0.5)))
+            // The last native `Menu` in the app. `.menuStyle(.borderlessButton)`
+            // hides the chrome of the *trigger*, but the popup itself is still
+            // AppKit's — system font, system highlight, system corner radius —
+            // dropped into an interface that is deliberately not macOS-shaped.
+            // `AinkradCommandMenu` is the HUD equivalent and is already the
+            // pattern everywhere else.
+            AinkradIconButton(systemName: "plus.square.on.square", size: 24,
+                              tooltip: "Duplicate \(name) to another workspace") {
+                duplicateMenuBlockID = duplicateMenuBlockID == block.id ? nil : block.id
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .help("Duplicate \(name) to another workspace")
+            .ainkradPopover(isPresented: Binding(
+                get: { duplicateMenuBlockID == block.id },
+                set: { if !$0 { duplicateMenuBlockID = nil } })) {
+                duplicateDestinations(block, tokens: tokens)
+            }
 
             rowButton("xmark", help: "Close \(name)", tokens: tokens) {
                 workspace.tileLayout.close(block.id)
@@ -378,6 +376,37 @@ struct WorkspaceOverviewView: View {
             return NSItemProvider(object: "appmove:\(block.id.uuidString)" as NSString)
         }
         .help("Drag onto a workspace on the left to move it")
+    }
+
+    /// The "duplicate to…" destinations, drawn in the HUD rather than by an
+    /// AppKit menu.
+    private func duplicateDestinations(_ block: Block, tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(manager.workspaces) { destination in
+                destinationRow("Duplicate to \(destination.name)", tokens: tokens) {
+                    manager.duplicateApp(block.appID, to: destination.id)
+                    duplicateMenuBlockID = nil
+                }
+            }
+            destinationRow("Duplicate to New Workspace", tokens: tokens) {
+                let destination = manager.createWorkspace()
+                manager.duplicateApp(block.appID, to: destination.id)
+                duplicateMenuBlockID = nil
+            }
+        }
+        .frame(minWidth: 200, alignment: .leading)
+    }
+
+    private func destinationRow(_ title: String, tokens: DesignTokens, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func rowButton(_ symbol: String, help: String, tokens: DesignTokens, action: @escaping () -> Void) -> some View {

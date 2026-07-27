@@ -20,6 +20,18 @@ struct AssistantWorkspaceSettings: PersistableDocument {
 @MainActor
 @Observable
 final class AppEnvironment {
+    /// True when the process was launched by the XCTest / swift-testing runner.
+    /// `xcodebuild test` hosts the test bundle INSIDE this app, so `@main` →
+    /// `bootstrap()` boots the full app before any test runs. This flag gates
+    /// launch-time external I/O — the local-model reachability probe loop, MCP
+    /// server connect, and LSP autodetect — which under a hosted test run
+    /// otherwise hang on 30s network timeouts (Ollama `:11434`) or block on a
+    /// TCC permission prompt nobody can dismiss, starving the test bundle of the
+    /// main loop. Production launches never set `XCTestConfigurationFilePath`,
+    /// so this is `false` in the shipped app and startup is byte-identical.
+    static let isRunningUnderTests: Bool =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     let persistence: PersistenceStore
     let secrets: SecretStore
     let registry: BuiltInAppRegistry
@@ -38,6 +50,11 @@ final class AppEnvironment {
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
     let appAppearanceStore: AppAppearanceStore
+    let webSearchSettingsStore: WebSearchSettingsStore
+    let mediaSettingsStore: MediaSettingsStore
+    /// Assistant session-share (M8) — writes self-contained HTML share artifacts
+    /// to disk and tracks their metadata, backing the composer's "Share…" flow.
+    let sessionShareStore: SessionShareStore
     let skySettingsStore: SkySettingsStore
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
@@ -151,11 +168,41 @@ final class AppEnvironment {
     /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
     /// `runManager`/`scheduleStore` above.
     let canvasStore: CanvasStore
+    /// Terminal streaming (Task 7): the store `run_terminal`'s live stdout/stderr
+    /// lands in and `AgentTurnTimelineView` reads for the running tool card — one
+    /// instance shared by the main `agentSession`'s `RunTerminalTool` and the
+    /// Assistant timeline, same pattern as `canvasStore` above.
+    let toolStreamStore: ToolStreamStore
+    /// Tool Hooks (M8 assistant-tool-hooks Task 5): persisted, observable CRUD
+    /// over user-authored PreToolUse/PostToolUse hooks — one instance shared
+    /// by the main `agentSession`'s `ToolHookRunner` and the settings surface
+    /// (Task 6) that binds to it, same pattern as `toolStreamStore`/
+    /// `canvasStore` above.
+    let toolHooksStore: ToolHooksStore
+    /// File-based custom `/name` slash commands (project + user Markdown files) —
+    /// registered into `commandRegistry` after skill commands at bootstrap; see
+    /// `resyncCustomCommands`.
+    let customCommandStore: CustomCommandStore
+    /// Watches the user custom-commands directory and reloads/re-registers
+    /// `customCommandStore`'s bindings when a file is added/edited/removed —
+    /// retained for the process lifetime so its `DispatchSource` stays alive;
+    /// see `bootstrapAgentSessionAndRuns` for where it's started.
+    let customCommandWatcher: CustomCommandWatcher
     /// M7 Slice 8 (Voice): push-to-talk + file-transcription facade. Constructed
     /// after `agentSession` (both in `bootstrap()` and here) so
     /// `attachSession(_:)` can wire voice auto-send through the real session's
     /// `send(_:)` — voice is not a privileged input channel.
     let voiceService: VoiceService
+    /// Multi-channel Task 5: persisted config (enable flag + port) for the optional
+    /// remote channel; the bearer token lives in `SecretStore`, never here. The
+    /// settings surface binds to this SAME instance the launch-time
+    /// `applyEnabledState()` read from.
+    let remoteChannelSettingsStore: RemoteChannelSettingsStore
+    /// Multi-channel Task 5: owns the `WebhookServer` lifecycle for the remote
+    /// channel. Fail-closed — only listens (127.0.0.1) when enabled AND a token
+    /// exists. Retained here so the settings surface and menu-bar presence read
+    /// the SAME live `status`.
+    let remoteChannelService: RemoteChannelService
     /// Owns the `NSStatusItem`/popover for the app's lifetime. `var`/optional
     /// (not an `init` param) because its content closure captures `self` —
     /// it's built in `bootstrap()` right after `environment` itself exists,
@@ -208,6 +255,9 @@ final class AppEnvironment {
         quitCoordinator: QuitCoordinator,
         generalSettingsStore: GeneralSettingsStore,
         appAppearanceStore: AppAppearanceStore,
+        webSearchSettingsStore: WebSearchSettingsStore,
+        mediaSettingsStore: MediaSettingsStore,
+        sessionShareStore: SessionShareStore,
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
@@ -251,7 +301,13 @@ final class AppEnvironment {
         skillCommandStore: SkillCommandStore,
         menuBarPresence: MenuBarPresence,
         canvasStore: CanvasStore,
-        voiceService: VoiceService
+        toolStreamStore: ToolStreamStore,
+        toolHooksStore: ToolHooksStore,
+        customCommandStore: CustomCommandStore,
+        customCommandWatcher: CustomCommandWatcher,
+        voiceService: VoiceService,
+        remoteChannelSettingsStore: RemoteChannelSettingsStore,
+        remoteChannelService: RemoteChannelService
     ) {
         self.persistence = persistence
         self.secrets = secrets
@@ -268,6 +324,9 @@ final class AppEnvironment {
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
+        self.webSearchSettingsStore = webSearchSettingsStore
+        self.mediaSettingsStore = mediaSettingsStore
+        self.sessionShareStore = sessionShareStore
         self.skySettingsStore = skySettingsStore
         self.sounds = sounds
         self.agentContextHub = agentContextHub
@@ -311,7 +370,13 @@ final class AppEnvironment {
         self.skillCommandStore = skillCommandStore
         self.menuBarPresence = menuBarPresence
         self.canvasStore = canvasStore
+        self.toolStreamStore = toolStreamStore
+        self.toolHooksStore = toolHooksStore
+        self.customCommandStore = customCommandStore
+        self.customCommandWatcher = customCommandWatcher
         self.voiceService = voiceService
+        self.remoteChannelSettingsStore = remoteChannelSettingsStore
+        self.remoteChannelService = remoteChannelService
         // Seeds `registeredSkillCommandNames` with whatever bootstrap already
         // registered (see the loop right after `commandRegistry` is built),
         // so the very first `resyncSkillCommands()` call — triggered by a
@@ -347,7 +412,7 @@ final class AppEnvironment {
         let (
             persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
-            appAppearanceStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
+            appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
         ) = bootstrapCoreStores(rootURL: rootURL, defaults: defaults)
 
@@ -360,12 +425,14 @@ final class AppEnvironment {
             skillsRoot: skillsRoot, rootURL: rootURL, documentsRoot: documentsRoot)
 
         let (
-            sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore
+            sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
+            toolStreamStore, terminalController
         ) = bootstrapExecutionAndTools(
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
             editJournal: editJournal, workspaceManager: workspaceManager, agentActionHub: agentActionHub,
             agentContextHub: agentContextHub, memoryService: memoryService, mcpConfigStore: mcpConfigStore,
-            skillRegistry: skillRegistry)
+            skillRegistry: skillRegistry,
+            permissionMode: { [weak agentPermissionStore] in agentPermissionStore?.mode ?? .ask })
 
         let (
             modelCatalogService, agentStore, modelCatalog, modelPriceTable, routerOutcomeStore, modelRouter,
@@ -378,7 +445,8 @@ final class AppEnvironment {
         let (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore
+            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
+            remoteChannelSettingsStore, remoteChannelService
         ) = bootstrapAgentSessionAndRuns(
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
@@ -388,7 +456,8 @@ final class AppEnvironment {
             runtimeOptionsStore: runtimeOptionsStore, commandRegistry: commandRegistry,
             authProfileStore: authProfileStore, localModelProbe: localModelProbe,
             agentActionHub: agentActionHub, agentTools: agentTools, mcpServerRegistry: mcpServerRegistry,
-            skillRegistry: skillRegistry, skillCommandStore: skillCommandStore)
+            skillRegistry: skillRegistry, skillCommandStore: skillCommandStore,
+            toolStreamStore: toolStreamStore, terminalController: terminalController)
 
         let environment = AppEnvironment(
             persistence: persistence,
@@ -406,6 +475,9 @@ final class AppEnvironment {
             quitCoordinator: QuitCoordinator(persistence: persistence, terminator: AppKitTerminationReplier()),
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
+            webSearchSettingsStore: webSearchSettingsStore,
+            mediaSettingsStore: mediaSettingsStore,
+            sessionShareStore: sessionShareStore,
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,
@@ -449,7 +521,13 @@ final class AppEnvironment {
             skillCommandStore: skillCommandStore,
             menuBarPresence: menuBarPresence,
             canvasStore: canvasStore,
-            voiceService: voiceService
+            toolStreamStore: toolStreamStore,
+            toolHooksStore: toolHooksStore,
+            customCommandStore: customCommandStore,
+            customCommandWatcher: customCommandWatcher,
+            voiceService: voiceService,
+            remoteChannelSettingsStore: remoteChannelSettingsStore,
+            remoteChannelService: remoteChannelService
         )
 
         finalizeBootstrap(

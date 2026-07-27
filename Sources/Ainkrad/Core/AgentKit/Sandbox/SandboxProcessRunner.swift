@@ -17,7 +17,9 @@ struct SandboxProcessRunner: Sendable {
     // wall-clock timer force-terminates a process that never produces
     // EOF (`tail -f`, `yes`, a dev server, an interactive REPL).
     func run(executable: String, arguments: [String],
-             workingDir: String?, timeout: TimeInterval) async -> ExecutionResult {
+             workingDir: String?, timeout: TimeInterval,
+             onOutput: (@Sendable (String) -> Void)? = nil,
+             controller: TerminalProcessController? = nil) async -> ExecutionResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -28,6 +30,7 @@ struct SandboxProcessRunner: Sendable {
 
         do {
             try process.run()
+            controller?.setActive(process)
         } catch {
             return ExecutionResult(output: "Could not launch: \(error.localizedDescription)",
                                    exitCode: -1, timedOut: false, unresponsive: false)
@@ -45,9 +48,13 @@ struct SandboxProcessRunner: Sendable {
                 if !accumulator.append(chunk) {
                     process.terminate()
                 }
+                if let onOutput {
+                    onOutput(String(decoding: accumulator.snapshot(), as: UTF8.self))
+                }
             }
 
             process.terminationHandler = { proc in
+                controller?.setActive(nil)
                 handle.readabilityHandler = nil
                 gate.resume(exitStatus: proc.terminationStatus)
             }
@@ -93,6 +100,30 @@ struct SandboxProcessRunner: Sendable {
         guard bytes.count > maxOutputBytes else { return raw }
         let tail = String(decoding: Array(bytes.suffix(maxOutputBytes)), as: UTF8.self)
         return "…[earlier output truncated]\n" + tail
+    }
+}
+
+/// Tracks the currently-running child `Process` so `AgentSession.interrupt()` can
+/// force-kill it (fixing the "task cancel doesn't kill the child" limitation
+/// noted in `AgentSession.interrupt`). Lock-guarded and `@unchecked Sendable`,
+/// consistent with `ContinuationGate`/`OutputAccumulator` in this file.
+final class TerminalProcessController: @unchecked Sendable {
+    private let lock = NSLock()
+    private var active: Process?
+
+    func setActive(_ process: Process?) {
+        lock.lock(); active = process; lock.unlock()
+    }
+
+    /// SIGTERM the live child, then SIGINT shortly after if it's still running —
+    /// the same escalation the timeout path uses. No-op when nothing is running.
+    func killActive() {
+        lock.lock(); let process = active; lock.unlock()
+        guard let process, process.isRunning else { return }
+        process.terminate()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+            if process.isRunning { process.interrupt() }
+        }
     }
 }
 

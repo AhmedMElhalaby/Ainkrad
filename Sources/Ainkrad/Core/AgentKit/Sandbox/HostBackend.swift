@@ -16,6 +16,7 @@ struct HostBackend: ExecutionBackend {
             executable: "/bin/zsh",
             arguments: ["-lc", request.command],
             workingDir: request.workingDir,
-            timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds))
+            timeout: TimeInterval(request.profile.resourceLimits.timeoutSeconds),
+            onOutput: request.onOutput, controller: request.processController)
     }
 }

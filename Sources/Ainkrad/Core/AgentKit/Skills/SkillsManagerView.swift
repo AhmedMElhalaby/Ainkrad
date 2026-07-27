@@ -36,6 +36,10 @@ final class SkillsManagerViewModel {
         self.fileManager = fileManager
     }
 
+    /// Count of pending `_proposed/` drafts — drives the manager-entry badge so a
+    /// freshly proposed/improved skill is visible without opening the manager.
+    var proposalCount: Int { registry.proposals().count }
+
     // MARK: - Active skills / local editor
 
     private func onDiskText(_ skill: Skill) -> String {

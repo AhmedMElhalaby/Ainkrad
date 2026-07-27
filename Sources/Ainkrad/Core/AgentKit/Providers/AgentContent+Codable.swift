@@ -5,7 +5,7 @@ import AinkradHostRuntime
 // discriminator. Mirrors the wire shape loosely but is an internal on-disk
 // format (session history), not the provider wire format.
 extension AgentContentBlock: Codable {
-    private enum Kind: String, Codable { case text, toolUse, toolResult, image }
+    private enum Kind: String, Codable { case text, thinking, toolUse, toolResult, image }
     private enum CodingKeys: String, CodingKey {
         case kind, text, id, name, input, toolUseID, content, isError, mediaType, base64
     }
@@ -15,6 +15,8 @@ extension AgentContentBlock: Codable {
         switch self {
         case .text(let t):
             try c.encode(Kind.text, forKey: .kind); try c.encode(t, forKey: .text)
+        case .thinking(let t):
+            try c.encode(Kind.thinking, forKey: .kind); try c.encode(t, forKey: .text)
         case .toolUse(let id, let name, let input):
             try c.encode(Kind.toolUse, forKey: .kind)
             try c.encode(id, forKey: .id); try c.encode(name, forKey: .name)
@@ -34,6 +36,8 @@ extension AgentContentBlock: Codable {
         switch try c.decode(Kind.self, forKey: .kind) {
         case .text:
             self = .text(try c.decode(String.self, forKey: .text))
+        case .thinking:
+            self = .thinking(try c.decode(String.self, forKey: .text))
         case .toolUse:
             self = .toolUse(id: try c.decode(String.self, forKey: .id),
                             name: try c.decode(String.self, forKey: .name),

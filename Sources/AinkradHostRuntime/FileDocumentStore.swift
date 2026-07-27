@@ -5,13 +5,27 @@ import Foundation
 /// A file that fails to decode is quarantined (renamed aside) and treated as
 /// absent, so a single corrupt document can never crash launch or block the
 /// rest of persistence. A write-through cache serves repeat reads.
-public final class FileDocumentStore: PersistenceStore {
+/// **Thread safety.** Every mutable member is guarded by `lock`. This is not
+/// decoration: five call sites reached this store from off the main actor via
+/// `nonisolated(unsafe) let persistence` — a real data race on `cache` that
+/// Swift 6 was explicitly told to ignore. Those escapes are now gone, and the
+/// synchronization lives here, once, where the state is.
+///
+/// The lock is **recursive** because `load` calls `save` to persist a schema
+/// upgrade while already holding it. A plain `NSLock` would deadlock on the
+/// first document that migrates.
+public final class FileDocumentStore: PersistenceStore, @unchecked Sendable {
     private let rootURL: URL
     private let fileManager: FileManager
+    private let lock = NSRecursiveLock()
     private var cache: [String: any PersistableDocument] = [:]
+    private weak var _syncEngine: SyncEngine?
 
     /// Optional sync seam; notified after each successful write. Not owned.
-    public weak var syncEngine: SyncEngine?
+    public var syncEngine: SyncEngine? {
+        get { lock.withLock { _syncEngine } }
+        set { lock.withLock { _syncEngine = newValue } }
+    }
 
     public init(rootURL: URL, fileManager: FileManager = .default) {
         self.rootURL = rootURL
@@ -30,7 +44,7 @@ public final class FileDocumentStore: PersistenceStore {
 
     /// Drops the in-memory cache. Call after files are written out of band
     /// (e.g. after an import) so subsequent loads read fresh from disk.
-    public func clearCache() { cache.removeAll() }
+    public func clearCache() { lock.withLock { cache.removeAll() } }
 
     private func fileURL(for id: String) -> URL {
         rootURL.appendingPathComponent("\(id).json")
@@ -49,6 +63,8 @@ public final class FileDocumentStore: PersistenceStore {
     }
 
     public func load<T: PersistableDocument>(_ type: T.Type) -> T? {
+        lock.lock()
+        defer { lock.unlock() }
         if let cached = cache[T.documentID] as? T { return cached }
         let url = fileURL(for: T.documentID)
         guard fileManager.fileExists(atPath: url.path) else { return nil }
@@ -96,10 +112,12 @@ public final class FileDocumentStore: PersistenceStore {
             Log.persistence.error("Failed to encode \(T.documentID, privacy: .public)")
             return
         }
+        lock.lock()
+        defer { lock.unlock() }
         do {
             try data.write(to: fileURL(for: T.documentID), options: .atomic)
             cache[T.documentID] = document
-            syncEngine?.documentDidChange(id: T.documentID, data: data)
+            _syncEngine?.documentDidChange(id: T.documentID, data: data)
         } catch {
             Log.persistence.error("Failed to write \(T.documentID, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
@@ -129,16 +147,20 @@ public final class FileDocumentStore: PersistenceStore {
             Log.persistence.error("Failed to encode raw payload for \(id, privacy: .public)")
             return
         }
+        lock.lock()
+        defer { lock.unlock() }
         do {
             try data.write(to: fileURL(for: id), options: .atomic)
             cache[id] = nil  // no concrete type to cache under; drop any stale entry
-            syncEngine?.documentDidChange(id: id, data: data)
+            _syncEngine?.documentDidChange(id: id, data: data)
         } catch {
             Log.persistence.error("Failed to write \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
     public func delete<T: PersistableDocument>(_ type: T.Type) {
+        lock.lock()
+        defer { lock.unlock() }
         cache[T.documentID] = nil
         try? fileManager.removeItem(at: fileURL(for: T.documentID))
     }

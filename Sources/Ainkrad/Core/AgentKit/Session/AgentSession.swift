@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 
 /// The tool-use agent loop: owns the transcript, in-flight streaming buffers,
 /// the tool registry, and the per-turn approval gate. Runs
@@ -38,6 +39,12 @@ final class AgentSession {
     private(set) var streamingText: String = ""
     private(set) var streamingThinking: String = ""
 
+    /// Hunk ids the user has toggled to REJECT on the pending edit_file approval.
+    /// Reset whenever a new approval is parked; read by `approve()` to rebuild a
+    /// partial edit. Empty = accept the whole edit (unchanged behavior).
+    private(set) var rejectedHunkIDs: Set<Int> = []
+    func setRejectedHunkIDs(_ ids: Set<Int>) { rejectedHunkIDs = ids }
+
     /// Token usage accumulated from the most recently completed turn's `.usage`
     /// events. Consumed by `UsageTracker` (Task 9) to compute per-turn cost.
     private(set) var lastTurnUsage: TokenUsage = .zero
@@ -46,6 +53,32 @@ final class AgentSession {
     /// the model failover/escalation ACTUALLY settled on, not necessarily the one
     /// `resolveTurn` originally picked. `nil` before any turn has settled.
     private(set) var lastUsageAttributedModel: String?
+
+    /// A skill-capture hint surfaced after a complex, clean turn (Task 2).
+    /// Passive — the UI offers it; it never proposes on its own. Cleared at the
+    /// start of the next turn and on reset.
+    private(set) var pendingSkillSuggestion: SkillSuggestion?
+
+    /// Recomputes `pendingSkillSuggestion` from a settled turn. Internal so the
+    /// settle path and tests can drive it without a full turn.
+    func updateSkillSuggestion(from messages: [AgentMessage], succeeded: Bool) {
+        switch SkillReflectionAdvisor.evaluate(messages, succeeded: succeeded) {
+        case .eligible(let toolNames): pendingSkillSuggestion = SkillSuggestion(toolNames: toolNames)
+        case .notEligible: pendingSkillSuggestion = nil
+        }
+    }
+
+    /// Accepts the pending skill suggestion: sends the reflection directive as a
+    /// normal turn (so `propose_skill` runs through the usual gate) and clears the
+    /// hint. No-op when nothing is pending.
+    func acceptSkillSuggestion() {
+        guard let suggestion = pendingSkillSuggestion else { return }
+        pendingSkillSuggestion = nil
+        send(SkillReflectionDirective.build(toolNames: suggestion.toolNames))
+    }
+
+    /// Dismisses the pending suggestion without sending anything.
+    func dismissSkillSuggestion() { pendingSkillSuggestion = nil }
 
     /// Fired whenever a turn settles (the tool loop returns to `.idle` inside
     /// `runConversation`) — every-settle is the host's only reliable trigger,
@@ -90,6 +123,32 @@ final class AgentSession {
     /// still rewinds the transcript but reports `revertedEdits: 0` (no file
     /// edits are tracked to revert), matching pre-Task-10 behavior.
     private let editJournal: EditJournal?
+
+    /// Checkpoint & Rewind Task 5 — durable capture/restore coordinator, consulted
+    /// at the pre-tool interception point in `execute(_:)` (step 1, before the tool
+    /// actually runs) and driven by `restoreCheckpoint(_:mode:)`/`/rewind`. `nil`
+    /// (the default) means no checkpointing: `execute` skips the capture call
+    /// entirely, byte-identical to pre-Task-5 behavior. Settable via
+    /// `setCheckpointer(_:)` for the production `/rewind` and bootstrap wiring
+    /// (Tasks 6/8), not just tests.
+    private var checkpointer: CheckpointCoordinator?
+
+    /// Terminal Streaming Task 5 — the shared live-output buffer for streaming
+    /// tool calls, bracketed around `registry.run(call)` in `execute(_:)` (step 3).
+    /// `nil` (the default) means no streaming: `execute` skips the begin/finish
+    /// calls entirely, byte-identical to pre-Task-5 behavior.
+    private let toolStream: ToolStreamStore?
+    /// Terminal Streaming Task 5 — force-kill handle for an in-flight `run_terminal`
+    /// child, consulted by `interrupt()`. `nil` (the default) means interrupt only
+    /// cancels the Swift `Task`, matching pre-Task-5 behavior.
+    private let terminalController: TerminalProcessController?
+
+    /// Tool Hooks Task 4 — PreToolUse/PostToolUse hook runner, consulted at the
+    /// pre-tool interception point in `execute(_:)` (step 2, after checkpoint
+    /// capture but before the tool runs) and the post-tool point (step 4, after
+    /// `toolStream?.finish`). `nil` (the default) means no hooks: `execute` skips
+    /// both calls entirely, byte-identical to pre-Task-4 behavior.
+    private let hooks: ToolHookRunner?
 
     /// M7 Slice 3b Task 21 — the resolved `SandboxProfile.toolAllowList` for this
     /// session's trust tier (subagent/background/scheduled), when the sandbox
@@ -157,7 +216,7 @@ final class AgentSession {
     /// byte-identical to before this seam existed.
     private let permissionModeOverride: AgentPermissionMode?
 
-    private enum ApprovalOutcome { case approved, denied(String) }
+    private enum ApprovalOutcome { case approved, approvedWithReplacement(JSONValue), denied(String) }
     private var approvalContinuation: CheckedContinuation<ApprovalOutcome, Never>?
 
     init(
@@ -172,6 +231,9 @@ final class AgentSession {
         memory: MemoryService? = nil,
         agents: AgentStore? = nil,
         editJournal: EditJournal? = nil,
+        checkpointer: CheckpointCoordinator? = nil,
+        toolStream: ToolStreamStore? = nil,
+        terminalController: TerminalProcessController? = nil,
         unattended: Bool = false,
         sandboxAllowList: Set<String>? = nil,
         agentAllowList: Set<String>? = nil,
@@ -183,7 +245,8 @@ final class AgentSession {
         candidatesProvider: (@MainActor () -> [RouterCandidate])? = nil,
         isLocalConnection: (@MainActor (Connection) -> Bool)? = nil,
         mcpTrust: (@MainActor (String) -> Bool)? = nil,
-        permissionModeOverride: AgentPermissionMode? = nil
+        permissionModeOverride: AgentPermissionMode? = nil,
+        hooks: ToolHookRunner? = nil
     ) {
         self.providerFor = providerFor
         self.connections = connections
@@ -196,6 +259,9 @@ final class AgentSession {
         self.memory = memory
         self.agents = agents
         self.editJournal = editJournal
+        self.checkpointer = checkpointer
+        self.toolStream = toolStream
+        self.terminalController = terminalController
         self.unattended = unattended
         self.sandboxAllowList = sandboxAllowList
         self.agentAllowList = agentAllowList
@@ -208,6 +274,7 @@ final class AgentSession {
         self.isLocalConnection = isLocalConnection
         self.mcpTrust = mcpTrust
         self.permissionModeOverride = permissionModeOverride
+        self.hooks = hooks
     }
 
     /// `images`, when non-empty, are attached as leading `.image` content
@@ -243,6 +310,9 @@ final class AgentSession {
             break
         }
 
+        // A stale hint from the previous turn must never linger into a new one.
+        pendingSkillSuggestion = nil
+
         // Turn-boundary watermark (Task 10): captured AFTER the command
         // intercept and re-entrancy guard, so only inputs that actually start
         // a new turn get a mark — a slash command returned above, and a
@@ -276,7 +346,28 @@ final class AgentSession {
             permissions.addToAllowlist(pending.call.name)
         }
         approvalContinuation = nil
-        cont.resume(returning: .approved)
+        if case .awaitingApproval(let pending) = state,
+           pending.call.name == "edit_file",
+           let fileDiff = pending.preview.fileDiff, !rejectedHunkIDs.isEmpty {
+            let newInput = Self.rewriteEditForPartialApproval(
+                input: pending.call.input, fileDiff: fileDiff, rejecting: rejectedHunkIDs)
+            cont.resume(returning: .approvedWithReplacement(newInput))
+        } else {
+            cont.resume(returning: .approved)
+        }
+    }
+
+    /// Rewrites an edit_file call so ONLY accepted hunks apply: `old_string` becomes
+    /// the full original file and `new_string` the reconstructed content. Returns the
+    /// input unchanged when nothing is rejected (keeps the original find/replace).
+    static func rewriteEditForPartialApproval(input: JSONValue, fileDiff: FileDiff,
+                                              rejecting rejected: Set<Int>) -> JSONValue {
+        guard !rejected.isEmpty else { return input }
+        let reconstructed = PartialEdit.reconstruct(fileDiff, rejecting: rejected)
+        guard case .object(var obj) = input else { return input }
+        obj["old_string"] = .string(fileDiff.original)
+        obj["new_string"] = .string(reconstructed)
+        return .object(obj)
     }
 
     /// Resume a parked approval by denying it; `reason` is fed back to the model
@@ -307,14 +398,15 @@ final class AgentSession {
     /// left half-parked; a subsequent `send(_:)` continues with the preserved
     /// history.
     ///
-    /// Limitation: a `run_terminal` child `Process` already spawned is not
-    /// force-killed by task cancellation — its captured result is simply
-    /// discarded when the cancelled task next checks `Task.isCancelled`.
-    /// Callers running under a `RunManager` should note the possible partial
-    /// side-effect in the run log.
+    /// Terminal Streaming Task 5: a `run_terminal` child `Process` already
+    /// spawned IS force-killed here (`terminalController?.killActive()`) —
+    /// task cancellation alone only discards the in-flight `Task`'s captured
+    /// result when it next checks `Task.isCancelled`, it does not stop an
+    /// already-spawned `Process`.
     func interrupt() {
         currentTask?.cancel()
         currentTask = nil
+        terminalController?.killActive()
         if let cont = approvalContinuation {
             approvalContinuation = nil
             cont.resume(returning: .denied("interrupted"))
@@ -379,6 +471,59 @@ final class AgentSession {
         send(prompt)
     }
 
+    /// Restores workspace state (and, for `.conversation`/`.both`, truncates the
+    /// transcript back to the checkpoint's turn boundary). The durable-checkpoint
+    /// counterpart to `undoLastTurn()`, driven by `/rewind` (Task 6). Returns the
+    /// `CheckpointCoordinator.RestoreOutcome` (`nil` when no checkpointer is wired)
+    /// so callers (`/rewind`) can surface a restore failure instead of silently
+    /// swallowing it — see `CheckpointCoordinator.RestoreOutcome`.
+    @discardableResult
+    func restoreCheckpoint(_ checkpoint: Checkpoint, mode: CheckpointCoordinator.RestoreMode) async -> CheckpointCoordinator.RestoreOutcome? {
+        guard let checkpointer else { return nil }
+        let outcome = await checkpointer.restore(checkpoint, mode: mode)
+        let truncateTo = outcome.transcriptIndex
+        if truncateTo >= 0, truncateTo <= messages.count {
+            let cut = cleanTranscriptBoundary(upTo: truncateTo)
+            messages.removeLast(messages.count - cut)
+        }
+        return outcome
+    }
+
+    /// Finds the closest safe cut index at-or-before `target` that never leaves a
+    /// dangling `tool_use` at the end of the truncated transcript. `Checkpoint.
+    /// transcriptIndex` is captured AFTER the assistant message carrying a
+    /// `tool_use` block was appended but BEFORE its `tool_result` (the pre-tool
+    /// interception point in `execute(_:)`) — truncating to exactly that index
+    /// would leave a trailing assistant message with an unmatched `tool_use`,
+    /// which the next provider `send` rejects. Walks backward past any such
+    /// trailing assistant message(s) until the cut lands on a clean boundary (a
+    /// user message, or an assistant message with no dangling `tool_use`).
+    private func cleanTranscriptBoundary(upTo target: Int) -> Int {
+        var cut = max(0, min(target, messages.count))
+        while cut > 0 {
+            let last = messages[cut - 1]
+            guard last.role == .assistant,
+                  last.content.contains(where: { if case .toolUse = $0 { return true }; return false })
+            else { break }
+            cut -= 1
+        }
+        return cut
+    }
+
+    /// Appends a system-authored note to the transcript outside of a normal turn —
+    /// used by `/rewind`'s async restore `Task` (Fix #2) to surface a restore
+    /// failure that only becomes known after the command handler already returned
+    /// its synchronous "in progress" note.
+    func appendSystemNote(_ text: String) {
+        messages.append(AgentMessage(role: .assistant, text: text))
+    }
+
+    /// Production `/rewind` and bootstrap wiring (Tasks 6/8) call these — not
+    /// test-only despite the historically test-flavored name pattern elsewhere
+    /// in this file.
+    func setCheckpointer(_ c: CheckpointCoordinator) { checkpointer = c }
+    func activeCheckpointer() -> CheckpointCoordinator? { checkpointer }
+
     func reset() {
         currentTask?.cancel()
         currentTask = nil
@@ -392,6 +537,7 @@ final class AgentSession {
         state = .idle
         streamingText = ""
         streamingThinking = ""
+        pendingSkillSuggestion = nil
     }
 
     // MARK: - Model resolution (Task 16)
@@ -600,7 +746,7 @@ final class AgentSession {
                 recordSettlement(success: true, resolved: resolved, usedModel: currentModel.model)
                 settled()
                 return
-            case .toolCalls(let calls, let assistantText):
+            case .toolCalls(let calls, let assistantText, let thinking):
                 iterations += 1
                 if iterations > maxToolIterations {
                     messages.append(AgentMessage(role: .assistant,
@@ -610,8 +756,10 @@ final class AgentSession {
                     settled()
                     return
                 }
-                // Commit the assistant turn (text + tool_use blocks).
-                var assistantBlocks: [AgentContentBlock] = assistantText.isEmpty ? [] : [.text(assistantText)]
+                // Commit the assistant turn (thinking + text + tool_use blocks).
+                var assistantBlocks: [AgentContentBlock] = []
+                if !thinking.isEmpty { assistantBlocks.append(.thinking(thinking)) }
+                if !assistantText.isEmpty { assistantBlocks.append(.text(assistantText)) }
                 assistantBlocks.append(contentsOf: calls.map { .toolUse(id: $0.id, name: $0.name, input: $0.input) })
                 messages.append(AgentMessage(role: .assistant, content: assistantBlocks))
 
@@ -649,7 +797,7 @@ final class AgentSession {
     private enum TurnOutcome {
         case completed
         case failed(String)
-        case toolCalls([ToolCall], assistantText: String)
+        case toolCalls([ToolCall], assistantText: String, thinking: String)
     }
 
     private func runOneTurn(provider: LLMProvider, system: String,
@@ -685,11 +833,14 @@ final class AgentSession {
 
         if let failure { return .failed(failure) }
         if !pendingCalls.isEmpty {
-            return .toolCalls(pendingCalls, assistantText: streamingText)
+            return .toolCalls(pendingCalls, assistantText: streamingText, thinking: streamingThinking)
         }
-        // No tool calls: commit any assistant text, then settle.
+        // No tool calls: commit any assistant text (with leading thinking), then settle.
         if !streamingText.isEmpty {
-            messages.append(AgentMessage(role: .assistant, text: streamingText))
+            var blocks: [AgentContentBlock] = []
+            if !streamingThinking.isEmpty { blocks.append(.thinking(streamingThinking)) }
+            blocks.append(.text(streamingText))
+            messages.append(AgentMessage(role: .assistant, content: blocks))
             return .completed
         }
         // Empty text. A clean `.done` (tool-less/text-less end_turn) settles to
@@ -786,6 +937,12 @@ final class AgentSession {
             }
         }
 
+        // The call actually run below. A partial-hunk approval rewrites the
+        // edit_file input (accepted hunks only) but MUST still flow through the
+        // shared pre-tool seam (checkpoint → PreToolUse → stream → PostToolUse),
+        // so we rebind here and fall through rather than running it early.
+        var effectiveCall = call
+
         if decision == .requireApproval {
             // Unattended gate (M7 Slice 3): a headless run (subagent/background/
             // scheduled) has no HUD to resolve an approval, so parking on the
@@ -800,6 +957,7 @@ final class AgentSession {
                     isError: true)
             }
             let preview = tool.approvalPreview(call.input)
+            rejectedHunkIDs = []            // fresh selection per approval
             state = .awaitingApproval(PendingApproval(call: call, preview: preview))
             let outcome = await withCheckedContinuation { (cont: CheckedContinuation<ApprovalOutcome, Never>) in
                 approvalContinuation = cont
@@ -807,10 +965,25 @@ final class AgentSession {
             if case .denied(let reason) = outcome {
                 return ToolResult(content: reason, isError: true)
             }
+            if case .approvedWithReplacement(let newInput) = outcome {
+                // Apply only accepted hunks — but still run through the shared
+                // seam below so the checkpoint/hooks/streaming fire exactly as
+                // they do for a whole-file approval.
+                effectiveCall = ToolCall(id: call.id, name: call.name, input: newInput)
+            }
         }
 
-        state = .callingTool(call.name)
-        return await registry.run(call)
+        state = .callingTool(effectiveCall.name)
+        // Pre-tool interception point (shared seam): step 1 — durable checkpoint before a mutating tool.
+        await checkpointer?.captureIfMutating(call: effectiveCall, tool: tool)
+        // step 2 — PreToolUse hooks: a non-zero hook blocks the call before it runs.
+        if let block = await hooks?.runPreToolUse(effectiveCall) { return block }
+        // step 3 — terminal-streaming: bracket the tool run so the live card fills.
+        toolStream?.begin(effectiveCall.id)
+        let result = await registry.run(effectiveCall)
+        toolStream?.finish(effectiveCall.id, finalOutput: result.content)
+        // step 4 — PostToolUse hooks: post-process a successful result (format/lint note).
+        return await hooks?.runPostToolUse(effectiveCall, result: result) ?? result
     }
 
     /// Runs the cheap rule-based consolidation pass and notifies observers
@@ -818,6 +991,7 @@ final class AgentSession {
     /// `runConversation` — not `reset()`, which is a discard, not a settle).
     private func settled() {
         if let memory { MemoryConsolidator.consolidate(memory) }
+        updateSkillSuggestion(from: messages, succeeded: { if case .idle = state { return true } else { return false } }())
         onSettled?()
     }
 

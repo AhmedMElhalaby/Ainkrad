@@ -8,11 +8,32 @@ import Foundation
 public final class PluginLaunchHub {
     private var pending: [String: String] = [:]
     private var openHandler: ((String) -> Void)?
+    private var availabilityProvider: ((String) -> Availability)?
+
+    /// Whether a target app can be opened right now.
+    public enum Availability: Equatable, Sendable {
+        case available
+        /// Registered but switched off by the user.
+        case disabled
+        /// No app with that id — not installed, or failed to load.
+        case unknown
+    }
 
     public init() {}
 
     /// Wired once in bootstrap to open a pane via the WorkspaceManager.
     public func setOpenHandler(_ handler: @escaping (String) -> Void) { openHandler = handler }
+
+    /// Wired once in bootstrap; lets a launch report *why* it didn't happen
+    /// instead of silently doing nothing. Absent (tests, early bootstrap) means
+    /// "assume available", preserving the pre-generation-8 behaviour exactly.
+    public func setAvailabilityProvider(_ provider: @escaping (String) -> Availability) {
+        availabilityProvider = provider
+    }
+
+    public func availability(of appID: String) -> Availability {
+        availabilityProvider?(appID) ?? .available
+    }
 
     public func enqueue(target appID: String, payload: String?) { pending[appID] = payload }
 

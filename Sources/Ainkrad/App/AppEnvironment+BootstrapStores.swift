@@ -28,6 +28,9 @@ extension AppEnvironment {
         agentActionHub: AgentActionRegistryHub,
         pluginLaunchHub: PluginLaunchHub,
         appAppearanceStore: AppAppearanceStore,
+        webSearchSettingsStore: WebSearchSettingsStore,
+        mediaSettingsStore: MediaSettingsStore,
+        sessionShareStore: SessionShareStore,
         loader: PluginLoader,
         mcpConfigStore: MCPServerConfigStore,
         skillsRoot: URL,
@@ -55,17 +58,30 @@ extension AppEnvironment {
         // `AppEnvironment` is constructed, since `appStore` is one of its
         // stored dependencies.
         let documentsRoot = rootURL ?? FileDocumentStore.defaultDocumentsURL()
-        let pluginDirs = [
-            documentsRoot.appendingPathComponent("Plugins", isDirectory: true),
-            documentsRoot.appendingPathComponent("DevPlugins", isDirectory: true),
-        ]
+        // `DevPlugins/` is an UNMANAGED sideload directory: anything that can
+        // write a `.bundle` there gets in-process execution. It is scanned in
+        // Debug only (`PluginTrust.scansDevPluginsDirectory`); in Release the
+        // sole entry path is a catalog install, which the signature policy
+        // below then gates. Order matters — dev last, so a sideloaded build
+        // overrides an installed release of the same app (see
+        // `PluginLoader.loadAll`'s dedup).
+        var pluginDirs = [documentsRoot.appendingPathComponent("Plugins", isDirectory: true)]
+        if PluginTrust.scansDevPluginsDirectory {
+            pluginDirs.append(documentsRoot.appendingPathComponent("DevPlugins", isDirectory: true))
+        }
         let pluginDataRoot = documentsRoot.appendingPathComponent("PluginData", isDirectory: true)
         let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
         let pluginLaunchHub = PluginLaunchHub()
         let appAppearanceStore = AppAppearanceStore(persistence: persistence)
-        let loader = PluginLoader(signaturePolicy: DevModeSignaturePolicy(), minSupportedAPIVersion: GenerationSupport.minSupported) { appID, declaredPresentation in
+        let webSearchSettingsStore = WebSearchSettingsStore(persistence: persistence)
+        let mediaSettingsStore = MediaSettingsStore(persistence: persistence)
+        let sessionShareStore = SessionShareStore(persistence: persistence)
+        // Trust policy is chosen by build configuration in ONE place
+        // (`PluginTrust`), so the permissive dev policy is compiled out of
+        // Release entirely and no wiring mistake can ship it.
+        let loader = PluginLoader(signaturePolicy: PluginTrust.policyForCurrentBuild(), minSupportedAPIVersion: GenerationSupport.minSupported) { appID, declaredPresentation in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager,
                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
@@ -138,7 +154,7 @@ extension AppEnvironment {
         return (
             persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
-            appAppearanceStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
+            appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
         )
     }

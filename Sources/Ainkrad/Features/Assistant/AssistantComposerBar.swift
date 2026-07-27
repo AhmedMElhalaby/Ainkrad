@@ -43,6 +43,10 @@ struct AssistantComposerBar: View {
     /// (`redactionsText`) and the modal content/export flow now live there too
     /// (`AssistantRootView+Export.swift`).
     @Binding var isExportModalPresented: Bool
+    /// Share modal presented flag. Owned by `AssistantRootView`, same rationale
+    /// as `isExportModalPresented`; the modal content/share flow live there too
+    /// (`AssistantRootView+Share.swift`).
+    @Binding var isShareModalPresented: Bool
 
     /// Images attached via drag-and-drop, carried into the NEXT `session.send`
     /// call and cleared on send (or on manual removal via its chip's ✕).
@@ -50,6 +54,11 @@ struct AssistantComposerBar: View {
     /// (M7 finalize Wave D, D2 file split; same minimal-widening rationale as
     /// the mention-overlay/export state below).
     @State var pendingImages: [ImageAttachment] = []
+
+    /// `@file` mentions committed via the overlay, carried into the NEXT
+    /// send() and cleared on send. Embed-mode entries inline their file
+    /// content; reference-mode entries stay as the `@path` token only.
+    @State var mentions: [ComposerMention] = []
 
     /// Slash-command palette state. `paletteQuery` is derived from `draft`
     /// (see `ComposerTriggers.paletteQuery`) rather than a separate text
@@ -83,6 +92,10 @@ struct AssistantComposerBar: View {
         return VStack(alignment: .leading, spacing: 8) {
             if !pendingImages.isEmpty {
                 attachmentChips
+            }
+
+            if !mentions.isEmpty {
+                mentionChips
             }
 
             AinkradTextArea(text: $draft, placeholder: "Message Assistant…",
@@ -232,13 +245,37 @@ struct AssistantComposerBar: View {
 
     private func send() {
         guard canSend(isBusy: AssistantComposerBar.isBusy(session.state)) else { return }
-        let text = draft
+        let text = AssistantComposerBar.outgoingText(draft: draft, mentions: mentions)
         let images = pendingImages
         draft = ""
         pendingImages = []
+        mentions = []
         isPaletteVisible = false
         isMentionVisible = false
         session.send(text, images: images)
+    }
+
+    /// The text actually sent: `draft` augmented with a `<mentioned_files>`
+    /// block for embed-mode mentions (path-only fallback for large/binary via
+    /// `MentionFileReader.read`). Reads are resolved here on the main actor,
+    /// then passed to the pure `augment` as a plain lookup so the resolver
+    /// stays nonisolated/testable.
+    static func outgoingText(draft: String, mentions: [ComposerMention]) -> String {
+        let resolved: [String: String] = mentions.reduce(into: [:]) { acc, mention in
+            if mention.mode == .embed, let content = MentionFileReader.read(path: mention.path) {
+                acc[mention.path] = content
+            }
+        }
+        return MentionContentResolver.augment(text: draft, mentions: mentions, read: { resolved[$0] })
+    }
+
+    /// Flips one mention's mode between embed and reference. Out-of-range
+    /// index is a no-op (defensive against a chip removed mid-toggle).
+    static func toggledMode(_ mentions: [ComposerMention], at index: Int) -> [ComposerMention] {
+        guard mentions.indices.contains(index) else { return mentions }
+        var copy = mentions
+        copy[index].mode = copy[index].mode == .embed ? .reference : .embed
+        return copy
     }
 
     static func isBusy(_ state: AgentSession.State) -> Bool {

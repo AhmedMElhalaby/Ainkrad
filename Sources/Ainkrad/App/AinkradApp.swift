@@ -21,6 +21,7 @@ struct AinkradHostApp: App {
         _environment = State(initialValue: environment)
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController
+        appDelegate.assistantSessionStore = environment.assistantSessionStore
     }
 
     var body: some Scene {

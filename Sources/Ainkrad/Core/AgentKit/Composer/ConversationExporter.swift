@@ -30,6 +30,7 @@ enum ConversationExporter {
                 case .toolUse(_, let name, _): out += "```tool: \(name)\n```\n\n"
                 case .toolResult(_, let content, _): out += "```result\n\(redact(content, redactions))\n```\n\n"
                 case .image: out += "_[image]_\n\n"
+                case .thinking: break   // display-only scaffolding — omit from exports
                 }
             }
         }
@@ -52,6 +53,7 @@ enum ConversationExporter {
                 case .toolUse(_, let name, _): body += "<pre>tool: \(esc(name))</pre>"
                 case .toolResult(_, let content, _): body += "<pre>\(esc(redact(content, redactions)))</pre>"
                 case .image: body += "<p><em>[image]</em></p>"
+                case .thinking: break   // display-only scaffolding — omit from exports
                 }
             }
             body += "</section>"

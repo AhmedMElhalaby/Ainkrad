@@ -20,12 +20,34 @@ final class AssistantSessionStore {
         if sessions.isEmpty { seedActive() }
     }
 
+    /// Mirrors the live transcript into the active saved session.
+    ///
+    /// Called from `AssistantRootView.onChange(of: session.messages)`, which
+    /// fires on **every** mutation — including each streamed chunk appended to
+    /// the in-flight assistant message. Each call used to re-encode *all*
+    /// sessions to JSON and write them to disk synchronously on the main actor,
+    /// so a single long reply produced hundreds of full-history rewrites and
+    /// the typing animation stuttered in proportion to how much history existed.
+    ///
+    /// In-memory state still updates synchronously — the sidebar, titles and
+    /// `activeMessages` must be correct immediately. Only the *durability* is
+    /// coalesced. Structural edits (new/activate/delete) still write straight
+    /// through, and `flush()` forces a write at quit.
     func syncActive(messages: [AgentMessage]) {
         guard let id = activeID, let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
         sessions[idx].messages = messages
         sessions[idx].title = Self.title(from: messages)
         sessions[idx].updatedAt = now()
-        resort(); save()
+        resort()
+        scheduleSave()
+    }
+
+    /// Writes any coalesced change immediately. Call before the process can go
+    /// away (app termination) or whenever the transcript must be durable now.
+    func flush() {
+        pendingSave?.cancel()
+        pendingSave = nil
+        save()
     }
 
     func startNewSession() {
@@ -70,6 +92,24 @@ final class AssistantSessionStore {
     }
 
     private func resort() { sessions.sort { $0.updatedAt > $1.updatedAt } }
+
+    /// How long a burst of transcript mutations is allowed to coalesce. Short
+    /// enough that a crash loses at most a fraction of a second of text; long
+    /// enough that an entire streamed reply is one write, not hundreds.
+    static let saveCoalescingInterval: Duration = .milliseconds(600)
+
+    private var pendingSave: Task<Void, Never>?
+
+    /// Debounced write: each call replaces the previous pending one, so a burst
+    /// of N mutations costs a single encode + disk write instead of N.
+    private func scheduleSave() {
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            try? await Task.sleep(for: Self.saveCoalescingInterval)
+            guard !Task.isCancelled else { return }
+            self?.save()
+        }
+    }
 
     private func save() {
         persistence.save(AssistantSessionsDocument(sessions: sessions, activeID: activeID))

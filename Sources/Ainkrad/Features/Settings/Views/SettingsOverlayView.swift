@@ -140,7 +140,8 @@ struct SettingsOverlayView: View {
                 sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
                 sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
                 sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
-                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles", tokens: tokens)
+                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles",
+                           badgeCount: environment.skillRegistry.proposals().count, tokens: tokens)
 
                 groupLabel("APPEARANCE", tokens: tokens)
                     .padding(.top, 12)
@@ -192,6 +193,7 @@ struct SettingsOverlayView: View {
         title: String,
         appID: String? = nil,
         systemIcon: String,
+        badgeCount: Int = 0,
         tokens: DesignTokens
     ) -> some View {
         let isSelected = selection == section
@@ -205,6 +207,9 @@ struct SettingsOverlayView: View {
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
                 Spacer(minLength: 0)
+                if badgeCount > 0 {
+                    AinkradBadge(text: "\(badgeCount)", tint: tokens.accentSecondary)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: 38)

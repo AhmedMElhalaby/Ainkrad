@@ -237,8 +237,41 @@ final class ReadOnceStubProvider: LLMProvider {
     }
 }
 
+/// Emits one `run_terminal` tool call on the first turn, plain text afterwards.
+/// Used by the interrupt-force-kill test (`makeStreamingTerminal`).
+@MainActor
+final class SingleTerminalCallProvider: LLMProvider {
+    private let command: String
+    private var served = false
+    init(command: String) { self.command = command }
+    func send(messages: [AgentMessage], system: String, tools: [AgentToolSchema],
+              model: AgentModelConfig, credential: ProviderCredential) -> AsyncThrowingStream<AgentEvent, Error> {
+        let isFollowUp = messages.last?.content.contains { if case .toolResult = $0 { return true }; return false } ?? false
+        let command = command
+        return AsyncThrowingStream { cont in
+            if !isFollowUp {
+                cont.yield(.toolUseComplete(id: "1", name: "run_terminal", input: .object(["command": .string(command)])))
+                cont.yield(.done(stopReason: "tool_use"))
+            } else {
+                cont.yield(.textDelta("ok")); cont.yield(.done(stopReason: "end_turn"))
+            }
+            cont.finish()
+        }
+    }
+}
+
 @MainActor
 enum TestSessionFactory {
+    /// `RunTerminalTool.actionHub` is `unowned` — production code relies on
+    /// `AppEnvironment` holding the single hub instance for the app's lifetime.
+    /// `makeStreamingTerminal` builds its own hub for a session that outlives
+    /// the factory call (the test drives it via `send`/`interrupt` afterwards),
+    /// so it must be kept alive here rather than let it die with the factory
+    /// method's local scope.
+    private static var retainedActionHubs: [AgentActionRegistryHub] = []
+    /// Same reasoning as `retainedActionHubs` — `RunTerminalTool.router` is
+    /// also `unowned`.
+    private static var retainedRouters: [ExecutionRouter] = []
     /// Builds a fully-wired `AgentSession` backed by an in-memory persistence
     /// stack and a `NoopProvider` (tests here drive `execute`/`allowedSchemas`/
     /// `effectiveMode` directly and never call `send`). Pass `connections`/
@@ -325,6 +358,86 @@ enum TestSessionFactory {
             unattended: unattended,
             sandboxAllowList: sandboxAllowList, agentAllowList: agentAllowList,
             commands: commands)
+    }
+
+    /// Builds a session wired with a real `CheckpointCoordinator` (Checkpoint &
+    /// Rewind Task 5), via `setCheckpointer(_:)`, plus the real `EditFileTool`
+    /// so `edit_file` calls actually mutate the target file and are captured.
+    static func makeWithCheckpoints(provider: LLMProvider, editJournal: EditJournal,
+                                    snapshotRoot: URL, router: ExecutionRouter) -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let ws = UUID()
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        permissions.setMode(.fullAuto)
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude",
+                                      baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let registry = AgentToolRegistry(tools: [EditFileTool(journal: editJournal), FakeReadFileTool()])
+        let session = AgentSession(
+            providerFor: { _ in provider }, connections: connections, config: config, context: context,
+            registry: registry, permissions: permissions, editJournal: editJournal)
+        let coord = CheckpointCoordinator(
+            sessionID: "test", snapshots: WorkspaceSnapshotStore(root: snapshotRoot),
+            git: GitWorkingTreeSnapshotter(router: router), persistence: persistence,
+            transcriptIndex: { [weak session] in session?.messages.count ?? 0 }, defaultWorkingDir: NSHomeDirectory())
+        session.setCheckpointer(coord)
+        return session
+    }
+
+    /// Builds a session wired with a real `TerminalProcessController` +
+    /// `ToolStreamStore` (Terminal Streaming Task 5), and a `RunTerminalTool`
+    /// that carries both, driven by a `SingleTerminalCallProvider` that emits
+    /// one `run_terminal` call for `command`. Used by the interrupt-force-kill
+    /// test.
+    static func makeStreamingTerminal(controller: TerminalProcessController, toolStream: ToolStreamStore,
+                                      command: String) -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let ws = UUID()
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        permissions.setMode(.fullAuto)
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude",
+                                      baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let router = ExecutionRouter(profiles: SandboxProfileStore(persistence: persistence), backends: [.host: HostBackend()])
+        retainedRouters.append(router)
+        let actionHub = AgentActionRegistryHub()
+        retainedActionHubs.append(actionHub)
+        var terminal = RunTerminalTool(actionHub: actionHub, router: router)
+        terminal.toolStream = toolStream
+        terminal.processController = controller
+        let registry = AgentToolRegistry(tools: [terminal, FakeReadFileTool()])
+        return AgentSession(
+            providerFor: { _ in SingleTerminalCallProvider(command: command) },
+            connections: connections, config: config, context: context,
+            registry: registry, permissions: permissions,
+            toolStream: toolStream, terminalController: controller)
+    }
+
+    /// Builds a session wired with a real `ToolHookRunner` (Tool Hooks Task 4),
+    /// plus the real `EditFileTool` so a blocked `edit_file` call can be proven
+    /// to never touch disk.
+    static func makeWithHooks(hooks: ToolHookRunner, mode: AgentPermissionMode = .fullAuto) -> AgentSession {
+        let persistence = InMemoryPersistenceStore()
+        let ws = UUID()
+        let permissions = AgentPermissionStore(persistence: persistence, currentWorkspaceID: { ws })
+        permissions.setMode(mode)
+        let connections = ConnectionStore(persistence: persistence, secrets: InMemorySecretStore())
+        _ = connections.addConnection(preset: ProviderPreset.preset(id: "claude"), displayName: "Claude",
+                                      baseURL: ProviderPreset.preset(id: "claude").defaultBaseURL, token: "k")
+        let config = AgentConfigStore(persistence: persistence)
+        let context = AgentContextService(hub: AgentContextRegistryHub(),
+                                          settings: AgentContextSettingsStore(persistence: persistence))
+        let registry = AgentToolRegistry(tools: [EditFileTool(), FakeReadFileTool()])
+        return AgentSession(
+            providerFor: { _ in RecordingProvider(script: []) },
+            connections: connections, config: config, context: context,
+            registry: registry, permissions: permissions, hooks: hooks)
     }
 
     /// A local (free) and a premium candidate on the given connection, for the

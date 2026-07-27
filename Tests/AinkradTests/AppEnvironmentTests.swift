@@ -93,6 +93,7 @@ final class AppEnvironmentTests {
         let fileChangeWatcher = FileChangeWatcher()
         let menuBarPresence = MenuBarPresence(runs: RunManagerMenuBarAdapter(manager: runManager))
         let canvasStore = CanvasStore(persistence: persistence)
+        let toolStreamStore = ToolStreamStore()
         let voiceService = VoiceService(persistence: persistence, connections: connectionStore)
         voiceService.attachSession(agentSession)
 
@@ -112,6 +113,9 @@ final class AppEnvironmentTests {
             quitCoordinator: quitCoordinator,
             generalSettingsStore: generalSettingsStore,
             appAppearanceStore: appAppearanceStore,
+            webSearchSettingsStore: WebSearchSettingsStore(persistence: persistence),
+            mediaSettingsStore: MediaSettingsStore(persistence: persistence),
+            sessionShareStore: SessionShareStore(persistence: persistence),
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,
@@ -156,7 +160,17 @@ final class AppEnvironmentTests {
             skillCommandStore: SkillCommandStore(persistence: persistence),
             menuBarPresence: menuBarPresence,
             canvasStore: canvasStore,
-            voiceService: voiceService
+            toolStreamStore: toolStreamStore,
+            toolHooksStore: ToolHooksStore(persistence: persistence),
+            customCommandStore: CustomCommandStore(paths: CustomCommandPaths(
+                userRoot: root.appendingPathComponent("Commands", isDirectory: true), projectRoot: nil)),
+            customCommandWatcher: CustomCommandWatcher(
+                directory: root.appendingPathComponent("Commands", isDirectory: true)) { },
+            voiceService: voiceService,
+            remoteChannelSettingsStore: RemoteChannelSettingsStore(persistence: persistence, secrets: secrets),
+            remoteChannelService: RemoteChannelService(
+                settingsStore: RemoteChannelSettingsStore(persistence: persistence, secrets: secrets),
+                scheduleStore: scheduleStore, dispatcher: triggerDispatcher, runs: runManager)
         )
 
         #expect(environment.registry === registry)

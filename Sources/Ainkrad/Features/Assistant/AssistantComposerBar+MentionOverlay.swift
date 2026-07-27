@@ -77,6 +77,9 @@ extension AssistantComposerBar {
         } else {
             draft = "@\(match.path) "
         }
+        if !mentions.contains(where: { $0.path == match.path }) {
+            mentions.append(ComposerMention(path: match.path))
+        }
         isMentionVisible = false
     }
 }

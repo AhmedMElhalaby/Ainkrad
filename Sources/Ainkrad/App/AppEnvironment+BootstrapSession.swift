@@ -9,6 +9,19 @@ import AinkradHostRuntime
 /// `@`-mention file index, the main `agentSession`, and `voiceService`. Pure
 /// value-construction, mirroring `bootstrap()`'s original order exactly.
 extension AppEnvironment {
+    /// `web_fetch`/`web_search` are read-class (auto-approve) network-egress
+    /// tools. They stay ONLY in the foreground interactive registry; every
+    /// UNATTENDED registry (spawned subagents + background/schedule/trigger
+    /// runs) excludes them, so no autonomous run performs un-gated network
+    /// access. (The foreground main session keeps them, gated by the read
+    /// approval policy with the user present.)
+    /// `image_generate` also makes paid network calls (image generation API),
+    /// so — like web_fetch/web_search — it must be stripped from unattended
+    /// registries so an unattended run can't incur paid image generation.
+    static func isUnattendedNetworkTool(_ tool: any AgentTool) -> Bool {
+        tool is WebFetchTool || tool is WebSearchTool || tool is ImageGenerateTool || tool is VideoGenerateTool
+    }
+
     static func bootstrapAgentSessionAndRuns(
         persistence: PersistenceStore,
         secrets: SecretStore,
@@ -32,7 +45,9 @@ extension AppEnvironment {
         agentTools: [any AgentTool],
         mcpServerRegistry: MCPServerRegistry,
         skillRegistry: SkillRegistry,
-        skillCommandStore: SkillCommandStore
+        skillCommandStore: SkillCommandStore,
+        toolStreamStore: ToolStreamStore,
+        terminalController: TerminalProcessController
     ) -> (
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
@@ -46,7 +61,12 @@ extension AppEnvironment {
         agentSession: AgentSession,
         voiceService: VoiceService,
         menuBarPresence: MenuBarPresence,
-        oauthStore: OAuthCredentialStore
+        oauthStore: OAuthCredentialStore,
+        toolHooksStore: ToolHooksStore,
+        customCommandStore: CustomCommandStore,
+        customCommandWatcher: CustomCommandWatcher,
+        remoteChannelSettingsStore: RemoteChannelSettingsStore,
+        remoteChannelService: RemoteChannelService
     ) {
         var agentTools = agentTools
 
@@ -92,7 +112,7 @@ extension AppEnvironment {
         // gate) with its router-resolved model PINNED (no router/candidatesProvider
         // passed to the child, so it never re-routes per tool-loop turn).
         let subagentRunner = AgentSessionSubagentRunner(
-            allTools: agentTools, agents: agentStore, router: modelRouter,
+            allTools: agentTools.filter { !AppEnvironment.isUnattendedNetworkTool($0) }, agents: agentStore, router: modelRouter,
             executionRouter: executionRouter,
             candidatesProvider: candidatesProvider,
             makeSession: AppEnvironment.makeSubagentSession(
@@ -137,7 +157,9 @@ extension AppEnvironment {
         // looking at — a cross-session split-brain. The foreground
         // `agentToolRegistry` above keeps `canvas_render`; only this background
         // copy drops it.
-        var backgroundAgentTools = agentTools.filter { !($0 is CanvasRenderTool) }
+        var backgroundAgentTools = agentTools.filter {
+            !($0 is CanvasRenderTool) && !AppEnvironment.isUnattendedNetworkTool($0)
+        }
         if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
             backgroundAgentTools[idx] = RunTerminalTool(
                 actionHub: agentActionHub, router: executionRouter, trustTier: .background)
@@ -217,24 +239,53 @@ extension AppEnvironment {
             }
         }
         scheduleRunner.start()
-        // `WebhookServer` is deliberately NOT constructed here: it needs a port +
-        // bearer token (from `SecretStore`, once the user enables it in a future
-        // settings surface) and must never `start()` at launch — constructing it
-        // eagerly with a placeholder token would be a live, unauthenticated-by-
-        // default local listener. Left for the settings surface that turns it on.
+
+        // Remote channel (multi-channel Task 5): the `WebhookServer` lifecycle is
+        // owned by `RemoteChannelService`, NOT constructed eagerly. `applyEnabledState()`
+        // is fail-closed — it starts a 127.0.0.1-only listener ONLY when the user
+        // previously enabled the channel AND a bearer token exists in `SecretStore`;
+        // otherwise it is a no-op (`stop()`), so a fresh install never opens a port.
+        // Both stores are retained on `AppEnvironment` so the settings surface binds
+        // to the SAME live instances this launch-time call reads from.
+        let remoteChannelSettingsStore = RemoteChannelSettingsStore(persistence: persistence, secrets: secrets)
+        let remoteChannelService = RemoteChannelService(
+            settingsStore: remoteChannelSettingsStore, scheduleStore: scheduleStore,
+            dispatcher: triggerDispatcher, runs: runManager)
+        remoteChannelService.applyEnabledState()
+        // Seed the menu-bar presence once at launch; the settings toggle re-applies
+        // state and the view reads `service.status` reactively for its own status line.
+        menuBarPresence.remoteChannelListening = RemoteChannelPresence.isListening(remoteChannelService.status)
 
         // `@`-mention file index (M7 Slice 5c Task 22a wiring; the overlay UI itself
         // is Task 22b). No first-class "project directory" concept exists yet — default
         // to the home directory until a folder-picker persists a real choice.
-        let assistantWorkingDirectory = persistence.load(AssistantWorkspaceSettings.self)
+        let chosenWorkspace = persistence.load(AssistantWorkspaceSettings.self)
             .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
-            ?? FileManager.default.homeDirectoryForCurrentUser
+        let assistantWorkingDirectory = chosenWorkspace ?? FileManager.default.homeDirectoryForCurrentUser
         let workspaceFileIndex = WorkspaceFileIndex(root: assistantWorkingDirectory)
-        // `WorkspaceFileIndex` is `@MainActor`; deferring the initial `refresh()` into a
-        // `Task` (still main-actor-isolated, since it's spawned from this MainActor-only
-        // static func) keeps bootstrap's synchronous path from stalling on a large
-        // directory walk, without ever touching the index off its required actor.
-        Task { workspaceFileIndex.refresh() }
+        // Index ONLY a directory the user actually chose.
+        //
+        // The home directory is the fallback for the other consumers below
+        // (repo instructions, project commands), where it costs a couple of
+        // stats. For the file index it meant enumerating up to 20,000 files
+        // under `~` — Downloads, Library, every checkout on the machine — at
+        // every launch, to populate an `@`-mention list for a workspace the
+        // user never picked. `refresh()` is now genuinely off-actor too (see
+        // its doc comment: the old unqualified `Task` inherited main-actor
+        // isolation, so the walk never left the main thread).
+        if chosenWorkspace != nil {
+            Task { await workspaceFileIndex.refresh() }
+        }
+
+        // Repo-instruction files (CLAUDE.md / AGENTS.md walked up from the active
+        // workspace root) as a DISTINCT context source from the host's own
+        // USER/MEMORY/AGENTS memory. mtime-cached inside the loader; the hub polls
+        // it each turn, gated by `AgentContextSettingsStore` via its `kind`. Same
+        // register-a-closure pattern as `MemoryContextSource`.
+        let repoInstructionsLoader = RepoInstructionsLoader(root: assistantWorkingDirectory)
+        _ = agentContextService.hub.register(appID: "host.repo-instructions") {
+            repoInstructionsLoader.snapshot()
+        }
 
         // Skill `/name` commands (Task 11): registered after the builtins, through
         // the same seam skill commands are documented to use — `register(_:)`
@@ -246,6 +297,35 @@ extension AppEnvironment {
             commandRegistry.register(command)
         }
 
+        // File-based custom slash commands (project + user). Registered AFTER skill
+        // commands so a colliding name can't shadow a skill binding; `CustomCommandStore`
+        // already refuses builtin names, and re-registration drops stale names first.
+        let customCommandStore = CustomCommandStore(paths: CustomCommandPaths(
+            userRoot: CustomCommandPaths.defaultUserRoot(),
+            projectRoot: CustomCommandPaths.projectRoot(forWorkspace: assistantWorkingDirectory)))
+        var liveCustomNames = resyncCustomCommands(
+            store: customCommandStore, registry: commandRegistry, previous: [])
+        let customCommandWatcher = CustomCommandWatcher(
+            directory: CustomCommandPaths.defaultUserRoot()) {
+                customCommandStore.reload()
+                liveCustomNames = resyncCustomCommands(
+                    store: customCommandStore, registry: commandRegistry, previous: liveCustomNames)
+            }
+        customCommandWatcher.start()
+
+        // Tool Hooks (M8 assistant-tool-hooks) — the store is a live, persisted
+        // CRUD surface (Task 6's settings view binds directly to this same
+        // instance, returned below) and the runner consults it on every
+        // PreToolUse/PostToolUse call. ONLY the main interactive session below
+        // gets a runner: background (`BackgroundRunRunner` above) and subagent
+        // (`makeSubagentSession` below) sessions stay hookless this milestone —
+        // an unattended run auto-executing a user-authored shell hook is
+        // deferred, not silently granted.
+        let toolHooksStore = ToolHooksStore(persistence: persistence)
+        let toolHookRunner = ToolHookRunner(
+            store: toolHooksStore, router: executionRouter,
+            workingDir: { assistantWorkingDirectory.path })
+
         let agentSession = AgentSession(
             providerFor: providerFor,
             connections: connectionStore,
@@ -256,6 +336,8 @@ extension AppEnvironment {
             memory: memoryService,
             agents: agentStore,
             editJournal: editJournal,
+            toolStream: toolStreamStore,
+            terminalController: terminalController,
             router: modelRouter,
             usage: usageTracker,
             runtime: runtimeOptionsStore,
@@ -263,8 +345,23 @@ extension AppEnvironment {
             authProfiles: authProfileStore,
             candidatesProvider: candidatesProvider,
             isLocalConnection: { [localModelProbe] connection in localModelProbe.isLocal(connection) },
-            mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false }
+            mcpTrust: { [weak mcpServerRegistry] name in mcpServerRegistry?.isToolTrusted(name) ?? false },
+            hooks: toolHookRunner
         )
+
+        // Durable checkpoints (Checkpoint & Rewind, Task 8): the coordinator is built
+        // AFTER `agentSession` exists because its `transcriptIndex` closure needs to
+        // read back into the session (chicken/egg with passing it into the initializer
+        // above). `persistence` is the shared app store, so checkpoints saved here
+        // survive relaunch — `CheckpointCoordinator.init` loads them back from disk.
+        let checkpointCoordinator = CheckpointCoordinator(
+            sessionID: "main",
+            snapshots: WorkspaceSnapshotStore(root: WorkspaceSnapshotStore.defaultRoot()),
+            git: GitWorkingTreeSnapshotter(router: executionRouter),
+            persistence: persistence,
+            transcriptIndex: { [weak agentSession] in agentSession?.messages.count ?? 0 },
+            defaultWorkingDir: assistantWorkingDirectory.path)
+        agentSession.setCheckpointer(checkpointCoordinator)
 
         // Restore the last-active persisted session into the live session so a
         // returning user sees their previous conversation — and so the first edit
@@ -285,7 +382,8 @@ extension AppEnvironment {
         return (
             subagentCoordinator, runManager, assistantSessionStore, scheduleStore, scheduleRunner, triggerDispatcher,
             fileChangeWatcher, assistantWorkingDirectory, workspaceFileIndex, agentSession, voiceService, menuBarPresence,
-            oauthStore
+            oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
+            remoteChannelSettingsStore, remoteChannelService
         )
     }
 

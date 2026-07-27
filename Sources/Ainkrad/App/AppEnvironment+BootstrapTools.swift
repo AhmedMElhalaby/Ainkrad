@@ -22,14 +22,22 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         memoryService: MemoryService?,
         mcpConfigStore: MCPServerConfigStore,
-        skillRegistry: SkillRegistry
+        skillRegistry: SkillRegistry,
+        // Read per tool call so the foreground `run_terminal` can demote itself
+        // off `HostBackend` when the session is unattended (Full-auto) — see
+        // `RunTerminalTool.effectiveTier`. A closure rather than the store
+        // itself: this block must not gain a dependency on the permission
+        // subsystem's shape, only on the one value it needs.
+        permissionMode: @escaping @MainActor () -> AgentPermissionMode
     ) -> (
         sandboxProfileStore: SandboxProfileStore,
         cloudCredentialsStore: CloudCredentialsStore,
         executionRouter: ExecutionRouter,
         agentTools: [any AgentTool],
         mcpServerRegistry: MCPServerRegistry,
-        canvasStore: CanvasStore
+        canvasStore: CanvasStore,
+        toolStreamStore: ToolStreamStore,
+        terminalController: TerminalProcessController
     ) {
         // M7 Slice 6: every backend is registered by its own kind — host
         // (trusted-main only, unchanged), seatbelt (macOS sandbox-exec),
@@ -50,6 +58,12 @@ extension AppEnvironment {
         // before this backend is even attempted, and its `remoteExec` driver
         // is a fail-closed research stub (see `ModalCloudBackend`). Cloud
         // never becomes a working "just works" path from this wiring alone.
+        // Terminal streaming (Task 7): one shared store + controller for the
+        // MAIN foreground `RunTerminalTool`/`AgentSession` — live output rides
+        // into the timeline via `toolStreamStore`; `terminalController` backs
+        // `AgentSession.interrupt()`'s force-kill of the running child.
+        let toolStreamStore = ToolStreamStore()
+        let terminalController = TerminalProcessController()
         let sandboxProfileStore = SandboxProfileStore(persistence: persistence)
         let cloudCredentialsStore = CloudCredentialsStore(secrets: secrets)
         let executionRouter = ExecutionRouter(
@@ -66,9 +80,22 @@ extension AppEnvironment {
             ReadFileTool(),
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
             WorkspaceControlTool(workspaces: workspaceManager),
-            RunTerminalTool(actionHub: agentActionHub, router: executionRouter),
+            { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
+              t.toolStream = toolStreamStore; t.processController = terminalController
+              t.permissionMode = permissionMode; return t }(),
             GitOpTool(actionHub: agentActionHub),
+            TodoWriteTool(),
+            PresentPlanTool(),
         ]
+        // M8 web tools (read-class, gated like reads). web_fetch uses a
+        // redirect-validating client so a 302 to a private host is never
+        // dispatched; web_search hits a fixed Brave endpoint (key in SecretStore).
+        agentTools.append(WebFetchTool(http: RedirectValidatingHTTPClient()))
+        agentTools.append(WebSearchTool(backend: RoutingWebSearchBackend(
+            persistence: persistence,
+            brave: BraveSearchBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+            duckduckgo: DuckDuckGoSearchBackend(http: URLSessionDataHTTPClient()),
+            searxngHTTP: URLSessionDataHTTPClient())))
         if let memoryService {
             _ = agentContextHub.register(appID: "host.memory") {
                 MemoryContextSource.snapshot(from: memoryService)
@@ -103,7 +130,50 @@ extension AppEnvironment {
         let canvasStore = CanvasStore(persistence: persistence)
         agentTools.append(CanvasRenderTool(store: canvasStore))
 
-        return (sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore)
+        // Media tools (read-class, render to the Live Canvas). Key in SecretStore.
+        agentTools.append(ImageGenerateTool(
+            backend: RoutingMediaBackend(
+                persistence: persistence,
+                secrets: secrets,
+                openai: OpenAIImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                pollinations: PollinationsImageBackend(http: URLSessionDataHTTPClient()),
+                stability: StabilityImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                replicate: ReplicateImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                google: GoogleImagenBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                huggingface: HuggingFaceImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                auxHTTP: URLSessionDataHTTPClient()),
+            store: canvasStore))
+        agentTools.append(VideoGenerateTool(
+            backend: RoutingVideoBackend(
+                persistence: persistence,
+                secrets: secrets,
+                replicate: ReplicateVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                luma: LumaVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                fal: FalVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
+                auxHTTP: URLSessionDataHTTPClient()),
+            store: canvasStore))
+        agentTools.append(SpeakTool(
+            synth: RoutingSpeechSynthesizer(
+                persistence: persistence, secrets: secrets, onDevice: SystemSpeechSynthesizer(),
+                http: URLSessionDataHTTPClient(), player: SystemAudioPlayer()),
+            producer: RoutingSpeechAudioProducer(
+                persistence: persistence, secrets: secrets, http: URLSessionDataHTTPClient(),
+                onDevice: OnDeviceSpeechAudioProducer()),
+            store: canvasStore))
+
+        // M8 code-search tools (read-class). Share the assistant workspace root,
+        // resolved live so a folder change is reflected without re-registering —
+        // same derivation as the @-mention index in bootstrapSession.
+        let searchRootProvider: @MainActor () -> URL = { [persistence] in
+            persistence.load(AssistantWorkspaceSettings.self)
+                .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
+                ?? FileManager.default.homeDirectoryForCurrentUser
+        }
+        agentTools.append(GrepTool(rootProvider: searchRootProvider))
+        agentTools.append(GlobTool(rootProvider: searchRootProvider))
+
+        return (sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
+                toolStreamStore, terminalController)
     }
 
     /// Fourth block of `bootstrap()`: Model Router / Usage / Failover

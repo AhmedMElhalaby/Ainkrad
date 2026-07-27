@@ -18,16 +18,22 @@ struct AssistantRootView: View {
     var autoFocusComposer: Bool = false
     @State private var draft = ""
     @State private var isSidebarVisible = false
-    @State private var isThinkingExpanded = true
     @State private var modelPicker = AssistantModelPickerModel()
-    @State private var hoveredTurnIndex: Int?
     // Not `private` — read from `AssistantRootView+Export.swift`.
     @Environment(\.ainkradToastCenter) var toastCenter
     @State private var isUsageDashboardPresented = false
     @State var isExportModalPresented = false
+    @State var isShareModalPresented = false
     @State private var isRunsPanelPresented = false
     @State private var isSchedulesPresented = false
+    /// A generated image presented full-screen in the lightbox overlay.
+    @State private var lightboxImage: NSImage?
+    /// A generated video presented full-screen in the lightbox overlay.
+    @State private var lightboxVideoURL: URL?
     @State var redactionsText = ""
+    /// Memoizes the per-turn timeline so a streamed chunk doesn't rebuild the
+    /// whole transcript — see `TranscriptTimelineCache`.
+    @State private var timelineCache = TranscriptTimelineCache()
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -57,6 +63,17 @@ struct AssistantRootView: View {
         .onChange(of: session.messages) { _, newValue in
             environment.assistantSessionStore.syncActive(messages: newValue)
         }
+        .overlay {
+            if let lightboxImage {
+                ImageLightboxView(image: lightboxImage, tokens: tokens) { self.lightboxImage = nil }
+                    .transition(reduceMotion ? .identity : .opacity)
+            } else if let lightboxVideoURL {
+                VideoLightboxView(url: lightboxVideoURL, tokens: tokens) { self.lightboxVideoURL = nil }
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: lightboxImage != nil)
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: lightboxVideoURL != nil)
     }
 
     // MARK: - Chat column
@@ -80,7 +97,20 @@ struct AssistantRootView: View {
                     onApprove: { session.approve() }
                 )
                 .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+            } else if session.state == .idle,
+                      let plan = PlanTurnHeuristics.pendingPlan(in: session.messages) {
+                PlanApprovalBar(
+                    plan: plan,
+                    tokens: tokens,
+                    onKeepPlanning: { PlanFlow.keepPlanning(plan: plan, session: session) },
+                    onApproveBuild: {
+                        PlanFlow.approveBuild(plan: plan, session: session, store: environment.agentStore)
+                    }
+                )
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             }
+
+            SkillSuggestionChip(session: session, tokens: tokens)
 
             AssistantComposerBar(
                 session: session,
@@ -91,7 +121,8 @@ struct AssistantRootView: View {
                 isUsageDashboardPresented: $isUsageDashboardPresented,
                 isRunsPanelPresented: $isRunsPanelPresented,
                 isSchedulesPresented: $isSchedulesPresented,
-                isExportModalPresented: $isExportModalPresented
+                isExportModalPresented: $isExportModalPresented,
+                isShareModalPresented: $isShareModalPresented
             )
         }
         .animation(reduceMotion ? nil : AinkradMotion.present, value: session.state)
@@ -107,6 +138,9 @@ struct AssistantRootView: View {
         }
         .ainkradModal(isPresented: $isExportModalPresented) {
             exportModalContent
+        }
+        .ainkradModal(isPresented: $isShareModalPresented) {
+            shareModalContent
         }
         // Runs/Schedules are variable-length lists — bound them to a compact
         // centered card that scrolls internally (like Settings/Launcher),
@@ -182,29 +216,58 @@ struct AssistantRootView: View {
                     emptyState()
                         .padding(.top, 60)
                 } else {
-                    VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
-                        ForEach(Array(session.messages.enumerated()), id: \.offset) { index, message in
-                            bubble(for: message, at: index, in: session.messages, tokens: tokens)
-                                .id(index)
-                                .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
+                    // Lazy: a long chat materialized every row's view on every
+                    // body pass, including all the markdown/diff/tool cards
+                    // scrolled far out of sight.
+                    LazyVStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+                        ForEach(timelineCache.items(for: session.messages)) { item in
+                            switch item {
+                            case .userBubble(let index, let message):
+                                bubble(for: message, tokens: tokens)
+                                    .id(index)
+                                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
+                            case .agentTurn(let id, let steps):
+                                AgentTurnTimelineView(steps: steps, tokens: tokens,
+                                                      typography: assistantTypography, reduceMotion: reduceMotion,
+                                                      toolStream: environment.toolStreamStore,
+                                                      canvasStore: environment.canvasStore,
+                                                      onOpenImage: { lightboxImage = $0 },
+                                                      onOpenVideo: { lightboxVideoURL = $0 })
+                                    .id(id)
+                                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
+                            }
                         }
 
                         if session.state == .thinking || session.state == .streaming
                             || isCallingToolWithoutCard(session) {
-                            streamingBubble(session: session, tokens: tokens)
+                            LiveStepView(streamingText: session.streamingText,
+                                         streamingThinking: session.streamingThinking,
+                                         isStreaming: session.state == .streaming,
+                                         tokens: tokens, typography: assistantTypography,
+                                         reduceMotion: reduceMotion)
                                 .id("streaming")
                                 .transition(reduceMotion ? .identity : .opacity)
                         }
 
                         if case .awaitingApproval(let pending) = session.state {
-                            ToolCallCardView(
-                                toolName: pending.call.name,
-                                title: pending.preview.title,
-                                summary: pending.preview.summary,
-                                diff: pending.preview.diff,
-                                tokens: tokens,
-                                pendingApproval: true
-                            )
+                            // Render the pending tool as an in-rail node (running
+                            // marker + spine), so an approval reads as the current
+                            // step of the timeline. The Approve/Deny/Always buttons
+                            // stay in the docked AssistantApprovalBar below.
+                            HStack(alignment: .top, spacing: 10) {
+                                TimelineRailGutter(status: .running, tokens: tokens, reduceMotion: reduceMotion)
+                                ToolCallCardView(
+                                    toolName: pending.call.name,
+                                    title: pending.preview.title,
+                                    summary: pending.preview.summary,
+                                    diff: pending.preview.diff,
+                                    tokens: tokens,
+                                    pendingApproval: true,
+                                    fileDiff: pending.preview.fileDiff,
+                                    rejectedHunkIDs: Binding(get: { session.rejectedHunkIDs }, set: { session.setRejectedHunkIDs($0) })
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             .id("approval")
                             .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
                         }
@@ -234,43 +297,21 @@ struct AssistantRootView: View {
         }
     }
 
+    /// Renders a user prompt bubble: its text (right-aligned chamfer) and any
+    /// attached image chips. Agent turns render through `AgentTurnTimelineView`,
+    /// so this is only ever called for `.userBubble` items — the old assistant
+    /// tool-card / hover-copy paths moved to the timeline.
     @ViewBuilder
-    private func bubble(for message: AgentMessage, at index: Int, in messages: [AgentMessage], tokens: DesignTokens) -> some View {
+    private func bubble(for message: AgentMessage, tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty {
                 textBubble(for: message, tokens: tokens)
             }
-
             ForEach(Array(message.content.enumerated()), id: \.offset) { _, block in
-                if case .toolUse(let id, let name, _) = block {
-                    let result = ToolResultLookup.summary(forToolUseID: id, after: index, in: messages)
-                    ToolCallCardView(
-                        toolName: name,
-                        title: ToolPresentation.humanize(name),
-                        summary: result.text,
-                        diff: nil,
-                        tokens: tokens,
-                        result: result
-                    )
-                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)))
-                }
                 if case .image(let mediaType, let base64) = block {
                     imageChip(mediaType: mediaType, base64: base64, tokens: tokens)
                 }
             }
-        }
-        .overlay(alignment: .topTrailing) {
-            if message.role == .assistant && !message.text.isEmpty {
-                AssistantTurnCopyButton(text: message.text, isVisible: hoveredTurnIndex == index)
-                    .padding(.trailing, 2)
-            }
-        }
-        .onHover { isHovering in
-            // Only assistant turns with text show the hover copy button, so
-            // only they drive the hovered-turn state — no dead writes for user
-            // bubbles (which have no overlay).
-            guard message.role == .assistant, !message.text.isEmpty else { return }
-            hoveredTurnIndex = isHovering ? index : (hoveredTurnIndex == index ? nil : hoveredTurnIndex)
         }
     }
 
@@ -315,58 +356,12 @@ struct AssistantRootView: View {
         }
     }
 
-    @ViewBuilder
-    private func streamingBubble(session: AgentSession, tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !session.streamingThinking.isEmpty {
-                thinkingDisclosure(session: session, tokens: tokens)
-            }
-
-            if session.state == .streaming || !session.streamingText.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    AssistantMarkdownText(text: session.streamingText, tokens: tokens, typography: assistantTypography)
-                    if session.state == .streaming {
-                        StreamingCursor(tokens: tokens)
-                    }
-                }
-            } else if session.streamingThinking.isEmpty {
-                WorkingIndicator(tokens: tokens)
-            }
-        }
-        .padding(.vertical, 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func thinkingDisclosure(session: AgentSession, tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(reduceMotion ? nil : AinkradMotion.present) { isThinkingExpanded.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: isThinkingExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9))
-                    Text("Thinking")
-                        .font(AinkradFont.display(11, weight: .medium))
-                        .kerning(1)
-                }
-                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
-            }
-            .buttonStyle(.plain)
-
-            if isThinkingExpanded {
-                Text(session.streamingThinking)
-                    .font(AinkradFont.mono(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
-            }
-        }
-    }
-
     private func errorBubble(_ message: String, session: AgentSession, tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(tokens.accentTertiary)
+                    .foregroundStyle(tokens.danger)
                 Text("Something went wrong")
                     .font(AinkradFont.display(12, weight: .semibold))
                     .foregroundStyle(tokens.foreground.opacity(0.85))
@@ -385,9 +380,9 @@ struct AssistantRootView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
         .overlay(alignment: .leading) {
-            Rectangle().fill(tokens.accentTertiary).frame(width: 2)
+            Rectangle().fill(tokens.danger).frame(width: 2)
         }
-        .shadow(color: tokens.accentTertiary.opacity(0.14), radius: 7)
+        .shadow(color: tokens.danger.opacity(0.14), radius: 7)
     }
 
 }

@@ -16,6 +16,11 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     /// `NSStatusItem`/popover for the app's lifetime — installed here on
     /// launch, torn down on quit (M7 Slice 7).
     var menuBarController: MenuBarController?
+    /// Wired alongside the above. Chat-history writes are coalesced (see
+    /// `AssistantSessionStore.syncActive`), so the last few hundred
+    /// milliseconds of a transcript may still be pending when the user quits —
+    /// this is where that gets forced to disk.
+    var assistantSessionStore: AssistantSessionStore?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         quitCoordinator?.requestTerminate() ?? .terminateNow
@@ -31,6 +36,7 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        assistantSessionStore?.flush()
         menuBarController?.teardown()
     }
 }
