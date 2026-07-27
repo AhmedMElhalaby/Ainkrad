@@ -59,6 +59,9 @@ struct AssistantSettingsView: View {
         case .permissions:    permissionsSection(tokens: tokens)
         case .sandbox:        sandboxSection(tokens: tokens)
         case .toolHooks:      toolHooksSection(tokens: tokens)
+        case .remoteChannel:  RemoteChannelSettingsView(
+                                  settingsStore: environment.remoteChannelSettingsStore,
+                                  service: environment.remoteChannelService)
         case .contextPrivacy: contextPrivacySection(tokens: tokens)
         case .web:            webSection(tokens: tokens)
         case .media:          mediaSection(tokens: tokens)

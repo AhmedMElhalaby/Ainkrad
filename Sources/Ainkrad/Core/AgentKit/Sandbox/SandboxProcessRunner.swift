@@ -44,7 +44,13 @@ struct SandboxProcessRunner: Sendable {
 
             handle.readabilityHandler = { fh in
                 let chunk = fh.availableData
-                guard !chunk.isEmpty else { return } // EOF
+                guard !chunk.isEmpty else {
+                    // EOF: the write end is fully closed, so everything the
+                    // process ever wrote has now been accumulated. This is the
+                    // only point at which the output is known to be complete.
+                    gate.noteEOF()
+                    return
+                }
                 if !accumulator.append(chunk) {
                     process.terminate()
                 }
@@ -55,8 +61,20 @@ struct SandboxProcessRunner: Sendable {
 
             process.terminationHandler = { proc in
                 controller?.setActive(nil)
-                handle.readabilityHandler = nil
-                gate.resume(exitStatus: proc.terminationStatus)
+                // Do NOT resume here on exit alone. `readabilityHandler` runs on
+                // a different queue, so a process that writes and exits
+                // immediately can trip `terminationHandler` while bytes are
+                // still buffered — snapshotting now loses that tail. Record the
+                // status and let EOF release the continuation.
+                gate.noteExit(exitStatus: proc.terminationStatus)
+                // Safety valve: EOF needs *every* copy of the write end closed,
+                // and a spawned grandchild (`sh -c 'sleep 100 &'`) inherits one.
+                // Never block the tool call on that — resume shortly after exit
+                // with whatever was captured. No blocking read is used anywhere
+                // here, so the pipe cannot deadlock the caller.
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) {
+                    gate.resume(exitStatus: proc.terminationStatus)
+                }
             }
 
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
@@ -88,6 +106,11 @@ struct SandboxProcessRunner: Sendable {
                 }
             }
         }
+
+        // The continuation is released; nothing more should accumulate. Cleared
+        // here rather than in `terminationHandler`, which must stay armed until
+        // EOF so the tail of a fast-exiting process is not dropped.
+        handle.readabilityHandler = nil
 
         let full = String(decoding: accumulator.snapshot(), as: UTF8.self)
         let output = boundedTail(full)
@@ -139,6 +162,8 @@ private final class ContinuationGate: @unchecked Sendable {
     private let lock = NSLock()
     private var didResume = false
     private var timedOut = false
+    private var sawEOF = false
+    private var pendingExit: Int32?
     private let continuation: CheckedContinuation<(Bool, Bool, Int32), Never>
 
     init(continuation: CheckedContinuation<(Bool, Bool, Int32), Never>) {
@@ -153,6 +178,27 @@ private final class ContinuationGate: @unchecked Sendable {
         lock.lock()
         timedOut = true
         lock.unlock()
+    }
+
+    /// Records that the pipe hit EOF — all output is captured. Releases the
+    /// continuation if the process has already exited.
+    func noteEOF() {
+        lock.lock()
+        sawEOF = true
+        let status = pendingExit
+        lock.unlock()
+        if let status { resume(exitStatus: status) }
+    }
+
+    /// Records the exit status without resuming. The continuation is released
+    /// by whichever comes first: `noteEOF` (clean, output complete) or the
+    /// caller's post-exit grace timer (a grandchild is holding the pipe open).
+    func noteExit(exitStatus: Int32) {
+        lock.lock()
+        pendingExit = exitStatus
+        let complete = sawEOF
+        lock.unlock()
+        if complete { resume(exitStatus: exitStatus) }
     }
 
     func resume(exitStatus: Int32) {
