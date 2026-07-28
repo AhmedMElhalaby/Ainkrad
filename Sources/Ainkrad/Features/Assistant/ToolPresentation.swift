@@ -34,7 +34,6 @@ struct ToolPresentation: Equatable {
         switch name {
         case "run_terminal":      return ("terminal", .secondary)
         case "run_tool_script":   return ("curlybraces", .secondary)
-        case "git_op":            return ("arrow.triangle.branch", .secondary)
         case "workspace_control": return ("macwindow", .secondary)
         case "edit_file":         return ("pencil", .primary)
         case "read_file":         return ("doc.text", .secondary)

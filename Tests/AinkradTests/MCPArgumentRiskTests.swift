@@ -33,7 +33,7 @@ struct MCPArgumentRiskTests {
         ])))
     }
 
-    // `GitOpTool` only ever inspects `.string` values for option-looking
+    // The rule only ever inspects `.string` values for option-looking
     // forms — a `.number` can never match `hasPrefix`/`ext::`. So this
     // doesn't prove some special negative-number carve-out; it proves the
     // walk doesn't misfire on non-string JSON at all.

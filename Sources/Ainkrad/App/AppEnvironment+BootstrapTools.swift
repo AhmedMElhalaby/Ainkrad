@@ -89,8 +89,10 @@ extension AppEnvironment {
             { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
               t.toolStream = toolStreamStore; t.processController = terminalController
               t.permissionMode = permissionMode; return t }(),
-            GitOpTool(actionHub: agentActionHub),
-            GitPrTool(actionHub: agentActionHub),
+            // Git and Pull-Request operations are no longer host tools: Git Mage
+            // publishes them as `mcp/gitmage/*` over its in-process MCP server
+            // (see `AppMCPDiscovery`), so they arrive through `dynamicTools`
+            // below rather than being hard-coded here.
             TodoWriteTool(),
             PresentPlanTool(),
         ]

@@ -42,7 +42,7 @@ struct FakeReadFileTool: AgentTool {
 
 /// A fake write-classified tool that ALWAYS reports `isIrreversible`, standing
 /// in for a real always-on-guard tool (`RunTerminalTool`/`WorkspaceControlTool`/
-/// `GitOpTool`'s force paths) in tests that need to prove the unattended gate
+/// the old git tool's force paths) in tests that need to prove the unattended gate
 /// denies the irreversible guard's `.requireApproval` even in `.fullAuto` mode
 /// (Task 8) — never auto-approves it.
 @MainActor

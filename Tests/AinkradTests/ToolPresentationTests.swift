@@ -11,7 +11,7 @@ struct ToolPresentationTests {
     }
 
     @Test func gitTool() {
-        #expect(ToolPresentation.for(toolName: "git_op").icon == "arrow.triangle.branch")
+        #expect(ToolPresentation.for(toolName: "run_terminal").icon == "terminal")
     }
 
     @Test func workspaceTool() {

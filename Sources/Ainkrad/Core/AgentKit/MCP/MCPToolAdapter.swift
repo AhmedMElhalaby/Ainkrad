@@ -23,10 +23,10 @@ struct MCPToolAdapter: AgentTool {
 
     /// Honours the server's own `annotations.destructiveHint` OR'd with a
     /// per-call argument-risk check. `destructiveHint` alone is a static
-    /// per-tool boolean and can't express per-call irreversibility (a `git_op`
+    /// per-tool boolean and can't express per-call irreversibility (a git
     /// style tool with a benign-looking `operation` but an
     /// `--upload-pack=<cmd>` argument). `MCPArgumentRisk` generalizes
-    /// `GitOpTool.optionLookingValue` off git so that hole is closed for every
+    /// the host's old git-only check off git so that hole is closed for every
     /// MCP tool, not just git's.
     ///
     /// The OR is one-directional by design: hints may only ESCALATE, never

@@ -2,7 +2,8 @@
 import Foundation
 import AinkradHostRuntime
 
-/// Generalizes `GitOpTool.optionLookingValue` off git so the same argument-
+/// Generalizes the host's old git-only `optionLookingValue` check off git so
+/// the same argument-
 /// injection defense applies to every MCP tool, including third-party
 /// servers. MCP's `destructiveHint` is a static per-tool boolean and cannot
 /// express per-call irreversibility, so this rule walks the actual call
@@ -12,7 +13,7 @@ import AinkradHostRuntime
 /// what the server claims about itself.
 enum MCPArgumentRisk {
     /// True when any value reachable from `input` looks like a command-line
-    /// option rather than plain data. Unlike `GitOpTool`, there is no
+    /// option rather than plain data. Unlike the old git-only check, there is no
     /// `repoPath`/`args` shape to special-case here — a generic MCP payload
     /// is walked in full, top level included.
     static func hasOptionLookingValue(_ input: JSONValue) -> Bool {
