@@ -21,14 +21,26 @@ struct MCPToolDescriptor: Equatable {
     /// it deliberately does NOT downgrade `MCPToolAdapter.permission`, which
     /// would change gating semantics.
     let readOnly: Bool
+    /// Ainkrad-specific `annotations["ainkrad/requiresLiveApp"]` — the SDK's
+    /// `MCPToolSpec.requiresLiveApp`. Namespaced upstream because it is not a
+    /// standard MCP annotation. Drives `AppServerActivator`: only a tool that
+    /// claims it needs the window force-opens the app before dispatch.
+    ///
+    /// Defaults to `false` for the same reason `destructive` does, and with a
+    /// sharper consequence: a tool call must never pop a window open on a claim
+    /// the server never made. A remote (non-app) server never sends this key,
+    /// and nothing about a remote tool could need a local app window anyway.
+    let requiresLiveApp: Bool
 
     init(name: String, description: String, inputSchema: JSONValue,
-         destructive: Bool = false, readOnly: Bool = false) {
+         destructive: Bool = false, readOnly: Bool = false,
+         requiresLiveApp: Bool = false) {
         self.name = name
         self.description = description
         self.inputSchema = inputSchema
         self.destructive = destructive
         self.readOnly = readOnly
+        self.requiresLiveApp = requiresLiveApp
     }
 }
 
@@ -36,6 +48,15 @@ struct MCPResourceDescriptor: Equatable {
     let uri: String
     let name: String
     let mimeType: String
+    /// See `MCPToolDescriptor.requiresLiveApp` — same key, same default.
+    let requiresLiveApp: Bool
+
+    init(uri: String, name: String, mimeType: String, requiresLiveApp: Bool = false) {
+        self.uri = uri
+        self.name = name
+        self.mimeType = mimeType
+        self.requiresLiveApp = requiresLiveApp
+    }
 }
 
 /// Pure JSON-RPC 2.0 (over `JSONValue`) helpers for the MCP client. String ids
@@ -74,7 +95,8 @@ enum MCPRPC {
                 description: item["description"]?.stringValue ?? "",
                 inputSchema: item["inputSchema"] ?? .object(["type": .string("object")]),
                 destructive: annotations?["destructiveHint"].flatMap(boolValue) ?? false,
-                readOnly: annotations?["readOnlyHint"].flatMap(boolValue) ?? false)
+                readOnly: annotations?["readOnlyHint"].flatMap(boolValue) ?? false,
+                requiresLiveApp: annotations?["ainkrad/requiresLiveApp"].flatMap(boolValue) ?? false)
         }
     }
 
@@ -85,7 +107,9 @@ enum MCPRPC {
             return MCPResourceDescriptor(
                 uri: uri,
                 name: item["name"]?.stringValue ?? uri,
-                mimeType: item["mimeType"]?.stringValue ?? "text/plain")
+                mimeType: item["mimeType"]?.stringValue ?? "text/plain",
+                requiresLiveApp: item["annotations"]?["ainkrad/requiresLiveApp"]
+                    .flatMap(boolValue) ?? false)
         }
     }
 

@@ -47,28 +47,47 @@ final class AppServerActivator {
     /// How often to re-check `isAppOpen` while waiting for a launch.
     private let pollInterval: Duration = .milliseconds(50)
 
-    /// The only JSON-RPC methods that justify force-opening a closed app.
+    /// The only JSON-RPC methods that CAN justify force-opening a closed app.
     ///
     /// `MCPAppServer.handle` answers `initialize`, `tools/list` and
     /// `resources/list` purely from registration-time metadata (names,
     /// descriptions, schemas, uris) — no bridge, no live view model, so no
     /// shell is needed. Only `tools/call` and `resources/read` reach an
-    /// app-supplied handler/provider closure, which is exactly where a nil
-    /// context bridge on a closed app bites. Opening for everything would mean
+    /// app-supplied handler/provider closure, which is where a nil context
+    /// bridge on a closed app could bite. Opening for everything would mean
     /// `MCPServerRegistry.connectEnabled()`'s launch-time `initialize` popped
     /// open EVERY MCP-publishing app on every launch, unasked.
+    ///
+    /// Being in this set is NECESSARY but no longer SUFFICIENT: the method gate
+    /// alone opened the app for every tool call, so asking the assistant to
+    /// create a Lore note popped Lore's window open. A tool call is background
+    /// work; the per-tool `requiresLiveApp` closure below makes the real call.
     private static let methodsRequiringLiveApp: Set<String> = ["tools/call", "resources/read"]
+
+    /// Does this specific tool/resource need the app's window on screen?
+    /// Called with the app id, the JSON-RPC method, and the target's name
+    /// (`params.name` for `tools/call`, `params.uri` for `resources/read`).
+    ///
+    /// A closure for the same reason `isAppOpen`/`requestOpen`/`availability`
+    /// are: the answer comes from the MCP registry's discovered descriptors,
+    /// which do not exist yet when this type is built at bootstrap, and it keeps
+    /// the activator testable without a host.
+    private let requiresLiveApp: (String, String, String) -> Bool
 
     init(serverFor: @escaping (String) -> MCPAppServer?,
          isAppOpen: @escaping (String) -> Bool,
          requestOpen: @escaping (String) -> Void,
          availability: @escaping (String) -> PluginLaunchHub.Availability,
+         // Defaults to "nothing needs the window", which is the behaviour we
+         // want when no app declares anything: tool calls run in the background.
+         requiresLiveApp: @escaping (String, String, String) -> Bool = { _, _, _ in false },
          launchTimeout: Duration = .seconds(5),
          onLaunch: ((String) -> Void)? = nil) {
         self.serverFor = serverFor
         self.isAppOpen = isAppOpen
         self.requestOpen = requestOpen
         self.availability = availability
+        self.requiresLiveApp = requiresLiveApp
         self.launchTimeout = launchTimeout
         self.onLaunch = onLaunch
     }
@@ -80,10 +99,12 @@ final class AppServerActivator {
                      isAppOpen: @escaping (String) -> Bool,
                      requestOpen: @escaping (String) -> Void,
                      availability: @escaping (String) -> PluginLaunchHub.Availability,
+                     requiresLiveApp: @escaping (String, String, String) -> Bool = { _, _, _ in false },
                      launchTimeout: Duration = .seconds(5),
                      onLaunch: ((String) -> Void)? = nil) {
         self.init(serverFor: { servers[$0] }, isAppOpen: isAppOpen, requestOpen: requestOpen,
-                  availability: availability, launchTimeout: launchTimeout, onLaunch: onLaunch)
+                  availability: availability, requiresLiveApp: requiresLiveApp,
+                  launchTimeout: launchTimeout, onLaunch: onLaunch)
     }
 
     /// Resolves — and on first success caches — this app's server. Every read
@@ -117,7 +138,7 @@ final class AppServerActivator {
     func dispatch(appID: String, message: String) async throws -> String {
         guard let server = server(for: appID) else { throw AppDispatchFailure.notInstalled(appID) }
 
-        if Self.needsLiveApp(message), !isAppOpen(appID) {
+        if needsLiveApp(appID: appID, message: message), !isAppOpen(appID) {
             switch availability(appID) {
             case .unknown: throw AppDispatchFailure.notInstalled(appID)
             case .disabled: throw AppDispatchFailure.disabled(appID)
@@ -130,15 +151,25 @@ final class AppServerActivator {
         return await server.handle(message)
     }
 
-    /// Whether this message's JSON-RPC `method` is one of the few that need the
-    /// app's live state. A message that doesn't parse — or carries no method —
-    /// is deliberately NOT worth launching an app for: it is dispatched as-is so
-    /// the server answers with its own parse/invalid-request error.
-    private static func needsLiveApp(_ message: String) -> Bool {
+    /// Whether this message needs the app's live state — first by method, then
+    /// by the specific tool/resource it targets.
+    ///
+    /// A message that doesn't parse — or carries no method — is deliberately NOT
+    /// worth launching an app for: it is dispatched as-is so the server answers
+    /// with its own parse/invalid-request error. Likewise a `tools/call` with no
+    /// `name`: the server will reject it, and there is nothing to look a flag up
+    /// by, so it must not open anything.
+    private func needsLiveApp(appID: String, message: String) -> Bool {
         guard let data = message.data(using: .utf8),
               let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let method = root["method"] as? String else { return false }
-        return methodsRequiringLiveApp.contains(method)
+              let method = root["method"] as? String,
+              Self.methodsRequiringLiveApp.contains(method) else { return false }
+        let params = root["params"] as? [String: Any] ?? [:]
+        // `tools/call` names its target in `params.name`, `resources/read` in
+        // `params.uri` — the two shapes `MCPAppServer.handle` reads.
+        let target = (method == "tools/call" ? params["name"] : params["uri"]) as? String
+        guard let target else { return false }
+        return requiresLiveApp(appID, method, target)
     }
 
     /// Bounded wait — never an unbounded spin. Uses a deadline rather than a
