@@ -24,7 +24,7 @@ actor StubMCPTransport: MCPTransport {
     // an actor-isolated `var` — mirrors the `@unchecked Sendable` + `NSLock`
     // pattern `RunTerminalTool`'s `OutputAccumulator` uses for the same
     // cross-isolation reason.
-    private let box = ContinuationBox()
+    private let box = MCPSharedContinuationBox()
     /// Auto-responder invoked for each sent message; return messages to inject.
     var responder: (@Sendable (JSONValue) -> [JSONValue])?
 
@@ -54,7 +54,16 @@ actor StubMCPTransport: MCPTransport {
 /// continuation to a `send`/`inject` call made from the actor without
 /// crossing actor isolation for the reference itself. `Continuation.yield`
 /// and `.finish()` are safe to call concurrently by design.
-private final class ContinuationBox: @unchecked Sendable {
+/// Shared by `StubMCPTransport` and `InProcessTransport` — both need to hand a
+/// continuation from a `nonisolated incoming()` to an isolated `send`. Not
+/// `private`: internal so `InProcessTransport` (a different file) can use it.
+/// Named `MCPSharedContinuationBox` (not the bare `ContinuationBox` name) so
+/// the "Shared" distinguishes it from two unrelated, file-private boxes that
+/// happen to sit in the same module: the `private final class
+/// MCPContinuationBox` in `HTTPSSETransport.swift`, and the `private final
+/// class ContinuationBox` in `Voice/OnDeviceTranscriptionBackend.swift`. Both
+/// stay file-private and untouched — those are distinct types, not this one.
+final class MCPSharedContinuationBox: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: AsyncThrowingStream<JSONValue, Error>.Continuation?
     // Values/finish that arrive BEFORE a consumer attaches are buffered and

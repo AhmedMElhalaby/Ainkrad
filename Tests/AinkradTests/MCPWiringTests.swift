@@ -15,7 +15,7 @@ struct MCPWiringTests {
                                            secrets: InMemorySecretStore())
         configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
                                        command: "x", enabled: true, trusted: true))
-        let mcp = MCPServerRegistry(configStore: configs, clientFactory: { _, _ in
+        let mcp = MCPServerRegistry(configStore: configs, clientFactory: { _, _, _ in
             MCPClient(transport: StubMCPTransport { message in
                 guard let id = message["id"]?.stringValue,
                       let method = message["method"]?.stringValue else { return [] }
@@ -47,7 +47,7 @@ struct MCPWiringTests {
                                            secrets: InMemorySecretStore())
         configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
                                        command: "x", enabled: true, trusted: false))
-        let mcp = MCPServerRegistry(configStore: configs, clientFactory: { _, _ in
+        let mcp = MCPServerRegistry(configStore: configs, clientFactory: { _, _, _ in
             MCPClient(transport: StubMCPTransport { message in
                 guard let id = message["id"]?.stringValue,
                       let method = message["method"]?.stringValue else { return [] }

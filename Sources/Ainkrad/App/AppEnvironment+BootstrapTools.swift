@@ -22,6 +22,12 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         memoryService: MemoryService?,
         mcpConfigStore: MCPServerConfigStore,
+        // App-hosted MCP (M9): the app registry is EMPTY at this point — apps
+        // are installed later, by `registry.install(...)` in
+        // `finalizeBootstrap`. Both are held only inside closures that read
+        // them at call time, never eagerly.
+        appRegistry: BuiltInAppRegistry,
+        pluginLaunchHub: PluginLaunchHub,
         skillRegistry: SkillRegistry,
         // Read per tool call so the foreground `run_terminal` can demote itself
         // off `HostBackend` when the session is unattended (Full-auto) — see
@@ -110,7 +116,38 @@ extension AppEnvironment {
         // stub factory instead so the registry core never spawns a process or hits
         // the network. Connecting is kicked off after `environment` exists (below),
         // never awaited here, so a down/misconfigured server can't delay launch.
-        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+        //
+        // App-hosted MCP servers (M9): one server per installed app that opts
+        // into `AinkradAppMCP`. Every collaborator is a closure resolved at
+        // CALL time, because none of this data exists yet — the app registry is
+        // still empty here and `pluginLaunchHub`'s open/availability handlers
+        // are installed in `finalizeBootstrap`. The activator memoizes each
+        // server on first use, so a server is built once and holds its app's
+        // live state. The matching `AppMCPDiscovery.refresh` call lives in
+        // `finalizeBootstrap`, right after the apps are actually installed.
+        let appServerActivator = AppServerActivator(
+            serverFor: { [weak appRegistry] appID in
+                appRegistry?.allApps.first { $0.id == appID }?.mcpServerFactory?()
+            },
+            // Both open-state and launch go through the hub: "open" must count
+            // an `.overlay`-presented app, which has no `tileLayout` block —
+            // asking `workspaceManager` alone would report a live overlay app
+            // as closed and every dispatch to it would wait out the launch
+            // timeout. `AppEnvironment.isAppOpen` composes the two halves; the
+            // hub is how that late-created answer reaches this closure.
+            isAppOpen: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.isOpen(appID) ?? false
+            },
+            requestOpen: { [weak pluginLaunchHub] appID in pluginLaunchHub?.requestOpen(appID) },
+            availability: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.availability(of: appID) ?? .unknown
+            })
+        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
+                                                  activator: appServerActivator)
+        // Read-class complement to the tool-call path above: fetches one
+        // resource's full contents on demand (see `MCPReadResourceTool` doc
+        // comment for why this exists alongside `<workspace_context>`).
+        agentTools.append(MCPReadResourceTool(registry: mcpServerRegistry))
 
         // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
         // Both hold the mutable `skillRegistry` reference and read its live set at

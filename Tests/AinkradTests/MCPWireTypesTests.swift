@@ -79,5 +79,26 @@ struct MCPWireTypesTests {
         #expect(tools.first?.name == "search")
         #expect(tools.first?.description == "web search")
         #expect(tools.last?.description == "")
+        // Finding 6: no annotations means "not destructive" — the host must not
+        // invent a risk claim the server never made.
+        #expect(tools.last?.destructive == false)
+        #expect(tools.last?.readOnly == false)
+    }
+
+    @Test("tool annotations decode into the descriptor")
+    func decodesToolAnnotations() {
+        let result = JSONValue.object(["tools": .array([
+            .object(["name": .string("reset"),
+                     "annotations": .object(["destructiveHint": .bool(true),
+                                             "readOnlyHint": .bool(false)])]),
+            .object(["name": .string("status"),
+                     "annotations": .object(["destructiveHint": .bool(false),
+                                             "readOnlyHint": .bool(true)])]),
+        ])])
+        let tools = MCPRPC.decodeToolList(result)
+        #expect(tools.first?.destructive == true)
+        #expect(tools.first?.readOnly == false)
+        #expect(tools.last?.destructive == false)
+        #expect(tools.last?.readOnly == true)
     }
 }

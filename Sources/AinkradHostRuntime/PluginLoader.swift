@@ -97,8 +97,14 @@ public final class PluginLoader {
             let instance = identified.instanceID
             teardown = { teardownable.teardown(instance: instance) }
         }
+        // Same cast-based discovery, for MCP capability.
+        var mcpServerFactory: (@MainActor () -> MCPAppServer)?
+        if let mcpCapable = appType as? AinkradAppMCP.Type {
+            mcpServerFactory = { mcpCapable.makeMCPServer(host: host) }
+        }
         return .success(.plugin(appType, url: url, apiVersion: metadata.apiVersion, host: host,
-                                presentation: metadata.presentation, teardown: teardown))
+                                presentation: metadata.presentation, teardown: teardown,
+                                mcpServerFactory: mcpServerFactory))
     }
 }
 
@@ -109,7 +115,8 @@ extension RegisteredApp {
     @MainActor
     public static func plugin(_ app: any AinkradApp.Type, url: URL, apiVersion: Int, host: HostServices,
                               presentation: PluginPresentation,
-                              teardown: (@MainActor () -> Void)? = nil) -> RegisteredApp {
+                              teardown: (@MainActor () -> Void)? = nil,
+                              mcpServerFactory: (@MainActor () -> MCPAppServer)? = nil) -> RegisteredApp {
         var registered = RegisteredApp(
             id: app.id,
             displayName: app.displayName,
@@ -136,6 +143,7 @@ extension RegisteredApp {
             presentation: presentation
         )
         registered.teardown = teardown
+        registered.mcpServerFactory = mcpServerFactory
         return registered
     }
 }

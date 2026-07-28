@@ -25,7 +25,11 @@ final class MCPServerRegistry {
     /// read/mutate configs directly while still calling back into `connectEnabled()`
     /// on this same registry to reconnect after edits.
     let configStore: MCPServerConfigStore
-    private let clientFactory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient?
+    private let clientFactory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient?
+    /// Supplies the app-side MCP servers for `.inProcess` configs. Nil in tests
+    /// and contexts with no app registry — an `.inProcess` config then fails
+    /// closed as `.failed("invalid configuration")`, never silently succeeds.
+    private let activator: AppServerActivator?
     private var clients: [String: MCPClient] = [:]
     private var tools: [String: [MCPToolDescriptor]] = [:]
     private(set) var health: [String: MCPHealth] = [:]
@@ -34,9 +38,11 @@ final class MCPServerRegistry {
     ///   Injectable so tests pass a stub-backed client and never spawn a real process or
     ///   hit the network.
     init(configStore: MCPServerConfigStore,
-         clientFactory: @escaping @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient? =
+         activator: AppServerActivator? = nil,
+         clientFactory: @escaping @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? =
             MCPServerRegistry.defaultClientFactory) {
         self.configStore = configStore
+        self.activator = activator
         self.clientFactory = clientFactory
     }
 
@@ -45,7 +51,8 @@ final class MCPServerRegistry {
     /// rather than crashing — `connectEnabled()` records that as `.failed`.
     @MainActor
     static func defaultClientFactory(_ config: MCPServerConfig,
-                                      _ store: MCPServerConfigStore) -> MCPClient? {
+                                      _ store: MCPServerConfigStore,
+                                      _ activator: AppServerActivator?) -> MCPClient? {
         switch config.transport {
         case .stdio:
             guard let command = config.command else { return nil }
@@ -57,20 +64,43 @@ final class MCPServerRegistry {
             let transport = HTTPSSETransport(endpoint: url,
                                               authHeaders: store.resolvedHeaders(for: config.id))
             return MCPClient(transport: transport)
+        case .inProcess:
+            guard let appID = config.appID, let activator,
+                  activator.hasServer(appID: appID) else { return nil }
+            return MCPClient(transport: InProcessTransport(appID: appID, activator: activator))
         }
     }
 
     /// Connects every enabled server with no missing secrets and records health.
     /// Bounded/non-hanging: `MCPClient.connect()`/`listTools()` requests already carry
     /// their own timeout, so this introduces no additional unbounded await.
+    /// Re-entrant by design: `MCPManagerView` calls it after every enable/edit,
+    /// so it must converge on the store's CURRENT state rather than only add to
+    /// what is already live. Anything previously connected is released first —
+    /// otherwise a disabled server's tools stayed advertised and callable until
+    /// relaunch, and a re-enable leaked the old client (a child process, for
+    /// stdio) on every toggle.
     func connectEnabled() async {
-        for config in configStore.all() {
+        let configs = configStore.all()
+
+        // Servers deleted from the store keep no live client or tools behind.
+        let known = Set(configs.map(\.id))
+        for id in Set(clients.keys).union(tools.keys).subtracting(known) {
+            await release(id)
+            health[id] = nil
+        }
+
+        for config in configs {
+            // Unconditional, and BEFORE any of the guards below: a config that
+            // is now disabled, missing secrets, or no longer buildable must lose
+            // its tools just as surely as one that reconnects.
+            await release(config.id)
             guard config.enabled else { health[config.id] = .disabled; continue }
             guard configStore.missingSecrets(for: config.id).isEmpty else {
                 health[config.id] = .needsConfiguration
                 continue
             }
-            guard let client = clientFactory(config, configStore) else {
+            guard let client = clientFactory(config, configStore, activator) else {
                 health[config.id] = .failed("invalid configuration")
                 continue
             }
@@ -85,6 +115,14 @@ final class MCPServerRegistry {
                 await client.disconnect()
             }
         }
+    }
+
+    /// Disconnects and forgets one server's client and discovered tools. Never
+    /// throws, so it cannot narrow `connectEnabled()`'s per-server isolation.
+    private func release(_ id: String) async {
+        tools[id] = nil
+        guard let client = clients.removeValue(forKey: id) else { return }
+        await client.disconnect()
     }
 
     /// Disconnects every currently-connected client.

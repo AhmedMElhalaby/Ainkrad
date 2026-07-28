@@ -18,26 +18,31 @@ private actor FailingStartTransport: MCPTransport {
 @Suite("MCPServerRegistry")
 @MainActor
 struct MCPServerRegistryTests {
-    private func stubClientFactory() -> @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient? {
-        return { _, _ in
-            MCPClient(transport: StubMCPTransport { message in
-                guard let id = message["id"]?.stringValue,
-                      let method = message["method"]?.stringValue else { return [] }
-                switch method {
-                case "initialize":
-                    return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
-                        "result": .object(["capabilities": .object([:])])])]
-                case "tools/list":
-                    return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
-                        "result": .object(["tools": .array([
-                            .object(["name": .string("search"),
-                                     "inputSchema": .object(["type": .string("object")])])])])])]
-                default:
-                    return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
-                        "result": .object([:])])]
-                }
-            })
+    /// The canned server behaviour, extracted so a test that needs its own
+    /// transport handle can reuse it instead of duplicating the script.
+    private func stubResponder() -> @Sendable (JSONValue) -> [JSONValue] {
+        return { message in
+            guard let id = message["id"]?.stringValue,
+                  let method = message["method"]?.stringValue else { return [] }
+            switch method {
+            case "initialize":
+                return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
+                    "result": .object(["capabilities": .object([:])])])]
+            case "tools/list":
+                return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
+                    "result": .object(["tools": .array([
+                        .object(["name": .string("search"),
+                                 "inputSchema": .object(["type": .string("object")])])])])])]
+            default:
+                return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
+                    "result": .object([:])])]
+            }
         }
+    }
+
+    private func stubClientFactory() -> @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? {
+        let responder = stubResponder()
+        return { _, _, _ in MCPClient(transport: StubMCPTransport(responder: responder)) }
     }
 
     private func registry() -> (MCPServerRegistry, MCPServerConfigStore) {
@@ -84,6 +89,66 @@ struct MCPServerRegistryTests {
         #expect(!registry.isToolTrusted("read_file"))
     }
 
+    /// Finding 2: toggling an app/server off in Settings is the ONLY control an
+    /// app row has, and it re-runs `connectEnabled()`. Before the fix the client
+    /// and its tools survived, so the tools stayed advertised to the model and
+    /// callable via `client(for:)`.
+    @Test func disablingAServerRemovesItsLiveToolsAndClient() async {
+        let (registry, configs) = registry()
+        configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
+                                       command: "x", enabled: true, trusted: true))
+        await registry.connectEnabled()
+        #expect(registry.currentTools().map(\.name) == ["mcp/srv/search"])
+
+        configs.setEnabled(false, for: "srv")
+        await registry.connectEnabled()
+        #expect(registry.currentTools().isEmpty)
+        #expect(registry.discoveredTools().isEmpty)
+        #expect(registry.client(for: "srv") == nil)
+        #expect(registry.health["srv"] == .disabled)
+    }
+
+    /// Finding 2 (delete path): a server removed from the store must not stay
+    /// reachable through the registry either.
+    @Test func removingAServerRemovesItsLiveToolsAndClient() async {
+        let (registry, configs) = registry()
+        configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
+                                       command: "x", enabled: true))
+        await registry.connectEnabled()
+        configs.remove(id: "srv")
+        await registry.connectEnabled()
+        #expect(registry.discoveredTools().isEmpty)
+        #expect(registry.client(for: "srv") == nil)
+        #expect(registry.health["srv"] == nil)
+    }
+
+    /// Finding 5: `connectEnabled()` runs on every Settings toggle and rebuilds a
+    /// client per enabled config. Without disconnecting the previous one first,
+    /// each toggle leaked a client — for stdio, a live child process.
+    @Test func reconnectingDisconnectsThePreviousClient() async {
+        let configs = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
+                                           secrets: InMemorySecretStore())
+        // Builds each client from a transport the test keeps a handle on, so it
+        // can observe whether the superseded one was actually stopped.
+        final class Box: @unchecked Sendable { var transports: [StubMCPTransport] = [] }
+        let box = Box()
+        let responder = stubResponder()
+        let factory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? = { _, _, _ in
+            let transport = StubMCPTransport(responder: responder)
+            box.transports.append(transport)
+            return MCPClient(transport: transport)
+        }
+        let registry = MCPServerRegistry(configStore: configs, clientFactory: factory)
+        configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
+                                       command: "x", enabled: true))
+        await registry.connectEnabled()
+        await registry.connectEnabled()
+        #expect(box.transports.count == 2)
+        let firstStops = await box.transports[0].stopCount
+        #expect(firstStops == 1)               // the superseded client was torn down
+        #expect(registry.health["srv"] == .connected(toolCount: 1))
+    }
+
     @Test func oneFailingServerDoesNotBreakOthers() async {
         // "bad" gets a client whose transport always fails to start; "good" gets the
         // normal working stub. Deterministic (no reliance on the factory returning nil
@@ -92,11 +157,11 @@ struct MCPServerRegistryTests {
         let configs = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
                                            secrets: InMemorySecretStore())
         let workingFactory = stubClientFactory()
-        let factory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient? = { config, store in
+        let factory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? = { config, store, activator in
             if config.id == "bad" {
                 return MCPClient(transport: FailingStartTransport())
             }
-            return workingFactory(config, store)
+            return workingFactory(config, store, activator)
         }
         let registry = MCPServerRegistry(configStore: configs, clientFactory: factory)
         configs.upsert(MCPServerConfig(id: "bad", displayName: "Bad", transport: .stdio,

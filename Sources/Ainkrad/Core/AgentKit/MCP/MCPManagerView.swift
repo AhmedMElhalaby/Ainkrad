@@ -43,6 +43,7 @@ struct MCPManagerView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                appsSection(tokens: tokens)
                 serversSection(tokens: tokens)
                 addServerSection(tokens: tokens)
             }
@@ -51,20 +52,84 @@ struct MCPManagerView: View {
         .scrollContentBackground(.hidden)
     }
 
+    // MARK: - Grouping
+
+    /// Ainkrad apps hosting their MCP server in-process. `nonisolated` because
+    /// it's a pure filter with no view/store access — callable synchronously
+    /// from tests without hopping onto the main actor.
+    nonisolated static func appConfigs(from configs: [MCPServerConfig]) -> [MCPServerConfig] {
+        configs.filter { $0.transport == .inProcess }
+    }
+
+    /// Everything else: user-configured stdio commands and HTTPS endpoints.
+    nonisolated static func externalConfigs(from configs: [MCPServerConfig]) -> [MCPServerConfig] {
+        configs.filter { $0.transport != .inProcess }
+    }
+
+    // MARK: - Apps
+
+    /// Ainkrad apps that publish MCP servers. Deliberately NOT editable the way
+    /// external servers are: there is no command, URL, or secret to configure,
+    /// and the row cannot be deleted — these are synthesized from installed
+    /// apps, so the control is enable/disable. Removing the app itself belongs
+    /// to the App Store surface, not here.
+    private func appsSection(tokens: DesignTokens) -> some View {
+        let apps = Self.appConfigs(from: configStore.all())
+        return Group {
+            if !apps.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsSectionHeader(title: "AINKRAD APPS", tokens: tokens)
+                    ForEach(apps) { config in
+                        appCard(config, tokens: tokens)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Same enable/trust/tools contract as `serverCard`, minus the fields that
+    /// don't apply to an in-process app server: no command/URL (nothing was
+    /// configured), no secrets (nothing to store), no remove button (the row
+    /// is synthesized from the installed app, not owned by this store).
+    private func appCard(_ config: MCPServerConfig, tokens: DesignTokens) -> some View {
+        let tools = registry.discoveredTools().filter { $0.server == config.id }
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text(config.displayName)
+                    .font(AinkradFont.display(13, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.9))
+                healthBadge(registry.health[config.id])
+                Spacer(minLength: 8)
+            }
+
+            enabledRow(config)
+            trustedRow(config)
+
+            if !tools.isEmpty {
+                toolsSection(tools, tokens: tokens)
+            }
+        }
+        .padding(14)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+    }
+
     // MARK: - Servers
 
     private func serversSection(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SettingsSectionHeader(title: "MCP SERVERS", tokens: tokens)
 
-            if configStore.all().isEmpty {
+            let externals = Self.externalConfigs(from: configStore.all())
+            if externals.isEmpty {
                 AinkradEmptyState(
                     icon: "point.3.connected.trianglepath.dotted",
                     title: "No MCP servers configured",
                     message: "Add a stdio command or an HTTPS endpoint below to connect external tools."
                 )
             } else {
-                ForEach(configStore.all()) { config in
+                ForEach(externals) { config in
                     serverCard(config, tokens: tokens)
                 }
             }
@@ -93,19 +158,8 @@ struct MCPManagerView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
 
-            AinkradFormRow(title: "Enabled") {
-                AinkradToggle(isOn: Binding(
-                    get: { config.enabled },
-                    set: { newValue in
-                        configStore.setEnabled(newValue, for: config.id)
-                        Task { await registry.connectEnabled() }
-                    }))
-            }
-            AinkradFormRow(title: "Trusted", help: "Auto-approve this server's tools") {
-                AinkradToggle(isOn: Binding(
-                    get: { config.trusted },
-                    set: { configStore.setTrusted($0, for: config.id) }))
-            }
+            enabledRow(config)
+            trustedRow(config)
 
             if !secretKeys.isEmpty {
                 secretsSection(config, keys: secretKeys, tokens: tokens)
@@ -194,6 +248,32 @@ struct MCPManagerView: View {
         }
     }
 
+    /// Shared by `serverCard` and `appCard`: flips the config live via
+    /// `configStore.setEnabled` and immediately reconnects, per the contract
+    /// documented on the type — an app server and an external server both
+    /// need enable/disable to take effect right away.
+    private func enabledRow(_ config: MCPServerConfig) -> some View {
+        AinkradFormRow(title: "Enabled") {
+            AinkradToggle(isOn: Binding(
+                get: { config.enabled },
+                set: { newValue in
+                    configStore.setEnabled(newValue, for: config.id)
+                    Task { await registry.connectEnabled() }
+                }))
+        }
+    }
+
+    /// Shared by `serverCard` and `appCard`: trust never affects connectivity
+    /// (per the contract documented on the type), so it writes straight to
+    /// the config store with no reconnect — for both app and external rows.
+    private func trustedRow(_ config: MCPServerConfig) -> some View {
+        AinkradFormRow(title: "Trusted", help: "Auto-approve this server's tools") {
+            AinkradToggle(isOn: Binding(
+                get: { config.trusted },
+                set: { configStore.setTrusted($0, for: config.id) }))
+        }
+    }
+
     private func healthBadge(_ health: MCPHealth?) -> some View {
         let text: String
         let status: AinkradStatus
@@ -255,6 +335,9 @@ struct MCPManagerView: View {
             return idOK && nameOK && !newCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .httpSSE:
             return idOK && nameOK && URL(string: newURL) != nil
+        // In-process rows are synthesized from installed apps; not addable through this form.
+        case .inProcess:
+            return false
         }
     }
 
