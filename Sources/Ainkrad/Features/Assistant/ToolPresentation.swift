@@ -20,10 +20,27 @@ struct ToolPresentation: Equatable {
     /// "run_terminal" → "Run terminal"; strips the MCP namespace prefix and
     /// collapses the separators MCP names carry ("mcp__linear__create_issue" →
     /// "Linear create issue", "mcp/gitmage/reset_hard" → "Gitmage reset hard").
-    /// A name with no underscore is returned unchanged.
+    /// A name with no underscore is returned unchanged — this is the timeline's
+    /// existing contract (pinned by `humanizeReplacesUnderscoresAndCapitalizes`),
+    /// kept as-is here. Callers that want a bare tool name capitalized even
+    /// without an underscore (e.g. Settings' MCP tool list) should use
+    /// `titleCasedBareName` instead.
     static func humanize(_ name: String) -> String {
         let base = mcpRemainder(name).map { $0.replacingOccurrences(of: "/", with: "_") } ?? name
         guard base.contains("_") else { return base }
+        return titleCase(base)
+    }
+
+    /// "reset_hard" → "Reset hard", "status" → "Status". Same snake_case
+    /// title-casing `humanize` uses, but applied unconditionally — for bare
+    /// tool names (no MCP prefix to strip) where an un-capitalized single word
+    /// would read inconsistently next to its underscored siblings. Used by the
+    /// Settings → MCP Servers tool list, not the transcript path.
+    static func titleCasedBareName(_ name: String) -> String {
+        titleCase(name)
+    }
+
+    private static func titleCase(_ base: String) -> String {
         let spaced = base.replacingOccurrences(of: "_", with: " ")
             .split(separator: " ", omittingEmptySubsequences: true)
             .joined(separator: " ")

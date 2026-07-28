@@ -241,9 +241,14 @@ struct MCPManagerView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.4))
 
             ForEach(tools, id: \.descriptor.name) { entry in
-                Text("mcp/\(entry.server)/\(entry.descriptor.name)")
-                    .font(AinkradFont.mono(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.6))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ToolPresentation.titleCasedBareName(entry.descriptor.name))
+                        .font(AinkradFont.mono(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.6))
+                    Text("mcp/\(entry.server)/\(entry.descriptor.name)")
+                        .font(AinkradFont.mono(9))
+                        .foregroundStyle(tokens.foreground.opacity(0.3))
+                }
             }
         }
     }
