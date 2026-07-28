@@ -104,7 +104,7 @@ struct MCPManagerView: View {
             }
 
             enabledRow(config)
-            trustedRow(config)
+            trustedRow(config, isApp: true)
 
             if !tools.isEmpty {
                 toolsSection(tools, tokens: tokens)
@@ -159,7 +159,7 @@ struct MCPManagerView: View {
                 .truncationMode(.middle)
 
             enabledRow(config)
-            trustedRow(config)
+            trustedRow(config, isApp: false)
 
             if !secretKeys.isEmpty {
                 secretsSection(config, keys: secretKeys, tokens: tokens)
@@ -263,11 +263,25 @@ struct MCPManagerView: View {
         }
     }
 
+    /// Help copy for the "Trusted" row, split by context because the grant
+    /// isn't the same size: an Ainkrad app's MCP server runs in-process on
+    /// the main actor with access to the app's live state (e.g. Git Mage can
+    /// commit/push to the user's repos), while an external server is an
+    /// arm's-length process or endpoint. Both variants must still make clear
+    /// that trust means no prompting and that irreversible actions are still
+    /// gated — the truth of that backstop doesn't change, only how much
+    /// silent authority precedes it. `nonisolated` and `static` so the test
+    /// can pin the strings without going through the view.
+    nonisolated static let appTrustHelp =
+        "Runs in-process with access to the app's live state and auto-approves its tools without prompting. Irreversible actions still require your confirmation."
+    nonisolated static let externalTrustHelp =
+        "Auto-approves this server's tools without prompting. Irreversible actions still require your confirmation."
+
     /// Shared by `serverCard` and `appCard`: trust never affects connectivity
     /// (per the contract documented on the type), so it writes straight to
     /// the config store with no reconnect — for both app and external rows.
-    private func trustedRow(_ config: MCPServerConfig) -> some View {
-        AinkradFormRow(title: "Trusted", help: "Auto-approve this server's tools") {
+    private func trustedRow(_ config: MCPServerConfig, isApp: Bool) -> some View {
+        AinkradFormRow(title: "Trusted", help: isApp ? Self.appTrustHelp : Self.externalTrustHelp) {
             AinkradToggle(isOn: Binding(
                 get: { config.trusted },
                 set: { configStore.setTrusted($0, for: config.id) }))
