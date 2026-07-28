@@ -52,8 +52,15 @@ struct MCPReadResourceTool: AgentTool {
         // into thinking discovery ran and found nothing worth naming.
         guard !all.isEmpty else { return Self.guidance }
 
+        // The descriptor's `description` says WHEN to read the resource, which
+        // is the part that actually lets the model choose between several —
+        // the name alone only labels them. Appended rather than substituted so
+        // a server that sends none still produces a well-formed line.
         let listed = all.prefix(Self.maxListedResources).map { entry in
-            "- server \"\(entry.server)\", uri \"\(entry.descriptor.uri)\": \(entry.descriptor.name)"
+            let line = "- server \"\(entry.server)\", uri \"\(entry.descriptor.uri)\": "
+                + entry.descriptor.name
+            let purpose = entry.descriptor.description
+            return purpose.isEmpty ? line : line + " — " + purpose
         }
         var text = Self.guidance + "\n\nCurrently available resources:\n"
             + listed.joined(separator: "\n")
@@ -90,6 +97,13 @@ struct MCPReadResourceTool: AgentTool {
         }
         do {
             return ToolResult(content: try await client.readResource(uri: uri), isError: false)
+        } catch MCPError.resourceFailure(let reason) {
+            // The resource itself reported failure. Surface it as an ERROR
+            // result carrying the server's own words — returning it as content
+            // would hand the model "no terminal is currently open" as though it
+            // were the buffer, and host framing about a failed read would bury
+            // the one sentence that explains what to do instead.
+            return ToolResult(content: reason, isError: true)
         } catch {
             return ToolResult(content: "Reading '\(uri)' from '\(server)' failed: \(error)",
                               isError: true)

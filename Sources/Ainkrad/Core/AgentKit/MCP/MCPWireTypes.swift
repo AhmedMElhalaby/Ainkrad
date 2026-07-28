@@ -6,6 +6,11 @@ enum MCPError: Error, Equatable {
     case protocolError(String)
     case rpc(code: Int, message: String)
     case notConnected
+    /// A `resources/read` that reached the server and came back marked failed
+    /// (`ainkrad/isError`). Distinct from `protocolError` because the payload is
+    /// the SERVER'S OWN explanation ("no terminal is currently open") and should
+    /// reach the model verbatim, not wrapped in host framing about the RPC.
+    case resourceFailure(String)
 }
 
 struct MCPToolDescriptor: Equatable {
@@ -48,13 +53,21 @@ struct MCPResourceDescriptor: Equatable {
     let uri: String
     let name: String
     let mimeType: String
+    /// Standard MCP `description` — the SDK's `MCPResourceSpec.purpose`. Says
+    /// WHEN to read the resource, which is the only part the model can act on
+    /// when choosing between several; `name` merely labels it. Empty when the
+    /// server sends none, so `MCPReadResourceTool` can omit the clause rather
+    /// than print a dangling separator.
+    let description: String
     /// See `MCPToolDescriptor.requiresLiveApp` — same key, same default.
     let requiresLiveApp: Bool
 
-    init(uri: String, name: String, mimeType: String, requiresLiveApp: Bool = false) {
+    init(uri: String, name: String, mimeType: String, description: String = "",
+         requiresLiveApp: Bool = false) {
         self.uri = uri
         self.name = name
         self.mimeType = mimeType
+        self.description = description
         self.requiresLiveApp = requiresLiveApp
     }
 }
@@ -108,6 +121,7 @@ enum MCPRPC {
                 uri: uri,
                 name: item["name"]?.stringValue ?? uri,
                 mimeType: item["mimeType"]?.stringValue ?? "text/plain",
+                description: item["description"]?.stringValue ?? "",
                 requiresLiveApp: item["annotations"]?["ainkrad/requiresLiveApp"]
                     .flatMap(boolValue) ?? false)
         }

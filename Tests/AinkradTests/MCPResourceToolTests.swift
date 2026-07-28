@@ -33,6 +33,39 @@ struct MCPResourceToolTests {
         #expect(result.content == "live value")
     }
 
+    /// A registry whose one resource always reports failure through the SDK's
+    /// `resultProvider`, the way Terminal's buffer does when no terminal is open.
+    func failingRegistry() -> MCPServerRegistry {
+        let server = MCPAppServer(appID: "demo")
+        var spec = MCPResourceSpec(uri: "demo://buffer", title: "Buffer") { "unused" }
+        spec.resultProvider = { MCPResourceContent(text: "no terminal is currently open",
+                                                   isError: true) }
+        server.addResource(spec)
+        let activator = AppServerActivator(
+            servers: ["demo": server], isAppOpen: { _ in true },
+            requestOpen: { _ in }, availability: { _ in .available })
+        let configStore = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
+                                               secrets: InMemorySecretStore())
+        configStore.upsert(MCPServerConfig(
+            id: "demo", displayName: "Demo", transport: .inProcess,
+            enabled: true, trusted: false, appID: "demo"))
+        return MCPServerRegistry(configStore: configStore, activator: activator)
+    }
+
+    @Test("a resource reporting failure yields isError, not plausible content",
+          .timeLimit(.minutes(1)))
+    func resourceFailureIsAnErrorResult() async throws {
+        let registry = failingRegistry()
+        await registry.connectEnabled()
+        let result = try await MCPReadResourceTool(registry: registry).execute(.object([
+            "server": .string("demo"), "uri": .string("demo://buffer"),
+        ]))
+        // The whole point: without the flag this text arrives as if it were the
+        // terminal buffer, and the model reasons over it as content.
+        #expect(result.isError)
+        #expect(result.content == "no terminal is currently open")
+    }
+
     @Test("is a read-class tool so it is gated like other reads")
     func isReadClass() {
         #expect(MCPReadResourceTool(registry: registry()).permission == .read)
@@ -81,6 +114,34 @@ struct MCPResourceToolTests {
         #expect(description.contains("demo://buffer"))
         #expect(description.contains("\"demo\""))
         #expect(description.contains("Buffer"))
+    }
+
+    @Test("the listing carries each resource's description so the model knows WHEN to read it",
+          .timeLimit(.minutes(1)))
+    func descriptionListsResourcePurpose() async {
+        let server = MCPAppServer(appID: "demo")
+        var described = MCPResourceSpec(uri: "demo://buffer", title: "Buffer") { "v" }
+        described.purpose = "Read when the workspace context shows a truncated terminal."
+        server.addResource(described)
+        // A second resource with no purpose proves the line stays well-formed
+        // rather than trailing a dangling separator.
+        server.addResource(.init(uri: "demo://plain", title: "Plain") { "v" })
+        let activator = AppServerActivator(
+            servers: ["demo": server], isAppOpen: { _ in true },
+            requestOpen: { _ in }, availability: { _ in .available })
+        let configStore = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
+                                               secrets: InMemorySecretStore())
+        configStore.upsert(MCPServerConfig(
+            id: "demo", displayName: "Demo", transport: .inProcess,
+            enabled: true, trusted: false, appID: "demo"))
+        let registry = MCPServerRegistry(configStore: configStore, activator: activator)
+        await registry.connectEnabled()
+
+        let description = MCPReadResourceTool(registry: registry).description
+        #expect(description.contains(
+            "uri \"demo://buffer\": Buffer — Read when the workspace context shows a truncated terminal."))
+        #expect(description.contains("uri \"demo://plain\": Plain\n")
+                || description.hasSuffix("uri \"demo://plain\": Plain"))
     }
 
     @Test("the listing never displaces the truncated-context guidance",
