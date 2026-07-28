@@ -34,6 +34,12 @@ public struct RegisteredApp: Identifiable {
     /// Defaulted to `nil` so every existing construction site (all the built-in
     /// apps) is unaffected: teardown is opt-in at both ends.
     public var teardown: (@MainActor () -> Void)? = nil
+    /// Builds this app's MCP server, or `nil` when the app does not conform to
+    /// `AinkradAppMCP`. Defaulted so every existing construction site is
+    /// unaffected — capability is opt-in at both ends, exactly like `teardown`.
+    /// The host calls this at most once per app and caches the result, so the
+    /// server can hold the app's live state.
+    public var mcpServerFactory: (@MainActor () -> MCPAppServer)? = nil
 
     public init(id: String, displayName: String, icon: String, summary: String = "",
                 isEnabledByDefault: Bool, source: AppSource,
@@ -76,7 +82,7 @@ extension RegisteredApp {
         host: HostServices,
         chromeFillOverride: (@MainActor () -> Color?)? = nil
     ) -> RegisteredApp {
-        RegisteredApp(
+        var registered = RegisteredApp(
             id: app.id,
             displayName: app.displayName,
             icon: app.icon,
@@ -91,5 +97,11 @@ extension RegisteredApp {
             chromeFill: chromeFillOverride ?? { app.chromeFill(host: host) },
             presentation: .pane
         )
+        // Discovered by CAST, never a protocol requirement — see PluginLoader
+        // for why (an added requirement would break already-compiled bundles).
+        if let mcpCapable = app as? AinkradAppMCP.Type {
+            registered.mcpServerFactory = { mcpCapable.makeMCPServer(host: host) }
+        }
+        return registered
     }
 }
