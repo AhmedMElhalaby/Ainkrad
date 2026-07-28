@@ -94,6 +94,16 @@ struct MCPToolAdapterTests {
             .permission == .write)
     }
 
+    /// Proves the OR is one-directional: `destructive: false` must never let
+    /// an option-looking argument slip through as reversible.
+    @Test func optionLookingArgumentEscalatesEvenWhenHintSaysSafe() {
+        let plain = MCPToolDescriptor(name: "status", description: "",
+                                      inputSchema: .object([:]), destructive: false)
+        let adapter = MCPToolAdapter(server: "git", descriptor: plain, client: client())
+        #expect(adapter.isIrreversible(.object(["branch": .string("--upload-pack=/bin/sh")])))
+        #expect(!adapter.isIrreversible(.object(["branch": .string("main")])))
+    }
+
     @Test func namespaceParsesBackToServerAndTool() {
         let desc = MCPToolDescriptor(name: "search", description: "", inputSchema: .object([:]))
         let adapter = MCPToolAdapter(server: "web", descriptor: desc, client: client())

@@ -21,12 +21,22 @@ struct MCPToolAdapter: AgentTool {
     var parametersSchema: JSONValue { descriptor.inputSchema }
     let permission: ToolPermissionClass = .write
 
-    /// Honours the server's own `annotations.destructiveHint`. Without this the
-    /// Full-auto irreversible guard could never fire for ANY MCP tool, because
-    /// `permission` is a constant `.write` — a trusted server's `reset --hard`
-    /// would auto-approve. Whole-tool granularity only: per-CALL irreversibility
-    /// (inspecting arguments) is a separate, unmade decision.
-    func isIrreversible(_ input: JSONValue) -> Bool { descriptor.destructive }
+    /// Honours the server's own `annotations.destructiveHint` OR'd with a
+    /// per-call argument-risk check. `destructiveHint` alone is a static
+    /// per-tool boolean and can't express per-call irreversibility (a `git_op`
+    /// style tool with a benign-looking `operation` but an
+    /// `--upload-pack=<cmd>` argument). `MCPArgumentRisk` generalizes
+    /// `GitOpTool.optionLookingValue` off git so that hole is closed for every
+    /// MCP tool, not just git's.
+    ///
+    /// The OR is one-directional by design: hints may only ESCALATE, never
+    /// de-escalate. A server declaring `destructive: false` (or `readOnly:
+    /// true`) must never be able to bypass the argument-risk check — do not
+    /// "simplify" this into a short-circuit that trusts the hint when it says
+    /// safe.
+    func isIrreversible(_ input: JSONValue) -> Bool {
+        descriptor.destructive || MCPArgumentRisk.hasOptionLookingValue(input)
+    }
 
     func execute(_ input: JSONValue) async throws -> ToolResult {
         do {
