@@ -49,4 +49,59 @@ struct MCPManagerViewGroupingTests {
             #expect(help.contains("Irreversible actions still require your confirmation"))
         }
     }
+
+    // MARK: - Connected badge
+
+    @Test("a tools-only server reads as tools alone")
+    func badgeToolsOnly() {
+        #expect(MCPManagerView.connectedBadgeText(toolCount: 35, resourceCount: 0) == "35 tools")
+    }
+
+    /// The Terminal case: 0 tools by design, 2 resources. Must never read
+    /// "0 tools", which users take to mean the app is broken.
+    @Test("a resources-only server never reads as 0 tools")
+    func badgeResourcesOnly() {
+        let text = MCPManagerView.connectedBadgeText(toolCount: 0, resourceCount: 2)
+        #expect(text == "2 resources")
+        #expect(!text.contains("0 tool"))
+    }
+
+    @Test("a server publishing both shows both")
+    func badgeBoth() {
+        #expect(MCPManagerView.connectedBadgeText(toolCount: 8, resourceCount: 1)
+                    == "8 tools · 1 resource")
+    }
+
+    @Test("a server publishing nothing still reports the successful connection")
+    func badgeNeither() {
+        #expect(MCPManagerView.connectedBadgeText(toolCount: 0, resourceCount: 0) == "connected")
+    }
+
+    @Test("counts of one are singular")
+    func badgeSingular() {
+        #expect(MCPManagerView.connectedBadgeText(toolCount: 1, resourceCount: 0) == "1 tool")
+    }
+
+    // MARK: - Resource labels
+
+    @Test("a publisher-supplied title wins over anything derived from the URI")
+    func resourceLabelPrefersTitle() {
+        #expect(ToolPresentation.resourceLabel(name: "Terminal buffer", uri: "terminal://buffer")
+                    == "Terminal buffer")
+    }
+
+    /// `MCPRPC.decodeResourceList` defaults a missing `name` to the URI, so this
+    /// is the path that would otherwise render "Terminal://buffer".
+    @Test("a missing title falls back to the URI's last segment, not the raw URI")
+    func resourceLabelFallsBackToURISegment() {
+        #expect(ToolPresentation.resourceLabel(name: "terminal://buffer", uri: "terminal://buffer")
+                    == "Buffer")
+        #expect(ToolPresentation.resourceLabel(name: "", uri: "app://logs/today-tail")
+                    == "Today tail")
+    }
+
+    @Test("a URI with no usable segment degrades to the URI itself rather than an empty label")
+    func resourceLabelDegradesToURI() {
+        #expect(ToolPresentation.resourceLabel(name: "scheme://", uri: "scheme://") == "scheme://")
+    }
 }

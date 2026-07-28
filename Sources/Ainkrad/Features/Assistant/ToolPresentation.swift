@@ -40,6 +40,34 @@ struct ToolPresentation: Equatable {
         titleCase(name)
     }
 
+    /// Readable label for an MCP *resource*, given its declared name and URI.
+    ///
+    /// Prefers the publisher's own title — apps already supply a human one
+    /// ("Terminal buffer", "Lore vault"), and inventing a label over a good one
+    /// would be strictly worse. The fallback matters because
+    /// `MCPRPC.decodeResourceList` defaults a missing `name` TO THE URI, so a
+    /// naive `titleCasedBareName(descriptor.name)` renders "Terminal://buffer"
+    /// for any server that omits the field. In that case the URI's last path
+    /// segment is the only human-meaningful part ("terminal://buffer" →
+    /// "Buffer"), so that is what gets title-cased.
+    static func resourceLabel(name: String, uri: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != uri { return trimmed }
+        return uriDerivedLabel(uri) ?? uri
+    }
+
+    /// "terminal://buffer" → "Buffer", "app://a/b-c" → "B c". Nil when the URI
+    /// has no segment worth showing (e.g. "scheme://"), so the caller can fall
+    /// back to the raw URI rather than render an empty label.
+    private static func uriDerivedLabel(_ uri: String) -> String? {
+        let afterScheme = uri.range(of: "://").map { String(uri[$0.upperBound...]) } ?? uri
+        guard let segment = afterScheme
+            .split(separator: "/", omittingEmptySubsequences: true).last else { return nil }
+        let normalized = segment.replacingOccurrences(of: "-", with: "_")
+        guard !normalized.isEmpty else { return nil }
+        return titleCase(normalized)
+    }
+
     private static func titleCase(_ base: String) -> String {
         let spaced = base.replacingOccurrences(of: "_", with: " ")
             .split(separator: " ", omittingEmptySubsequences: true)

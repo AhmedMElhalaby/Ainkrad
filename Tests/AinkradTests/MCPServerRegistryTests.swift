@@ -198,6 +198,79 @@ struct MCPServerRegistryTests {
         #expect(!registry.isToolTrusted("mcp/web/evil/search"))
     }
 
+    // MARK: - Discovered resources
+
+    /// Like `stubClientFactory()`, but each server answers `resources/list`
+    /// with one resource whose URI is derived from its own id — so a
+    /// per-server filter that silently returned everything would fail.
+    private func resourcePublishingFactory()
+        -> @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? {
+        let base = stubResponder()
+        return { config, _, _ in
+            let serverID = config.id
+            let responder: @Sendable (JSONValue) -> [JSONValue] = { message in
+                guard let id = message["id"]?.stringValue,
+                      message["method"]?.stringValue == "resources/list" else { return base(message) }
+                return [.object(["jsonrpc": .string("2.0"), "id": .string(id),
+                    "result": .object(["resources": .array([
+                        .object(["uri": .string("\(serverID)://buffer"),
+                                 "name": .string("\(serverID) buffer")])])])])]
+            }
+            return MCPClient(transport: StubMCPTransport(responder: responder))
+        }
+    }
+
+    @Test("discoveredResources returns what was fetched, filtered per server")
+    func discoveredResourcesAreFilteredPerServer() async {
+        let configs = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
+                                           secrets: InMemorySecretStore())
+        let registry = MCPServerRegistry(configStore: configs,
+                                          clientFactory: resourcePublishingFactory())
+        configs.upsert(MCPServerConfig(id: "alpha", displayName: "A", transport: .stdio,
+                                       command: "x", enabled: true))
+        configs.upsert(MCPServerConfig(id: "beta", displayName: "B", transport: .stdio,
+                                       command: "x", enabled: true))
+        await registry.connectEnabled()
+
+        let all = registry.discoveredResources()
+        #expect(all.count == 2)
+        // Sorted by (server, uri) so the system-prompt listing is stable.
+        #expect(all.map(\.server) == ["alpha", "beta"])
+
+        let alpha = all.filter { $0.server == "alpha" }
+        #expect(alpha.map(\.descriptor.uri) == ["alpha://buffer"])
+        #expect(alpha.map(\.descriptor.name) == ["alpha buffer"])
+    }
+
+    @Test("a disabled server's resources stop being advertised")
+    func discoveredResourcesDropOnDisable() async {
+        let configs = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
+                                           secrets: InMemorySecretStore())
+        let registry = MCPServerRegistry(configStore: configs,
+                                          clientFactory: resourcePublishingFactory())
+        configs.upsert(MCPServerConfig(id: "alpha", displayName: "A", transport: .stdio,
+                                       command: "x", enabled: true))
+        await registry.connectEnabled()
+        #expect(registry.discoveredResources().count == 1)
+
+        configs.setEnabled(false, for: "alpha")
+        await registry.connectEnabled()
+        #expect(registry.discoveredResources().isEmpty)
+    }
+
+    /// A server with no resources capability answers `resources/list` with an
+    /// RPC error; that must leave it healthy with an empty resource list, not
+    /// downgrade the connection.
+    @Test("a server without resources stays connected with an empty list")
+    func serverWithoutResourcesStaysHealthy() async {
+        let (registry, configs) = registry()
+        configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
+                                       command: "x", enabled: true))
+        await registry.connectEnabled()
+        #expect(registry.health["srv"] == .connected(toolCount: 1))
+        #expect(registry.discoveredResources().isEmpty)
+    }
+
     @Test func enabledAndTrustedTogglesPersistViaConfigStore() async {
         let (registry, configs) = registry()
         configs.upsert(MCPServerConfig(id: "srv", displayName: "S", transport: .stdio,
