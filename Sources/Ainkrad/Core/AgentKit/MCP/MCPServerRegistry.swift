@@ -57,6 +57,9 @@ final class MCPServerRegistry {
             let transport = HTTPSSETransport(endpoint: url,
                                               authHeaders: store.resolvedHeaders(for: config.id))
             return MCPClient(transport: transport)
+        case .inProcess:
+            // In-process servers are reached directly through the app; not via this factory.
+            return nil
         }
     }
 
