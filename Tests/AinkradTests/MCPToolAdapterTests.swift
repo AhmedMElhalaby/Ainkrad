@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+@testable import AinkradHostRuntime
 
 @Suite("MCPToolAdapter")
 @MainActor
@@ -89,9 +90,75 @@ struct MCPToolAdapterTests {
             .isIrreversible(.object([:])))
         #expect(!MCPToolAdapter(server: "git", descriptor: plain, client: client())
             .isIrreversible(.object([:])))
-        // permission stays `.write` for both — read-only gating is a separate call.
+        // A destructive tool is `.write` whatever else it claims.
         #expect(MCPToolAdapter(server: "git", descriptor: destructive, client: client())
             .permission == .write)
+    }
+
+    /// `readOnlyHint` de-escalates the permission CLASS, so a read stops being
+    /// gated as a write. Both flags default false, so a descriptor with no
+    /// annotations at all stays `.write` — the host must not invent a safety
+    /// claim the server never made.
+    @Test func readOnlyHintDrivesPermissionClass() {
+        func adapter(readOnly: Bool, destructive: Bool) -> MCPToolAdapter {
+            MCPToolAdapter(server: "lore",
+                           descriptor: MCPToolDescriptor(name: "t", description: "",
+                                                         inputSchema: .object([:]),
+                                                         destructive: destructive,
+                                                         readOnly: readOnly),
+                           client: client())
+        }
+        #expect(adapter(readOnly: true, destructive: false).permission == .read)
+        #expect(adapter(readOnly: false, destructive: false).permission == .write)
+        // The contradiction case: a descriptor claiming BOTH is self-contradictory
+        // and the safe reading of a contradiction is `.write`.
+        #expect(adapter(readOnly: true, destructive: true).permission == .write)
+        // No annotations at all — the default.
+        #expect(MCPToolAdapter(server: "lore",
+                               descriptor: MCPToolDescriptor(name: "t", description: "",
+                                                             inputSchema: .object([:])),
+                               client: client()).permission == .write)
+    }
+
+    /// THE property the whole relaxation rests on: de-escalating the class must
+    /// not touch `isIrreversible`. `MCPArgumentRisk` is evaluated independently of
+    /// the permission class, and `AgentPermissionPolicy.decide` checks
+    /// `isIrreversible` first and unconditionally — so a `readOnly` tool carrying
+    /// an option-looking argument still requires approval, even on a trusted
+    /// server in every mode.
+    @Test func readOnlyToolWithOptionLookingArgumentIsStillIrreversible() {
+        let desc = MCPToolDescriptor(name: "status", description: "",
+                                     inputSchema: .object([:]),
+                                     destructive: false, readOnly: true)
+        let adapter = MCPToolAdapter(server: "git", descriptor: desc, client: client())
+        #expect(adapter.permission == .read)
+        let risky = JSONValue.object(["ref": .string("--upload-pack=/bin/sh")])
+        #expect(adapter.isIrreversible(risky))
+        for mode in AgentPermissionMode.allCases {
+            #expect(AgentPermissionPolicy.decide(
+                toolPermission: adapter.permission, toolName: adapter.name,
+                mode: mode, allowlist: [adapter.name], gateReads: false,
+                isIrreversible: adapter.isIrreversible(risky),
+                isTrusted: true) == .requireApproval)
+        }
+    }
+
+    /// The user-facing escape hatch survives the de-escalation: `gateReads`
+    /// re-gates read-class tools. Driven through the policy directly, since it is
+    /// the policy — not the adapter — that owns this behaviour.
+    @Test func gateReadsStillGatesAReadOnlyMCPTool() {
+        let desc = MCPToolDescriptor(name: "status", description: "",
+                                     inputSchema: .object([:]),
+                                     destructive: false, readOnly: true)
+        let adapter = MCPToolAdapter(server: "git", descriptor: desc, client: client())
+        func decide(gateReads: Bool) -> PermissionDecision {
+            AgentPermissionPolicy.decide(
+                toolPermission: adapter.permission, toolName: adapter.name,
+                mode: .ask, allowlist: [], gateReads: gateReads,
+                isIrreversible: adapter.isIrreversible(.object([:])), isTrusted: false)
+        }
+        #expect(decide(gateReads: false) == .autoApprove)
+        #expect(decide(gateReads: true) == .requireApproval)
     }
 
     /// Proves the OR is one-directional: `destructive: false` must never let
