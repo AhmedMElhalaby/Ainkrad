@@ -9,8 +9,10 @@ import AinkradHostRuntime
 /// `(server, tool)` pairs by exact equality — deliberately NOT by splitting the
 /// string on `/` (a server id may contain `/`, and a naive split would let one
 /// server borrow another's trust). Do not "simplify" that lookup to a split.
-/// MCP tools are `.write` class (gated) by default; a trusted server
-/// auto-approves them via the permission seam (Task 9), never an irreversible op.
+/// MCP tools are `.write` class (gated) unless the server marks them
+/// `readOnlyHint` without `destructiveHint` — see `permission` for why that
+/// de-escalation is safe and where it stops. A trusted server auto-approves them
+/// via the permission seam (Task 9), never an irreversible op.
 struct MCPToolAdapter: AgentTool {
     let server: String
     let descriptor: MCPToolDescriptor
@@ -19,7 +21,45 @@ struct MCPToolAdapter: AgentTool {
     var name: String { "mcp/\(server)/\(descriptor.name)" }
     var description: String { descriptor.description }
     var parametersSchema: JSONValue { descriptor.inputSchema }
-    let permission: ToolPermissionClass = .write
+    /// The permission class honours the server's `annotations.readOnlyHint`, but
+    /// only when the same descriptor does NOT also claim `destructiveHint`. A
+    /// descriptor asserting both is self-contradictory, and the safe reading of a
+    /// contradiction is `.write`.
+    ///
+    /// WHY this changed from a constant `.write`: across the three current
+    /// adopters every read was gated as a write, so `mcp/gitmage/status`,
+    /// `mcp/lore/list_tags` and friends all prompted in `.ask`. A gate that fires
+    /// on `list_tags` trains the user to click Approve reflexively, which corrodes
+    /// the gate for the calls that actually matter — a worse security outcome than
+    /// this relaxation.
+    ///
+    /// Why the relaxation is bounded (see `AgentPermissionPolicy.decide`, whose
+    /// exact ordering this reasoning depends on):
+    /// - `isIrreversible` is checked FIRST and UNCONDITIONALLY, before class,
+    ///   mode, allowlist and trust. So `destructiveHint` OR an option-looking
+    ///   argument (`MCPArgumentRisk`) still forces approval no matter what this
+    ///   property says. `readOnly` can de-escalate the CLASS; it can never bypass
+    ///   the irreversible gate.
+    /// - `.read` auto-approves in `.ask`/`.autoApprove` only when `gateReads` is
+    ///   false — an existing user setting, so a user who wants reads gated already
+    ///   has the switch.
+    ///
+    /// The honest threat model: this trusts a server's self-reported `readOnly`. A
+    /// lying server could mark a writing tool read-only and have it auto-approve in
+    /// `.ask`. That is ACCEPTED, not prevented, because (a) the same server already
+    /// self-reports `destructive`, so this is not a new axis of trust, (b) the
+    /// irreversible backstop is independent of the server's claims for the
+    /// argument-risk half, and (c) `gateReads` exists. Nothing here makes a
+    /// dishonest server safe.
+    ///
+    /// This is a DELIBERATE, SCOPED EXCEPTION to the "hints may only escalate"
+    /// rule stated on `isIrreversible` below. The exception applies to the
+    /// permission class only; the escalate-only property still holds absolutely
+    /// for `isIrreversible`. Anyone reading the OR down there and this line
+    /// together should know the two were reconciled on purpose, not by accident.
+    var permission: ToolPermissionClass {
+        descriptor.readOnly && !descriptor.destructive ? .read : .write
+    }
 
     /// Honours the server's own `annotations.destructiveHint` OR'd with a
     /// per-call argument-risk check. `destructiveHint` alone is a static

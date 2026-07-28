@@ -22,9 +22,11 @@ struct MCPToolDescriptor: Equatable {
     /// approval guard. Defaults to `false` when the server sends no annotations:
     /// the host must not invent a risk claim a server never made.
     let destructive: Bool
-    /// MCP `annotations.readOnlyHint`. Recorded for display/future gating only —
-    /// it deliberately does NOT downgrade `MCPToolAdapter.permission`, which
-    /// would change gating semantics.
+    /// MCP `annotations.readOnlyHint`. Drives `MCPToolAdapter.permission`: a tool
+    /// that claims `readOnly` and NOT `destructive` is published as `.read`, so it
+    /// stops prompting in `.ask` unless the user has turned `gateReads` on. It can
+    /// never relax `isIrreversible` — see the reasoning on `MCPToolAdapter.permission`.
+    /// Defaults to `false` for the same reason `destructive` does.
     let readOnly: Bool
     /// Ainkrad-specific `annotations["ainkrad/requiresLiveApp"]` — the SDK's
     /// `MCPToolSpec.requiresLiveApp`. Namespaced upstream because it is not a

@@ -106,14 +106,35 @@ struct GitMageMCPParityTests {
 
     // MARK: - trust gating
 
-    @Test("an untrusted Git Mage has its non-destructive tools gated",
+    /// Driven through `reset` rather than `status`: since the adapter honours
+    /// `readOnlyHint`, `status` is now `.read` class and auto-approves in `.ask`
+    /// on its own merits (see `untrustedReadOnlyToolIsNoLongerGated` below).
+    /// `reset` is the non-destructive WRITE, which is what "gated because
+    /// untrusted" actually means now.
+    @Test("an untrusted Git Mage has its non-destructive write tools gated",
           .timeLimit(.minutes(1)))
     func untrustedIsGated() async throws {
         let mcp = await connectedRegistry(trusted: false)
-        let tool = try #require(mcp.currentTools().first { $0.name == "mcp/gitmage/status" })
+        let tool = try #require(mcp.currentTools().first { $0.name == "mcp/gitmage/reset" })
         #expect(!mcp.isToolTrusted(tool.name))
+        #expect(tool.permission == .write)
         #expect(decision(for: tool, input: .object(["repoPath": .string("/r")]), registry: mcp)
                 == .requireApproval)
+    }
+
+    /// The UX payoff of honouring `readOnlyHint`: `mcp/gitmage/status` no longer
+    /// prompts in `.ask` on an UNTRUSTED server. Previously every MCP tool was a
+    /// constant `.write`, so a `status` call raised the same HUD prompt a
+    /// `reset_hard` did — which is what trained reflexive approval.
+    @Test("an untrusted Git Mage's read-only tools no longer prompt",
+          .timeLimit(.minutes(1)))
+    func untrustedReadOnlyToolIsNoLongerGated() async throws {
+        let mcp = await connectedRegistry(trusted: false)
+        let tool = try #require(mcp.currentTools().first { $0.name == "mcp/gitmage/status" })
+        #expect(!mcp.isToolTrusted(tool.name))
+        #expect(tool.permission == .read)
+        #expect(decision(for: tool, input: .object(["repoPath": .string("/r")]), registry: mcp)
+                == .autoApprove)
     }
 
     @Test("a trusted Git Mage auto-approves its non-destructive tools",
