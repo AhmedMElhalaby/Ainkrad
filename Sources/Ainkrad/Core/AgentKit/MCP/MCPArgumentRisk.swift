@@ -2,10 +2,9 @@
 import Foundation
 import AinkradHostRuntime
 
-/// Generalizes the host's old git-only `optionLookingValue` check off git so
-/// the same argument-
-/// injection defense applies to every MCP tool, including third-party
-/// servers. MCP's `destructiveHint` is a static per-tool boolean and cannot
+/// Generalizes the host's old git-only `optionLookingValue` check off git, so
+/// the same argument-injection defense applies to every MCP tool, including
+/// third-party servers. MCP's `destructiveHint` is a static per-tool boolean and cannot
 /// express per-call irreversibility, so this rule walks the actual call
 /// arguments: an option-looking value anywhere in the payload is dangerous
 /// for any tool that reaches a CLI (`--upload-pack=<cmd>`, `--exec=<cmd>`,

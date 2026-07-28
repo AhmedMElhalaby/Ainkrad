@@ -29,7 +29,7 @@ public final class AgentActionRegistryHub {
 
     /// Invoke the handler registered for `actionID`. Returns nil when none is
     /// registered (e.g. the owning plugin isn't installed/open). First match
-    /// wins — actionIDs are namespaced ("terminal.echo", "gitmage.pr_op") so a
+    /// wins — actionIDs are namespaced ("terminal.echo", "gitmage.git_op") so a
     /// collision across apps is not expected.
     public func invoke(actionID: String, input: String) async -> AgentActionResult? {
         guard let entry = entries.values.first(where: { $0.actionID == actionID }) else { return nil }
