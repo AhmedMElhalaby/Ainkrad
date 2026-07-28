@@ -172,6 +172,20 @@ final class MCPServerRegistry {
         tools.flatMap { server, descriptors in descriptors.map { (server: server, descriptor: $0) } }
     }
 
+    /// Enabled+connected servers' discovered resources, keyed by owning server —
+    /// the resource-side mirror of `discoveredTools()`, same shape and same
+    /// "only what is live right now" contract.
+    ///
+    /// Sorted, unlike `discoveredTools()`. Dictionary iteration order is not
+    /// stable across runs, and this feeds `MCPReadResourceTool.description`,
+    /// which lands in the system prompt: an unstable order would rewrite the
+    /// prompt on every turn and defeat prompt caching for no visible benefit.
+    func discoveredResources() -> [(server: String, descriptor: MCPResourceDescriptor)] {
+        resources
+            .flatMap { server, descriptors in descriptors.map { (server: server, descriptor: $0) } }
+            .sorted { ($0.server, $0.descriptor.uri) < ($1.server, $1.descriptor.uri) }
+    }
+
     func client(for server: String) -> MCPClient? {
         clients[server]
     }

@@ -93,13 +93,14 @@ struct MCPManagerView: View {
     /// is synthesized from the installed app, not owned by this store).
     private func appCard(_ config: MCPServerConfig, tokens: DesignTokens) -> some View {
         let tools = registry.discoveredTools().filter { $0.server == config.id }
+        let resources = registry.discoveredResources().filter { $0.server == config.id }
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text(config.displayName)
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(0.9))
-                healthBadge(registry.health[config.id])
+                healthBadge(registry.health[config.id], resourceCount: resources.count)
                 Spacer(minLength: 8)
             }
 
@@ -108,6 +109,10 @@ struct MCPManagerView: View {
 
             if !tools.isEmpty {
                 toolsSection(tools, tokens: tokens)
+            }
+
+            if !resources.isEmpty {
+                resourcesSection(resources, tokens: tokens)
             }
         }
         .padding(14)
@@ -139,13 +144,14 @@ struct MCPManagerView: View {
     private func serverCard(_ config: MCPServerConfig, tokens: DesignTokens) -> some View {
         let secretKeys = config.transport == .stdio ? config.envKeys : config.headerKeys
         let tools = registry.discoveredTools().filter { $0.server == config.id }
+        let resources = registry.discoveredResources().filter { $0.server == config.id }
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text(config.displayName)
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(0.9))
-                healthBadge(registry.health[config.id])
+                healthBadge(registry.health[config.id], resourceCount: resources.count)
                 Spacer(minLength: 8)
                 AinkradButton(title: "Remove", style: .danger, icon: "trash") {
                     pendingRemovalID = config.id
@@ -167,6 +173,10 @@ struct MCPManagerView: View {
 
             if !tools.isEmpty {
                 toolsSection(tools, tokens: tokens)
+            }
+
+            if !resources.isEmpty {
+                resourcesSection(resources, tokens: tokens)
             }
         }
         .padding(14)
@@ -253,6 +263,31 @@ struct MCPManagerView: View {
         }
     }
 
+    /// Resource-side twin of `toolsSection`, same typography and same
+    /// readable-label-over-dim-raw-identifier shape — a resources-only server
+    /// (Terminal) would otherwise render a card with nothing in it at all.
+    private func resourcesSection(_ resources: [(server: String, descriptor: MCPResourceDescriptor)],
+                                  tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("DISCOVERED RESOURCES")
+                .font(AinkradFont.mono(9, weight: .medium))
+                .kerning(1.5)
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+
+            ForEach(resources, id: \.descriptor.uri) { entry in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ToolPresentation.resourceLabel(name: entry.descriptor.name,
+                                                        uri: entry.descriptor.uri))
+                        .font(AinkradFont.mono(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.6))
+                    Text(entry.descriptor.uri)
+                        .font(AinkradFont.mono(9))
+                        .foregroundStyle(tokens.foreground.opacity(0.3))
+                }
+            }
+        }
+    }
+
     /// Shared by `serverCard` and `appCard`: flips the config live via
     /// `configStore.setEnabled` and immediately reconnects, per the contract
     /// documented on the type — an app server and an external server both
@@ -293,12 +328,34 @@ struct MCPManagerView: View {
         }
     }
 
-    private func healthBadge(_ health: MCPHealth?) -> some View {
+    /// Badge copy for a connected server, given what it actually published.
+    ///
+    /// Only non-zero parts appear. The old unconditional "\(count) tools" read
+    /// "0 TOOLS" for Terminal — which publishes 2 resources and, by design, no
+    /// tools (`run_terminal` stays host-owned) — and users reasonably read that
+    /// as a broken app. A server contributing something must never be described
+    /// by the count of the thing it deliberately doesn't contribute.
+    ///
+    /// Both zero still says "connected", not "0 tools": the connection genuinely
+    /// succeeded and the server genuinely published nothing, and those are
+    /// different facts from a failed connect (which `.failed` already covers).
+    /// `nonisolated` and `static` so it is unit-testable without the view.
+    nonisolated static func connectedBadgeText(toolCount: Int, resourceCount: Int) -> String {
+        var parts: [String] = []
+        if toolCount > 0 { parts.append("\(toolCount) tool\(toolCount == 1 ? "" : "s")") }
+        if resourceCount > 0 {
+            parts.append("\(resourceCount) resource\(resourceCount == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? "connected" : parts.joined(separator: " · ")
+    }
+
+    private func healthBadge(_ health: MCPHealth?, resourceCount: Int) -> some View {
         let text: String
         let status: AinkradStatus
         switch health {
         case .connected(let count):
-            text = "\(count) tools"; status = .success
+            text = Self.connectedBadgeText(toolCount: count, resourceCount: resourceCount)
+            status = .success
         case .needsConfiguration:
             text = "needs config"; status = .warning
         case .failed:
