@@ -17,11 +17,12 @@ struct ToolPresentation: Equatable {
         return ToolPresentation(icon: icon, tint: tint, label: humanize(name))
     }
 
-    /// "run_terminal" → "Run terminal"; strips a leading "mcp__" and collapses
-    /// the doubled separators MCP names carry ("mcp__linear__create_issue" →
-    /// "Linear create issue"). A name with no underscore is returned unchanged.
+    /// "run_terminal" → "Run terminal"; strips the MCP namespace prefix and
+    /// collapses the separators MCP names carry ("mcp__linear__create_issue" →
+    /// "Linear create issue", "mcp/gitmage/reset_hard" → "Gitmage reset hard").
+    /// A name with no underscore is returned unchanged.
     static func humanize(_ name: String) -> String {
-        let base = name.hasPrefix("mcp__") ? String(name.dropFirst(5)) : name
+        let base = mcpRemainder(name).map { $0.replacingOccurrences(of: "/", with: "_") } ?? name
         guard base.contains("_") else { return base }
         let spaced = base.replacingOccurrences(of: "_", with: " ")
             .split(separator: " ", omittingEmptySubsequences: true)
@@ -29,12 +30,36 @@ struct ToolPresentation: Equatable {
         return spaced.prefix(1).uppercased() + spaced.dropFirst().lowercased()
     }
 
+    /// The part of an MCP tool name after its namespace prefix, or nil when this
+    /// is not an MCP tool.
+    ///
+    /// TWO prefixes, deliberately. `mcp__<server>__<tool>` is the wire spelling
+    /// providers use (see `ClaudeProvider`'s inbound conversion), while
+    /// `mcp/<server>/<tool>` is what `MCPToolAdapter.name` produces and what the
+    /// registry and transcript actually carry. Only the first was matched here,
+    /// so every real MCP tool fell through to the wrench + a mangled label —
+    /// latent until Git Mage's tools moved onto this path.
+    private static func mcpRemainder(_ name: String) -> String? {
+        if name.hasPrefix("mcp__") { return String(name.dropFirst(5)) }
+        if name.hasPrefix("mcp/") { return String(name.dropFirst(4)) }
+        return nil
+    }
+
     private static func iconAndTint(for name: String) -> (String, ToolTint) {
-        if name.hasPrefix("mcp__") { return ("puzzlepiece.extension", .secondary) }
+        if mcpRemainder(name) != nil {
+            // Presentation-only affordance, NOT a capability coupling: git is by
+            // far the most-used MCP family, and a generic puzzle piece on every
+            // commit/push/checkout reads worse than the branch glyph these calls
+            // carried when they were the host's own `git_op`. An unrecognised
+            // server still gets the puzzle piece.
+            if name.hasPrefix("mcp/gitmage/") || name.hasPrefix("mcp__gitmage__") {
+                return ("arrow.triangle.branch", .secondary)
+            }
+            return ("puzzlepiece.extension", .secondary)
+        }
         switch name {
         case "run_terminal":      return ("terminal", .secondary)
         case "run_tool_script":   return ("curlybraces", .secondary)
-        case "git_op":            return ("arrow.triangle.branch", .secondary)
         case "workspace_control": return ("macwindow", .secondary)
         case "edit_file":         return ("pencil", .primary)
         case "read_file":         return ("doc.text", .secondary)

@@ -29,4 +29,24 @@ struct MCPManagerViewGroupingTests {
         #expect(Set(app).isDisjoint(with: Set(external)))
         #expect(Set(app).union(external) == Set(configs.map(\.id)))
     }
+
+    @Test("the app and external trust copy differ")
+    func trustHelpDiffersByContext() {
+        #expect(MCPManagerView.appTrustHelp != MCPManagerView.externalTrustHelp)
+    }
+
+    @Test("only the app variant discloses the in-process/live-state grant")
+    func trustHelpAppMentionsInProcess() {
+        #expect(MCPManagerView.appTrustHelp.contains("in-process"))
+        #expect(MCPManagerView.appTrustHelp.contains("live state"))
+        #expect(!MCPManagerView.externalTrustHelp.contains("in-process"))
+    }
+
+    @Test("both variants disclose auto-approval without prompting and the irreversible-action gate")
+    func trustHelpBothDiscloseAutoApproveAndGate() {
+        for help in [MCPManagerView.appTrustHelp, MCPManagerView.externalTrustHelp] {
+            #expect(help.contains("without prompting"))
+            #expect(help.contains("Irreversible actions still require your confirmation"))
+        }
+    }
 }

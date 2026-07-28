@@ -21,12 +21,92 @@ struct MCPToolAdapter: AgentTool {
     var parametersSchema: JSONValue { descriptor.inputSchema }
     let permission: ToolPermissionClass = .write
 
-    /// Honours the server's own `annotations.destructiveHint`. Without this the
-    /// Full-auto irreversible guard could never fire for ANY MCP tool, because
-    /// `permission` is a constant `.write` — a trusted server's `reset --hard`
-    /// would auto-approve. Whole-tool granularity only: per-CALL irreversibility
-    /// (inspecting arguments) is a separate, unmade decision.
-    func isIrreversible(_ input: JSONValue) -> Bool { descriptor.destructive }
+    /// Honours the server's own `annotations.destructiveHint` OR'd with a
+    /// per-call argument-risk check. `destructiveHint` alone is a static
+    /// per-tool boolean and can't express per-call irreversibility (a git
+    /// style tool with a benign-looking `operation` but an
+    /// `--upload-pack=<cmd>` argument). `MCPArgumentRisk` generalizes
+    /// the host's old git-only check off git so that hole is closed for every
+    /// MCP tool, not just git's.
+    ///
+    /// The OR is one-directional by design: hints may only ESCALATE, never
+    /// de-escalate. A server declaring `destructive: false` (or `readOnly:
+    /// true`) must never be able to bypass the argument-risk check — do not
+    /// "simplify" this into a short-circuit that trusts the hint when it says
+    /// safe.
+    func isIrreversible(_ input: JSONValue) -> Bool {
+        descriptor.destructive || MCPArgumentRisk.hasOptionLookingValue(input)
+    }
+
+    /// What the user reads at the moment they authorise an irreversible call,
+    /// so it must not be a raw JSON dump. The default `AgentTool` preview
+    /// rendered `mcp/gitmage/reset_hard` + `{"args":{"ref":"HEAD~1"},...}`; the
+    /// host's own git tool used to say `Git: reset` / `reset — /repo`, and this
+    /// restores that register for every MCP tool.
+    ///
+    /// The title goes through `ToolPresentation.humanize`, the ONE place that
+    /// knows both MCP spellings (`mcp/…` and `mcp__…`) — deliberately not a
+    /// second copy of that prefix logic here.
+    func approvalPreview(_ input: JSONValue) -> ToolApprovalPreview {
+        ToolApprovalPreview(title: ToolPresentation.humanize(name),
+                            summary: Self.summarize(input), diff: nil)
+    }
+
+    /// A readable one-line rendering of the call's arguments.
+    ///
+    /// Flattens exactly one level of nesting, because the shape MCP payloads
+    /// actually take is a flat envelope plus a single `args`/`arguments` object
+    /// (`{"repoPath": "/x", "args": {"ref": "HEAD~1"}}`), and the user needs the
+    /// inner values — those are the dangerous ones — not the word "args".
+    /// Deeper structure is summarised rather than expanded, and the whole line
+    /// is capped, so a large payload can never push the meaningful part of the
+    /// prompt off the HUD.
+    private static func summarize(_ input: JSONValue) -> String {
+        guard case .object(let root) = input, !root.isEmpty else { return scalar(input) ?? "" }
+        var parts: [String] = []
+        for key in root.keys.sorted() {
+            guard let value = root[key] else { continue }
+            if case .object(let nested) = value {
+                for inner in nested.keys.sorted() {
+                    guard let innerValue = nested[inner] else { continue }
+                    parts.append("\(inner): \(scalar(innerValue) ?? shape(innerValue))")
+                }
+            } else {
+                parts.append("\(key): \(scalar(value) ?? shape(value))")
+            }
+        }
+        let line = parts.joined(separator: " · ")
+        return line.count <= summaryLimit ? line : String(line.prefix(summaryLimit)) + "…"
+    }
+    private static let summaryLimit = 240
+
+    /// The value as plain text, or nil when it is not a scalar.
+    private static func scalar(_ value: JSONValue) -> String? {
+        switch value {
+        case .string(let s): return s
+        case .bool(let b): return "\(b)"
+        // `Int(exactly:)`, never `Int(n)`. Every JSON number is a `Double`, and
+        // `Int(Double)` TRAPS outside `Int`'s range — for exactly the values an
+        // `n == n.rounded()` test waves through: any integral magnitude past
+        // `Int.max` (`1e30`), and `±.infinity`, whose `.rounded()` is itself.
+        // This runs on the approval-preview path with a model- or
+        // server-controlled value, so a trap here crashes the app at the moment
+        // the user is being asked to authorise an irreversible call.
+        case .number(let n): return Int(exactly: n).map(String.init) ?? "\(n)"
+        case .null: return "null"
+        case .array, .object: return nil
+        }
+    }
+
+    /// A non-scalar's shape, so a nested payload still reads as something
+    /// rather than vanishing from the prompt.
+    private static func shape(_ value: JSONValue) -> String {
+        switch value {
+        case .array(let items): return "[\(items.count) items]"
+        case .object(let dict): return "{\(dict.count) fields}"
+        default: return scalar(value) ?? ""
+        }
+    }
 
     func execute(_ input: JSONValue) async throws -> ToolResult {
         do {

@@ -151,6 +151,43 @@ struct AppServerActivatorTests {
         }
     }
 
+    /// The cache is memoized for the process lifetime, so a torn-down app must
+    /// evict it — otherwise the next dispatch runs against a server built over
+    /// the CLOSED instance's state, and that instance is pinned forever.
+    @Test("evicting drops the cached server and the next use builds a fresh one",
+          .timeLimit(.minutes(1)))
+    func evictionRebuildsTheServer() async throws {
+        let counter = Counter()
+        var built = 0
+        let activator = AppServerActivator(
+            serverFor: { _ in built += 1; return self.makeServer(counter) },
+            isAppOpen: { _ in true }, requestOpen: { _ in },
+            availability: { _ in .available })
+
+        _ = try await activator.dispatch(appID: "demo", message: callPing)
+        _ = try await activator.dispatch(appID: "demo", message: callPing)
+        #expect(built == 1, "the server must be memoized across dispatches")
+
+        activator.evict(appID: "demo")
+        _ = try await activator.dispatch(appID: "demo", message: callPing)
+        #expect(built == 2, "after eviction the next dispatch must resolve a fresh server")
+        // And the fresh one is cached in turn, not rebuilt per call.
+        _ = try await activator.dispatch(appID: "demo", message: callPing)
+        #expect(built == 2)
+    }
+
+    @Test("evicting an app that was never cached is a no-op", .timeLimit(.minutes(1)))
+    func evictingUnknownAppIsHarmless() async throws {
+        let counter = Counter()
+        let activator = AppServerActivator(
+            servers: ["demo": makeServer(counter)],
+            isAppOpen: { _ in true }, requestOpen: { _ in },
+            availability: { _ in .available })
+        activator.evict(appID: "ghost")
+        let reply = try await activator.dispatch(appID: "demo", message: callPing)
+        #expect(reply.contains("pong"))
+    }
+
     @Test("fails with launchTimedOut when the app never opens", .timeLimit(.minutes(1)))
     func failsWhenLaunchTimesOut() async {
         let counter = Counter()

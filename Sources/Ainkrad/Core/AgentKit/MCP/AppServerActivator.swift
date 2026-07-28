@@ -98,6 +98,19 @@ final class AppServerActivator {
     /// True when this app publishes an MCP server at all.
     func hasServer(appID: String) -> Bool { server(for: appID) != nil }
 
+    /// Drops this app's cached server, so the next dispatch resolves a fresh one.
+    ///
+    /// Called when the app is torn down (`BuiltInAppRegistry.deregister`,
+    /// right after `RegisteredApp.teardown`). Without it the memoized server
+    /// outlives the instance it was built over: an app that tears its own
+    /// instance state down on close (Git Mage's `GitMageRuntime.teardown`
+    /// removes its server) would be driven through a DETACHED server holding
+    /// the closed instance's `HostServices` — the case the SDK's
+    /// `makeMCPServer` doc warns about, and a pin on that instance for the rest
+    /// of the process, which is exactly the leak `AinkradAppTeardown` exists to
+    /// close.
+    func evict(appID: String) { cache[appID] = nil }
+
     /// Sends one JSON-RPC message to the app's server, opening the app first if
     /// the message needs a live shell and the app isn't already open. Returns
     /// the raw reply, or an empty string when the message was a notification.

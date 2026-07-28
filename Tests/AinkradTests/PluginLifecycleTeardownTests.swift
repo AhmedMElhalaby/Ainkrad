@@ -39,6 +39,42 @@ struct PluginLifecycleTeardownTests {
         #expect(flag.torndown)
     }
 
+    /// The host-side half of teardown: caches keyed on the app id (the
+    /// activator's memoized MCP server) must be dropped on the SAME seam, or
+    /// they outlive the instance they were built over.
+    @Test("Deregistering also runs the host-side teardown hook, after the plugin's own")
+    func deregisterEvictsHostSideCaches() {
+        final class Log { var events: [String] = [] }
+        let log = Log()
+        let reg = registry()
+        reg.onAppTornDown = { log.events.append("host:\($0)") }
+        reg.install(builtIn: [], loaded: [app("lore", teardown: { log.events.append("plugin") })])
+
+        reg.deregister(id: "lore")
+
+        #expect(log.events == ["plugin", "host:lore"])
+    }
+
+    @Test("A built-in ignored by deregister does not fire the host hook")
+    func builtInDoesNotFireHostHook() {
+        final class Log { var ids: [String] = [] }
+        let log = Log()
+        var builtIn = RegisteredApp(
+            id: "assistant", displayName: "Assistant", icon: "app", isEnabledByDefault: true,
+            source: .builtIn,
+            makeRootView: { AnyView(EmptyView()) },
+            makeSettingsView: { AnyView(EmptyView()) },
+            chromeFill: { nil })
+        builtIn.teardown = nil
+        let reg = registry()
+        reg.onAppTornDown = { log.ids.append($0) }
+        reg.install(builtIn: [builtIn])
+
+        reg.deregister(id: "assistant")
+
+        #expect(log.ids.isEmpty, "a still-installed app's server must stay cached")
+    }
+
     @Test("A plugin without teardown deregisters cleanly")
     func generationSevenPluginStillDeregisters() {
         let reg = registry()

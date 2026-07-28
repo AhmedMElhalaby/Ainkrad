@@ -89,8 +89,10 @@ extension AppEnvironment {
             { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
               t.toolStream = toolStreamStore; t.processController = terminalController
               t.permissionMode = permissionMode; return t }(),
-            GitOpTool(actionHub: agentActionHub),
-            GitPrTool(actionHub: agentActionHub),
+            // Git and Pull-Request operations are no longer host tools: Git Mage
+            // publishes them as `mcp/gitmage/*` over its in-process MCP server
+            // (see `AppMCPDiscovery`), so they arrive through `dynamicTools`
+            // below rather than being hard-coded here.
             TodoWriteTool(),
             PresentPlanTool(),
         ]
@@ -142,6 +144,13 @@ extension AppEnvironment {
             availability: { [weak pluginLaunchHub] appID in
                 pluginLaunchHub?.availability(of: appID) ?? .unknown
             })
+        // The other half of that memoization: a torn-down app's cached server
+        // must not outlive the instance it was built over. `deregister` is the
+        // one place an app is finished with (it already calls the app's own
+        // `teardown`), so the host-side eviction hangs off the same seam.
+        appRegistry.onAppTornDown = { [weak appServerActivator] appID in
+            appServerActivator?.evict(appID: appID)
+        }
         let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
                                                   activator: appServerActivator)
         // Read-class complement to the tool-call path above: fetches one

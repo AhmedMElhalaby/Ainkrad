@@ -12,6 +12,14 @@ final class BuiltInAppRegistry {
     private var enabledOverrides: [String: Bool]
     private(set) var loadFailures: [PluginLoadFailure] = []
 
+    /// Host-side follow-up to an app's own `teardown`, run on the same seam:
+    /// anything the HOST caches per app id and must drop when that app goes
+    /// away. Bootstrap points it at `AppServerActivator.evict`, whose memoized
+    /// MCP server would otherwise outlive the instance it was built over. A
+    /// closure, not a direct reference, so the registry gains no dependency on
+    /// the MCP subsystem's shape.
+    @ObservationIgnored var onAppTornDown: ((String) -> Void)?
+
     init(persistence: PersistenceStore) {
         self.persistence = persistence
         self.enabledOverrides = persistence.load(RegistryStateDocument.self)?.enabled ?? [:]
@@ -56,6 +64,7 @@ final class BuiltInAppRegistry {
         // never had a way to say "you're finished". Opt-in and best-effort: a
         // generation-7 plugin has no teardown and this is a no-op.
         app.teardown?()
+        onAppTornDown?(id)
         registeredApps.removeAll { $0.id == id }
     }
 
