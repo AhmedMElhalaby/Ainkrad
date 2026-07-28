@@ -58,6 +58,8 @@ struct RunTerminalTool: AgentTool {
                                     "description": .string("The shell command to run (via zsh -lc).")]),
                 "working_dir": .object(["type": .string("string"),
                                         "description": .string("Absolute working directory. Defaults to the user's home.")]),
+                "remote": .object(["type": .string("string"),
+                                   "description": .string("Optional. The id of a saved Leyline SSH connection to run this command ON, instead of running locally. Omit for a local run. Every remote command requires the user's approval.")]),
             ]),
             "required": .array([.string("command")]),
         ])
@@ -88,16 +90,21 @@ struct RunTerminalTool: AgentTool {
             throw ToolError.message("run_terminal requires a non-empty \"command\".")
         }
         let workingDir = input["working_dir"]?.stringValue
+        let remote = Self.remoteID(input)
 
         // Fail-closed: a router failure (backend unavailable/unregistered,
         // cloud not opted in, etc.) returns a failed tool result — it NEVER
-        // falls back to an unsandboxed direct exec.
+        // falls back to an unsandboxed direct exec. With `remote` set the
+        // router hands back the `.ssh` backend whatever the tier resolved to,
+        // and `SSHBackend` refuses the run unless the id resolves — so a remote
+        // command that cannot reach its host does not become a local one.
         let backend: any ExecutionBackend
         var profile: SandboxProfile
         do {
-            (backend, profile) = try await router.route(tier: effectiveTier, policy: agentPolicy)
+            (backend, profile) = try await router.route(tier: effectiveTier, policy: agentPolicy,
+                                                        remote: remote)
         } catch {
-            return ToolResult(content: "$ \(command)\n[blocked: \(error)]", isError: true)
+            return ToolResult(content: "$ \(command)\n[blocked: \(Self.blockedText(error))]", isError: true)
         }
         if let override = timeout { profile.resourceLimits.timeoutSeconds = Int(override) } // test seam
 
@@ -122,9 +129,9 @@ struct RunTerminalTool: AgentTool {
         do {
             result = try await backend.run(ExecutionRequest(
                 command: command, workingDir: workingDir, profile: profile, onOutput: onOutput,
-                processController: processController))
+                processController: processController, remote: remote))
         } catch {
-            return ToolResult(content: "$ \(command)\n[blocked: \(error)]", isError: true)
+            return ToolResult(content: "$ \(command)\n[blocked: \(Self.blockedText(error))]", isError: true)
         }
 
         var output = result.output
@@ -149,8 +156,18 @@ struct RunTerminalTool: AgentTool {
         return ToolResult(content: content, isError: result.isError)
     }
 
+    /// The approval card. For a remote run the machine is the thing the user
+    /// most needs to see, so it becomes the title — "Remote: prod-web" reads
+    /// very differently from "Run terminal", which is the point.
+    ///
+    /// This method is SYNCHRONOUS, so it cannot resolve the connection to a
+    /// hostname. It shows the id/label the caller supplied instead — which is
+    /// what the user named the connection and therefore what they recognise.
     func approvalPreview(_ input: JSONValue) -> ToolApprovalPreview {
         let command = input["command"]?.stringValue ?? "?"
+        if let remote = Self.remoteID(input) {
+            return ToolApprovalPreview(title: "Remote: \(remote)", summary: command, diff: nil)
+        }
         return ToolApprovalPreview(title: "Run terminal", summary: command, diff: nil)
     }
 
@@ -162,10 +179,55 @@ struct RunTerminalTool: AgentTool {
     /// retained as a coarse belt-and-braces pass so the new analyzer can only
     /// ever *widen* what gets stopped, never narrow it.
     func isIrreversible(_ input: JSONValue) -> Bool {
+        // A remote run ALWAYS requires approval, in every mode, allowlisted or
+        // trusted. `AgentPermissionPolicy.decide` checks `isIrreversible`
+        // first and unconditionally, and that is currently the ONLY mechanism
+        // that always prompts — so the flag is borrowed here.
+        //
+        // Be honest about the borrow: a remote command is not literally
+        // irreversible, it is OUTWARD-FACING. Two things the host cannot do
+        // make it always-approve anyway: it cannot assess risk on a machine it
+        // knows nothing about (`CommandRisk` reasons about *this* filesystem),
+        // and it cannot undo an effect that has already left this machine — a
+        // command on a production server is somebody else's state.
+        //
+        // The permission model has no separate concept for that yet. The
+        // review of Leyline's adoption of `destructive` proposed splitting it
+        // into locally-destructive vs outward-facing for exactly this reason;
+        // when that lands, this should move to the outward-facing flag and stop
+        // overloading `isIrreversible`. Until then this is deliberate, not an
+        // oversight.
+        if Self.remoteID(input) != nil { return true }
         let raw = input["command"]?.stringValue ?? ""
         if CommandRisk.isIrreversible(raw) { return true }
         let lowered = raw.lowercased()
         return Self.destructivePatterns.contains { lowered.contains($0) }
+    }
+
+    /// The text shown when a run is blocked.
+    ///
+    /// `BackendError.unavailable` carries a message written FOR the user —
+    /// "install Leyline", "attach a key with no passphrase". Interpolating the
+    /// error instead of that payload wrapped it in `unavailable(...)` and
+    /// backslash-escaped every quote inside it, turning actionable guidance
+    /// into debug output. Other error types have no such payload and keep
+    /// their description.
+    static func blockedText(_ error: any Error) -> String {
+        if case BackendError.unavailable(let message) = error { return message }
+        return "\(error)"
+    }
+
+    /// The `remote` argument, normalized to "a real target or nothing".
+    ///
+    /// One implementation, used by `execute`, `approvalPreview` and
+    /// `isIrreversible` alike — because a whitespace-only `remote` that read as
+    /// "present" to the approval gate but "absent" to the router (or the
+    /// reverse) is precisely how a remote run would slip through as a local
+    /// one. Absent/blank means local, everywhere.
+    static func remoteID(_ input: JSONValue) -> String? {
+        guard let raw = input["remote"]?.stringValue else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func echoJSON(command: String, output: String) -> String {

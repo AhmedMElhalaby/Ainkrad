@@ -15,7 +15,7 @@ struct SandboxWiringTests {
         let store = SandboxProfileStore(persistence: InMemoryPersistenceStore())
         let router = ExecutionRouter(profiles: store, backends: [
             .host: HostBackend(), .seatbelt: SeatbeltBackend(),
-            .docker: DockerBackend(), .ssh: SSHBackend(connection: nil),
+            .docker: DockerBackend(), .ssh: SSHBackend(resolveConnection: nil),
         ])
         let (backend, _) = try await router.route(tier: .mainInteractive, policy: nil)
         #expect(backend.kind == .host)
