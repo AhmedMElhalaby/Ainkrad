@@ -213,6 +213,39 @@ struct RunTerminalRemoteTests {
         #expect(preview.summary == "systemctl restart nginx")
     }
 
+    /// The property this whole label-addressing change exists to produce.
+    ///
+    /// Leyline connection ids are UUIDs, and `approvalPreview` is synchronous,
+    /// so it cannot look a label up — it can only print what the model passed.
+    /// A card reading `Remote: 9F3A1C2E-…` above `systemctl restart nginx`
+    /// gives the user nothing to catch a wrong-host mistake with, which is the
+    /// only reason the gate exists. Leyline now accepts a label, and the schema
+    /// below is the single lever that makes the model send one.
+    @Test("a supplied label reaches the approval card verbatim, and the schema asks for one")
+    func approvalCardReadsTheLabel() throws {
+        let hub = AgentActionRegistryHub()
+        let tool = RunTerminalTool(actionHub: hub, router: router(resolver: nil))
+
+        let byLabel = tool.approvalPreview(obj([
+            "command": .string("systemctl restart nginx"), "remote": .string("prod-web"),
+        ]))
+        #expect(byLabel.title == "Remote: prod-web")
+        #expect(!byLabel.title.contains("-4B7D-"))
+
+        // A UUID still works — it must, for the ambiguous-label case — but it
+        // is what the card is NOT supposed to read, so the steer lives in the
+        // schema description rather than in a rejection here.
+        let uuid = "9F3A1C2E-4B7D-4E19-9A6B-0C1D2E3F4A5B"
+        #expect(tool.approvalPreview(obj(["command": .string("uptime"),
+                                          "remote": .string(uuid)])).title == "Remote: \(uuid)")
+
+        let described = try #require(
+            tool.parametersSchema["properties"]?["remote"]?["description"]?.stringValue)
+        #expect(described.contains("label"))
+        #expect(described.contains("PREFER THE LABEL"))
+        #expect(described.contains("approval card"))
+    }
+
     // MARK: - No `remote` ⇒ unchanged
 
     @Test("without remote, the tool behaves exactly as before")

@@ -59,7 +59,7 @@ struct RunTerminalTool: AgentTool {
                 "working_dir": .object(["type": .string("string"),
                                         "description": .string("Absolute working directory. Defaults to the user's home.")]),
                 "remote": .object(["type": .string("string"),
-                                   "description": .string("Optional. The id of a saved Leyline SSH connection to run this command ON, instead of running locally. Omit for a local run. Every remote command requires the user's approval.")]),
+                                   "description": .string("Optional. A saved Leyline SSH connection to run this command ON, instead of running locally — its label OR its id. PREFER THE LABEL (e.g. \"prod-web\"): this exact string is shown to the user on the approval card as the machine the command will run on, and a UUID there is unreadable, so a wrong-host mistake gets approved. Use the id only when list_connections shows two connections sharing a label. Omit for a local run. Every remote command requires the user's approval.")]),
             ]),
             "required": .array([.string("command")]),
         ])
