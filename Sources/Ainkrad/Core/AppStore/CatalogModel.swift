@@ -28,17 +28,15 @@ struct MCPCatalogDescriptor: Codable, Equatable {
     let url: URL?
     let envKeys: [String]
     let headerKeys: [String]
-    let appID: String?
 
     init(transport: MCPTransportKind, command: String? = nil, args: [String] = [],
-         url: URL? = nil, envKeys: [String] = [], headerKeys: [String] = [], appID: String? = nil) {
+         url: URL? = nil, envKeys: [String] = [], headerKeys: [String] = []) {
         self.transport = transport
         self.command = command
         self.args = args
         self.url = url
         self.envKeys = envKeys
         self.headerKeys = headerKeys
-        self.appID = appID
     }
 }
 
@@ -145,7 +143,9 @@ extension CatalogEntry {
         switch mcp.transport {
         case .stdio: return (mcp.command?.isEmpty == false)
         case .httpSSE: return mcp.url?.scheme?.lowercased() == "https"
-        case .inProcess: return (mcp.appID?.isEmpty == false)
+        // In-process servers are synthesized from installed apps, never catalog-offered;
+        // reject malformed entries per the pattern above.
+        case .inProcess: return false
         }
     }
 

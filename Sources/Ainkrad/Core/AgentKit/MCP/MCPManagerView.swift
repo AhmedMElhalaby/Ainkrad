@@ -30,7 +30,6 @@ struct MCPManagerView: View {
     @State private var newCommand = ""
     @State private var newArgs = ""
     @State private var newURL = ""
-    @State private var newAppID = ""
     @State private var newEnvKeys = ""
     @State private var newHeaderKeys = ""
     /// In-progress secret VALUE drafts, keyed by `MCPSecretKey.keychainID`.
@@ -256,8 +255,9 @@ struct MCPManagerView: View {
             return idOK && nameOK && !newCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .httpSSE:
             return idOK && nameOK && URL(string: newURL) != nil
+        // In-process rows are synthesized from installed apps; not addable through this form.
         case .inProcess:
-            return idOK && nameOK && !newAppID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return false
         }
     }
 
