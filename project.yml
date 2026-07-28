@@ -40,7 +40,11 @@ packages:
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: dd96b2daf1cd528cf4c8b77cccffbed3fb066fb3
+    # Wave A of "apps over MCP" (AinkradAppKit PR #18, feat/apps-over-mcp-sdk):
+    # adds AinkradAppMCP + MCPAppServer, which this repo's host half needs.
+    # RE-PIN to the merge commit on development once PR #18 lands — this
+    # revision is currently reachable only from the unmerged feature branch.
+    revision: 3bf3e460708ad333c3a5cbed218caaed3f4e92a3
 
 targets:
   AinkradHostRuntime:
