@@ -151,7 +151,19 @@ public final class PluginLoader {
             return .failure(PluginRejection(reason: "signature: \(rejection.reason)"))
         }
 
-        guard bundle.load() else { return .failure(PluginRejection(reason: "Bundle.load() failed")) }
+        // WHY not `bundle.load()`: see `PluginLoadDiagnostics`. The bare `Bool`
+        // discards dyld's message, which is the only thing that names the
+        // missing symbol.
+        do {
+            try bundle.loadAndReturnError()
+        } catch {
+            let nsError = error as NSError
+            let diagnosis = PluginLoadDiagnostics.diagnose(nsError)
+            // The banner gets one sentence; the log keeps everything, so a
+            // truncated banner never costs us the underlying detail.
+            Log.registry.error("Bundle load failed for \(url.lastPathComponent, privacy: .public): \(diagnosis.log, privacy: .public)")
+            return .failure(PluginRejection(reason: diagnosis.banner))
+        }
         guard let principal = bundle.principalClass as? AinkradPluginEntryPoint.Type else {
             return .failure(PluginRejection(reason: "principal class missing or not AinkradPluginEntryPoint"))
         }
