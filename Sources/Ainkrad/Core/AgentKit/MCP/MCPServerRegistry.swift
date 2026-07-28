@@ -74,8 +74,27 @@ final class MCPServerRegistry {
     /// Connects every enabled server with no missing secrets and records health.
     /// Bounded/non-hanging: `MCPClient.connect()`/`listTools()` requests already carry
     /// their own timeout, so this introduces no additional unbounded await.
+    /// Re-entrant by design: `MCPManagerView` calls it after every enable/edit,
+    /// so it must converge on the store's CURRENT state rather than only add to
+    /// what is already live. Anything previously connected is released first —
+    /// otherwise a disabled server's tools stayed advertised and callable until
+    /// relaunch, and a re-enable leaked the old client (a child process, for
+    /// stdio) on every toggle.
     func connectEnabled() async {
-        for config in configStore.all() {
+        let configs = configStore.all()
+
+        // Servers deleted from the store keep no live client or tools behind.
+        let known = Set(configs.map(\.id))
+        for id in Set(clients.keys).union(tools.keys).subtracting(known) {
+            await release(id)
+            health[id] = nil
+        }
+
+        for config in configs {
+            // Unconditional, and BEFORE any of the guards below: a config that
+            // is now disabled, missing secrets, or no longer buildable must lose
+            // its tools just as surely as one that reconnects.
+            await release(config.id)
             guard config.enabled else { health[config.id] = .disabled; continue }
             guard configStore.missingSecrets(for: config.id).isEmpty else {
                 health[config.id] = .needsConfiguration
@@ -96,6 +115,14 @@ final class MCPServerRegistry {
                 await client.disconnect()
             }
         }
+    }
+
+    /// Disconnects and forgets one server's client and discovered tools. Never
+    /// throws, so it cannot narrow `connectEnabled()`'s per-server isolation.
+    private func release(_ id: String) async {
+        tools[id] = nil
+        guard let client = clients.removeValue(forKey: id) else { return }
+        await client.disconnect()
     }
 
     /// Disconnects every currently-connected client.

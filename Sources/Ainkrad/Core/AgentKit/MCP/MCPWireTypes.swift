@@ -12,6 +12,24 @@ struct MCPToolDescriptor: Equatable {
     let name: String
     let description: String
     let inputSchema: JSONValue
+    /// MCP `annotations.destructiveHint` — what the SDK's `MCPToolSpec.destructive`
+    /// serializes to. Drives `MCPToolAdapter.isIrreversible`, i.e. the Full-auto
+    /// approval guard. Defaults to `false` when the server sends no annotations:
+    /// the host must not invent a risk claim a server never made.
+    let destructive: Bool
+    /// MCP `annotations.readOnlyHint`. Recorded for display/future gating only —
+    /// it deliberately does NOT downgrade `MCPToolAdapter.permission`, which
+    /// would change gating semantics.
+    let readOnly: Bool
+
+    init(name: String, description: String, inputSchema: JSONValue,
+         destructive: Bool = false, readOnly: Bool = false) {
+        self.name = name
+        self.description = description
+        self.inputSchema = inputSchema
+        self.destructive = destructive
+        self.readOnly = readOnly
+    }
 }
 
 struct MCPResourceDescriptor: Equatable {
@@ -50,10 +68,13 @@ enum MCPRPC {
         guard case .array(let items)? = result["tools"] else { return [] }
         return items.compactMap { item in
             guard let name = item["name"]?.stringValue else { return nil }
+            let annotations = item["annotations"]
             return MCPToolDescriptor(
                 name: name,
                 description: item["description"]?.stringValue ?? "",
-                inputSchema: item["inputSchema"] ?? .object(["type": .string("object")]))
+                inputSchema: item["inputSchema"] ?? .object(["type": .string("object")]),
+                destructive: annotations?["destructiveHint"].flatMap(boolValue) ?? false,
+                readOnly: annotations?["readOnlyHint"].flatMap(boolValue) ?? false)
         }
     }
 
@@ -77,6 +98,11 @@ enum MCPRPC {
     /// True when the message is a server-initiated notification (no id).
     static func isNotification(_ message: JSONValue) -> Bool {
         message["id"] == nil && message["method"] != nil
+    }
+
+    private static func boolValue(_ v: JSONValue) -> Bool? {
+        if case .bool(let b) = v { return b }
+        return nil
     }
 
     private static func intValue(_ v: JSONValue) -> Int? {

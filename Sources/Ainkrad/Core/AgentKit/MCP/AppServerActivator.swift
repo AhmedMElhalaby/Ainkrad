@@ -47,6 +47,18 @@ final class AppServerActivator {
     /// How often to re-check `isAppOpen` while waiting for a launch.
     private let pollInterval: Duration = .milliseconds(50)
 
+    /// The only JSON-RPC methods that justify force-opening a closed app.
+    ///
+    /// `MCPAppServer.handle` answers `initialize`, `tools/list` and
+    /// `resources/list` purely from registration-time metadata (names,
+    /// descriptions, schemas, uris) — no bridge, no live view model, so no
+    /// shell is needed. Only `tools/call` and `resources/read` reach an
+    /// app-supplied handler/provider closure, which is exactly where a nil
+    /// context bridge on a closed app bites. Opening for everything would mean
+    /// `MCPServerRegistry.connectEnabled()`'s launch-time `initialize` popped
+    /// open EVERY MCP-publishing app on every launch, unasked.
+    private static let methodsRequiringLiveApp: Set<String> = ["tools/call", "resources/read"]
+
     init(serverFor: @escaping (String) -> MCPAppServer?,
          isAppOpen: @escaping (String) -> Bool,
          requestOpen: @escaping (String) -> Void,
@@ -87,12 +99,12 @@ final class AppServerActivator {
     func hasServer(appID: String) -> Bool { server(for: appID) != nil }
 
     /// Sends one JSON-RPC message to the app's server, opening the app first if
-    /// it isn't already open. Returns the raw reply, or an empty string when the
-    /// message was a notification.
+    /// the message needs a live shell and the app isn't already open. Returns
+    /// the raw reply, or an empty string when the message was a notification.
     func dispatch(appID: String, message: String) async throws -> String {
         guard let server = server(for: appID) else { throw AppDispatchFailure.notInstalled(appID) }
 
-        if !isAppOpen(appID) {
+        if Self.needsLiveApp(message), !isAppOpen(appID) {
             switch availability(appID) {
             case .unknown: throw AppDispatchFailure.notInstalled(appID)
             case .disabled: throw AppDispatchFailure.disabled(appID)
@@ -105,12 +117,28 @@ final class AppServerActivator {
         return await server.handle(message)
     }
 
+    /// Whether this message's JSON-RPC `method` is one of the few that need the
+    /// app's live state. A message that doesn't parse — or carries no method —
+    /// is deliberately NOT worth launching an app for: it is dispatched as-is so
+    /// the server answers with its own parse/invalid-request error.
+    private static func needsLiveApp(_ message: String) -> Bool {
+        guard let data = message.data(using: .utf8),
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let method = root["method"] as? String else { return false }
+        return methodsRequiringLiveApp.contains(method)
+    }
+
     /// Bounded wait — never an unbounded spin. Uses a deadline rather than a
     /// fixed iteration count so the poll interval can change without silently
     /// changing the timeout.
     private func waitUntilOpen(_ appID: String) async throws {
         let deadline = ContinuousClock.now.advanced(by: launchTimeout)
         while ContinuousClock.now < deadline {
+            // Checked explicitly because the sleep below swallows cancellation:
+            // on a cancelled task `Task.sleep` returns IMMEDIATELY, so without
+            // this the loop would busy-spin the main actor for the whole
+            // `launchTimeout` — a UI freeze, not just a missed cancellation.
+            try Task.checkCancellation()
             if isAppOpen(appID) { return }
             try? await Task.sleep(for: pollInterval)
         }

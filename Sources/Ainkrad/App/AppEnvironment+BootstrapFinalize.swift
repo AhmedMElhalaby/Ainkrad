@@ -132,9 +132,12 @@ extension AppEnvironment {
         // moment any `RegisteredApp` — and therefore any `mcpServerFactory` —
         // exists, so discovery has to run here rather than beside the
         // `MCPServerRegistry` construction in `bootstrapExecutionAndTools`
-        // (where the registry object exists but holds no apps yet). Purely
-        // static and synchronous: it reads a nullable closure per app, opens
-        // nothing and awaits nothing, so it costs the launch path nothing.
+        // (where the registry object exists but holds no apps yet). This call
+        // itself is purely static and synchronous — it reads a nullable closure
+        // per app, opens nothing and awaits nothing. (The `connectEnabled()`
+        // below is the part with real cost, and it is deliberately off the
+        // launch path; it does NOT open apps, because `AppServerActivator`
+        // force-opens only for `tools/call`/`resources/read`.)
         AppMCPDiscovery.refresh(apps: registry.allApps, into: mcpServerRegistry.configStore)
 
         // Connect enabled MCP servers off the launch path: `connectEnabled()` is async

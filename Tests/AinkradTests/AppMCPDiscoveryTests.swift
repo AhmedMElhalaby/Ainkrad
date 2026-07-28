@@ -53,6 +53,33 @@ struct AppMCPDiscoveryTests {
         #expect(config.trusted)
     }
 
+    /// Finding 3: without a prune pass an uninstalled app left a permanent
+    /// `.inProcess` card in MCP settings, stuck at "failed" and undeletable —
+    /// app rows have no remove button.
+    @Test("an uninstalled app's config is pruned")
+    func prunesConfigsForUninstalledApps() {
+        let configStore = store()
+        AppMCPDiscovery.refresh(apps: [app("gitmage", name: "Git Mage", mcp: true),
+                                       app("notes", name: "Notes", mcp: true)],
+                                into: configStore)
+        #expect(configStore.all().map(\.id).sorted() == ["gitmage", "notes"])
+
+        AppMCPDiscovery.refresh(apps: [app("gitmage", name: "Git Mage", mcp: true)],
+                                into: configStore)
+        #expect(configStore.all().map(\.id) == ["gitmage"])
+    }
+
+    @Test("pruning never touches an external server's config")
+    func pruneLeavesExternalConfigsAlone() throws {
+        let configStore = store()
+        configStore.upsert(MCPServerConfig(
+            id: "brave", displayName: "Brave", transport: .stdio,
+            command: "/usr/bin/brave", enabled: true, trusted: true))
+        // No apps at all — the stdio config must survive regardless.
+        AppMCPDiscovery.refresh(apps: [], into: configStore)
+        #expect(try #require(configStore.config(id: "brave")).transport == .stdio)
+    }
+
     @Test("an external server's config is left untouched")
     func leavesExternalConfigsAlone() throws {
         let configStore = store()

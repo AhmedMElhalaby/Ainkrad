@@ -77,6 +77,23 @@ struct MCPToolAdapterTests {
         #expect(r.content.contains("boom"))
     }
 
+    /// Finding 6: `permission` is a constant `.write`, so without honouring the
+    /// server's `destructiveHint` the Full-auto irreversible guard could never
+    /// fire for an MCP tool — a trusted server's destructive tool would
+    /// auto-approve.
+    @Test func destructiveHintDrivesIrreversibility() {
+        let destructive = MCPToolDescriptor(name: "reset", description: "",
+                                            inputSchema: .object([:]), destructive: true)
+        let plain = MCPToolDescriptor(name: "status", description: "", inputSchema: .object([:]))
+        #expect(MCPToolAdapter(server: "git", descriptor: destructive, client: client())
+            .isIrreversible(.object([:])))
+        #expect(!MCPToolAdapter(server: "git", descriptor: plain, client: client())
+            .isIrreversible(.object([:])))
+        // permission stays `.write` for both — read-only gating is a separate call.
+        #expect(MCPToolAdapter(server: "git", descriptor: destructive, client: client())
+            .permission == .write)
+    }
+
     @Test func namespaceParsesBackToServerAndTool() {
         let desc = MCPToolDescriptor(name: "search", description: "", inputSchema: .object([:]))
         let adapter = MCPToolAdapter(server: "web", descriptor: desc, client: client())

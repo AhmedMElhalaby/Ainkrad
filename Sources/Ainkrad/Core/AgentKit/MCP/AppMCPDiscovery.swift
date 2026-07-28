@@ -16,7 +16,18 @@ enum AppMCPDiscovery {
     /// of ones already known. The user's `enabled`/`trusted` choices are the
     /// user's — a refresh never resets them. Configs for other transports are
     /// never touched.
+    /// Configs for apps that are gone are pruned: an uninstalled app would
+    /// otherwise leave a permanent `.inProcess` card in MCP settings, stuck at
+    /// "failed", with no way to delete it (an app row has no remove button).
+    /// Only `.inProcess` configs are ours to prune — a stdio/httpSSE config is
+    /// the user's own and is never touched, matched or not.
     static func refresh(apps: [RegisteredApp], into store: MCPServerConfigStore) {
+        let installed = Set(apps.map(\.id))
+        for config in store.all() where config.transport == .inProcess
+            && !installed.contains(config.appID ?? config.id) {
+            store.remove(id: config.id)
+        }
+
         for app in apps where app.mcpServerFactory != nil {
             if let existing = store.config(id: app.id) {
                 // An id collision with a user-configured stdio/httpSSE server is
