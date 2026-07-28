@@ -131,4 +131,18 @@ struct MCPWireTypesTests {
         #expect(resources[0].requiresLiveApp == true)
         #expect(resources[1].requiresLiveApp == false)
     }
+
+    @Test("a resource's MCP description decodes, and its absence is an empty string")
+    func decodesResourceDescription() {
+        let result = JSONValue.object(["resources": .array([
+            .object(["uri": .string("lore://notes"),
+                     "description": .string("Read when the user asks about the vault.")]),
+            // A remote server predating the field must not become nil-shaped:
+            // the tool description branches on `isEmpty`, not on optionality.
+            .object(["uri": .string("lore://plain")]),
+        ])])
+        let resources = MCPRPC.decodeResourceList(result)
+        #expect(resources[0].description == "Read when the user asks about the vault.")
+        #expect(resources[1].description == "")
+    }
 }

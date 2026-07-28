@@ -41,15 +41,16 @@ packages:
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
     # Apps-over-MCP: AinkradAppMCP + MCPAppServer (PR #18) and the per-tool
-    # `requiresLiveApp` flag (PR #20). Always a merge commit on development,
-    # never a feature-branch SHA.
+    # `requiresLiveApp` flag (PR #20), plus resource `purpose`/`resultProvider`
+    # (feat/resource-description-and-errors). Always a merge commit on
+    # development, never a feature-branch SHA.
     #
     # KEEP THIS AT OR AHEAD OF EVERY PLUGIN'S PIN. The host embeds the one
     # dynamic copy of the SDK; a plugin built against a NEWER revision links
     # symbols this copy does not define and dies at `Bundle.load()` with no
     # hint as to why. Terminal hit exactly that: same generation (8), newer
     # revision, missing `MCPResourceSpec.requiresLiveApp` setter.
-    revision: 2fb237310b90459054c2280ac338f61d718248db
+    revision: 69a21dd73e4a7fdbb78099df015863251e82c637
 
 targets:
   AinkradHostRuntime:
