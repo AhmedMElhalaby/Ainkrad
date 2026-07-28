@@ -104,6 +104,42 @@ struct MCPToolAdapterTests {
         #expect(!adapter.isIrreversible(.object(["branch": .string("main")])))
     }
 
+    /// This text is what the user reads at the moment they authorise an
+    /// irreversible operation. The default `AgentTool` preview dumped raw JSON
+    /// (`mcp/gitmage/reset_hard` + `{"args":{...},"repoPath":"/x"}`); it must
+    /// read like the host's own tools did (`Git: reset` / `reset — /repo`).
+    @Test func approvalPreviewIsHumanReadableNotRawJSON() {
+        let desc = MCPToolDescriptor(name: "reset_hard", description: "",
+                                     inputSchema: .object([:]), destructive: true)
+        let adapter = MCPToolAdapter(server: "gitmage", descriptor: desc, client: client())
+        let preview = adapter.approvalPreview(.object([
+            "repoPath": .string("/x"),
+            "args": .object(["ref": .string("HEAD~1")]),
+        ]))
+        #expect(preview.title == "Gitmage reset hard")
+        // The inner `args` values are flattened out — they are the dangerous
+        // ones, and "args" itself tells the user nothing.
+        #expect(preview.summary == "ref: HEAD~1 · repoPath: /x")
+        #expect(!preview.summary.contains("{"), "no raw JSON in the approval prompt")
+        #expect(preview.diff == nil)
+    }
+
+    /// Non-string scalars and deeper structure must still read as something,
+    /// and a huge payload must not push the meaningful part off the HUD.
+    @Test func approvalPreviewRendersScalarsAndCapsLength() {
+        let desc = MCPToolDescriptor(name: "pr_create", description: "", inputSchema: .object([:]))
+        let adapter = MCPToolAdapter(server: "gitmage", descriptor: desc, client: client())
+        let preview = adapter.approvalPreview(.object([
+            "draft": .bool(false), "number": .number(7),
+            "labels": .array([.string("a"), .string("b")]),
+        ]))
+        #expect(preview.summary == "draft: false · labels: [2 items] · number: 7")
+
+        let long = adapter.approvalPreview(.object(["body": .string(String(repeating: "x", count: 500))]))
+        #expect(long.summary.count < 260)
+        #expect(long.summary.hasSuffix("…"))
+    }
+
     @Test func namespaceParsesBackToServerAndTool() {
         let desc = MCPToolDescriptor(name: "search", description: "", inputSchema: .object([:]))
         let adapter = MCPToolAdapter(server: "web", descriptor: desc, client: client())

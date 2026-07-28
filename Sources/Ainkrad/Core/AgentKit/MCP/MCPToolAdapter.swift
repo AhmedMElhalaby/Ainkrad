@@ -38,6 +38,69 @@ struct MCPToolAdapter: AgentTool {
         descriptor.destructive || MCPArgumentRisk.hasOptionLookingValue(input)
     }
 
+    /// What the user reads at the moment they authorise an irreversible call,
+    /// so it must not be a raw JSON dump. The default `AgentTool` preview
+    /// rendered `mcp/gitmage/reset_hard` + `{"args":{"ref":"HEAD~1"},...}`; the
+    /// host's own git tool used to say `Git: reset` / `reset — /repo`, and this
+    /// restores that register for every MCP tool.
+    ///
+    /// The title goes through `ToolPresentation.humanize`, the ONE place that
+    /// knows both MCP spellings (`mcp/…` and `mcp__…`) — deliberately not a
+    /// second copy of that prefix logic here.
+    func approvalPreview(_ input: JSONValue) -> ToolApprovalPreview {
+        ToolApprovalPreview(title: ToolPresentation.humanize(name),
+                            summary: Self.summarize(input), diff: nil)
+    }
+
+    /// A readable one-line rendering of the call's arguments.
+    ///
+    /// Flattens exactly one level of nesting, because the shape MCP payloads
+    /// actually take is a flat envelope plus a single `args`/`arguments` object
+    /// (`{"repoPath": "/x", "args": {"ref": "HEAD~1"}}`), and the user needs the
+    /// inner values — those are the dangerous ones — not the word "args".
+    /// Deeper structure is summarised rather than expanded, and the whole line
+    /// is capped, so a large payload can never push the meaningful part of the
+    /// prompt off the HUD.
+    private static func summarize(_ input: JSONValue) -> String {
+        guard case .object(let root) = input, !root.isEmpty else { return scalar(input) ?? "" }
+        var parts: [String] = []
+        for key in root.keys.sorted() {
+            guard let value = root[key] else { continue }
+            if case .object(let nested) = value {
+                for inner in nested.keys.sorted() {
+                    guard let innerValue = nested[inner] else { continue }
+                    parts.append("\(inner): \(scalar(innerValue) ?? shape(innerValue))")
+                }
+            } else {
+                parts.append("\(key): \(scalar(value) ?? shape(value))")
+            }
+        }
+        let line = parts.joined(separator: " · ")
+        return line.count <= summaryLimit ? line : String(line.prefix(summaryLimit)) + "…"
+    }
+    private static let summaryLimit = 240
+
+    /// The value as plain text, or nil when it is not a scalar.
+    private static func scalar(_ value: JSONValue) -> String? {
+        switch value {
+        case .string(let s): return s
+        case .bool(let b): return "\(b)"
+        case .number(let n): return n == n.rounded() ? String(Int(n)) : "\(n)"
+        case .null: return "null"
+        case .array, .object: return nil
+        }
+    }
+
+    /// A non-scalar's shape, so a nested payload still reads as something
+    /// rather than vanishing from the prompt.
+    private static func shape(_ value: JSONValue) -> String {
+        switch value {
+        case .array(let items): return "[\(items.count) items]"
+        case .object(let dict): return "{\(dict.count) fields}"
+        default: return scalar(value) ?? ""
+        }
+    }
+
     func execute(_ input: JSONValue) async throws -> ToolResult {
         do {
             let text = try await client.callTool(name: descriptor.name, arguments: input)
