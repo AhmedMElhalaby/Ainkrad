@@ -85,7 +85,14 @@ struct MCPToolAdapter: AgentTool {
         switch value {
         case .string(let s): return s
         case .bool(let b): return "\(b)"
-        case .number(let n): return n == n.rounded() ? String(Int(n)) : "\(n)"
+        // `Int(exactly:)`, never `Int(n)`. Every JSON number is a `Double`, and
+        // `Int(Double)` TRAPS outside `Int`'s range — for exactly the values an
+        // `n == n.rounded()` test waves through: any integral magnitude past
+        // `Int.max` (`1e30`), and `±.infinity`, whose `.rounded()` is itself.
+        // This runs on the approval-preview path with a model- or
+        // server-controlled value, so a trap here crashes the app at the moment
+        // the user is being asked to authorise an irreversible call.
+        case .number(let n): return Int(exactly: n).map(String.init) ?? "\(n)"
         case .null: return "null"
         case .array, .object: return nil
         }
