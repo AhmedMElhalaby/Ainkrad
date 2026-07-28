@@ -74,7 +74,30 @@ for repo in Ainkrad AinkradKit AinkradPluginTemplate AinkradTerminal GitMage Ain
   done
 done
 
-host_pin="$(grep -A5 'AinkradAppKit:' "$HOST_ROOT/project.yml" | grep -m1 'revision:' | awk '{print $2}')"
+# Extract the `revision:` belonging to the AinkradAppKit package entry.
+#
+# This was `grep -A5 'AinkradAppKit:' | grep revision:`, and a 10-line
+# explanatory comment added between the key and its revision pushed the pin
+# past the 5-line window. The check then read an EMPTY pin and — because the
+# empty-pin branch only fails when no local path dependency exists — the
+# lockstep invariant went unverified while still printing a green-looking run.
+# A guard that silently stops guarding is worse than no guard, so scan the
+# whole YAML block: from the key until the next line indented no deeper,
+# skipping comments and blanks.
+appkit_pin() {
+  awk '
+    /AinkradAppKit:[[:space:]]*$/ && !inblock {
+      match($0, /[^ ]/); keyindent = RSTART; inblock = 1; next
+    }
+    inblock {
+      if ($0 ~ /^[[:space:]]*($|#)/) next
+      match($0, /[^ ]/)
+      if (RSTART <= keyindent) { inblock = 0; next }
+      if ($0 ~ /^[[:space:]]*revision:/) { gsub(/^[[:space:]]*revision:[[:space:]]*/, ""); gsub(/["'"'"'].*$/, ""); print; exit }
+    }
+  ' "$1"
+}
+host_pin="$(appkit_pin "$HOST_ROOT/project.yml")"
 if [[ -z "$host_pin" ]]; then
   if [[ "$path_deps" -gt 0 ]]; then
     echo "  – pin equality not checkable while local path dependencies are in use"
@@ -88,7 +111,7 @@ else
     [[ -d "$dir" ]] || { echo "  – $repo (not present, skipped)"; continue; }
     pin=""
     if [[ -f "$dir/project.yml" ]]; then
-      pin="$(grep -A5 'AinkradAppKit:' "$dir/project.yml" | grep -m1 'revision:' | awk '{print $2}')"
+      pin="$(appkit_pin "$dir/project.yml")"
     fi
     if [[ -z "$pin" && -f "$dir/Package.swift" ]]; then
       pin="$(grep -oE 'revision: "[a-f0-9]{40}"' "$dir/Package.swift" | head -1 | grep -oE '[a-f0-9]{40}')"
@@ -144,7 +167,22 @@ done
 if [[ -z "$sdk_api" ]]; then
   fail "could not read apiVersion from the AinkradAppKit sources"
 else
-  min_supported=$((sdk_api - 1))
+  # Read the FLOOR from the SDK too, rather than assuming `apiVersion - 1`.
+  # That assumption encodes the intended one-generation deprecation window,
+  # but generation 8 is a HARD break (the module split renamed every symbol),
+  # so the SDK sets `minSupportedAPIVersion = apiVersion`. Computing the floor
+  # here made preflight PASS a generation-7 plugin that the host then refuses
+  # to load — a false negative in the one check whose whole purpose is to stop
+  # plugins from silently vanishing. Derive it, don't guess it.
+  min_supported="$(grep -oE 'minSupportedAPIVersion[[:space:]]*=[[:space:]]*apiVersion[[:space:]]*-[[:space:]]*[0-9]+' "$candidate" | grep -oE '[0-9]+$' | head -1)"
+  if [[ -n "$min_supported" ]]; then
+    min_supported=$((sdk_api - min_supported))
+  elif grep -qE 'minSupportedAPIVersion[[:space:]]*=[[:space:]]*apiVersion[[:space:]]*$' "$candidate"; then
+    min_supported="$sdk_api"
+  else
+    min_supported="$(grep -oE 'minSupportedAPIVersion[[:space:]]*=[[:space:]]*[0-9]+' "$candidate" | grep -oE '[0-9]+$' | head -1)"
+  fi
+  [[ -n "$min_supported" ]] || fail "could not read minSupportedAPIVersion from the AinkradAppKit sources"
   echo "  host supports [$min_supported … $sdk_api]"
   for entry in "${PLUGIN_REPOS[@]}"; do
     repo="${entry%%:*}"
