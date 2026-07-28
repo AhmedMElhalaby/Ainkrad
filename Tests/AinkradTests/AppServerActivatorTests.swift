@@ -22,6 +22,12 @@ struct AppServerActivatorTests {
 
     let callPing = #"{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ping","arguments":{}}}"#
 
+    /// Stands in for an app that declared `requiresLiveApp` on every tool. The
+    /// activator's own default is the opposite (`false` everywhere), so the
+    /// tests that exercise the OPEN path must opt in explicitly — that is the
+    /// point of the change: opening is now the app's claim, not the method's.
+    let needsWindow: (String, String, String) -> Bool = { _, _, _ in true }
+
     @Test("dispatches straight through when the app is already open", .timeLimit(.minutes(1)))
     func dispatchesWhenOpen() async throws {
         let counter = Counter()
@@ -47,6 +53,7 @@ struct AppServerActivatorTests {
             isAppOpen: { _ in opened },
             requestOpen: { _ in opened = true },   // the host opens it synchronously here
             availability: { _ in .available },
+            requiresLiveApp: needsWindow,
             launchTimeout: .seconds(2),
             onLaunch: { launched.append($0) })
         let reply = try await activator.dispatch(appID: "demo", message: callPing)
@@ -92,6 +99,70 @@ struct AppServerActivatorTests {
         #expect(openRequests.isEmpty)
     }
 
+    /// THE regression. The gate used to be per-METHOD, so every `tools/call`
+    /// force-opened the app: asking the assistant to create a Lore note popped
+    /// Lore's window open. A tool that never claimed it needs a window must be
+    /// dispatched against a CLOSED app, in the background, with no open request
+    /// and no launch wait.
+    @Test("a background tool call against a closed app never opens it",
+          .timeLimit(.minutes(1)))
+    func backgroundToolCallDoesNotOpenTheApp() async throws {
+        let counter = Counter()
+        var openRequests: [String] = []
+        var launched: [String] = []
+        let activator = AppServerActivator(
+            servers: ["demo": makeServer(counter)],
+            isAppOpen: { _ in false },          // closed, and stays closed
+            requestOpen: { openRequests.append($0) },
+            availability: { _ in .available },
+            // The default the host now ships with: nothing declares it.
+            launchTimeout: .milliseconds(200),
+            onLaunch: { launched.append($0) })
+        let reply = try await activator.dispatch(appID: "demo", message: callPing)
+        #expect(reply.contains("pong"))         // the handler actually ran
+        #expect(counter.calls == 1)
+        #expect(openRequests.isEmpty)           // …with no window popped open
+        #expect(launched.isEmpty)               // …and no launch event
+    }
+
+    /// The other half: an app that DOES declare a tool needs its window still
+    /// gets one. Guards against "fixed the pop-open by never opening at all".
+    @Test("only the declaring tool opens the app", .timeLimit(.minutes(1)))
+    func onlyDeclaredToolsOpenTheApp() async throws {
+        let counter = Counter()
+        var opened = false
+        var openRequests: [String] = []
+        let activator = AppServerActivator(
+            servers: ["demo": makeServer(counter)],
+            isAppOpen: { _ in opened },
+            requestOpen: { openRequests.append($0); opened = true },
+            availability: { _ in .available },
+            requiresLiveApp: { _, _, name in name == "ping" },
+            launchTimeout: .seconds(2))
+        _ = try await activator.dispatch(appID: "demo", message: callPing)
+        #expect(openRequests == ["demo"])
+    }
+
+    /// A `tools/call` with no `name` has nothing to look a flag up by, and the
+    /// server will reject it anyway — so it must not launch an app either.
+    @Test("a tools/call with no name never opens the app", .timeLimit(.minutes(1)))
+    func namelessToolCallDoesNotOpenTheApp() async throws {
+        let counter = Counter()
+        var openRequests: [String] = []
+        let activator = AppServerActivator(
+            servers: ["demo": makeServer(counter)],
+            isAppOpen: { _ in false },
+            requestOpen: { openRequests.append($0) },
+            availability: { _ in .available },
+            requiresLiveApp: needsWindow,
+            launchTimeout: .milliseconds(200))
+        let reply = try await activator.dispatch(
+            appID: "demo",
+            message: #"{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{}}"#)
+        #expect(reply.contains("-32602"))
+        #expect(openRequests.isEmpty)
+    }
+
     @Test("tools/call against a closed app still opens it first", .timeLimit(.minutes(1)))
     func toolsCallStillOpensTheApp() async throws {
         let counter = Counter()
@@ -102,6 +173,7 @@ struct AppServerActivatorTests {
             isAppOpen: { _ in opened },
             requestOpen: { openRequests.append($0); opened = true },
             availability: { _ in .available },
+            requiresLiveApp: needsWindow,
             launchTimeout: .seconds(2))
         let reply = try await activator.dispatch(appID: "demo", message: callPing)
         #expect(reply.contains("pong"))
@@ -120,6 +192,7 @@ struct AppServerActivatorTests {
             isAppOpen: { _ in false },          // never opens
             requestOpen: { _ in },
             availability: { _ in .available },
+            requiresLiveApp: needsWindow,
             launchTimeout: .seconds(30))        // far longer than we will wait
         let start = ContinuousClock.now
         let task = Task { try await activator.dispatch(appID: "demo", message: callPing) }
@@ -145,7 +218,8 @@ struct AppServerActivatorTests {
         let activator = AppServerActivator(
             servers: ["demo": makeServer(counter)],
             isAppOpen: { _ in false }, requestOpen: { _ in },
-            availability: { _ in .disabled })
+            availability: { _ in .disabled },
+            requiresLiveApp: needsWindow)
         await #expect(throws: AppDispatchFailure.disabled("demo")) {
             try await activator.dispatch(appID: "demo", message: callPing)
         }
@@ -196,6 +270,7 @@ struct AppServerActivatorTests {
             isAppOpen: { _ in false },          // never becomes open
             requestOpen: { _ in },
             availability: { _ in .available },
+            requiresLiveApp: needsWindow,
             launchTimeout: .milliseconds(200))
         await #expect(throws: AppDispatchFailure.launchTimedOut("demo")) {
             try await activator.dispatch(appID: "demo", message: callPing)

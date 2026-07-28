@@ -32,6 +32,11 @@ final class MCPServerRegistry {
     private let activator: AppServerActivator?
     private var clients: [String: MCPClient] = [:]
     private var tools: [String: [MCPToolDescriptor]] = [:]
+    /// Discovered resources, kept only so `requiresLiveApp(appID:method:name:)`
+    /// can answer for `resources/read` the same way it does for `tools/call`.
+    /// Reading a resource still goes through `MCPReadResourceTool`, which asks
+    /// the client directly — this is not a read cache.
+    private var resources: [String: [MCPResourceDescriptor]] = [:]
     private(set) var health: [String: MCPHealth] = [:]
 
     /// - Parameter clientFactory: builds the right transport-backed client from a config.
@@ -109,6 +114,10 @@ final class MCPServerRegistry {
                 let discovered = try await client.listTools()
                 clients[config.id] = client
                 tools[config.id] = discovered
+                // `try?`: a server with no resources capability answers
+                // `resources/list` with an RPC error, and that must not
+                // downgrade an otherwise healthy connection to `.failed`.
+                resources[config.id] = (try? await client.listResources()) ?? []
                 health[config.id] = .connected(toolCount: discovered.count)
             } catch {
                 health[config.id] = .failed(String(describing: error))
@@ -121,6 +130,7 @@ final class MCPServerRegistry {
     /// throws, so it cannot narrow `connectEnabled()`'s per-server isolation.
     private func release(_ id: String) async {
         tools[id] = nil
+        resources[id] = nil
         guard let client = clients.removeValue(forKey: id) else { return }
         await client.disconnect()
     }
@@ -130,6 +140,31 @@ final class MCPServerRegistry {
         for client in clients.values { await client.disconnect() }
         clients.removeAll()
         tools.removeAll()
+        resources.removeAll()
+    }
+
+    /// Whether the tool/resource an in-process app is about to be asked for
+    /// needs that app's window on screen. Wired into `AppServerActivator`, which
+    /// force-opens the app only when this says so — see its `requiresLiveApp`.
+    ///
+    /// Resolves appID → config → discovered descriptor, because the registry
+    /// keys everything by CONFIG id while the activator only knows the app id.
+    /// An unknown app, an unconnected server, or an undeclared tool all answer
+    /// `false`: the host must never invent a window-open on a claim no app made.
+    func requiresLiveApp(appID: String, method: String, name: String) -> Bool {
+        let serverIDs = configStore.all().filter { $0.appID == appID }.map(\.id)
+        switch method {
+        case "tools/call":
+            return serverIDs.contains { id in
+                tools[id]?.contains { $0.name == name && $0.requiresLiveApp } ?? false
+            }
+        case "resources/read":
+            return serverIDs.contains { id in
+                resources[id]?.contains { $0.uri == name && $0.requiresLiveApp } ?? false
+            }
+        default:
+            return false
+        }
     }
 
     /// Enabled+connected servers' discovered tools, keyed by owning server.

@@ -85,7 +85,10 @@ extension AppEnvironment {
         var agentTools: [any AgentTool] = [
             ReadFileTool(),
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
-            WorkspaceControlTool(workspaces: workspaceManager),
+            // The launch hub carries `openApp`: since MCP tool calls no longer
+            // force an app open, this is the assistant's ONLY way to honour
+            // "open Lore".
+            WorkspaceControlTool(workspaces: workspaceManager, launchHub: pluginLaunchHub),
             { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
               t.toolStream = toolStreamStore; t.processController = terminalController
               t.permissionMode = permissionMode; return t }(),
@@ -127,6 +130,11 @@ extension AppEnvironment {
         // server on first use, so a server is built once and holds its app's
         // live state. The matching `AppMCPDiscovery.refresh` call lives in
         // `finalizeBootstrap`, right after the apps are actually installed.
+        // Late-bound on purpose: the flag lives on the MCP registry's discovered
+        // descriptors, and that registry is built FROM this activator two
+        // statements below. Boxing the reference is the same trick the closures
+        // above use for `pluginLaunchHub` — resolve at call time, not here.
+        var mcpRegistryForLiveAppFlag: (() -> MCPServerRegistry?)?
         let appServerActivator = AppServerActivator(
             serverFor: { [weak appRegistry] appID in
                 appRegistry?.allApps.first { $0.id == appID }?.mcpServerFactory?()
@@ -143,6 +151,13 @@ extension AppEnvironment {
             requestOpen: { [weak pluginLaunchHub] appID in pluginLaunchHub?.requestOpen(appID) },
             availability: { [weak pluginLaunchHub] appID in
                 pluginLaunchHub?.availability(of: appID) ?? .unknown
+            },
+            // No registry yet (or no discovery done) means no app has claimed it
+            // needs its window, so the call runs in the background — which is
+            // what a tool call should do.
+            requiresLiveApp: { appID, method, name in
+                mcpRegistryForLiveAppFlag?()?
+                    .requiresLiveApp(appID: appID, method: method, name: name) ?? false
             })
         // The other half of that memoization: a torn-down app's cached server
         // must not outlive the instance it was built over. `deregister` is the
@@ -153,6 +168,9 @@ extension AppEnvironment {
         }
         let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
                                                   activator: appServerActivator)
+        // Closes the loop opened above. Weak so the activator's closure cannot
+        // keep the registry alive past teardown.
+        mcpRegistryForLiveAppFlag = { [weak mcpServerRegistry] in mcpServerRegistry }
         // Read-class complement to the tool-call path above: fetches one
         // resource's full contents on demand (see `MCPReadResourceTool` doc
         // comment for why this exists alongside `<workspace_context>`).

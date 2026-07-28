@@ -101,4 +101,34 @@ struct MCPWireTypesTests {
         #expect(tools.last?.destructive == false)
         #expect(tools.last?.readOnly == true)
     }
+
+    /// Ainkrad-namespaced, because it is not a standard MCP annotation. Absent
+    /// must decode as `false`: a remote server never sends it, and the host must
+    /// never pop an app window open on a claim no server made.
+    @Test("ainkrad/requiresLiveApp decodes, and defaults to false when absent")
+    func decodesRequiresLiveApp() {
+        let result = JSONValue.object(["tools": .array([
+            .object(["name": .string("draw"),
+                     "annotations": .object(["ainkrad/requiresLiveApp": .bool(true)])]),
+            .object(["name": .string("note"),
+                     "annotations": .object(["ainkrad/requiresLiveApp": .bool(false)])]),
+            .object(["name": .string("legacy")]),
+        ])])
+        let tools = MCPRPC.decodeToolList(result)
+        #expect(tools[0].requiresLiveApp == true)
+        #expect(tools[1].requiresLiveApp == false)
+        #expect(tools[2].requiresLiveApp == false)
+    }
+
+    @Test("resource annotations carry ainkrad/requiresLiveApp")
+    func decodesResourceRequiresLiveApp() {
+        let result = JSONValue.object(["resources": .array([
+            .object(["uri": .string("lore://live"),
+                     "annotations": .object(["ainkrad/requiresLiveApp": .bool(true)])]),
+            .object(["uri": .string("lore://cold")]),
+        ])])
+        let resources = MCPRPC.decodeResourceList(result)
+        #expect(resources[0].requiresLiveApp == true)
+        #expect(resources[1].requiresLiveApp == false)
+    }
 }
