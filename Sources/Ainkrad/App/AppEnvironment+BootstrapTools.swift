@@ -129,8 +129,14 @@ extension AppEnvironment {
             serverFor: { [weak appRegistry] appID in
                 appRegistry?.allApps.first { $0.id == appID }?.mcpServerFactory?()
             },
-            isAppOpen: { [weak workspaceManager] appID in
-                workspaceManager?.isAppOpen(appID) ?? false
+            // Both open-state and launch go through the hub: "open" must count
+            // an `.overlay`-presented app, which has no `tileLayout` block —
+            // asking `workspaceManager` alone would report a live overlay app
+            // as closed and every dispatch to it would wait out the launch
+            // timeout. `AppEnvironment.isAppOpen` composes the two halves; the
+            // hub is how that late-created answer reaches this closure.
+            isAppOpen: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.isOpen(appID) ?? false
             },
             requestOpen: { [weak pluginLaunchHub] appID in pluginLaunchHub?.requestOpen(appID) },
             availability: { [weak pluginLaunchHub] appID in

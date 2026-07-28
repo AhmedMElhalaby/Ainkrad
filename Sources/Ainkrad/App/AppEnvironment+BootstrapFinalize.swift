@@ -64,15 +64,6 @@ extension AppEnvironment {
                 }
             }
 
-            // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
-            // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
-            // launch itself must never block on a slow or down server, so this is fired
-            // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
-            // Tools/trust populate as servers come up; a down server just never appears.
-            Task { [weak mcpServerRegistry] in
-                await mcpServerRegistry?.connectEnabled()
-            }
-
             // Seed autodetected LSP servers off the launch path: `autodetect()` shells out to
             // `which` once per known server (a handful of `Process` spawns), so it runs inside
             // this unawaited `Task` rather than synchronously in `bootstrap()`. `seedIfEmpty`
@@ -144,9 +135,21 @@ extension AppEnvironment {
         // (where the registry object exists but holds no apps yet). Purely
         // static and synchronous: it reads a nullable closure per app, opens
         // nothing and awaits nothing, so it costs the launch path nothing.
-        // The unawaited `connectEnabled()` Task above cannot run before this
-        // synchronous main-actor body returns, so it sees these configs.
         AppMCPDiscovery.refresh(apps: registry.allApps, into: mcpServerRegistry.configStore)
+
+        // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
+        // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
+        // launch itself must never block on a slow or down server, so this is fired
+        // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
+        // Tools/trust populate as servers come up; a down server just never appears.
+        // MUST stay below `AppMCPDiscovery.refresh` above: it connects whatever configs
+        // exist at that moment, so app-server configs have to be synthesized first.
+        // Skipped under a hosted test run for the same reason as the block above.
+        if !AppEnvironment.isRunningUnderTests {
+            Task { [weak mcpServerRegistry] in
+                await mcpServerRegistry?.connectEnabled()
+            }
+        }
 
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
@@ -176,6 +179,16 @@ extension AppEnvironment {
                 environment.workspaceManager.activeWorkspace.tileLayout.openApp(appID)
                 environment.presentedOverlayAppID = nil
             }
+        }
+
+        // Counterpart to the open handler, for callers that need a live shell
+        // rather than a launch — currently the app-hosted MCP activator, which
+        // must not re-launch (and then time out waiting for) an app that is
+        // already up. Installed here, with the same `[weak environment]` late
+        // binding as the two handlers around it, because `presentedOverlayAppID`
+        // only exists once `environment` does.
+        pluginLaunchHub.setOpenStateProvider { [weak environment] appID in
+            environment?.isAppOpen(appID) ?? false
         }
 
         // Generation 8: lets `apps.openReportingOutcome` tell a plugin WHY a

@@ -384,6 +384,20 @@ final class AppEnvironment {
         self.registeredSkillCommandNames = Set(skillCommandStore.slashCommands(registry: skillRegistry).map(\.name))
     }
 
+    /// True when this app currently has a live shell, by EITHER presentation
+    /// route: a tiled pane in any workspace, or the floating overlay
+    /// (`.overlay` apps never get a `tileLayout` block — see the launch-hub
+    /// open handler in `finalizeBootstrap`).
+    ///
+    /// This composition lives here because `AppEnvironment` is the only type
+    /// that owns both halves. Backs the app-hosted MCP activator's "do I need
+    /// to launch this app first?" check — answering `false` for an already-
+    /// presented overlay app would make every tool call against it wait out the
+    /// launch timeout and fail, for a server that was reachable the whole time.
+    func isAppOpen(_ appID: String) -> Bool {
+        workspaceManager.isAppTiled(appID) || presentedOverlayAppID == appID
+    }
+
     /// Re-syncs the live `commandRegistry` with the current
     /// `skillCommandStore` bindings. Bootstrap (`bootstrap()` below) only
     /// registers skill `/name` commands once, at launch — a bind/unbind made

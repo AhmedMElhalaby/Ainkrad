@@ -109,10 +109,14 @@ final class WorkspaceManager {
         onStateChange?()
     }
 
-    /// True when this app has an open pane in ANY workspace, not just the
-    /// active one — a block on an inactive workspace is still a live shell, so
-    /// an app-hosted MCP server there is reachable and must not be re-launched.
-    func isAppOpen(_ appID: String) -> Bool {
+    /// True when this app has a tiled pane in ANY workspace, not just the
+    /// active one — a block on an inactive workspace is still a live shell.
+    ///
+    /// Deliberately named `isAppTiled`, not `isAppOpen`: an `.overlay`-
+    /// presentation app is open without ever having a block here (it lives in
+    /// `AppEnvironment.presentedOverlayAppID`, which this type does not and
+    /// should not know about). "Is this app open?" is `AppEnvironment.isAppOpen`.
+    func isAppTiled(_ appID: String) -> Bool {
         workspaces.contains { $0.tileLayout.blocks.contains { $0.appID == appID } }
     }
 
