@@ -5,6 +5,9 @@ import AinkradHostRuntime
 enum MCPTransportKind: String, Codable, Equatable {
     case stdio
     case httpSSE
+    /// An Ainkrad app hosting its MCP server in-process. No command, URL, or
+    /// secrets — the server object is reached through `AppServerActivator`.
+    case inProcess
 }
 
 /// Identifies one secret (a stdio env value or an HTTP auth-header value) belonging to a
@@ -36,11 +39,13 @@ struct MCPServerConfig: Codable, Equatable, Identifiable {
     var headerKeys: [String]
     var enabled: Bool
     var trusted: Bool
+    /// For `.inProcess`: the owning app's id. Nil for every other transport.
+    var appID: String?
 
     init(id: String, displayName: String, transport: MCPTransportKind,
          command: String? = nil, args: [String] = [], url: URL? = nil,
          envKeys: [String] = [], headerKeys: [String] = [],
-         enabled: Bool = false, trusted: Bool = false) {
+         enabled: Bool = false, trusted: Bool = false, appID: String? = nil) {
         self.id = id
         self.displayName = displayName
         self.transport = transport
@@ -51,12 +56,13 @@ struct MCPServerConfig: Codable, Equatable, Identifiable {
         self.headerKeys = headerKeys
         self.enabled = enabled
         self.trusted = trusted
+        self.appID = appID
     }
 
     // Host idiom: forward-compatible decoding (decodeIfPresent + defaults) so a payload
     // missing newer keys never throws. See AuthProfilesDocument / RouterOutcomeDocument.
     private enum CodingKeys: String, CodingKey {
-        case id, displayName, transport, command, args, url, envKeys, headerKeys, enabled, trusted
+        case id, displayName, transport, command, args, url, envKeys, headerKeys, enabled, trusted, appID
     }
 
     init(from decoder: Decoder) throws {
@@ -71,6 +77,7 @@ struct MCPServerConfig: Codable, Equatable, Identifiable {
         headerKeys = try c.decodeIfPresent([String].self, forKey: .headerKeys) ?? []
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
         trusted = try c.decodeIfPresent(Bool.self, forKey: .trusted) ?? false
+        appID = try c.decodeIfPresent(String.self, forKey: .appID)
     }
 }
 

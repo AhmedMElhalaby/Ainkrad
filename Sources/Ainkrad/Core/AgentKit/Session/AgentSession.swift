@@ -424,7 +424,7 @@ final class AgentSession {
     /// AND the transcript (truncated back to before the turn's user message).
     ///
     /// **All-or-nothing:** if the removed turn executed any tool classified as
-    /// irreversible (`TurnUndo.classifyIrreversible`, e.g. `run_terminal`/`git_op` —
+    /// irreversible (`TurnUndo.classifyIrreversible`, e.g. `run_terminal`/`mcp/*` —
     /// a shell command or a git push already happened and cannot be unwound), the
     /// WHOLE undo is refused: no file edit is reverted, the transcript is left
     /// untouched, and the turn mark stays on the stack. Silently reverting only the

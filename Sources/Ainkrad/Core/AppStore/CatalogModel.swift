@@ -143,6 +143,9 @@ extension CatalogEntry {
         switch mcp.transport {
         case .stdio: return (mcp.command?.isEmpty == false)
         case .httpSSE: return mcp.url?.scheme?.lowercased() == "https"
+        // In-process servers are synthesized from installed apps, never catalog-offered;
+        // reject malformed entries per the pattern above.
+        case .inProcess: return false
         }
     }
 
