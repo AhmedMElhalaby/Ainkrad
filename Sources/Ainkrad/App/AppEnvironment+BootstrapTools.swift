@@ -22,6 +22,12 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         memoryService: MemoryService?,
         mcpConfigStore: MCPServerConfigStore,
+        // App-hosted MCP (M9): the app registry is EMPTY at this point — apps
+        // are installed later, by `registry.install(...)` in
+        // `finalizeBootstrap`. Both are held only inside closures that read
+        // them at call time, never eagerly.
+        appRegistry: BuiltInAppRegistry,
+        pluginLaunchHub: PluginLaunchHub,
         skillRegistry: SkillRegistry,
         // Read per tool call so the foreground `run_terminal` can demote itself
         // off `HostBackend` when the session is unattended (Full-auto) — see
@@ -110,7 +116,28 @@ extension AppEnvironment {
         // stub factory instead so the registry core never spawns a process or hits
         // the network. Connecting is kicked off after `environment` exists (below),
         // never awaited here, so a down/misconfigured server can't delay launch.
-        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+        //
+        // App-hosted MCP servers (M9): one server per installed app that opts
+        // into `AinkradAppMCP`. Every collaborator is a closure resolved at
+        // CALL time, because none of this data exists yet — the app registry is
+        // still empty here and `pluginLaunchHub`'s open/availability handlers
+        // are installed in `finalizeBootstrap`. The activator memoizes each
+        // server on first use, so a server is built once and holds its app's
+        // live state. The matching `AppMCPDiscovery.refresh` call lives in
+        // `finalizeBootstrap`, right after the apps are actually installed.
+        let appServerActivator = AppServerActivator(
+            serverFor: { [weak appRegistry] appID in
+                appRegistry?.allApps.first { $0.id == appID }?.mcpServerFactory?()
+            },
+            isAppOpen: { [weak workspaceManager] appID in
+                workspaceManager?.isAppOpen(appID) ?? false
+            },
+            requestOpen: { [weak pluginLaunchHub] appID in pluginLaunchHub?.requestOpen(appID) },
+            availability: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.availability(of: appID) ?? .unknown
+            })
+        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
+                                                  activator: appServerActivator)
 
         // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
         // Both hold the mutable `skillRegistry` reference and read its live set at

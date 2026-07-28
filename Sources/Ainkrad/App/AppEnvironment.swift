@@ -431,7 +431,7 @@ final class AppEnvironment {
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
             editJournal: editJournal, workspaceManager: workspaceManager, agentActionHub: agentActionHub,
             agentContextHub: agentContextHub, memoryService: memoryService, mcpConfigStore: mcpConfigStore,
-            skillRegistry: skillRegistry,
+            appRegistry: registry, pluginLaunchHub: pluginLaunchHub, skillRegistry: skillRegistry,
             permissionMode: { [weak agentPermissionStore] in agentPermissionStore?.mode ?? .ask })
 
         let (

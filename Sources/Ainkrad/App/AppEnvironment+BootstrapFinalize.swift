@@ -137,6 +137,17 @@ extension AppEnvironment {
             failures: loaded.failures
         )
 
+        // App-hosted MCP servers (M9): `registry.install` above is the FIRST
+        // moment any `RegisteredApp` — and therefore any `mcpServerFactory` —
+        // exists, so discovery has to run here rather than beside the
+        // `MCPServerRegistry` construction in `bootstrapExecutionAndTools`
+        // (where the registry object exists but holds no apps yet). Purely
+        // static and synchronous: it reads a nullable closure per app, opens
+        // nothing and awaits nothing, so it costs the launch path nothing.
+        // The unawaited `connectEnabled()` Task above cannot run before this
+        // synchronous main-actor body returns, so it sees these configs.
+        AppMCPDiscovery.refresh(apps: registry.allApps, into: mcpServerRegistry.configStore)
+
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
             workspaceManager.pruneApps(keeping: Set(registry.allApps.map { $0.id }))

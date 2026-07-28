@@ -109,6 +109,13 @@ final class WorkspaceManager {
         onStateChange?()
     }
 
+    /// True when this app has an open pane in ANY workspace, not just the
+    /// active one — a block on an inactive workspace is still a live shell, so
+    /// an app-hosted MCP server there is reachable and must not be re-launched.
+    func isAppOpen(_ appID: String) -> Bool {
+        workspaces.contains { $0.tileLayout.blocks.contains { $0.appID == appID } }
+    }
+
     /// Drops any open pane whose app id is not in `validIDs` — used at launch
     /// to clean a restored layout of apps that no longer exist (e.g. Settings,
     /// once it became an overlay instead of a tiled Block).

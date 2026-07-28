@@ -26,7 +26,19 @@ enum AppDispatchFailure: Error, Equatable {
 /// supplies hub-backed closures.
 @MainActor
 final class AppServerActivator {
-    private let servers: [String: MCPAppServer]
+    /// Resolves an app's server on first use rather than at construction.
+    ///
+    /// A closure, not a stored dictionary, for the same reason `isAppOpen` /
+    /// `requestOpen` / `availability` are closures: this type must not bake in
+    /// bootstrap's ordering. The app registry is EMPTY when the activator is
+    /// built (`bootstrapExecutionAndTools`) and only gets populated later, by
+    /// `registry.install(...)` in `finalizeBootstrap` — an eagerly-captured
+    /// dictionary would therefore always be empty. It also means an app
+    /// installed after launch is picked up without rebuilding anything.
+    private let serverFor: (String) -> MCPAppServer?
+    /// Memoizes resolved servers so each app's server object — and therefore
+    /// its live state — is built exactly once for the process lifetime.
+    private var cache: [String: MCPAppServer] = [:]
     private let isAppOpen: (String) -> Bool
     private let requestOpen: (String) -> Void
     private let availability: (String) -> PluginLaunchHub.Availability
@@ -35,13 +47,13 @@ final class AppServerActivator {
     /// How often to re-check `isAppOpen` while waiting for a launch.
     private let pollInterval: Duration = .milliseconds(50)
 
-    init(servers: [String: MCPAppServer],
+    init(serverFor: @escaping (String) -> MCPAppServer?,
          isAppOpen: @escaping (String) -> Bool,
          requestOpen: @escaping (String) -> Void,
          availability: @escaping (String) -> PluginLaunchHub.Availability,
          launchTimeout: Duration = .seconds(5),
          onLaunch: ((String) -> Void)? = nil) {
-        self.servers = servers
+        self.serverFor = serverFor
         self.isAppOpen = isAppOpen
         self.requestOpen = requestOpen
         self.availability = availability
@@ -49,14 +61,36 @@ final class AppServerActivator {
         self.onLaunch = onLaunch
     }
 
+    /// A fixed set of servers — the shape tests and any caller that already
+    /// holds every server use. Wraps the dictionary in a provider closure so
+    /// there is only one lookup path.
+    convenience init(servers: [String: MCPAppServer],
+                     isAppOpen: @escaping (String) -> Bool,
+                     requestOpen: @escaping (String) -> Void,
+                     availability: @escaping (String) -> PluginLaunchHub.Availability,
+                     launchTimeout: Duration = .seconds(5),
+                     onLaunch: ((String) -> Void)? = nil) {
+        self.init(serverFor: { servers[$0] }, isAppOpen: isAppOpen, requestOpen: requestOpen,
+                  availability: availability, launchTimeout: launchTimeout, onLaunch: onLaunch)
+    }
+
+    /// Resolves — and on first success caches — this app's server. Every read
+    /// of a server goes through here so a server is never built twice.
+    private func server(for appID: String) -> MCPAppServer? {
+        if let cached = cache[appID] { return cached }
+        guard let server = serverFor(appID) else { return nil }
+        cache[appID] = server
+        return server
+    }
+
     /// True when this app publishes an MCP server at all.
-    func hasServer(appID: String) -> Bool { servers[appID] != nil }
+    func hasServer(appID: String) -> Bool { server(for: appID) != nil }
 
     /// Sends one JSON-RPC message to the app's server, opening the app first if
     /// it isn't already open. Returns the raw reply, or an empty string when the
     /// message was a notification.
     func dispatch(appID: String, message: String) async throws -> String {
-        guard let server = servers[appID] else { throw AppDispatchFailure.notInstalled(appID) }
+        guard let server = server(for: appID) else { throw AppDispatchFailure.notInstalled(appID) }
 
         if !isAppOpen(appID) {
             switch availability(appID) {
