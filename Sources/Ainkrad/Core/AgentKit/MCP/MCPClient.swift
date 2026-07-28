@@ -74,6 +74,16 @@ actor MCPClient {
         return Self.flatten(result)
     }
 
+    func listResources() async throws -> [MCPResourceDescriptor] {
+        MCPRPC.decodeResourceList(try await request(method: "resources/list", params: .object([:])))
+    }
+
+    func readResource(uri: String) async throws -> String {
+        let params = JSONValue.object(["uri": .string(uri)])
+        return MCPRPC.flattenResourceContents(try await request(method: "resources/read",
+                                                                params: params))
+    }
+
     func disconnect() async {
         readLoop?.cancel()
         readLoop = nil

@@ -14,6 +14,12 @@ struct MCPToolDescriptor: Equatable {
     let inputSchema: JSONValue
 }
 
+struct MCPResourceDescriptor: Equatable {
+    let uri: String
+    let name: String
+    let mimeType: String
+}
+
 /// Pure JSON-RPC 2.0 (over `JSONValue`) helpers for the MCP client. String ids
 /// keep correlation simple and match `JSONValue.stringValue`.
 enum MCPRPC {
@@ -49,6 +55,23 @@ enum MCPRPC {
                 description: item["description"]?.stringValue ?? "",
                 inputSchema: item["inputSchema"] ?? .object(["type": .string("object")]))
         }
+    }
+
+    static func decodeResourceList(_ result: JSONValue) -> [MCPResourceDescriptor] {
+        guard case .array(let items)? = result["resources"] else { return [] }
+        return items.compactMap { item in
+            guard let uri = item["uri"]?.stringValue else { return nil }
+            return MCPResourceDescriptor(
+                uri: uri,
+                name: item["name"]?.stringValue ?? uri,
+                mimeType: item["mimeType"]?.stringValue ?? "text/plain")
+        }
+    }
+
+    /// Flattens a `resources/read` result's `contents` array into plain text.
+    static func flattenResourceContents(_ result: JSONValue) -> String {
+        guard case .array(let items)? = result["contents"] else { return "" }
+        return items.compactMap { $0["text"]?.stringValue }.joined(separator: "\n")
     }
 
     /// True when the message is a server-initiated notification (no id).

@@ -144,6 +144,10 @@ extension AppEnvironment {
             })
         let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
                                                   activator: appServerActivator)
+        // Read-class complement to the tool-call path above: fetches one
+        // resource's full contents on demand (see `MCPReadResourceTool` doc
+        // comment for why this exists alongside `<workspace_context>`).
+        agentTools.append(MCPReadResourceTool(registry: mcpServerRegistry))
 
         // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
         // Both hold the mutable `skillRegistry` reference and read its live set at
