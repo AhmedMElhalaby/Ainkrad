@@ -18,8 +18,8 @@ private actor FailingStartTransport: MCPTransport {
 @Suite("MCPServerRegistry")
 @MainActor
 struct MCPServerRegistryTests {
-    private func stubClientFactory() -> @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient? {
-        return { _, _ in
+    private func stubClientFactory() -> @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? {
+        return { _, _, _ in
             MCPClient(transport: StubMCPTransport { message in
                 guard let id = message["id"]?.stringValue,
                       let method = message["method"]?.stringValue else { return [] }
@@ -92,11 +92,11 @@ struct MCPServerRegistryTests {
         let configs = MCPServerConfigStore(persistence: InMemoryPersistenceStore(),
                                            secrets: InMemorySecretStore())
         let workingFactory = stubClientFactory()
-        let factory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient? = { config, store in
+        let factory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? = { config, store, activator in
             if config.id == "bad" {
                 return MCPClient(transport: FailingStartTransport())
             }
-            return workingFactory(config, store)
+            return workingFactory(config, store, activator)
         }
         let registry = MCPServerRegistry(configStore: configs, clientFactory: factory)
         configs.upsert(MCPServerConfig(id: "bad", displayName: "Bad", transport: .stdio,

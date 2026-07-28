@@ -25,7 +25,11 @@ final class MCPServerRegistry {
     /// read/mutate configs directly while still calling back into `connectEnabled()`
     /// on this same registry to reconnect after edits.
     let configStore: MCPServerConfigStore
-    private let clientFactory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient?
+    private let clientFactory: @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient?
+    /// Supplies the app-side MCP servers for `.inProcess` configs. Nil in tests
+    /// and contexts with no app registry — an `.inProcess` config then fails
+    /// closed as `.failed("invalid configuration")`, never silently succeeds.
+    private let activator: AppServerActivator?
     private var clients: [String: MCPClient] = [:]
     private var tools: [String: [MCPToolDescriptor]] = [:]
     private(set) var health: [String: MCPHealth] = [:]
@@ -34,9 +38,11 @@ final class MCPServerRegistry {
     ///   Injectable so tests pass a stub-backed client and never spawn a real process or
     ///   hit the network.
     init(configStore: MCPServerConfigStore,
-         clientFactory: @escaping @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore) -> MCPClient? =
+         activator: AppServerActivator? = nil,
+         clientFactory: @escaping @MainActor @Sendable (MCPServerConfig, MCPServerConfigStore, AppServerActivator?) -> MCPClient? =
             MCPServerRegistry.defaultClientFactory) {
         self.configStore = configStore
+        self.activator = activator
         self.clientFactory = clientFactory
     }
 
@@ -45,7 +51,8 @@ final class MCPServerRegistry {
     /// rather than crashing — `connectEnabled()` records that as `.failed`.
     @MainActor
     static func defaultClientFactory(_ config: MCPServerConfig,
-                                      _ store: MCPServerConfigStore) -> MCPClient? {
+                                      _ store: MCPServerConfigStore,
+                                      _ activator: AppServerActivator?) -> MCPClient? {
         switch config.transport {
         case .stdio:
             guard let command = config.command else { return nil }
@@ -58,8 +65,9 @@ final class MCPServerRegistry {
                                               authHeaders: store.resolvedHeaders(for: config.id))
             return MCPClient(transport: transport)
         case .inProcess:
-            // In-process servers are reached directly through the app; not via this factory.
-            return nil
+            guard let appID = config.appID, let activator,
+                  activator.hasServer(appID: appID) else { return nil }
+            return MCPClient(transport: InProcessTransport(appID: appID, activator: activator))
         }
     }
 
@@ -73,7 +81,7 @@ final class MCPServerRegistry {
                 health[config.id] = .needsConfiguration
                 continue
             }
-            guard let client = clientFactory(config, configStore) else {
+            guard let client = clientFactory(config, configStore, activator) else {
                 health[config.id] = .failed("invalid configuration")
                 continue
             }
