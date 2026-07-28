@@ -150,6 +150,123 @@ struct PluginLoaderTests {
         #expect(result.failures.count == 2)   // BOTH processed — the scan never aborts early
     }
 
+    // MARK: - Precedence between directories (the DevPlugins shadowing fix)
+
+    /// Records every bundle the loader asks it about. The signature check is the
+    /// last gate inside `loadBundle` before `Bundle.load()` — i.e. before the
+    /// `dlopen` — so a URL absent from `seen` was never passed to `loadBundle`
+    /// at all and therefore was never loaded into the process.
+    ///
+    /// What this proves and what it does not: it proves the loader never
+    /// *entered* the load path for the shadowed bundle, which is exactly the
+    /// bug (both images being `dlopen`ed, and by-name class lookup resolving to
+    /// whichever was loaded first). It does not observe `dlopen` itself — the
+    /// fixtures are binary-less, so no real image is ever mapped in a unit test.
+    private final class RecordingSignaturePolicy: PluginSignaturePolicy, @unchecked Sendable {
+        private(set) var seen: [URL] = []
+        func validate(bundleURL: URL) -> Result<Void, PluginRejection> {
+            seen.append(bundleURL)
+            return .success(())
+        }
+    }
+
+    /// Two directories, one appID: the LAST directory wins — this is the
+    /// [Plugins, DevPlugins] precedence a sideloaded dev build depends on.
+    @Test("the last directory's bundle wins when two directories declare the same app id")
+    func lastDirectoryWinsOnDuplicateAppID() throws {
+        let (release, dev) = try twoDirs()
+        try writeBundle(in: release, name: "HelloRelease", info: validInfo)
+        try writeBundle(in: dev, name: "HelloDev", info: validInfo)
+
+        let policy = RecordingSignaturePolicy()
+        let result = loader(signaturePolicy: policy).loadAll(from: [release, dev])
+
+        // Binary-less fixtures cannot reach `RegisteredApp`, so the winner is
+        // identified by the single load attempt that got as far as the binary.
+        #expect(result.failures.count == 1)
+        #expect(result.failures[0].url.lastPathComponent == "HelloDev.bundle")
+        #expect(result.failures[0].reason.contains("Bundle.load() failed"))
+    }
+
+    /// The shadowed release is intentionally overridden, not broken: it must not
+    /// reach the user-facing "couldn't be loaded" list.
+    @Test("the shadowed bundle is not reported as a failure")
+    func shadowedBundleIsNotAFailure() throws {
+        let (release, dev) = try twoDirs()
+        try writeBundle(in: release, name: "HelloRelease", info: validInfo)
+        try writeBundle(in: dev, name: "HelloDev", info: validInfo)
+
+        let result = loader().loadAll(from: [release, dev])
+        #expect(!result.failures.contains { $0.url.lastPathComponent == "HelloRelease.bundle" })
+    }
+
+    /// The regression test for the actual bug: the shadowed bundle must never be
+    /// handed to `loadBundle`, because `loadBundle` is what `dlopen`s it and two
+    /// images of the same plugin make class lookup resolve to the first one
+    /// loaded. Asserted on a side effect of the load path, not on the returned
+    /// value — the returned value looked correct even while the bug was live.
+    @Test("the shadowed bundle is never entered into the load path")
+    func shadowedBundleIsNeverLoaded() throws {
+        let (release, dev) = try twoDirs()
+        try writeBundle(in: release, name: "HelloRelease", info: validInfo)
+        try writeBundle(in: dev, name: "HelloDev", info: validInfo)
+
+        let policy = RecordingSignaturePolicy()
+        _ = loader(signaturePolicy: policy).loadAll(from: [release, dev])
+
+        #expect(policy.seen.count == 1)
+        #expect(policy.seen.first?.lastPathComponent == "HelloDev.bundle")
+        #expect(!policy.seen.contains { $0.lastPathComponent == "HelloRelease.bundle" })
+    }
+
+    /// Fail closed: a broken winner is reported as a failure and the shadowed
+    /// bundle is NOT resurrected — silently running an older build is the whole
+    /// class of bug being fixed.
+    @Test("a winner that fails validation is reported and does not fall back to the shadowed bundle")
+    func brokenWinnerDoesNotFallBackToShadowed() throws {
+        let (release, dev) = try twoDirs()
+        try writeBundle(in: release, name: "HelloRelease", info: validInfo)
+        var badAPI = validInfo; badAPI[PluginInfoKey.apiVersion] = 999
+        try writeBundle(in: dev, name: "HelloDev", info: badAPI)
+
+        let policy = RecordingSignaturePolicy()
+        let result = loader(signaturePolicy: policy).loadAll(from: [release, dev])
+
+        #expect(result.apps.isEmpty)
+        #expect(result.failures.count == 1)
+        #expect(result.failures[0].url.lastPathComponent == "HelloDev.bundle")
+        #expect(result.failures[0].reason.contains("999"))
+        // The shadowed release was never a fallback: it never reached the load path.
+        #expect(policy.seen.isEmpty)   // the winner failed before the signature gate
+    }
+
+    /// Precedence must not collapse distinct apps: different appIDs in different
+    /// directories both survive discovery and both get loaded.
+    @Test("distinct app ids in different directories both load")
+    func distinctAppIDsInDifferentDirectoriesBothLoad() throws {
+        let (release, dev) = try twoDirs()
+        try writeBundle(in: release, name: "Hello", info: validInfo)
+        var other = validInfo; other[PluginInfoKey.appID] = "goodbye"
+        try writeBundle(in: dev, name: "Goodbye", info: other)
+
+        let policy = RecordingSignaturePolicy()
+        let result = loader(signaturePolicy: policy).loadAll(from: [release, dev])
+
+        #expect(policy.seen.count == 2)
+        #expect(result.failures.count == 2)   // both reached the binary and both are binary-less
+    }
+
+    /// Two fresh sibling directories standing in for `Plugins` and `DevPlugins`.
+    private func twoDirs() throws -> (release: URL, dev: URL) {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let release = root.appendingPathComponent("Plugins")
+        let dev = root.appendingPathComponent("DevPlugins")
+        for d in [release, dev] {
+            try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        }
+        return (release, dev)
+    }
+
     /// Guards the value both open paths (tiling and overlay) read: the
     /// `presentation:` argument passed to `RegisteredApp.plugin(...)` must land
     /// in `RegisteredApp.presentation`. (The loader's own binary-less fixtures
