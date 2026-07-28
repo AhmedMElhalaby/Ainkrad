@@ -185,7 +185,10 @@ struct PluginLoaderTests {
         // identified by the single load attempt that got as far as the binary.
         #expect(result.failures.count == 1)
         #expect(result.failures[0].url.lastPathComponent == "HelloDev.bundle")
-        #expect(result.failures[0].reason.contains("Bundle.load() failed"))
+        // The reason is dyld's, not a fixed string: a binary-less fixture must
+        // still say something specific about WHY (see PluginLoadDiagnostics).
+        #expect(!result.failures[0].reason.isEmpty)
+        #expect(!result.failures[0].reason.contains("Bundle.load() failed"))
     }
 
     /// The shadowed release is intentionally overridden, not broken: it must not
@@ -281,5 +284,83 @@ struct PluginLoaderTests {
         let pane = RegisteredApp.plugin(
             StubApp.self, url: url, apiVersion: 4, host: stubHost(appID: "stub"), presentation: .pane)
         #expect(pane.presentation == .pane)
+    }
+}
+
+/// Unit tests for the message builder, which is the part of the load
+/// diagnostic with real logic in it.
+///
+/// WHY these are error-fixture tests and not end-to-end loads: the loader's
+/// fixtures are binary-less directories, so `dlopen` is never reached and a
+/// genuine missing-symbol failure cannot be produced from them. The dyld text
+/// below is not invented — it is copied verbatim in shape from a real
+/// reproduction (a bundle linked against a dylib subsequently rebuilt without
+/// the symbol), with the symbol replaced by the actual one from the 2026-07-28
+/// Terminal session.
+@Suite("Plugin load diagnostics")
+struct PluginLoadDiagnosticsTests {
+
+    private func loadError(debugDescription: String?) -> NSError {
+        var info: [String: Any] = [NSLocalizedDescriptionKey: "The bundle “Terminal.bundle” couldn’t be loaded."]
+        if let debugDescription { info[NSDebugDescriptionErrorKey] = debugDescription }
+        return NSError(domain: NSCocoaErrorDomain, code: 3588, userInfo: info)
+    }
+
+    private static let skewSymbol = "_$s21AinkradAppKitContract15MCPResourceSpecV012requiresLiveB0Sbvs"
+
+    private static let skewDyldText = """
+        dlopen(/Users/x/Library/Application Support/Plugins/Terminal.bundle/Contents/MacOS/Terminal, 0x0109): Symbol not found: _$s21AinkradAppKitContract15MCPResourceSpecV012requiresLiveB0Sbvs
+          Referenced from: <A> /Users/x/Library/Application Support/Plugins/Terminal.bundle/Contents/MacOS/Terminal
+          Expected in:     <B> /Applications/Ainkrad.app/Contents/Frameworks/AinkradAppKit.framework/Versions/A/AinkradAppKit
+        """
+
+    @Test("SDK skew is named in plain language, with the raw symbol kept")
+    func sdkSkewIsExplained() {
+        let d = PluginLoadDiagnostics.diagnose(loadError(debugDescription: Self.skewDyldText))
+        #expect(d.banner.contains("newer AinkradAppKit than this host embeds"))
+        #expect(d.banner.contains("bump the host's SDK pin or rebuild the plugin"))
+        #expect(d.banner.contains(Self.skewSymbol))
+        // Fit for the banner: one line, not the three-line dyld dump.
+        #expect(!d.banner.contains("\n"))
+        // …but the log keeps every line of it.
+        #expect(d.log == Self.skewDyldText)
+        #expect(d.log.contains("Referenced from:"))
+    }
+
+    @Test("a missing symbol from some other library is reported without SDK advice")
+    func nonSDKSymbolFailure() {
+        let text = """
+            dlopen(/tmp/P.bundle/Contents/MacOS/P, 0x0109): Symbol not found: _libgit2_thing
+              Expected in:     <B> /usr/local/lib/libgit2.dylib
+            """
+        let d = PluginLoadDiagnostics.diagnose(loadError(debugDescription: text))
+        #expect(d.banner.contains("_libgit2_thing"))
+        #expect(!d.banner.contains("AinkradAppKit"))
+        #expect(!d.banner.contains("\n"))
+    }
+
+    @Test("a non-symbol failure still yields its first dyld line, not a fixed string")
+    func nonSymbolFailure() {
+        let text = "dlopen(/tmp/P.bundle/Contents/MacOS/P, 0x0109): tried: '/tmp/P' (no such file)"
+        let d = PluginLoadDiagnostics.diagnose(loadError(debugDescription: text))
+        #expect(d.banner == text)
+    }
+
+    @Test("with no debug description we fall back to the localized description")
+    func noDebugDescription() {
+        let d = PluginLoadDiagnostics.diagnose(loadError(debugDescription: nil))
+        #expect(d.banner.contains("couldn’t be loaded"))
+        #expect(!d.banner.isEmpty)
+    }
+
+    @Test("the dyld text is dug out of an underlyingError when it is nested there")
+    func underlyingErrorIsSearched() {
+        let inner = NSError(domain: NSCocoaErrorDomain, code: 3588,
+                            userInfo: [NSDebugDescriptionErrorKey: Self.skewDyldText])
+        let outer = NSError(domain: NSCocoaErrorDomain, code: 3588, userInfo: [
+            NSLocalizedDescriptionKey: "The bundle couldn’t be loaded.",
+            NSUnderlyingErrorKey: inner,
+        ])
+        #expect(PluginLoadDiagnostics.diagnose(outer).banner.contains(Self.skewSymbol))
     }
 }
