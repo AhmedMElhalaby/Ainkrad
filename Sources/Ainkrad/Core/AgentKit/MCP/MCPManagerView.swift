@@ -43,6 +43,7 @@ struct MCPManagerView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                appsSection(tokens: tokens)
                 serversSection(tokens: tokens)
                 addServerSection(tokens: tokens)
             }
@@ -51,20 +52,89 @@ struct MCPManagerView: View {
         .scrollContentBackground(.hidden)
     }
 
+    // MARK: - Grouping
+
+    /// Ainkrad apps hosting their MCP server in-process. `nonisolated` because
+    /// it's a pure filter with no view/store access — callable synchronously
+    /// from tests without hopping onto the main actor.
+    nonisolated static func appConfigs(from configs: [MCPServerConfig]) -> [MCPServerConfig] {
+        configs.filter { $0.transport == .inProcess }
+    }
+
+    /// Everything else: user-configured stdio commands and HTTPS endpoints.
+    nonisolated static func externalConfigs(from configs: [MCPServerConfig]) -> [MCPServerConfig] {
+        configs.filter { $0.transport != .inProcess }
+    }
+
+    // MARK: - Apps
+
+    /// Ainkrad apps that publish MCP servers. Deliberately NOT editable the way
+    /// external servers are: there is no command, URL, or secret to configure,
+    /// and the row cannot be deleted — these are synthesized from installed
+    /// apps, so the control is enable/disable. Removing the app itself belongs
+    /// to the App Store surface, not here.
+    private func appsSection(tokens: DesignTokens) -> some View {
+        let apps = Self.appConfigs(from: configStore.all())
+        return Group {
+            if !apps.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsSectionHeader(title: "AINKRAD APPS", tokens: tokens)
+                    ForEach(apps) { config in
+                        appCard(config, tokens: tokens)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Same enable/trust/tools contract as `serverCard`, minus the fields that
+    /// don't apply to an in-process app server: no command/URL (nothing was
+    /// configured), no secrets (nothing to store), no remove button (the row
+    /// is synthesized from the installed app, not owned by this store).
+    private func appCard(_ config: MCPServerConfig, tokens: DesignTokens) -> some View {
+        let tools = registry.discoveredTools().filter { $0.server == config.id }
+        let resources = registry.discoveredResources().filter { $0.server == config.id }
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text(config.displayName)
+                    .font(AinkradFont.display(13, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.9))
+                healthBadge(registry.health[config.id], resourceCount: resources.count)
+                Spacer(minLength: 8)
+            }
+
+            enabledRow(config)
+            trustedRow(config, isApp: true)
+
+            if !tools.isEmpty {
+                toolsSection(tools, tokens: tokens)
+            }
+
+            if !resources.isEmpty {
+                resourcesSection(resources, tokens: tokens)
+            }
+        }
+        .padding(14)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
+        .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
+    }
+
     // MARK: - Servers
 
     private func serversSection(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SettingsSectionHeader(title: "MCP SERVERS", tokens: tokens)
 
-            if configStore.all().isEmpty {
+            let externals = Self.externalConfigs(from: configStore.all())
+            if externals.isEmpty {
                 AinkradEmptyState(
                     icon: "point.3.connected.trianglepath.dotted",
                     title: "No MCP servers configured",
                     message: "Add a stdio command or an HTTPS endpoint below to connect external tools."
                 )
             } else {
-                ForEach(configStore.all()) { config in
+                ForEach(externals) { config in
                     serverCard(config, tokens: tokens)
                 }
             }
@@ -74,13 +144,14 @@ struct MCPManagerView: View {
     private func serverCard(_ config: MCPServerConfig, tokens: DesignTokens) -> some View {
         let secretKeys = config.transport == .stdio ? config.envKeys : config.headerKeys
         let tools = registry.discoveredTools().filter { $0.server == config.id }
+        let resources = registry.discoveredResources().filter { $0.server == config.id }
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text(config.displayName)
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(0.9))
-                healthBadge(registry.health[config.id])
+                healthBadge(registry.health[config.id], resourceCount: resources.count)
                 Spacer(minLength: 8)
                 AinkradButton(title: "Remove", style: .danger, icon: "trash") {
                     pendingRemovalID = config.id
@@ -93,19 +164,8 @@ struct MCPManagerView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
 
-            AinkradFormRow(title: "Enabled") {
-                AinkradToggle(isOn: Binding(
-                    get: { config.enabled },
-                    set: { newValue in
-                        configStore.setEnabled(newValue, for: config.id)
-                        Task { await registry.connectEnabled() }
-                    }))
-            }
-            AinkradFormRow(title: "Trusted", help: "Auto-approve this server's tools") {
-                AinkradToggle(isOn: Binding(
-                    get: { config.trusted },
-                    set: { configStore.setTrusted($0, for: config.id) }))
-            }
+            enabledRow(config)
+            trustedRow(config, isApp: false)
 
             if !secretKeys.isEmpty {
                 secretsSection(config, keys: secretKeys, tokens: tokens)
@@ -113,6 +173,10 @@ struct MCPManagerView: View {
 
             if !tools.isEmpty {
                 toolsSection(tools, tokens: tokens)
+            }
+
+            if !resources.isEmpty {
+                resourcesSection(resources, tokens: tokens)
             }
         }
         .padding(14)
@@ -187,19 +251,111 @@ struct MCPManagerView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.4))
 
             ForEach(tools, id: \.descriptor.name) { entry in
-                Text("mcp/\(entry.server)/\(entry.descriptor.name)")
-                    .font(AinkradFont.mono(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.6))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ToolPresentation.titleCasedBareName(entry.descriptor.name))
+                        .font(AinkradFont.mono(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.6))
+                    Text("mcp/\(entry.server)/\(entry.descriptor.name)")
+                        .font(AinkradFont.mono(9))
+                        .foregroundStyle(tokens.foreground.opacity(0.3))
+                }
             }
         }
     }
 
-    private func healthBadge(_ health: MCPHealth?) -> some View {
+    /// Resource-side twin of `toolsSection`, same typography and same
+    /// readable-label-over-dim-raw-identifier shape — a resources-only server
+    /// (Terminal) would otherwise render a card with nothing in it at all.
+    private func resourcesSection(_ resources: [(server: String, descriptor: MCPResourceDescriptor)],
+                                  tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("DISCOVERED RESOURCES")
+                .font(AinkradFont.mono(9, weight: .medium))
+                .kerning(1.5)
+                .foregroundStyle(tokens.foreground.opacity(0.4))
+
+            ForEach(resources, id: \.descriptor.uri) { entry in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ToolPresentation.resourceLabel(name: entry.descriptor.name,
+                                                        uri: entry.descriptor.uri))
+                        .font(AinkradFont.mono(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.6))
+                    Text(entry.descriptor.uri)
+                        .font(AinkradFont.mono(9))
+                        .foregroundStyle(tokens.foreground.opacity(0.3))
+                }
+            }
+        }
+    }
+
+    /// Shared by `serverCard` and `appCard`: flips the config live via
+    /// `configStore.setEnabled` and immediately reconnects, per the contract
+    /// documented on the type — an app server and an external server both
+    /// need enable/disable to take effect right away.
+    private func enabledRow(_ config: MCPServerConfig) -> some View {
+        AinkradFormRow(title: "Enabled") {
+            AinkradToggle(isOn: Binding(
+                get: { config.enabled },
+                set: { newValue in
+                    configStore.setEnabled(newValue, for: config.id)
+                    Task { await registry.connectEnabled() }
+                }))
+        }
+    }
+
+    /// Help copy for the "Trusted" row, split by context because the grant
+    /// isn't the same size: an Ainkrad app's MCP server runs in-process on
+    /// the main actor with access to the app's live state (e.g. Git Mage can
+    /// commit/push to the user's repos), while an external server is an
+    /// arm's-length process or endpoint. Both variants must still make clear
+    /// that trust means no prompting and that irreversible actions are still
+    /// gated — the truth of that backstop doesn't change, only how much
+    /// silent authority precedes it. `nonisolated` and `static` so the test
+    /// can pin the strings without going through the view.
+    nonisolated static let appTrustHelp =
+        "Runs in-process with access to the app's live state and auto-approves its tools without prompting. Irreversible actions still require your confirmation."
+    nonisolated static let externalTrustHelp =
+        "Auto-approves this server's tools without prompting. Irreversible actions still require your confirmation."
+
+    /// Shared by `serverCard` and `appCard`: trust never affects connectivity
+    /// (per the contract documented on the type), so it writes straight to
+    /// the config store with no reconnect — for both app and external rows.
+    private func trustedRow(_ config: MCPServerConfig, isApp: Bool) -> some View {
+        AinkradFormRow(title: "Trusted", help: isApp ? Self.appTrustHelp : Self.externalTrustHelp) {
+            AinkradToggle(isOn: Binding(
+                get: { config.trusted },
+                set: { configStore.setTrusted($0, for: config.id) }))
+        }
+    }
+
+    /// Badge copy for a connected server, given what it actually published.
+    ///
+    /// Only non-zero parts appear. The old unconditional "\(count) tools" read
+    /// "0 TOOLS" for Terminal — which publishes 2 resources and, by design, no
+    /// tools (`run_terminal` stays host-owned) — and users reasonably read that
+    /// as a broken app. A server contributing something must never be described
+    /// by the count of the thing it deliberately doesn't contribute.
+    ///
+    /// Both zero still says "connected", not "0 tools": the connection genuinely
+    /// succeeded and the server genuinely published nothing, and those are
+    /// different facts from a failed connect (which `.failed` already covers).
+    /// `nonisolated` and `static` so it is unit-testable without the view.
+    nonisolated static func connectedBadgeText(toolCount: Int, resourceCount: Int) -> String {
+        var parts: [String] = []
+        if toolCount > 0 { parts.append("\(toolCount) tool\(toolCount == 1 ? "" : "s")") }
+        if resourceCount > 0 {
+            parts.append("\(resourceCount) resource\(resourceCount == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? "connected" : parts.joined(separator: " · ")
+    }
+
+    private func healthBadge(_ health: MCPHealth?, resourceCount: Int) -> some View {
         let text: String
         let status: AinkradStatus
         switch health {
         case .connected(let count):
-            text = "\(count) tools"; status = .success
+            text = Self.connectedBadgeText(toolCount: count, resourceCount: resourceCount)
+            status = .success
         case .needsConfiguration:
             text = "needs config"; status = .warning
         case .failed:
@@ -255,6 +411,9 @@ struct MCPManagerView: View {
             return idOK && nameOK && !newCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .httpSSE:
             return idOK && nameOK && URL(string: newURL) != nil
+        // In-process rows are synthesized from installed apps; not addable through this form.
+        case .inProcess:
+            return false
         }
     }
 

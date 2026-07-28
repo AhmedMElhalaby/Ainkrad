@@ -26,14 +26,30 @@ enum TurnUndo {
     /// repo, etc. Matched by tool NAME rather than by re-invoking
     /// `AgentTool.isIrreversible(_:)`, so classification stays a pure function
     /// of the transcript and needs no live tool registry to test.
-    static let irreversibleTools: Set<String> = ["run_terminal", "git_op"]
+    static let irreversibleTools: Set<String> = ["run_terminal"]
+
+    /// Namespace whose tools are all treated as irreversible for undo purposes.
+    ///
+    /// Git used to appear here as the flat `git_op` name; it is now Git Mage's
+    /// `mcp/gitmage/push`, `mcp/gitmage/commit`, … A name-only rule cannot ask an
+    /// MCP descriptor for its `destructiveHint` (that would need a live registry,
+    /// which is exactly what this type avoids), so the whole namespace is treated
+    /// as unundoable. Deliberately over-broad and fail-safe in the right
+    /// direction: the cost is refusing to unwind a turn that contained a
+    /// read-only MCP call, versus the pre-existing cost of silently half-unwinding
+    /// a turn that pushed. Narrowing this needs the descriptor, not a longer list.
+    static let irreversibleToolPrefix = "mcp/"
+
+    private static func isIrreversible(_ name: String) -> Bool {
+        irreversibleTools.contains(name) || name.hasPrefix(irreversibleToolPrefix)
+    }
 
     @MainActor
     static func classifyIrreversible(_ turnMessages: [AgentMessage]) -> [String] {
         var notes: [String] = []
         for message in turnMessages {
             for block in message.content {
-                if case .toolUse(_, let name, _) = block, irreversibleTools.contains(name) {
+                if case .toolUse(_, let name, _) = block, isIrreversible(name) {
                     notes.append("Cannot undo: \(name) already ran (side effects persist).")
                 }
             }

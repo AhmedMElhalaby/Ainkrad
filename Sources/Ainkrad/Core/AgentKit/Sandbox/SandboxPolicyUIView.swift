@@ -49,7 +49,7 @@ enum SandboxPolicyExplainer {
     /// Illustrative subset of real tool names (`AgentTool.name` values) — not
     /// an exhaustive registry lookup, since this pane is a fail-closed
     /// explainer, not a live tool catalog.
-    static let sampleToolNames = ["read_file", "edit_file", "run_terminal", "git_op", "workspace_control"]
+    static let sampleToolNames = ["read_file", "edit_file", "run_terminal", "mcp/gitmage/push", "workspace_control"]
 
     static func permissionClass(for toolName: String) -> ToolPermissionClass {
         toolName == "read_file" ? .read : .write

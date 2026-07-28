@@ -11,13 +11,16 @@ struct TurnUndoTests {
             AgentMessage(role: .assistant, content: [
                 .toolUse(id: "1", name: "edit_file", input: .object(["path": .string("/x")])),
                 .toolUse(id: "2", name: "run_terminal", input: .object(["command": .string("rm x")])),
-                .toolUse(id: "3", name: "git_op", input: .object(["op": .string("commit")])),
+                .toolUse(id: "3", name: "mcp/gitmage/commit", input: .object(["repoPath": .string("/r")])),
             ]),
         ]
         let notes = TurnUndo.classifyIrreversible(turn)
-        #expect(notes.count == 2)                       // run_terminal + git_op, not edit_file
+        // run_terminal + the MCP git call, not edit_file. Git arrives as
+        // `mcp/gitmage/*` now that the bespoke `git_op` tool is gone, so the
+        // namespace prefix — not a flat name — is what has to catch it.
+        #expect(notes.count == 2)
         #expect(notes.contains { $0.contains("run_terminal") })
-        #expect(notes.contains { $0.contains("git_op") })
+        #expect(notes.contains { $0.contains("mcp/gitmage/commit") })
     }
 
     @Test func pureReadTurnHasNoIrreversibles() {

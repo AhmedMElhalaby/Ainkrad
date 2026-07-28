@@ -22,6 +22,12 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         memoryService: MemoryService?,
         mcpConfigStore: MCPServerConfigStore,
+        // App-hosted MCP (M9): the app registry is EMPTY at this point — apps
+        // are installed later, by `registry.install(...)` in
+        // `finalizeBootstrap`. Both are held only inside closures that read
+        // them at call time, never eagerly.
+        appRegistry: BuiltInAppRegistry,
+        pluginLaunchHub: PluginLaunchHub,
         skillRegistry: SkillRegistry,
         // Read per tool call so the foreground `run_terminal` can demote itself
         // off `HostBackend` when the session is unattended (Full-auto) — see
@@ -72,19 +78,30 @@ extension AppEnvironment {
                 .host: HostBackend(),
                 .seatbelt: SeatbeltBackend(),
                 .docker: DockerBackend(),
-                .ssh: SSHBackend(connection: nil),   // Leyline connection wired when AinkradSSH lands
+                // Remote targets are resolved PER CALL from `run_terminal`'s
+                // `remote` argument, through Leyline's host-only
+                // `leyline.resolve_connection` action. No ambient "active
+                // remote" exists, and with Leyline absent the resolver fails
+                // and `SSHBackend` refuses to run — never locally.
+                .ssh: SSHBackend(resolveConnection:
+                    LeylineConnectionResolver.make(hub: agentActionHub)),
                 .cloud: ModalCloudBackend(credentials: cloudCredentialsStore),
             ])
 
         var agentTools: [any AgentTool] = [
             ReadFileTool(),
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
-            WorkspaceControlTool(workspaces: workspaceManager),
+            // The launch hub carries `openApp`: since MCP tool calls no longer
+            // force an app open, this is the assistant's ONLY way to honour
+            // "open Lore".
+            WorkspaceControlTool(workspaces: workspaceManager, launchHub: pluginLaunchHub),
             { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
               t.toolStream = toolStreamStore; t.processController = terminalController
               t.permissionMode = permissionMode; return t }(),
-            GitOpTool(actionHub: agentActionHub),
-            GitPrTool(actionHub: agentActionHub),
+            // Git and Pull-Request operations are no longer host tools: Git Mage
+            // publishes them as `mcp/gitmage/*` over its in-process MCP server
+            // (see `AppMCPDiscovery`), so they arrive through `dynamicTools`
+            // below rather than being hard-coded here.
             TodoWriteTool(),
             PresentPlanTool(),
         ]
@@ -110,7 +127,60 @@ extension AppEnvironment {
         // stub factory instead so the registry core never spawns a process or hits
         // the network. Connecting is kicked off after `environment` exists (below),
         // never awaited here, so a down/misconfigured server can't delay launch.
-        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+        //
+        // App-hosted MCP servers (M9): one server per installed app that opts
+        // into `AinkradAppMCP`. Every collaborator is a closure resolved at
+        // CALL time, because none of this data exists yet — the app registry is
+        // still empty here and `pluginLaunchHub`'s open/availability handlers
+        // are installed in `finalizeBootstrap`. The activator memoizes each
+        // server on first use, so a server is built once and holds its app's
+        // live state. The matching `AppMCPDiscovery.refresh` call lives in
+        // `finalizeBootstrap`, right after the apps are actually installed.
+        // Late-bound on purpose: the flag lives on the MCP registry's discovered
+        // descriptors, and that registry is built FROM this activator two
+        // statements below. Boxing the reference is the same trick the closures
+        // above use for `pluginLaunchHub` — resolve at call time, not here.
+        var mcpRegistryForLiveAppFlag: (() -> MCPServerRegistry?)?
+        let appServerActivator = AppServerActivator(
+            serverFor: { [weak appRegistry] appID in
+                appRegistry?.allApps.first { $0.id == appID }?.mcpServerFactory?()
+            },
+            // Both open-state and launch go through the hub: "open" must count
+            // an `.overlay`-presented app, which has no `tileLayout` block —
+            // asking `workspaceManager` alone would report a live overlay app
+            // as closed and every dispatch to it would wait out the launch
+            // timeout. `AppEnvironment.isAppOpen` composes the two halves; the
+            // hub is how that late-created answer reaches this closure.
+            isAppOpen: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.isOpen(appID) ?? false
+            },
+            requestOpen: { [weak pluginLaunchHub] appID in pluginLaunchHub?.requestOpen(appID) },
+            availability: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.availability(of: appID) ?? .unknown
+            },
+            // No registry yet (or no discovery done) means no app has claimed it
+            // needs its window, so the call runs in the background — which is
+            // what a tool call should do.
+            requiresLiveApp: { appID, method, name in
+                mcpRegistryForLiveAppFlag?()?
+                    .requiresLiveApp(appID: appID, method: method, name: name) ?? false
+            })
+        // The other half of that memoization: a torn-down app's cached server
+        // must not outlive the instance it was built over. `deregister` is the
+        // one place an app is finished with (it already calls the app's own
+        // `teardown`), so the host-side eviction hangs off the same seam.
+        appRegistry.onAppTornDown = { [weak appServerActivator] appID in
+            appServerActivator?.evict(appID: appID)
+        }
+        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
+                                                  activator: appServerActivator)
+        // Closes the loop opened above. Weak so the activator's closure cannot
+        // keep the registry alive past teardown.
+        mcpRegistryForLiveAppFlag = { [weak mcpServerRegistry] in mcpServerRegistry }
+        // Read-class complement to the tool-call path above: fetches one
+        // resource's full contents on demand (see `MCPReadResourceTool` doc
+        // comment for why this exists alongside `<workspace_context>`).
+        agentTools.append(MCPReadResourceTool(registry: mcpServerRegistry))
 
         // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
         // Both hold the mutable `skillRegistry` reference and read its live set at

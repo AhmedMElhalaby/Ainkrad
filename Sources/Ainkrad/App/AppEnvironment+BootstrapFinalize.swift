@@ -64,15 +64,6 @@ extension AppEnvironment {
                 }
             }
 
-            // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
-            // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
-            // launch itself must never block on a slow or down server, so this is fired
-            // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
-            // Tools/trust populate as servers come up; a down server just never appears.
-            Task { [weak mcpServerRegistry] in
-                await mcpServerRegistry?.connectEnabled()
-            }
-
             // Seed autodetected LSP servers off the launch path: `autodetect()` shells out to
             // `which` once per known server (a handful of `Process` spawns), so it runs inside
             // this unawaited `Task` rather than synchronously in `bootstrap()`. `seedIfEmpty`
@@ -137,6 +128,32 @@ extension AppEnvironment {
             failures: loaded.failures
         )
 
+        // App-hosted MCP servers (M9): `registry.install` above is the FIRST
+        // moment any `RegisteredApp` — and therefore any `mcpServerFactory` —
+        // exists, so discovery has to run here rather than beside the
+        // `MCPServerRegistry` construction in `bootstrapExecutionAndTools`
+        // (where the registry object exists but holds no apps yet). This call
+        // itself is purely static and synchronous — it reads a nullable closure
+        // per app, opens nothing and awaits nothing. (The `connectEnabled()`
+        // below is the part with real cost, and it is deliberately off the
+        // launch path; it does NOT open apps, because `AppServerActivator`
+        // force-opens only for `tools/call`/`resources/read`.)
+        AppMCPDiscovery.refresh(apps: registry.allApps, into: mcpServerRegistry.configStore)
+
+        // Connect enabled MCP servers off the launch path: `connectEnabled()` is async
+        // and per-server bounded/degrade-don't-crash (see `MCPServerRegistry`), but
+        // launch itself must never block on a slow or down server, so this is fired
+        // from an unawaited `Task` rather than run synchronously in `bootstrap()`.
+        // Tools/trust populate as servers come up; a down server just never appears.
+        // MUST stay below `AppMCPDiscovery.refresh` above: it connects whatever configs
+        // exist at that moment, so app-server configs have to be synthesized first.
+        // Skipped under a hosted test run for the same reason as the block above.
+        if !AppEnvironment.isRunningUnderTests {
+            Task { [weak mcpServerRegistry] in
+                await mcpServerRegistry?.connectEnabled()
+            }
+        }
+
         if let saved = persistence.load(LayoutStateSnapshot.self) {
             workspaceManager.restore(from: saved)
             workspaceManager.pruneApps(keeping: Set(registry.allApps.map { $0.id }))
@@ -165,6 +182,16 @@ extension AppEnvironment {
                 environment.workspaceManager.activeWorkspace.tileLayout.openApp(appID)
                 environment.presentedOverlayAppID = nil
             }
+        }
+
+        // Counterpart to the open handler, for callers that need a live shell
+        // rather than a launch — currently the app-hosted MCP activator, which
+        // must not re-launch (and then time out waiting for) an app that is
+        // already up. Installed here, with the same `[weak environment]` late
+        // binding as the two handlers around it, because `presentedOverlayAppID`
+        // only exists once `environment` does.
+        pluginLaunchHub.setOpenStateProvider { [weak environment] appID in
+            environment?.isAppOpen(appID) ?? false
         }
 
         // Generation 8: lets `apps.openReportingOutcome` tell a plugin WHY a
