@@ -15,15 +15,25 @@ struct ExecutionRequest: Sendable {
     /// Optional handle that lets the caller force-kill the live child process
     /// (e.g. on user interrupt) once it's registered by `SandboxProcessRunner.run`.
     var processController: TerminalProcessController? = nil
+    /// The id of a saved remote connection to run this command ON, or nil for a
+    /// local run. Read only by `SSHBackend`; every other backend ignores it, so
+    /// a request without it is byte-identical to the pre-remote path.
+    ///
+    /// Per-call by design — there is no ambient "active remote" anywhere in the
+    /// system, so the caller names its target every time and a command can
+    /// never land on a machine nobody just named.
+    var remote: String? = nil
 
     init(command: String, workingDir: String?, profile: SandboxProfile,
          onOutput: (@Sendable (String) -> Void)? = nil,
-         processController: TerminalProcessController? = nil) {
+         processController: TerminalProcessController? = nil,
+         remote: String? = nil) {
         self.command = command
         self.workingDir = workingDir
         self.profile = profile
         self.onOutput = onOutput
         self.processController = processController
+        self.remote = remote
     }
 }
 

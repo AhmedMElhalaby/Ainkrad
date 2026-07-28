@@ -78,7 +78,13 @@ extension AppEnvironment {
                 .host: HostBackend(),
                 .seatbelt: SeatbeltBackend(),
                 .docker: DockerBackend(),
-                .ssh: SSHBackend(connection: nil),   // Leyline connection wired when AinkradSSH lands
+                // Remote targets are resolved PER CALL from `run_terminal`'s
+                // `remote` argument, through Leyline's host-only
+                // `leyline.resolve_connection` action. No ambient "active
+                // remote" exists, and with Leyline absent the resolver fails
+                // and `SSHBackend` refuses to run — never locally.
+                .ssh: SSHBackend(resolveConnection:
+                    LeylineConnectionResolver.make(hub: agentActionHub)),
                 .cloud: ModalCloudBackend(credentials: cloudCredentialsStore),
             ])
 
