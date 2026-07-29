@@ -9,10 +9,10 @@ import AinkradHostRuntime
 /// section shown in the detail pane on the right. See Settings Overlay Panel
 /// — Direction.md.
 ///
-/// Two selection domains coexist while Tasks 8–9 finish folding the rest of
-/// the sidebar into the catalog: catalog pages (WORKSPACE today) are owned by
-/// `navigator.selection`, and the still-hardcoded rows (Memory, MCP, LSP,
-/// Skills, every app) are owned by `legacySelection`. Exactly one of the two
+/// Two selection domains coexist while Task 9 finishes folding the rest of
+/// the sidebar into the catalog: catalog pages (WORKSPACE and INTELLIGENCE
+/// today) are owned by `navigator.selection`, and the still-hardcoded app
+/// rows are owned by `legacySelection`. Exactly one of the two
 /// is "live" at a time: selecting a legacy row *sets* `legacySelection`,
 /// which takes priority over the catalog selection for both the sidebar
 /// highlight and the detail pane; selecting a catalog row clears
@@ -48,14 +48,11 @@ struct SettingsOverlayView: View {
         let isBuiltIn: Bool
     }
 
-    /// The sections not yet folded into the catalog. General, Sound, Appearance,
-    /// Living Sky, App Icon, and Keyboard moved into the WORKSPACE catalog
-    /// pages in this task; Memory/MCP/LSP/Skills/apps fold in in Tasks 8–9.
+    /// The sections not yet folded into the catalog. The WORKSPACE pages
+    /// (General, Appearance, Sound & Voice, Keyboard) and the INTELLIGENCE
+    /// pages (Model & Connections, Permissions & Sandbox, Memory, Skills,
+    /// Tools, Privacy & Data) are catalog-driven; only the app rows remain.
     private enum SettingsSection: Hashable {
-        case memory
-        case mcp
-        case lsp
-        case skills
         case app(String)
     }
 
@@ -154,14 +151,6 @@ struct SettingsOverlayView: View {
                     }
                 }
 
-                groupLabel("AINKRAD", tokens: tokens)
-                    .padding(.top, 12)
-                sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
-                sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
-                sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
-                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles",
-                           badgeCount: environment.skillRegistry.proposals().count, tokens: tokens)
-
                 if !builtInAppEntries.isEmpty {
                     groupLabel("BUILT-IN APPS", tokens: tokens)
                         .padding(.top, 12)
@@ -237,7 +226,6 @@ struct SettingsOverlayView: View {
         title: String,
         appID: String? = nil,
         systemIcon: String,
-        badgeCount: Int = 0,
         tokens: DesignTokens
     ) -> some View {
         let isSelected = legacySelection == section
@@ -251,9 +239,6 @@ struct SettingsOverlayView: View {
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
                 Spacer(minLength: 0)
-                if badgeCount > 0 {
-                    AinkradBadge(text: "\(badgeCount)", tint: tokens.accentSecondary)
-                }
             }
             .padding(.horizontal, 8)
             .frame(height: 38)
@@ -313,26 +298,6 @@ struct SettingsOverlayView: View {
     @ViewBuilder
     private func legacyDetail(_ selection: SettingsSection, tokens: DesignTokens) -> some View {
         switch selection {
-        case .memory:
-            if let memoryService = environment.memoryService {
-                MemoryUIView(service: memoryService)
-            } else {
-                AinkradEmptyState(
-                    icon: "brain",
-                    title: "Memory unavailable",
-                    message: "The assistant's memory index couldn't be opened this launch, so it's running memory-less for now. Restart Ainkrad to try again."
-                )
-            }
-        case .mcp:
-            MCPManagerView(configStore: environment.mcpServerRegistry.configStore, registry: environment.mcpServerRegistry)
-        case .lsp:
-            LSPConfigView(registry: environment.lspServerRegistry)
-        case .skills:
-            SkillsManagerView(
-                registry: environment.skillRegistry,
-                commands: environment.skillCommandStore,
-                resyncCommands: { environment.resyncSkillCommands() }
-            )
         case .app(let id):
             // Look up among enabled apps only: a disabled app has no settings
             // section, and if the selected app is disabled while the overlay is

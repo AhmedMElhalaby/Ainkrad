@@ -7,8 +7,9 @@ import AinkradHostRuntime
 /// binds straight through to the existing store — the catalog describes
 /// settings, it does not own their persistence.
 ///
-/// This task builds only the WORKSPACE pages (General, Appearance, Sound &
-/// Voice, Keyboard); INTELLIGENCE and APPS pages arrive in later tasks.
+/// This builds the WORKSPACE pages (General, Appearance, Sound & Voice,
+/// Keyboard) and appends the INTELLIGENCE pages from
+/// `IntelligenceSettingsCatalog`; the APPS pages arrive in a later task.
 @MainActor
 enum HostSettingsCatalog {
     static func build(environment: AppEnvironment) -> SettingsCatalog {
@@ -17,7 +18,7 @@ enum HostSettingsCatalog {
             appearance(environment),
             soundAndVoice(environment),
             keyboard(environment)
-        ])
+        ] + IntelligenceSettingsCatalog.pages(environment: environment))
     }
 
     // MARK: - General
