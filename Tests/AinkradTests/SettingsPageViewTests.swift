@@ -41,4 +41,21 @@ struct SettingsPageViewTests {
         #expect(SettingsGroupView.hitCount(group: p.groups[0], matchedPaths: matched) == 1)
         #expect(SettingsGroupView.hitCount(group: p.groups[1], matchedPaths: matched) == 0)
     }
+
+    @Test("row width accounts for the mini-map's occupied space, not just total width")
+    func rowAreaWidthSubtractsMiniMap() {
+        let p = page(groupCount: 4)
+        // Total width is comfortably past the wide breakpoint (900), but once
+        // the mini-map's ~168pt is subtracted the rows don't actually have
+        // side-by-side room. If the mini-map's width were ignored, this would
+        // report a width still >= wideBreakpoint and pick .sideBySide.
+        let total: CGFloat = 950
+        let rowWidth = SettingsPageView.rowAreaWidth(page: p, totalWidth: total)
+        #expect(rowWidth == total - SettingsPageView.miniMapOccupiedWidth)
+        #expect(SettingsRowLayout(detailWidth: rowWidth) == .stacked)
+
+        // No mini-map (too few groups) — the full width is available to rows.
+        let noMiniMap = page(groupCount: 3)
+        #expect(SettingsPageView.rowAreaWidth(page: noMiniMap, totalWidth: total) == total)
+    }
 }
