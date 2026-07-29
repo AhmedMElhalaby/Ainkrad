@@ -87,6 +87,30 @@ struct SettingsPageViewTests {
                           fields: [pane(g.appending("a")), control(g.appending("b"))])))
     }
 
+    @Test("an always-expanded group composes AinkradSectionFrame")
+    func alwaysGroupUsesSectionFrame() {
+        let root = SettingsPath(["test", "page"])
+        let group = SettingsGroup(path: root.appending("g"), title: "Startup",
+                                  disclosure: .always, fields: [
+            SettingsField(path: root.appending("g").appending("f"),
+                          label: "Field", kind: .toggle(.constant(false)))
+        ])
+        let described = String(describing: SettingsGroupView(group: group, layout: .stacked).body)
+        #expect(described.contains("AinkradSectionFrame"))
+    }
+
+    @Test("a collapsed-by-default group composes AinkradDisclosureGroup")
+    func collapsibleGroupUsesDisclosure() {
+        let root = SettingsPath(["test", "page"])
+        let group = SettingsGroup(path: root.appending("g"), title: "Advanced",
+                                  disclosure: .collapsedByDefault, fields: [
+            SettingsField(path: root.appending("g").appending("f"),
+                          label: "Field", kind: .toggle(.constant(false)))
+        ])
+        let described = String(describing: SettingsGroupView(group: group, layout: .stacked).body)
+        #expect(described.contains("AinkradDisclosureGroup"))
+    }
+
     @Test("row width accounts for the mini-map's occupied space, not just total width")
     func rowAreaWidthSubtractsMiniMap() {
         let p = page(groupCount: 4)
