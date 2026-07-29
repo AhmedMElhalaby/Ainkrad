@@ -46,11 +46,21 @@ struct SettingsKitCompositionTests {
     @Test("RATCHET: the .custom field count may not grow")
     func customRatchet() {
         // Measured against the live catalog. Raising this ceiling requires a
-        // deliberate edit and a reason in the PR — that is the point; it only
-        // works if decomposition work TIGHTENS it.
-        // 23 at the start of Task 6 → 22 after Task 7 decomposed Sound & Voice
-        // (two panes removed, one small read-only chord display kept).
-        let ceiling = 22
+        // deliberate edit and a reason — that is the point; it only works if
+        // decomposition work TIGHTENS it.
+        //
+        // History:
+        //   23  start of Task 6.
+        //   22  Task 7 decomposed BOTH Sound and Voice.
+        //   23  Sound reverted at the review gate — one field per control made
+        //       each of 13 sound events three near-duplicate rows. Voice stayed
+        //       decomposed (−1 pane), Sound came back (+1 pane), net 23.
+        //
+        // So this is a HOLD, not a loosening: the number is back where it
+        // started because the Sound pane returned, and it may not grow past it.
+        // It drops again when the SDK gains a composite row kind and Sound can
+        // be converted properly — see the note in `HostSettingsCatalog`.
+        let ceiling = 23
         let catalog = HostSettingsCatalog.build(environment: .preview())
         let customCount = catalog.allFields.filter {
             if case .custom = $0.kind { return true }

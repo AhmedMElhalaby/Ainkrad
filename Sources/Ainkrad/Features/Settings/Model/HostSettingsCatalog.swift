@@ -113,8 +113,23 @@ enum HostSettingsCatalog {
             path: page, title: "Sound & Voice", icon: "speaker.wave.2",
             group: .workspace, order: 2,
             groups: [
-                soundGroup(environment, page: page),
-                soundEffectsGroup(environment, page: page),
+                // Sound stays a `.custom` pane DELIBERATELY. It was decomposed
+                // in Task 7 and reverted after review: each of the 13 `UISound`
+                // events needs an enable toggle, an effect chooser AND a
+                // preview action, which one-field-per-control turns into three
+                // rows with near-duplicate labels ("Startup" / "Startup sound"
+                // / "Preview Startup") thirteen times over — worse than the
+                // pane. A correct conversion needs a COMPOSITE row kind the SDK
+                // does not have yet; until then this is the right use of the
+                // escape hatch. Voice, directly below, decomposed cleanly.
+                SettingsGroup(path: page.appending("sound"), title: "Sound", fields: [
+                    SettingsField(
+                        path: page.appending("sound").appending("effects"),
+                        label: "Sound effects",
+                        help: "Workspace interaction sounds.",
+                        keywords: ["audio", "volume", "mute", "chime"],
+                        kind: .custom(AnyView(SoundSettingsView())))
+                ]),
                 voiceGroup(environment, page: page),
                 SettingsGroup(path: page.appending("speech"), title: "Speech", fields: [
                     SettingsField(
@@ -128,116 +143,6 @@ enum HostSettingsCatalog {
                             tokens: tokens))))
                 ])
             ])
-    }
-
-    // MARK: - Sound & Voice — declarative groups
-    //
-    // Decomposed from `SoundSettingsView` + `VoiceSettingsView` (Task 7). Every
-    // default below is read from the store, never inferred from the label:
-    // `soundEnabled`/`soundVolume` from `GlobalSettings` (true / 0.7), the
-    // per-event defaults from `GeneralSettingsStore` (a missing key means
-    // enabled, and an event's default effect is its own sound), and the voice
-    // defaults from `VoiceSettingsDocument`'s member-wise init — where BOTH
-    // `autoSend` and `providerOptIn` are `false` despite affirmative labels.
-
-    private static func soundGroup(_ environment: AppEnvironment, page: SettingsPath) -> SettingsGroup {
-        let sound = page.appending("sound")
-        let store = environment.generalSettingsStore
-
-        return SettingsGroup(path: sound, title: "Sound", fields: [
-            SettingsField(
-                path: sound.appending("effects"),
-                label: "Sound effects",
-                help: "Plays a short chime on HUD open/close, install, and other key actions.",
-                keywords: ["audio", "chime", "mute", "click", "sfx"],
-                kind: .toggle(Binding(
-                    get: { store.soundEnabled },
-                    set: { store.setSoundEnabled($0) })),
-                defaultDescription: "On",
-                isModified: { store.soundEnabled != true },
-                reset: { store.setSoundEnabled(true) }),
-            SettingsField(
-                path: sound.appending("volume"),
-                label: "Volume",
-                help: "Playback level for every workspace sound effect.",
-                keywords: ["loudness", "level", "quiet", "loud", "audio"],
-                kind: .slider(range: 0...1, step: 0.05, value: Binding(
-                    get: { store.soundVolume },
-                    set: { store.setSoundVolume($0) })),
-                defaultDescription: "0.7",
-                isModified: { store.soundVolume != 0.7 },
-                reset: { store.setSoundVolume(0.7) })
-        ])
-    }
-
-    /// One enable toggle, one effect chooser, and one preview action per
-    /// `UISound` — 13 events, 39 fields. Collapsed by default so the page reads
-    /// as two rows plus a section the user opens deliberately; the reachability
-    /// audit covers `.collapsedByDefault` because a deep-link expands the group.
-    private static func soundEffectsGroup(_ environment: AppEnvironment, page: SettingsPath) -> SettingsGroup {
-        let effects = page.appending("soundEffects")
-        let store = environment.generalSettingsStore
-
-        let fields: [SettingsField] = UISound.allCases.flatMap { event -> [SettingsField] in
-            let base = effects.appending(event.rawValue)
-            let name = event.displayName
-            return [
-                SettingsField(
-                    path: base.appending("enabled"),
-                    label: name,
-                    help: event.eventDescription,
-                    keywords: ["cue", "event", "sound", name.lowercased()],
-                    kind: .toggle(Binding(
-                        get: { store.isEventEnabled(event) },
-                        set: { store.setEventEnabled($0, for: event) })),
-                    // A missing key means enabled — see `isEventEnabled`.
-                    defaultDescription: "On",
-                    isModified: { store.isEventEnabled(event) != true },
-                    reset: { store.setEventEnabled(true, for: event) }),
-                SettingsField(
-                    path: base.appending("effect"),
-                    label: "\(name) sound",
-                    help: "Which effect \(name.lowercased()) plays.",
-                    keywords: ["effect", "chooser", "cue", name.lowercased()],
-                    kind: .select(
-                        options: UISound.allCases.map {
-                            SettingsOption(id: $0.rawValue,
-                                           title: $0 == event ? "Default (\($0.displayName))" : $0.displayName)
-                        },
-                        selection: Binding(
-                            get: { store.effect(for: event).rawValue },
-                            set: { raw in
-                                guard let chosen = UISound(rawValue: raw) else { return }
-                                store.setEffect(chosen, for: event)
-                                // Preserves the on-change preview the bespoke
-                                // pane fired per item tap — picking an effect
-                                // plays it, so the chooser stays audible.
-                                environment.sounds.preview(chosen)
-                            })),
-                    defaultDescription: "Default (\(name))",
-                    isModified: { store.effect(for: event) != event },
-                    reset: { store.setEffect(event, for: event) }),
-                // `.action` carries no value, so it declares no default and no
-                // reset — `SettingsField.reset == nil` is documented as "no
-                // meaningful reset". This is the ▶ preview button from the old
-                // per-event row, kept so the current effect stays re-playable
-                // without changing the selection.
-                SettingsField(
-                    path: base.appending("preview"),
-                    label: "Preview \(name)",
-                    help: "Play the effect currently chosen for \(name.lowercased()).",
-                    keywords: ["preview", "play", "listen", "audition", name.lowercased()],
-                    kind: .action(title: "Preview", handler: {
-                        environment.sounds.preview(store.effect(for: event))
-                    }))
-            ]
-        }
-
-        return SettingsGroup(path: effects, title: "Sound Effects",
-                             disclosure: .collapsedByDefault,
-                             footerNote: "Enable each cue individually and choose which effect it plays. "
-                                       + "Picking an effect previews it; Preview replays the current one.",
-                             fields: fields)
     }
 
     private static func voiceGroup(_ environment: AppEnvironment, page: SettingsPath) -> SettingsGroup {
