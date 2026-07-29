@@ -155,4 +155,29 @@ struct SettingsPageViewTests {
         let noMiniMap = page(groupCount: 3)
         #expect(SettingsPageView.rowAreaWidth(page: noMiniMap, totalWidth: total) == total)
     }
+
+    @Test("tabs appear only for pages with three or more groups")
+    func tabsOnlyForTallPages() {
+        #expect(!SettingsPageView.usesTabs(page: page(groupCount: 1)))
+        #expect(!SettingsPageView.usesTabs(page: page(groupCount: 2)))
+        #expect(SettingsPageView.usesTabs(page: page(groupCount: 3)))
+        #expect(SettingsPageView.usesTabs(page: page(groupCount: 4)))
+    }
+
+    @Test("a tab reports how many of its own fields match the filter")
+    func tabHitCounts() {
+        let p = page(groupCount: 3)
+        let matched: Set<SettingsPath> = [p.groups[1].fields[0].path]
+        #expect(SettingsPageView.tabHitCount(group: p.groups[0], matchedPaths: matched) == 0)
+        #expect(SettingsPageView.tabHitCount(group: p.groups[1], matchedPaths: matched) == 1)
+        #expect(SettingsPageView.tabHitCount(group: p.groups[2], matchedPaths: nil) == 0)
+    }
+
+    @Test("a deep-linked field resolves to the tab that contains it")
+    func tabIndexForDeepLink() {
+        let p = page(groupCount: 3)
+        #expect(SettingsPageView.tabIndex(containing: p.groups[2].fields[0].path, page: p) == 2)
+        #expect(SettingsPageView.tabIndex(containing: p.groups[0].fields[0].path, page: p) == 0)
+        #expect(SettingsPageView.tabIndex(containing: SettingsPath(["nope"]), page: p) == nil)
+    }
 }
