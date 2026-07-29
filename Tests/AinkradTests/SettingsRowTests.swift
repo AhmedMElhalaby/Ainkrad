@@ -65,6 +65,28 @@ struct SettingsRowTests {
         #expect(!SettingsRow.showsRevert(for: noReset))
     }
 
+    @Test("the row path composes AinkradFormRow rather than a local row")
+    func composesFormRow() throws {
+        let path = SettingsPath(["a", "b", "c"])
+        let field = SettingsField(path: path, label: "Sound effects",
+                                  help: "Workspace interaction sounds.",
+                                  kind: .toggle(.constant(true)))
+        let row = SettingsRow(field: field, layout: .sideBySide)
+        let described = String(describing: row.body)
+        #expect(described.contains("AinkradFormRow"),
+                "row path must compose AinkradFormRow; found: \(described.prefix(200))")
+    }
+
+    @Test("badges and control width are handed to FormRow, not re-implemented")
+    func handsSlotsToFormRow() {
+        let path = SettingsPath(["a", "b", "c"])
+        let field = SettingsField(path: path, label: "Sandbox",
+                                  kind: .toggle(.constant(true)),
+                                  isAdvanced: true, requiresRestart: true)
+        #expect(SettingsRow.badges(for: field) == ["Advanced", "Restart required"])
+        #expect(SettingsRowLayout(detailWidth: 1000) == .sideBySide)
+    }
+
     @Test("quantize rounds to the nearest step, clamps to range, and passes through when step <= 0")
     func quantize() {
         // A value between two steps rounds to the nearer one.
