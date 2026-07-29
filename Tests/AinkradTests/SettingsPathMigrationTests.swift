@@ -49,4 +49,25 @@ struct SettingsPathMigrationTests {
         navigator.navigate(to: SettingsPath(rawValue: "workspace.livingSky")!, in: catalog)
         #expect(navigator.selection.rawValue == "workspace.appearance")
     }
+
+    @Test("resolve follows a chained alias to its final target")
+    func resolveFollowsChains() {
+        // `resolve` walks to a fixed point rather than stopping at the first
+        // hop, so even if a retired path's target is later itself retired,
+        // callers still land on the live page instead of a stale intermediate.
+        #expect(SettingsPathAliases.resolve(SettingsPath(rawValue: "assistant.web")!).rawValue == "intelligence.tools")
+    }
+
+    @Test("no alias target is itself a retired alias key today")
+    func noAliasTargetIsItselfAKey() {
+        // Documents the current shape of the table: it is a flat
+        // "retired -> current" map, not a chain. `resolve` tolerates a chain
+        // (see `resolveFollowsChains`), but this test makes a future chain
+        // visible in review rather than silently relying on the fixed-point
+        // walk to paper over it.
+        let keys = Set(SettingsPathAliases.allKeys)
+        for target in SettingsPathAliases.allTargets {
+            #expect(!keys.contains(target.rawValue), "\(target.rawValue) is both an alias target and an alias key — chained")
+        }
+    }
 }

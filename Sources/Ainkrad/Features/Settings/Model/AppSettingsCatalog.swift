@@ -32,16 +32,26 @@ enum AppSettingsCatalog {
             // relative structure between a group and its fields (which is
             // itself part of the plugin's declared paths) is preserved
             // because the same prefix is prepended to both.
-            var groups = (published?.groups ?? [
-                SettingsGroup(path: root.appending("settings"), title: app.displayName, fields: [
-                    SettingsField(
-                        path: root.appending("settings").appending("pane"),
-                        label: "\(app.displayName) settings",
-                        help: nil,
-                        keywords: [app.displayName.lowercased()],
-                        kind: .custom(app.makeSettingsView()))
-                ])
-            ]).map { namespaced($0, under: root) }
+            // The fallback group is built directly by the host, already
+            // rooted under `root` — only the plugin-published branch is
+            // untrusted third-party input that needs re-rooting. Namespacing
+            // the fallback too would double-prefix its paths
+            // (["app", id, "app", id, "settings"]).
+            var groups: [SettingsGroup]
+            if let published {
+                groups = published.groups.map { namespaced($0, under: root) }
+            } else {
+                groups = [
+                    SettingsGroup(path: root.appending("settings"), title: app.displayName, fields: [
+                        SettingsField(
+                            path: root.appending("settings").appending("pane"),
+                            label: "\(app.displayName) settings",
+                            help: nil,
+                            keywords: [app.displayName.lowercased()],
+                            kind: .custom(app.makeSettingsView()))
+                    ])
+                ]
+            }
 
             if app.id != AssistantApp.id {
                 groups.append(appearanceGroup(appID: app.id, root: root, environment: environment))

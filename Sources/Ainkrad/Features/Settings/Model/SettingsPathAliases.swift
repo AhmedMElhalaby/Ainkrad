@@ -24,13 +24,33 @@ enum SettingsPathAliases {
         "assistant.appearance": "workspace.appearance"
     ]
 
+    /// Follows the alias chain to a fixed point, so retiring an already-retired
+    /// path's target (chaining two entries together) still resolves all the
+    /// way through instead of stopping at the stale intermediate. Guards
+    /// against a cycle (which would only ever be a bug in `map` itself) by
+    /// capping the walk at `map.count` hops — more hops than that means we're
+    /// looping, so bail out to the last path seen rather than spin forever.
     static func resolve(_ path: SettingsPath) -> SettingsPath {
-        guard let target = map[path.rawValue],
-              let resolved = SettingsPath(rawValue: target) else { return path }
-        return resolved
+        var current = path
+        var seen = Set<String>()
+        for _ in 0..<map.count {
+            guard let target = map[current.rawValue],
+                  let resolved = SettingsPath(rawValue: target) else { return current }
+            guard !seen.contains(resolved.rawValue) else { return current }
+            seen.insert(current.rawValue)
+            current = resolved
+        }
+        return current
     }
 
     static var allTargets: [SettingsPath] {
         map.values.compactMap { SettingsPath(rawValue: $0) }
+    }
+
+    /// Every retired path this table knows about. Exposed so tests can
+    /// assert the table stays a flat "retired -> current" map (no target is
+    /// itself a key) without reaching into `map` directly.
+    static var allKeys: [String] {
+        Array(map.keys)
     }
 }

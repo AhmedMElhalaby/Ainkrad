@@ -212,8 +212,10 @@ struct SettingsOverlayView: View {
             // A sidebar tap is an unambiguous "take me to this page"
             // instruction — it must always show that page, in BOTH the
             // palette and filtering modes, not just leave the palette
-            // sitting inertly on screen. See SettingsSearchMode.afterSidebarTap.
-            hasNavigatedWithQuery = true
+            // sitting inertly on screen. Routed through the real
+            // SettingsSearchMode.afterSidebarTap transition so production
+            // and the sidebar-tap tests exercise the same code path.
+            hasNavigatedWithQuery = searchMode.afterSidebarTap().query != nil
         } label: {
             HStack(spacing: 10) {
                 appTile(appID: page.appID, systemIcon: page.icon, size: 22,
