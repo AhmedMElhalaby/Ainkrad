@@ -39,7 +39,14 @@ packages:
   # DYNAMIC library: the host embeds one copy; plugin bundles resolve it at
   # runtime (a static copy per binary would break dynamic protocol casts).
   AinkradAppKit:
-    url: https://github.com/AhmedMElhalaby/AinkradAppKit
+    # TEMPORARY LOCAL OVERRIDE — settings redesign pass 2 (feat/settings-redesign).
+    # This branch adds AinkradFormRow slots and AinkradDisclosureGroup to the SDK,
+    # so it must build against the local checkout on AinkradAppKit's
+    # `feat/settings-kit-composition`.
+    # BEFORE MERGE: AinkradAppKit merges to its development first, then this
+    # block reverts to `url:` + `revision:` pinned at THAT merge commit.
+    path: /Users/ahmedmelhalaby/Home/Projects/Ainkrad/AinkradAppKit
+    # url: https://github.com/AhmedMElhalaby/AinkradAppKit
     # Apps-over-MCP: AinkradAppMCP + MCPAppServer (PR #18) and the per-tool
     # `requiresLiveApp` flag (PR #20), plus resource `purpose`/`resultProvider`
     # (feat/resource-description-and-errors). Always a merge commit on
@@ -53,7 +60,7 @@ packages:
     # Settings catalog: SettingsPath, the SettingsCatalog descriptor types, the
     # SettingsRow/Group/Page primitives, and the optional
     # AinkradApp.settingsCatalog(host:) contract (merge of feat/settings-catalog).
-    revision: 3900640a83ce16b64e9496646344e9e5f5f5863a
+    # revision: 3900640a83ce16b64e9496646344e9e5f5f5863a  # restored at merge time
 
 targets:
   AinkradHostRuntime:
