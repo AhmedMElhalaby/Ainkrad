@@ -112,11 +112,19 @@ struct SettingsOverlayView: View {
             }
         }
         .hudPanelChrome(tokens: tokens)
-        .onKeyPress(.init("f"), phases: .down) { press in
-            guard press.modifiers.contains(.command) else { return .ignored }
-            searchFocused = true
-            return .handled
-        }
+        .background(
+            // `.onKeyPress` only fires for a view in the focus chain, so with
+            // nothing focused inside the overlay (e.g. right after it opens)
+            // a key-press handler never sees ⌘F at all. A hidden `Button`
+            // with `.keyboardShortcut` is registered with the window's key
+            // equivalent system instead of the responder/focus chain, so it
+            // fires regardless of what — if anything — is focused.
+            Button {
+                searchFocused = true
+            } label: { EmptyView() }
+                .keyboardShortcut("f", modifiers: .command)
+                .hidden()
+        )
         .onKeyPress(.escape) {
             // Agree with `SettingsSearchMode`'s own notion of "empty" — a
             // whitespace-only query is `.browsing`, so it must dismiss on
