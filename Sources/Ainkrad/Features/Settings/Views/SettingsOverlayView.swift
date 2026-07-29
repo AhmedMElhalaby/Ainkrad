@@ -18,8 +18,18 @@ struct SettingsOverlayView: View {
     let onDismiss: () -> Void
 
     @State private var navigator: SettingsNavigator
+    @State private var pendingDeepLink: SettingsPath?
+
+    @State private var query = ""
+    @State private var hasNavigatedWithQuery = false
+    @FocusState private var searchFocused: Bool
 
     private var catalog: SettingsCatalog { HostSettingsCatalog.build(environment: environment) }
+
+    private var searchMode: SettingsSearchMode {
+        SettingsSearchMode(query: query, hasNavigated: hasNavigatedWithQuery)
+    }
+    private var index: SettingsCatalogIndex { SettingsCatalogIndex(catalog: catalog) }
 
     /// `focusedAppID` opens the overlay directly on that app's settings —
     /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
@@ -28,6 +38,16 @@ struct SettingsOverlayView: View {
         self.onDismiss = onDismiss
         let initial = focusedAppID.map { SettingsPath(["app", $0]) } ?? SettingsPath(["workspace", "general"])
         _navigator = State(initialValue: SettingsNavigator(initial: initial))
+    }
+
+    /// Lands the overlay directly on a specific field — used by ⌘, from a
+    /// focused app, error toasts, and the assistant. Old paths still resolve
+    /// via `SettingsPathAliases` so links survive the IA restructure.
+    init(deepLink: SettingsPath, onDismiss: @escaping () -> Void) {
+        self.onDismiss = onDismiss
+        let resolved = SettingsPathAliases.resolve(deepLink)
+        _navigator = State(initialValue: SettingsNavigator(initial: resolved))
+        _pendingDeepLink = State(initialValue: resolved)
     }
 
     var body: some View {
@@ -73,7 +93,21 @@ struct SettingsOverlayView: View {
             }
         }
         .hudPanelChrome(tokens: tokens)
-        .onKeyPress(.escape) { onDismiss(); return .handled }
+        .onKeyPress(.init("f"), phases: .down) { press in
+            guard press.modifiers.contains(.command) else { return .ignored }
+            searchFocused = true
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            if !query.isEmpty { query = ""; return .handled }
+            onDismiss(); return .handled
+        }
+        .task {
+            if let path = pendingDeepLink {
+                navigator.navigate(to: path, in: catalog)
+                pendingDeepLink = nil
+            }
+        }
     }
 
     private func header(tokens: DesignTokens) -> some View {
@@ -98,6 +132,19 @@ struct SettingsOverlayView: View {
     // MARK: - Sidebar
 
     private func sidebar(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSearchField(query: $query, isFocused: $searchFocused)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+                .onChange(of: query) { _, _ in hasNavigatedWithQuery = false }
+
+            sidebarList(tokens: tokens)
+        }
+        .frame(width: SettingsMetrics.sidebarWidth, alignment: .topLeading)
+    }
+
+    private func sidebarList(tokens: DesignTokens) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(SettingsPageGroup.allCases, id: \.self) { group in
@@ -114,7 +161,6 @@ struct SettingsOverlayView: View {
             .padding(12)
         }
         .scrollContentBackground(.hidden)
-        .frame(width: SettingsMetrics.sidebarWidth, alignment: .topLeading)
     }
 
     /// A group header in the HUD language: a short accent tick beside an
@@ -188,12 +234,53 @@ struct SettingsOverlayView: View {
 
     @ViewBuilder
     private func detail(tokens: DesignTokens) -> some View {
-        if let page = catalog.page(at: navigator.selection) {
-            SettingsPageView(page: page, highlightedPath: navigator.highlightedPath)
-        } else {
-            AinkradEmptyState(icon: "gearshape", title: "Nothing here",
-                              message: "That settings page is no longer available.")
+        switch searchMode {
+        case .palette(let q):
+            SettingsPaletteView(results: index.search(q, currentPage: navigator.selection), query: q) { path in
+                navigator.navigate(to: path, in: catalog)
+                hasNavigatedWithQuery = true
+            }
+        case .filtering(let q):
+            if let page = catalog.page(at: navigator.selection) {
+                VStack(alignment: .leading, spacing: 0) {
+                    filterBanner(query: q, tokens: tokens)
+                    SettingsPageView(page: page,
+                                     matchedPaths: index.matchedPaths(q, on: page),
+                                     highlightedPath: navigator.highlightedPath)
+                }
+            } else {
+                AinkradEmptyState(icon: "gearshape", title: "Nothing here",
+                                  message: "That settings page is no longer available.")
+            }
+        case .browsing:
+            if let page = catalog.page(at: navigator.selection) {
+                SettingsPageView(page: page, highlightedPath: navigator.highlightedPath)
+            } else {
+                AinkradEmptyState(icon: "gearshape", title: "Nothing here",
+                                  message: "That settings page is no longer available.")
+            }
         }
+    }
+
+    /// Makes the filter escapable — a filter you cannot see or exit is the
+    /// disorienting part of System Settings' version, which we're
+    /// deliberately not copying.
+    private func filterBanner(query: String, tokens: DesignTokens) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 10))
+                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+            Text("Filtering by \u{201C}\(query)\u{201D} — non-matching settings are dimmed")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.6))
+            Spacer(minLength: 8)
+            Button("Clear") { self.query = "" }
+                .buttonStyle(.plain)
+                .font(AinkradFont.display(11, weight: .medium))
+                .foregroundStyle(tokens.accentSecondary)
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 34)
     }
 
 }
