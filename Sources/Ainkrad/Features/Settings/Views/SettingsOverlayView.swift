@@ -70,12 +70,10 @@ struct SettingsOverlayView: View {
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
 
+                let size = SettingsGeometry.panelSize(in: geo.size)
                 panel(tokens: tokens)
-                    .frame(
-                        width: min(max(820, geo.size.width * 0.78), 1040),
-                        height: min(max(560, geo.size.height * 0.82), 720)
-                    )
-                    .offset(y: -30)
+                    .frame(width: size.width, height: size.height)
+                    .offset(y: SettingsMetrics.panelYOffset)
             }
         }
     }
@@ -168,7 +166,7 @@ struct SettingsOverlayView: View {
             .padding(12)
         }
         .scrollContentBackground(.hidden)
-        .frame(width: 208, alignment: .topLeading)
+        .frame(width: SettingsMetrics.sidebarWidth, alignment: .topLeading)
     }
 
     /// A group header in the HUD language: a short accent tick beside an
