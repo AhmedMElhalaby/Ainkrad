@@ -111,6 +111,34 @@ struct SettingsPageViewTests {
         #expect(described.contains("AinkradDisclosureGroup"))
     }
 
+    @Test("a group containing the highlighted path must expand")
+    func mustExpandForHighlightedPath() {
+        let g = SettingsPath(["p", "g"])
+        let target = g.appending("f")
+        let group = SettingsGroup(path: g, title: "G", disclosure: .collapsedByDefault,
+                                  fields: [control(target)])
+        #expect(SettingsGroupView.mustExpand(group: group, highlightedPath: target, matchedPaths: nil))
+        // A highlight for a path outside the group must not force it open.
+        #expect(!SettingsGroupView.mustExpand(
+            group: group, highlightedPath: SettingsPath(["other", "path"]), matchedPaths: nil))
+        // No highlight, no filter: stays closed.
+        #expect(!SettingsGroupView.mustExpand(group: group, highlightedPath: nil, matchedPaths: nil))
+    }
+
+    @Test("a group containing a filter match must expand")
+    func mustExpandForFilterMatch() {
+        let g = SettingsPath(["p", "g"])
+        let target = g.appending("f")
+        let group = SettingsGroup(path: g, title: "G", disclosure: .collapsedByDefault,
+                                  fields: [control(target)])
+        #expect(SettingsGroupView.mustExpand(group: group, highlightedPath: nil, matchedPaths: [target]))
+        // A match elsewhere doesn't force this group open.
+        #expect(!SettingsGroupView.mustExpand(
+            group: group, highlightedPath: nil, matchedPaths: [SettingsPath(["other", "path"])]))
+        // `matchedPaths == nil` means no active filter — never forces open on that basis alone.
+        #expect(!SettingsGroupView.mustExpand(group: group, highlightedPath: nil, matchedPaths: nil))
+    }
+
     @Test("row width accounts for the mini-map's occupied space, not just total width")
     func rowAreaWidthSubtractsMiniMap() {
         let p = page(groupCount: 4)
