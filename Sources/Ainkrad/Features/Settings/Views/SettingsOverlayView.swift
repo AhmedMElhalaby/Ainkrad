@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradAppKitContract
 import AinkradHostRuntime
 
 /// The Settings overlay — the third summonable panel (⌘, or the Launcher's
@@ -7,19 +8,33 @@ import AinkradHostRuntime
 /// Overview. A left grouped sidebar (AINKRAD / BUILT-IN APPS) selects a
 /// section shown in the detail pane on the right. See Settings Overlay Panel
 /// — Direction.md.
+///
+/// Two selection domains coexist while Tasks 8–9 finish folding the rest of
+/// the sidebar into the catalog: catalog pages (WORKSPACE today) are owned by
+/// `navigator.selection`, and the still-hardcoded rows (Memory, MCP, LSP,
+/// Skills, every app) are owned by `legacySelection`. Exactly one of the two
+/// is "live" at a time: selecting a legacy row *sets* `legacySelection`,
+/// which takes priority over the catalog selection for both the sidebar
+/// highlight and the detail pane; selecting a catalog row clears
+/// `legacySelection` back to nil so the catalog selection takes over. This
+/// keeps highlighting unambiguous without needing a third "which domain is
+/// active" flag.
 struct SettingsOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradReduceMotion) private var reduceMotion
     let onDismiss: () -> Void
 
-    @State private var selection: SettingsSection
+    @State private var navigator = SettingsNavigator(initial: SettingsPath(["workspace", "general"]))
+    @State private var legacySelection: SettingsSection?
+
+    private var catalog: SettingsCatalog { HostSettingsCatalog.build(environment: environment) }
 
     /// `focusedAppID` opens the overlay directly on that app's settings —
     /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
     /// Otherwise it lands on General — the natural top of the reordered sidebar.
     init(focusedAppID: String? = nil, onDismiss: @escaping () -> Void) {
         self.onDismiss = onDismiss
-        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .general)
+        _legacySelection = State(initialValue: focusedAppID.map { .app($0) })
     }
 
     /// A value snapshot of a registered app for the sidebar — iterating
@@ -33,13 +48,10 @@ struct SettingsOverlayView: View {
         let isBuiltIn: Bool
     }
 
+    /// The sections not yet folded into the catalog. General, Sound, Appearance,
+    /// Living Sky, App Icon, and Keyboard moved into the WORKSPACE catalog
+    /// pages in this task; Memory/MCP/LSP/Skills/apps fold in in Tasks 8–9.
     private enum SettingsSection: Hashable {
-        case general
-        case sound
-        case appearance
-        case livingSky
-        case appIcon
-        case shortcuts
         case memory
         case mcp
         case lsp
@@ -131,21 +143,24 @@ struct SettingsOverlayView: View {
     private func sidebar(tokens: DesignTokens) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
+                ForEach(SettingsPageGroup.allCases, id: \.self) { group in
+                    let pages = catalog.pages(in: group)
+                    if !pages.isEmpty {
+                        groupLabel(group.title, tokens: tokens)
+                            .padding(.top, group == .workspace ? 0 : 12)
+                        ForEach(pages) { page in
+                            sidebarRow(page: page, tokens: tokens)
+                        }
+                    }
+                }
+
                 groupLabel("AINKRAD", tokens: tokens)
-                sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
-                sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
-                sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
+                    .padding(.top, 12)
                 sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
                 sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
                 sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
                 sidebarRow(.skills, title: "Skills", systemIcon: "sparkles",
                            badgeCount: environment.skillRegistry.proposals().count, tokens: tokens)
-
-                groupLabel("APPEARANCE", tokens: tokens)
-                    .padding(.top, 12)
-                sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
-                sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
-                sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
 
                 if !builtInAppEntries.isEmpty {
                     groupLabel("BUILT-IN APPS", tokens: tokens)
@@ -186,6 +201,37 @@ struct SettingsOverlayView: View {
         .padding(.bottom, 2)
     }
 
+    /// A catalog-driven WORKSPACE (and, in later tasks, other group) row.
+    /// Selecting it hands live selection back to the navigator by clearing
+    /// `legacySelection`.
+    private func sidebarRow(page: SettingsPage, tokens: DesignTokens) -> some View {
+        let isSelected = legacySelection == nil && navigator.selection == page.path
+        return Button {
+            legacySelection = nil
+            navigator.selection = page.path
+            navigator.clearHighlight()
+        } label: {
+            HStack(spacing: 10) {
+                appTile(appID: page.appID, systemIcon: page.icon, size: 22,
+                        isSelected: isSelected, tokens: tokens)
+                Text(page.title)
+                    .font(AinkradFont.display(13, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 38)
+            .background(ChamferShape(cut: AinkradRadius.md)
+                .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear))
+            .overlay(TargetingBrackets(length: 7)
+                .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.3)
+                .padding(1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
+    }
+
     private func sidebarRow(
         _ section: SettingsSection,
         title: String,
@@ -194,10 +240,10 @@ struct SettingsOverlayView: View {
         badgeCount: Int = 0,
         tokens: DesignTokens
     ) -> some View {
-        let isSelected = selection == section
+        let isSelected = legacySelection == section
 
         return Button {
-            selection = section
+            legacySelection = section
         } label: {
             HStack(spacing: 10) {
                 rowIcon(appID: appID, systemIcon: systemIcon, isSelected: isSelected, tokens: tokens)
@@ -254,19 +300,19 @@ struct SettingsOverlayView: View {
 
     @ViewBuilder
     private func detail(tokens: DesignTokens) -> some View {
+        if let legacySelection {
+            legacyDetail(legacySelection, tokens: tokens)
+        } else if let page = catalog.page(at: navigator.selection) {
+            SettingsPageView(page: page, highlightedPath: navigator.highlightedPath)
+        } else {
+            AinkradEmptyState(icon: "gearshape", title: "Nothing here",
+                              message: "That settings page is no longer available.")
+        }
+    }
+
+    @ViewBuilder
+    private func legacyDetail(_ selection: SettingsSection, tokens: DesignTokens) -> some View {
         switch selection {
-        case .general:
-            GeneralSettingsView()
-        case .sound:
-            SoundSettingsView()
-        case .appearance:
-            AppearanceSettingsView()
-        case .livingSky:
-            LivingSkySettingsView()
-        case .appIcon:
-            AppIconSettingsView()
-        case .shortcuts:
-            ShortcutsSettingsView()
         case .memory:
             if let memoryService = environment.memoryService {
                 MemoryUIView(service: memoryService)
