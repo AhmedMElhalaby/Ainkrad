@@ -45,10 +45,12 @@ struct SettingsKitCompositionTests {
 
     @Test("RATCHET: the .custom field count may not grow")
     func customRatchet() {
-        // Measured against the live catalog at the start of Task 6. Raising
-        // this ceiling requires a deliberate edit and a reason in the PR —
-        // that is the point.
-        let ceiling = 23
+        // Measured against the live catalog. Raising this ceiling requires a
+        // deliberate edit and a reason in the PR — that is the point; it only
+        // works if decomposition work TIGHTENS it.
+        // 23 at the start of Task 6 → 22 after Task 7 decomposed Sound & Voice
+        // (two panes removed, one small read-only chord display kept).
+        let ceiling = 22
         let catalog = HostSettingsCatalog.build(environment: .preview())
         let customCount = catalog.allFields.filter {
             if case .custom = $0.kind { return true }
