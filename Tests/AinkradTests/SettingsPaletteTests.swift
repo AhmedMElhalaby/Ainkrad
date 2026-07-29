@@ -33,4 +33,12 @@ struct SettingsPaletteTests {
     func sidebarTapFromFiltering() {
         #expect(SettingsSearchMode.filtering("blur").afterSidebarTap() == .filtering("blur"))
     }
+
+    @Test("the search field is the kit's, not a settings look-alike")
+    func usesKitSearchField() {
+        // SettingsSearchField is deleted; the overlay composes AinkradSearchField.
+        // This test pins the enum's new home so the move is deliberate.
+        #expect(SettingsSearchMode(query: "blur", hasNavigated: false) == .palette("blur"))
+        #expect(SettingsSearchMode(query: "  ", hasNavigated: true) == .browsing)
+    }
 }

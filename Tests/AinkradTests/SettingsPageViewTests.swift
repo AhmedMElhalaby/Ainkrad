@@ -87,6 +87,58 @@ struct SettingsPageViewTests {
                           fields: [pane(g.appending("a")), control(g.appending("b"))])))
     }
 
+    @Test("an always-expanded group composes AinkradSectionFrame")
+    func alwaysGroupUsesSectionFrame() {
+        let root = SettingsPath(["test", "page"])
+        let group = SettingsGroup(path: root.appending("g"), title: "Startup",
+                                  disclosure: .always, fields: [
+            SettingsField(path: root.appending("g").appending("f"),
+                          label: "Field", kind: .toggle(.constant(false)))
+        ])
+        let described = String(describing: SettingsGroupView(group: group, layout: .stacked).body)
+        #expect(described.contains("AinkradSectionFrame"))
+    }
+
+    @Test("a collapsed-by-default group composes AinkradDisclosureGroup")
+    func collapsibleGroupUsesDisclosure() {
+        let root = SettingsPath(["test", "page"])
+        let group = SettingsGroup(path: root.appending("g"), title: "Advanced",
+                                  disclosure: .collapsedByDefault, fields: [
+            SettingsField(path: root.appending("g").appending("f"),
+                          label: "Field", kind: .toggle(.constant(false)))
+        ])
+        let described = String(describing: SettingsGroupView(group: group, layout: .stacked).body)
+        #expect(described.contains("AinkradDisclosureGroup"))
+    }
+
+    @Test("a group containing the highlighted path must expand")
+    func mustExpandForHighlightedPath() {
+        let g = SettingsPath(["p", "g"])
+        let target = g.appending("f")
+        let group = SettingsGroup(path: g, title: "G", disclosure: .collapsedByDefault,
+                                  fields: [control(target)])
+        #expect(SettingsGroupView.mustExpand(group: group, highlightedPath: target, matchedPaths: nil))
+        // A highlight for a path outside the group must not force it open.
+        #expect(!SettingsGroupView.mustExpand(
+            group: group, highlightedPath: SettingsPath(["other", "path"]), matchedPaths: nil))
+        // No highlight, no filter: stays closed.
+        #expect(!SettingsGroupView.mustExpand(group: group, highlightedPath: nil, matchedPaths: nil))
+    }
+
+    @Test("a group containing a filter match must expand")
+    func mustExpandForFilterMatch() {
+        let g = SettingsPath(["p", "g"])
+        let target = g.appending("f")
+        let group = SettingsGroup(path: g, title: "G", disclosure: .collapsedByDefault,
+                                  fields: [control(target)])
+        #expect(SettingsGroupView.mustExpand(group: group, highlightedPath: nil, matchedPaths: [target]))
+        // A match elsewhere doesn't force this group open.
+        #expect(!SettingsGroupView.mustExpand(
+            group: group, highlightedPath: nil, matchedPaths: [SettingsPath(["other", "path"])]))
+        // `matchedPaths == nil` means no active filter — never forces open on that basis alone.
+        #expect(!SettingsGroupView.mustExpand(group: group, highlightedPath: nil, matchedPaths: nil))
+    }
+
     @Test("row width accounts for the mini-map's occupied space, not just total width")
     func rowAreaWidthSubtractsMiniMap() {
         let p = page(groupCount: 4)
@@ -102,5 +154,30 @@ struct SettingsPageViewTests {
         // No mini-map (too few groups) — the full width is available to rows.
         let noMiniMap = page(groupCount: 3)
         #expect(SettingsPageView.rowAreaWidth(page: noMiniMap, totalWidth: total) == total)
+    }
+
+    @Test("tabs appear only for pages with three or more groups")
+    func tabsOnlyForTallPages() {
+        #expect(!SettingsPageView.usesTabs(page: page(groupCount: 1)))
+        #expect(!SettingsPageView.usesTabs(page: page(groupCount: 2)))
+        #expect(SettingsPageView.usesTabs(page: page(groupCount: 3)))
+        #expect(SettingsPageView.usesTabs(page: page(groupCount: 4)))
+    }
+
+    @Test("a tab reports how many of its own fields match the filter")
+    func tabHitCounts() {
+        let p = page(groupCount: 3)
+        let matched: Set<SettingsPath> = [p.groups[1].fields[0].path]
+        #expect(SettingsPageView.tabHitCount(group: p.groups[0], matchedPaths: matched) == 0)
+        #expect(SettingsPageView.tabHitCount(group: p.groups[1], matchedPaths: matched) == 1)
+        #expect(SettingsPageView.tabHitCount(group: p.groups[2], matchedPaths: nil) == 0)
+    }
+
+    @Test("a deep-linked field resolves to the tab that contains it")
+    func tabIndexForDeepLink() {
+        let p = page(groupCount: 3)
+        #expect(SettingsPageView.tabIndex(containing: p.groups[2].fields[0].path, page: p) == 2)
+        #expect(SettingsPageView.tabIndex(containing: p.groups[0].fields[0].path, page: p) == 0)
+        #expect(SettingsPageView.tabIndex(containing: SettingsPath(["nope"]), page: p) == nil)
     }
 }

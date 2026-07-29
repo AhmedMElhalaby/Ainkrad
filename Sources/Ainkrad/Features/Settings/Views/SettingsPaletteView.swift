@@ -5,75 +5,55 @@ import AinkradHostRuntime
 
 /// The ranked result list that replaces the detail pane while searching.
 /// Each row shows the field, where it lives, and its current value — the
-/// value is often the whole reason for the search.
+/// value is often the whole reason for the search. Composes the kit's
+/// `AinkradCommandMenu` (extended with `detail`/`value` slots, keyboard
+/// navigation, and an empty-state slot) rather than a bespoke result list.
 struct SettingsPaletteView: View {
-    @Environment(\.ainkradTheme) private var tokens
-    @Environment(\.ainkradReduceMotion) private var reduceMotion
-
     let results: [SettingsSearchResult]
     let query: String
+    /// The keyboard highlight, owned by `SettingsOverlayView` because the keys
+    /// that move it arrive at the SEARCH FIELD in the sidebar — the palette
+    /// itself is never focused, so `.onKeyPress` inside it would never fire.
+    @Binding var highlight: Int?
     let onSelect: (SettingsPath) -> Void
 
-    @State private var highlightedIndex = 0
+    /// `AinkradCommandMenu` is keyed by item, so it's driven by `SettingsPath`
+    /// (Hashable) with the matching `SettingsSearchResult` looked up per row —
+    /// `SettingsSearchResult` itself carries a `score: Int` that makes it
+    /// unsuitable as a stable Hashable identity across re-searches.
+    @State private var selection: SettingsPath?
 
-    var body: some View {
-        if results.isEmpty {
-            AinkradEmptyState(
-                icon: "magnifyingglass",
-                title: "No settings match \u{201C}\(query)\u{201D}",
-                message: "Try a shorter word, or the name of the app the setting belongs to.")
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(results.enumerated()), id: \.element.id) { index, result in
-                        row(result, isHighlighted: index == highlightedIndex)
-                    }
-                }
-                .padding(18)
-            }
-            .scrollContentBackground(.hidden)
-            .onKeyPress(.downArrow) {
-                highlightedIndex = min(highlightedIndex + 1, results.count - 1); return .handled
-            }
-            .onKeyPress(.upArrow) {
-                highlightedIndex = max(highlightedIndex - 1, 0); return .handled
-            }
-            .onKeyPress(.return) {
-                onSelect(results[highlightedIndex].path); return .handled
-            }
-            .onChange(of: query) { _, _ in highlightedIndex = 0 }
-        }
+    private func result(for path: SettingsPath) -> SettingsSearchResult? {
+        results.first { $0.path == path }
     }
 
-    private func row(_ result: SettingsSearchResult, isHighlighted: Bool) -> some View {
-        Button { onSelect(result.path) } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(result.label)
-                        .font(AinkradFont.display(13, weight: .medium))
-                        .foregroundStyle(tokens.foreground.opacity(0.92))
-                    Text(result.breadcrumb)
-                        .font(AinkradFont.mono(10))
-                        .foregroundStyle(tokens.foreground.opacity(0.45))
-                }
-                Spacer(minLength: 12)
-                if let value = result.valueDescription {
-                    Text(value)
-                        .font(AinkradFont.mono(11))
-                        .foregroundStyle(tokens.accentSecondary.opacity(0.85))
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(ChamferShape(cut: AinkradRadius.md)
-                .fill(isHighlighted ? tokens.accentPrimary.opacity(0.14) : tokens.surfaceElevated.opacity(0.4)))
-            .overlay(TargetingBrackets(length: 7)
-                .stroke(isHighlighted ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.3)
-                .padding(1))
-            .settingsRowHover(isActive: isHighlighted)
-            .contentShape(Rectangle())
+    var body: some View {
+        ScrollView {
+            AinkradCommandMenu(
+                items: results.map(\.path),
+                selection: $selection,
+                icon: { _ in "magnifyingglass" },
+                label: { result(for: $0)?.label ?? "" },
+                detail: { result(for: $0)?.breadcrumb },
+                value: { result(for: $0)?.valueDescription },
+                uppercased: false,
+                emptyState: {
+                    AnyView(
+                        AinkradEmptyState(
+                            icon: "magnifyingglass",
+                            title: "No settings match \u{201C}\(query)\u{201D}",
+                            message: "Try a shorter word, or the name of the app the setting belongs to.")
+                    )
+                },
+                highlight: $highlight
+            )
+            .padding(AinkradSpacing.lg)
         }
-        .buttonStyle(.plain)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isHighlighted)
+        .scrollContentBackground(.hidden)
+        .onChange(of: selection) { _, newValue in
+            guard let newValue else { return }
+            onSelect(newValue)
+        }
+        .onChange(of: query) { _, _ in selection = nil }
     }
 }

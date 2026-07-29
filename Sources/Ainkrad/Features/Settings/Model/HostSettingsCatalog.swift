@@ -92,8 +92,13 @@ enum HostSettingsCatalog {
                         keywords: ["background", "wallpaper", "animation", "parallax"],
                         kind: .custom(AnyView(LivingSkySettingsView())))
                 ]),
-                SettingsGroup(path: page.appending("appIcon"), title: "App Icon",
-                              disclosure: .collapsedByDefault, fields: [
+                // Always expanded. This page is tabbed (3 groups), so the icon
+                // picker already sits behind one hiding mechanism; collapsing
+                // it too is what produced "I can't find the app icons
+                // settings". `AppIconSettingsView` draws its own "APP ICON"
+                // heading, so the tab label plus the pane heading label it
+                // fine without the catalog's disclosure header.
+                SettingsGroup(path: page.appending("appIcon"), title: "App Icon", fields: [
                     SettingsField(
                         path: page.appending("appIcon").appending("picker"),
                         label: "App icon",
@@ -113,6 +118,15 @@ enum HostSettingsCatalog {
             path: page, title: "Sound & Voice", icon: "speaker.wave.2",
             group: .workspace, order: 2,
             groups: [
+                // Sound stays a `.custom` pane DELIBERATELY. It was decomposed
+                // in Task 7 and reverted after review: each of the 13 `UISound`
+                // events needs an enable toggle, an effect chooser AND a
+                // preview action, which one-field-per-control turns into three
+                // rows with near-duplicate labels ("Startup" / "Startup sound"
+                // / "Preview Startup") thirteen times over — worse than the
+                // pane. A correct conversion needs a COMPOSITE row kind the SDK
+                // does not have yet; until then this is the right use of the
+                // escape hatch. Voice, directly below, decomposed cleanly.
                 SettingsGroup(path: page.appending("sound"), title: "Sound", fields: [
                     SettingsField(
                         path: page.appending("sound").appending("effects"),
@@ -121,17 +135,8 @@ enum HostSettingsCatalog {
                         keywords: ["audio", "volume", "mute", "chime"],
                         kind: .custom(AnyView(SoundSettingsView())))
                 ]),
+                voiceGroup(environment, page: page),
                 SettingsGroup(path: page.appending("speech"), title: "Speech", fields: [
-                    SettingsField(
-                        path: page.appending("speech").appending("voice"),
-                        label: "Voice input",
-                        help: "Speech recognition for talking to the assistant.",
-                        keywords: ["dictation", "microphone", "speech", "stt"],
-                        kind: .custom(AnyView(VoiceSettingsView(
-                            settings: environment.voiceService.settings,
-                            connections: environment.connectionStore,
-                            shortcuts: environment.shortcutStore,
-                            tokens: tokens)))),
                     SettingsField(
                         path: page.appending("speech").appending("textToSpeech"),
                         label: "Spoken responses",
@@ -143,6 +148,137 @@ enum HostSettingsCatalog {
                             tokens: tokens))))
                 ])
             ])
+    }
+
+    private static func voiceGroup(_ environment: AppEnvironment, page: SettingsPath) -> SettingsGroup {
+        let voice = page.appending("voice")
+        // The voice store lives on the service — there is no
+        // `environment.voiceSettingsStore`.
+        let settings = environment.voiceService.settings
+        let connections = environment.connectionStore
+        let shortcuts = environment.shortcutStore
+        let tokens = environment.themeManager.tokens
+
+        func backendTitle(_ kind: TranscriptionBackendKind) -> String {
+            kind == .onDevice ? "On-device (private)" : "Provider (Whisper)"
+        }
+
+        return SettingsGroup(path: voice, title: "Voice", fields: [
+            SettingsField(
+                path: voice.appending("backend"),
+                label: "Backend",
+                help: "On-device keeps audio private; Provider sends it to a configured connection.",
+                keywords: ["transcription", "whisper", "on-device", "offline", "stt", "engine"],
+                kind: .select(
+                    options: TranscriptionBackendKind.allCases.map {
+                        SettingsOption(id: $0.rawValue, title: backendTitle($0))
+                    },
+                    selection: Binding(
+                        get: { settings.document.backend.rawValue },
+                        set: { raw in
+                            guard let kind = TranscriptionBackendKind(rawValue: raw) else { return }
+                            settings.setBackend(kind)
+                        })),
+                defaultDescription: backendTitle(.onDevice),
+                isModified: { settings.document.backend != .onDevice },
+                reset: { settings.setBackend(.onDevice) }),
+            SettingsField(
+                path: voice.appending("mode"),
+                label: "Push-to-talk mode",
+                help: "Hold records while the hotkey is down; Toggle starts and stops on separate presses.",
+                keywords: ["hold", "toggle", "ptt", "dictation", "microphone"],
+                kind: .select(
+                    options: PushToTalkMode.allCases.map {
+                        SettingsOption(id: $0.rawValue, title: $0 == .hold ? "Hold" : "Toggle")
+                    },
+                    selection: Binding(
+                        get: { settings.document.mode.rawValue },
+                        set: { raw in
+                            guard let mode = PushToTalkMode(rawValue: raw) else { return }
+                            settings.setMode(mode)
+                        })),
+                defaultDescription: "Hold",
+                isModified: { settings.document.mode != .hold },
+                reset: { settings.setMode(.hold) }),
+            SettingsField(
+                path: voice.appending("autoSend"),
+                label: "Auto-send after dictation",
+                help: "Sends the transcript to the assistant as soon as dictation ends.",
+                keywords: ["send", "submit", "dictation", "automatic", "enter"],
+                kind: .toggle(Binding(
+                    get: { settings.document.autoSend },
+                    set: { settings.setAutoSend($0) })),
+                // Reads as an affirmative label but the store default is false.
+                defaultDescription: "Off",
+                isModified: { settings.document.autoSend != false },
+                reset: { settings.setAutoSend(false) }),
+            SettingsField(
+                path: voice.appending("providerOptIn"),
+                label: "Upload audio to provider",
+                help: "Opt in to sending dictated audio to the selected connection for transcription.",
+                keywords: ["upload", "opt-in", "privacy", "cloud", "consent"],
+                kind: .toggle(Binding(
+                    get: { settings.document.providerOptIn },
+                    set: { settings.setProviderOptIn($0) })),
+                defaultDescription: "Off",
+                isModified: { settings.document.providerOptIn != false },
+                reset: { settings.setProviderOptIn(false) }),
+            SettingsField(
+                path: voice.appending("connection"),
+                label: "Connection",
+                help: "Which configured connection transcribes uploaded audio.",
+                keywords: ["provider", "endpoint", "openai", "server", "account"],
+                kind: .select(
+                    options: connections.connections.map {
+                        SettingsOption(id: $0.id.uuidString, title: $0.displayName)
+                    },
+                    selection: Binding(
+                        get: { settings.document.providerConnectionID?.uuidString
+                            ?? connections.connections.first?.id.uuidString ?? "" },
+                        set: { settings.setProviderConnection(UUID(uuidString: $0)) })),
+                defaultDescription: "None",
+                isModified: { settings.document.providerConnectionID != nil },
+                reset: { settings.setProviderConnection(nil) }),
+            // Not `.secure`: this is a MODEL NAME ("whisper-1"), not a
+            // credential. Marking it secure would hide it from search for no
+            // security gain. The TTS API key is the page's only real secret and
+            // it lives in the out-of-scope `TTSSettingsView` pane.
+            SettingsField(
+                path: voice.appending("providerModel"),
+                label: "Model",
+                help: "Transcription model requested from the provider.",
+                keywords: ["whisper", "model", "engine", "name"],
+                kind: .text(Binding(
+                    get: { settings.document.providerModel },
+                    set: { settings.setProviderModel($0) })),
+                defaultDescription: "whisper-1",
+                isModified: { settings.document.providerModel != "whisper-1" },
+                reset: { settings.setProviderModel("whisper-1") }),
+            SettingsField(
+                path: voice.appending("locale"),
+                label: "Locale",
+                help: "Language hint for speech recognition, as a BCP-47 tag.",
+                keywords: ["language", "region", "bcp-47", "en-US", "accent"],
+                kind: .text(Binding(
+                    get: { settings.document.localeIdentifier },
+                    set: { settings.setLocale($0) })),
+                defaultDescription: "en-US",
+                isModified: { settings.document.localeIdentifier != "en-US" },
+                reset: { settings.setLocale("en-US") }),
+            // The one deliberate `.custom` here: a READ-ONLY display of the
+            // current chord. It is rebound in Settings → Keyboard, so there is
+            // nothing to edit; the kit has no informational field kind and one
+            // is not worth adding for a single row.
+            SettingsField(
+                path: voice.appending("hotkey"),
+                label: "Push-to-talk hotkey",
+                help: "Change this in Settings → Keyboard.",
+                // Deliberately NOT "hotkey": Keyboard ▸ "Keyboard shortcuts" is
+                // where a chord is actually rebound and must stay the top hit
+                // for that word. This row is a read-only pointer to it.
+                keywords: ["push to talk", "ptt", "chord", "dictation shortcut"],
+                kind: .custom(AnyView(VoiceHotkeyDisplay(shortcuts: shortcuts, tokens: tokens))))
+        ])
     }
 
     // MARK: - Keyboard
