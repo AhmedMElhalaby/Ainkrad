@@ -21,7 +21,18 @@ enum AppSettingsCatalog {
             let root = SettingsPath(["app", app.id])
             let published = app.settingsCatalog()
 
-            var groups = published?.groups ?? [
+            // Everything under `published.groups` came from third-party code
+            // and is untrusted at this boundary: a plugin could (deliberately
+            // or by copy-paste) declare a path like ["workspace","general"]
+            // or another app's ["app", otherID] and collide with a host page
+            // or another plugin in `page(at:)`, deep-link resolution,
+            // highlighting, and search. Re-root every group/field path under
+            // this app's own `root` before it enters the catalog, so a
+            // plugin can only ever address paths inside its own page — the
+            // relative structure between a group and its fields (which is
+            // itself part of the plugin's declared paths) is preserved
+            // because the same prefix is prepended to both.
+            var groups = (published?.groups ?? [
                 SettingsGroup(path: root.appending("settings"), title: app.displayName, fields: [
                     SettingsField(
                         path: root.appending("settings").appending("pane"),
@@ -30,7 +41,7 @@ enum AppSettingsCatalog {
                         keywords: [app.displayName.lowercased()],
                         kind: .custom(app.makeSettingsView()))
                 ])
-            ]
+            ]).map { namespaced($0, under: root) }
 
             if app.id != AssistantApp.id {
                 groups.append(appearanceGroup(appID: app.id, root: root, environment: environment))
@@ -39,8 +50,42 @@ enum AppSettingsCatalog {
             return SettingsPage(
                 path: root, title: app.displayName, icon: app.icon,
                 group: isBuiltIn ? .builtInApps : .installedApps,
-                order: index, groups: groups, appID: app.id)
+                order: index, groups: groups, appID: app.id,
+                badge: published?.badge)
         }
+    }
+
+    /// Prefixes every segment of `path` with `root`'s segments. Deterministic
+    /// and injective, so a group and the fields declared under it keep
+    /// pointing at each other after the rewrite — and the result always
+    /// starts with `["app", <this app's id>, ...]`, which cannot collide
+    /// with a host page (`["workspace", ...]` / `["intelligence", ...]`) or
+    /// another app's page (a different id in the second segment).
+    private static func namespaced(_ path: SettingsPath, under root: SettingsPath) -> SettingsPath {
+        SettingsPath(root.segments + path.segments)
+    }
+
+    private static func namespaced(_ field: SettingsField, under root: SettingsPath) -> SettingsField {
+        SettingsField(
+            path: namespaced(field.path, under: root),
+            label: field.label,
+            help: field.help,
+            keywords: field.keywords,
+            kind: field.kind,
+            isAdvanced: field.isAdvanced,
+            requiresRestart: field.requiresRestart,
+            defaultDescription: field.defaultDescription,
+            isModified: field.isModified,
+            reset: field.reset)
+    }
+
+    private static func namespaced(_ group: SettingsGroup, under root: SettingsPath) -> SettingsGroup {
+        SettingsGroup(
+            path: namespaced(group.path, under: root),
+            title: group.title,
+            disclosure: group.disclosure,
+            footerNote: group.footerNote,
+            fields: group.fields.map { namespaced($0, under: root) })
     }
 
     /// The blur toggle every app but the Assistant gets — the host renders
