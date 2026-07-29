@@ -23,6 +23,18 @@ enum SettingsSearchMode: Equatable {
         case .palette(let q), .filtering(let q): return q
         }
     }
+
+    /// A sidebar row tap is an unambiguous "take me to this page" instruction
+    /// — it must always produce a visible result, so it always behaves as a
+    /// navigation (`hasNavigated: true`), regardless of which mode it was
+    /// tapped from. From `.browsing` that's a no-op (still `.browsing`); from
+    /// `.palette` it must replace the palette with the tapped page rather
+    /// than silently leaving the palette on screen (the defect this fixes);
+    /// from `.filtering` it stays `.filtering` on the newly tapped page. The
+    /// two live-query modes therefore always agree after a tap.
+    func afterSidebarTap() -> SettingsSearchMode {
+        SettingsSearchMode(query: query ?? "", hasNavigated: true)
+    }
 }
 
 /// The search field at the top of the sidebar. ⌘F focuses it.

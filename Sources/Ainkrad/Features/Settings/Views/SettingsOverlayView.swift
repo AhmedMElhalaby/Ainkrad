@@ -31,6 +31,25 @@ struct SettingsOverlayView: View {
     }
     private var index: SettingsCatalogIndex { SettingsCatalogIndex(catalog: catalog) }
 
+    /// The page actually on screen. Resolves through `pendingDeepLink` (a
+    /// field or group path) via `catalog.page(containing:)` so a deep-link's
+    /// containing page renders on the very first frame — `navigator.selection`
+    /// only catches up once `.task` runs, which is too late to avoid a flash
+    /// of the empty state if relied on directly.
+    private var displayedPage: SettingsPage? {
+        catalog.page(containing: pendingDeepLink ?? navigator.selection)
+    }
+
+    /// The field to highlight/scroll to. Mirrors `SettingsNavigator.navigate`'s
+    /// own rule (nil when the resolved path IS the page, i.e. there's nothing
+    /// more specific to point at) so the pending and post-`.task` states agree.
+    private var displayedHighlight: SettingsPath? {
+        if let pendingDeepLink {
+            return (displayedPage?.path == pendingDeepLink) ? nil : pendingDeepLink
+        }
+        return navigator.highlightedPath
+    }
+
     /// `focusedAppID` opens the overlay directly on that app's settings —
     /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
     /// Otherwise it lands on General — the natural top of the reordered sidebar.
@@ -99,7 +118,10 @@ struct SettingsOverlayView: View {
             return .handled
         }
         .onKeyPress(.escape) {
-            if !query.isEmpty { query = ""; return .handled }
+            // Agree with `SettingsSearchMode`'s own notion of "empty" — a
+            // whitespace-only query is `.browsing`, so it must dismiss on
+            // the first press rather than silently eating the whitespace.
+            if searchMode != .browsing { query = ""; return .handled }
             onDismiss(); return .handled
         }
         .task {
@@ -182,10 +204,16 @@ struct SettingsOverlayView: View {
 
     /// A catalog-driven sidebar row for any page in any group.
     private func sidebarRow(page: SettingsPage, tokens: DesignTokens) -> some View {
-        let isSelected = navigator.selection == page.path
+        let isSelected = displayedPage?.path == page.path
         return Button {
             navigator.selection = page.path
             navigator.clearHighlight()
+            pendingDeepLink = nil
+            // A sidebar tap is an unambiguous "take me to this page"
+            // instruction — it must always show that page, in BOTH the
+            // palette and filtering modes, not just leave the palette
+            // sitting inertly on screen. See SettingsSearchMode.afterSidebarTap.
+            hasNavigatedWithQuery = true
         } label: {
             HStack(spacing: 10) {
                 appTile(appID: page.appID, systemIcon: page.icon, size: 22,
@@ -241,20 +269,20 @@ struct SettingsOverlayView: View {
                 hasNavigatedWithQuery = true
             }
         case .filtering(let q):
-            if let page = catalog.page(at: navigator.selection) {
+            if let page = displayedPage {
                 VStack(alignment: .leading, spacing: 0) {
                     filterBanner(query: q, tokens: tokens)
                     SettingsPageView(page: page,
                                      matchedPaths: index.matchedPaths(q, on: page),
-                                     highlightedPath: navigator.highlightedPath)
+                                     highlightedPath: displayedHighlight)
                 }
             } else {
                 AinkradEmptyState(icon: "gearshape", title: "Nothing here",
                                   message: "That settings page is no longer available.")
             }
         case .browsing:
-            if let page = catalog.page(at: navigator.selection) {
-                SettingsPageView(page: page, highlightedPath: navigator.highlightedPath)
+            if let page = displayedPage {
+                SettingsPageView(page: page, highlightedPath: displayedHighlight)
             } else {
                 AinkradEmptyState(icon: "gearshape", title: "Nothing here",
                                   message: "That settings page is no longer available.")
