@@ -21,7 +21,12 @@ enum SettingsPathAliases {
         "assistant.data":       "intelligence.privacy",
         "assistant.web":        "intelligence.tools",
         "assistant.voice":      "workspace.soundAndVoice",
-        "assistant.appearance": "workspace.appearance"
+        // The Assistant's appearance (surface opacity, blur, message font and
+        // size) did NOT move to WORKSPACE ▸ Appearance — that page is the
+        // workspace theme, Living Sky, and app icon. Those controls are still
+        // `AssistantSettingsView.appearanceSection`, which renders on the
+        // Assistant's own app page.
+        "assistant.appearance": "app.assistant"
     ]
 
     /// Follows the alias chain to a fixed point, so retiring an already-retired

@@ -11,34 +11,30 @@ struct AppIconSettingsView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
         let store = environment.appIconStore
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "APP ICON", tokens: tokens)
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "APP ICON", tokens: tokens)
 
-                Text("Choose the Dock icon. Auto follows your theme; System follows the Dock's light/dark.")
-                    .font(AinkradFont.display(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
+            Text("Choose the Dock icon. Auto follows your theme; System follows the Dock's light/dark.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.5))
 
-                preview(store: store, tokens: tokens)
+            preview(store: store, tokens: tokens)
 
-                labeled("COLOR", tokens: tokens) {
-                    AinkradSegmentedPicker(
-                        items: AppIconChoice.allCases,
-                        selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
-                        label: colorTitle
-                    )
-                }
-                labeled("APPEARANCE", tokens: tokens) {
-                    AinkradSegmentedPicker(
-                        items: AppIconAppearance.allCases,
-                        selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),
-                        label: appearanceTitle
-                    )
-                }
+            labeled("COLOR", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: AppIconChoice.allCases,
+                    selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
+                    label: colorTitle
+                )
             }
-            .padding(18)
+            labeled("APPEARANCE", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: AppIconAppearance.allCases,
+                    selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),
+                    label: appearanceTitle
+                )
+            }
         }
-        .scrollContentBackground(.hidden)
     }
 
     // The resolved icon for the current selection (preview uses the current

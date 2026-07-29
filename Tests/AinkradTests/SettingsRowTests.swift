@@ -1,4 +1,5 @@
 import Testing
+import SwiftUI
 import AinkradAppKit
 import AinkradAppKitContract
 
@@ -10,6 +11,33 @@ struct SettingsRowTests {
         #expect(SettingsRowLayout(detailWidth: 500) == .stacked)
         #expect(SettingsRowLayout(detailWidth: 899) == .stacked)
         #expect(SettingsRowLayout(detailWidth: 901) == .sideBySide)
+    }
+
+    @Test("a .custom field takes the pane presentation; every real control takes the row presentation")
+    func presentationSplit() {
+        let path = SettingsPath(["a", "b", "c"])
+        func field(_ kind: SettingsFieldKind) -> SettingsField {
+            SettingsField(path: path, label: "X", kind: kind)
+        }
+
+        // The escape hatch: a whole pane, not a control. It must NOT be
+        // clamped into the 220pt control column or wrapped in row chrome.
+        #expect(SettingsRow.presentation(for: field(.custom(AnyView(EmptyView())))) == .pane)
+
+        // All seven genuine controls keep the row treatment — the shared
+        // trailing rail is the point of the design.
+        let controls: [SettingsFieldKind] = [
+            .toggle(.constant(false)),
+            .select(options: [SettingsOption(id: "a", title: "A")], selection: .constant("a")),
+            .slider(range: 0...1, step: 0.1, value: .constant(0)),
+            .text(.constant("")),
+            .secure(.constant("")),
+            .shortcut(.constant("⌘K")),
+            .action(title: "Do it", handler: {})
+        ]
+        for kind in controls {
+            #expect(SettingsRow.presentation(for: field(kind)) == .row)
+        }
     }
 
     @Test("badges reflect the field's flags")

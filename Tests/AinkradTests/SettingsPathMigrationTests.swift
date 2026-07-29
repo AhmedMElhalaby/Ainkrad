@@ -20,7 +20,12 @@ struct SettingsPathMigrationTests {
             ("workspace.mcp",                  "intelligence.tools"),
             ("workspace.lsp",                  "intelligence.tools"),
             ("workspace.skills",               "intelligence.skills"),
-            ("workspace.memory",               "intelligence.memory")
+            ("workspace.memory",               "intelligence.memory"),
+            // NOT workspace.appearance: the Assistant's appearance settings
+            // (surface opacity, blur, message font/size) never moved there —
+            // they are still `AssistantSettingsView.appearanceSection`, on the
+            // Assistant's own app page.
+            ("assistant.appearance",           "app.assistant")
         ]
         for (old, new) in cases {
             let resolved = SettingsPathAliases.resolve(SettingsPath(rawValue: old)!)

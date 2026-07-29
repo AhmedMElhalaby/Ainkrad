@@ -42,6 +42,51 @@ struct SettingsPageViewTests {
         #expect(SettingsGroupView.hitCount(group: p.groups[1], matchedPaths: matched) == 0)
     }
 
+    private func pane(_ path: SettingsPath) -> SettingsField {
+        SettingsField(path: path, label: "Pane", kind: .custom(AnyView(EmptyView())))
+    }
+
+    private func control(_ path: SettingsPath) -> SettingsField {
+        SettingsField(path: path, label: "Control", kind: .toggle(.constant(false)))
+    }
+
+    @Test("a group is pane-only when every field in it is a pane")
+    func paneOnlyDetection() {
+        let g = SettingsPath(["p", "g"])
+        #expect(SettingsGroupView.isPaneOnly(
+            SettingsGroup(path: g, title: "G", fields: [pane(g.appending("a")), pane(g.appending("b"))])))
+        #expect(!SettingsGroupView.isPaneOnly(
+            SettingsGroup(path: g, title: "G", fields: [pane(g.appending("a")), control(g.appending("b"))])))
+        #expect(!SettingsGroupView.isPaneOnly(
+            SettingsGroup(path: g, title: "G", fields: [control(g.appending("a"))])))
+        // An empty group is not "pane-only" — suppressing its header would
+        // leave nothing at all on screen for it.
+        #expect(!SettingsGroupView.isPaneOnly(SettingsGroup(path: g, title: "G", fields: [])))
+    }
+
+    @Test("the catalog's group header is suppressed only for an always-expanded pane-only group")
+    func headerSuppression() {
+        let g = SettingsPath(["p", "g"])
+        // Pane-only + always expanded: the pane draws its own heading, so the
+        // catalog's would be the second one on the page.
+        #expect(!SettingsGroupView.showsHeader(for:
+            SettingsGroup(path: g, title: "G", fields: [pane(g.appending("a"))])))
+
+        // Collapsible: the header IS the disclosure control — never suppressed,
+        // or the group could not be opened.
+        #expect(SettingsGroupView.showsHeader(for:
+            SettingsGroup(path: g, title: "G", disclosure: .collapsedByDefault,
+                          fields: [pane(g.appending("a"))])))
+
+        // Any real control in the group means real rows, which have no heading
+        // of their own and need the group's.
+        #expect(SettingsGroupView.showsHeader(for:
+            SettingsGroup(path: g, title: "G", fields: [control(g.appending("a"))])))
+        #expect(SettingsGroupView.showsHeader(for:
+            SettingsGroup(path: g, title: "G",
+                          fields: [pane(g.appending("a")), control(g.appending("b"))])))
+    }
+
     @Test("row width accounts for the mini-map's occupied space, not just total width")
     func rowAreaWidthSubtractsMiniMap() {
         let p = page(groupCount: 4)

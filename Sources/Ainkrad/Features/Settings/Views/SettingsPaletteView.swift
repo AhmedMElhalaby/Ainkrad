@@ -70,6 +70,7 @@ struct SettingsPaletteView: View {
             .overlay(TargetingBrackets(length: 7)
                 .stroke(isHighlighted ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.3)
                 .padding(1))
+            .settingsRowHover(isActive: isHighlighted)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

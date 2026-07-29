@@ -237,6 +237,7 @@ struct SettingsOverlayView: View {
             .overlay(TargetingBrackets(length: 7)
                 .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.3)
                 .padding(1))
+            .settingsRowHover(isActive: isSelected)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

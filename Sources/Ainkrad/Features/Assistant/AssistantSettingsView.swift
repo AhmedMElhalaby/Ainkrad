@@ -24,12 +24,8 @@ struct AssistantSettingsView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                appearanceSection(tokens: tokens)
-            }
-            .padding(18)
+        VStack(alignment: .leading, spacing: 20) {
+            appearanceSection(tokens: tokens)
         }
-        .scrollContentBackground(.hidden)
     }
 }

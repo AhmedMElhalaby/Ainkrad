@@ -136,25 +136,21 @@ struct SkillsManagerView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "ACTIVE SKILLS", tokens: tokens)
-                activeSkillsSection(tokens: tokens)
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "ACTIVE SKILLS", tokens: tokens)
+            activeSkillsSection(tokens: tokens)
 
-                SettingsSectionHeader(title: "PROPOSED", tokens: tokens)
-                proposedSection(tokens: tokens)
+            SettingsSectionHeader(title: "PROPOSED", tokens: tokens)
+            proposedSection(tokens: tokens)
 
-                SettingsSectionHeader(title: "COMMANDS", tokens: tokens)
-                commandsSection(tokens: tokens)
+            SettingsSectionHeader(title: "COMMANDS", tokens: tokens)
+            commandsSection(tokens: tokens)
 
-                if !viewModel.registry.loadErrors.isEmpty {
-                    SettingsSectionHeader(title: "LOAD ERRORS", tokens: tokens)
-                    loadErrorsSection(tokens: tokens)
-                }
+            if !viewModel.registry.loadErrors.isEmpty {
+                SettingsSectionHeader(title: "LOAD ERRORS", tokens: tokens)
+                loadErrorsSection(tokens: tokens)
             }
-            .padding(18)
         }
-        .scrollContentBackground(.hidden)
         .onAppear(perform: syncDefaultCommandSkill)
         .onChange(of: viewModel.registry.skills) { _, _ in syncDefaultCommandSkill() }
     }

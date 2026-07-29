@@ -20,41 +20,37 @@ struct LivingSkySettingsView: View {
         let tokens = environment.themeManager.tokens
         let store = environment.skySettingsStore
 
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "LIVING SKY", tokens: tokens)
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "LIVING SKY", tokens: tokens)
 
+            toggleRow(
+                tokens: tokens,
+                title: "Animate the sky",
+                subtitle: "Freezes every ambient effect in place when off — the scene stays, the motion stops.",
+                isOn: store.motionEnabled,
+                action: { store.setMotionEnabled($0) }
+            )
+
+            if store.motionEnabled {
+                speedRow(tokens: tokens, store: store)
+            }
+
+            SettingsSectionHeader(title: "EFFECTS", tokens: tokens)
+
+            Text("Switch each layer of the living sky individually. The island artwork itself is never animated.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.5))
+
+            ForEach(SkyEffect.allCases) { effect in
                 toggleRow(
                     tokens: tokens,
-                    title: "Animate the sky",
-                    subtitle: "Freezes every ambient effect in place when off — the scene stays, the motion stops.",
-                    isOn: store.motionEnabled,
-                    action: { store.setMotionEnabled($0) }
+                    title: effect.displayName,
+                    subtitle: effect.effectDescription,
+                    isOn: store.isEnabled(effect),
+                    action: { store.setEnabled($0, for: effect) }
                 )
-
-                if store.motionEnabled {
-                    speedRow(tokens: tokens, store: store)
-                }
-
-                SettingsSectionHeader(title: "EFFECTS", tokens: tokens)
-
-                Text("Switch each layer of the living sky individually. The island artwork itself is never animated.")
-                    .font(AinkradFont.display(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
-
-                ForEach(SkyEffect.allCases) { effect in
-                    toggleRow(
-                        tokens: tokens,
-                        title: effect.displayName,
-                        subtitle: effect.effectDescription,
-                        isOn: store.isEnabled(effect),
-                        action: { store.setEnabled($0, for: effect) }
-                    )
-                }
             }
-            .padding(18)
         }
-        .scrollContentBackground(.hidden)
     }
 
     private func speedRow(tokens: DesignTokens, store: SkySettingsStore) -> some View {
