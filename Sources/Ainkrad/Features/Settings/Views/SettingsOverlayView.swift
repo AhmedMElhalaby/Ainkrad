@@ -155,8 +155,7 @@ struct SettingsOverlayView: View {
 
     private func sidebar(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            AinkradSearchField(text: $query, placeholder: "Search settings")
-                .focused($searchFocused)
+            AinkradSearchField(text: $query, placeholder: "Search settings", focus: $searchFocused)
                 .padding(.horizontal, AinkradSpacing.md)
                 .padding(.top, AinkradSpacing.md)
                 .padding(.bottom, AinkradSpacing.sm)
