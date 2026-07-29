@@ -556,4 +556,25 @@ final class AppEnvironment {
 
         return environment
     }
+
+    #if DEBUG
+    /// A fully-wired `AppEnvironment` for previews and tests that need real
+    /// descriptor→store bindings (e.g. `HostSettingsCatalog`) without a real
+    /// app launch. Each call gets its own temp directory and an isolated
+    /// `UserDefaults` suite, so callers never see another call's state and
+    /// nothing touches the developer's real `~/Library/Application Support`
+    /// or `.standard` defaults. Reuses the production `bootstrap()` wiring
+    /// rather than a bespoke stub graph — `isRunningUnderTests` already gates
+    /// the network/TCC-prompting I/O (model probe, MCP connect, LSP
+    /// autodetect) when hosted under `xcodebuild test`, so this is safe and
+    /// fast in that context; call sites outside tests should expect that
+    /// gating to relax and real I/O to occur.
+    static func preview() -> AppEnvironment {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AinkradPreview-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "com.ainkrad.preview.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        return bootstrap(rootURL: root, defaults: defaults)
+    }
+    #endif
 }
