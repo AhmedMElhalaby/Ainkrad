@@ -98,4 +98,90 @@ struct HostSettingsCatalogIntegrityTests {
 
         #expect(unreachable.isEmpty, "Unreachable fields: \(unreachable.map(\.description))")
     }
+
+    /// The composition `everyFieldIsReachable` cannot see.
+    ///
+    /// That test calls `SettingsGroupView.mustExpand` as a pure function, so
+    /// it passes whenever a group WOULD open if asked. It never models the
+    /// tab bar. But the tabbed branch of `SettingsPageView` renders exactly
+    /// one group at one structural slot, and until it carried a per-group
+    /// `.id` SwiftUI gave every tab's group the same view identity: the
+    /// `@State isExpanded` seeded in `SettingsGroupView.init` was created once
+    /// and then INHERITED by every later tab, so `mustExpand` was never
+    /// consulted again. Intelligence ▸ Permissions & Sandbox has two
+    /// `.collapsedByDefault` groups; collapsing the first left the second
+    /// rendering as a bare header, and a deep-link into it scrolled to an id
+    /// that was not in the hierarchy.
+    ///
+    /// `SettingsPageView.deepLinkTarget` is the composition as one pure value
+    /// — (tab, group, actually expanded) — and it reasons about the same
+    /// `groupViewIdentity` the view applies, so this fails if the identity
+    /// ever collapses again.
+    @Test("a deep-link into a collapsed group on an inactive tab resolves to that tab, open")
+    func deepLinkResolvesThroughTabs() {
+        let catalog = HostSettingsCatalog.build(environment: .preview())
+        var broken: [String] = []
+
+        for page in catalog.pages {
+            let tabbed = SettingsPageView.usesTabs(page: page)
+            for (index, group) in page.groups.enumerated() {
+                for field in group.fields {
+                    guard let target = SettingsPageView.deepLinkTarget(
+                        page: page, highlightedPath: field.path) else {
+                        broken.append("\(field.path): no target")
+                        continue
+                    }
+                    // The right tab must be selected...
+                    let expectedTab = tabbed ? index : nil
+                    if target.tabIndex != expectedTab {
+                        broken.append("\(field.path): tab \(String(describing: target.tabIndex)) != \(String(describing: expectedTab))")
+                    }
+                    if target.groupPath != group.path {
+                        broken.append("\(field.path): group \(target.groupPath)")
+                    }
+                    // ...and the group that lands there must actually be open,
+                    // INCLUDING when it is a collapsed group that was not the
+                    // tab shown a moment ago.
+                    if !target.groupIsExpanded {
+                        broken.append("\(field.path): group renders collapsed")
+                    }
+                }
+            }
+        }
+
+        #expect(broken.isEmpty, "Deep-links that do not land: \(broken)")
+    }
+
+    /// The concrete case from the bug report, pinned by name so a catalog
+    /// edit that re-hides it reads as the regression it is.
+    @Test("Permissions & Sandbox is tabbed and every collapsed tab still opens on deep-link")
+    func permissionsTabsOpen() {
+        let catalog = HostSettingsCatalog.build(environment: .preview())
+        guard let page = catalog.pages.first(where: { $0.title.contains("Permissions") }) else {
+            Issue.record("no Permissions & Sandbox page"); return
+        }
+        #expect(SettingsPageView.usesTabs(page: page))
+        let collapsed = page.groups.enumerated().filter { $0.element.disclosure == .collapsedByDefault }
+        #expect(collapsed.count >= 2, "expected more than one collapsed group behind tabs")
+        for (index, group) in collapsed {
+            let target = SettingsPageView.deepLinkTarget(page: page, highlightedPath: group.fields[0].path)
+            #expect(target?.tabIndex == index)
+            #expect(target?.groupIsExpanded == true, "\(group.path) stays collapsed on its own tab")
+        }
+    }
+
+    /// App Icon must not be hidden twice. `workspace.appearance` has three
+    /// groups, so it is tabbed; a `.collapsedByDefault` on top of that is the
+    /// exact combination behind "I can't find the app icons settings".
+    @Test("App Icon is expanded by default")
+    func appIconIsAlwaysExpanded() {
+        let catalog = HostSettingsCatalog.build(environment: .preview())
+        guard let page = catalog.pages.first(where: { $0.path == SettingsPath(["workspace", "appearance"]) }),
+              let group = page.groups.first(where: { $0.title == "App Icon" }) else {
+            Issue.record("no App Icon group on workspace.appearance"); return
+        }
+        #expect(group.disclosure == .always)
+        let target = SettingsPageView.deepLinkTarget(page: page, highlightedPath: group.fields[0].path)
+        #expect(target?.groupIsExpanded == true)
+    }
 }

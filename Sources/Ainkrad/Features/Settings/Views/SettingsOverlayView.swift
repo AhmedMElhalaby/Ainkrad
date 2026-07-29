@@ -23,6 +23,11 @@ struct SettingsOverlayView: View {
     @State private var query = ""
     @State private var hasNavigatedWithQuery = false
     @FocusState private var searchFocused: Bool
+    /// The palette's keyboard highlight. Owned HERE, not by the palette,
+    /// because the arrow keys arrive at the focused search field in the
+    /// sidebar; the palette sits in the detail pane and is never in the focus
+    /// chain, so a key handler installed inside it would never fire.
+    @State private var paletteHighlight: Int?
 
     private var catalog: SettingsCatalog { HostSettingsCatalog.build(environment: environment) }
 
@@ -167,11 +172,44 @@ struct SettingsOverlayView: View {
                 .padding(.horizontal, AinkradSpacing.md)
                 .padding(.top, AinkradSpacing.md)
                 .padding(.bottom, AinkradSpacing.sm)
-                .onChange(of: query) { _, _ in hasNavigatedWithQuery = false }
+                // ↑/↓/Return for the palette live HERE, on the ancestor of the
+                // focused text field: key presses start at the focused view
+                // and bubble up through its ancestors, so this is the nearest
+                // place they can be seen while the user is typing. The palette
+                // itself is in the detail pane and never focused.
+                .onKeyPress(.downArrow) { movePaletteHighlight(1) }
+                .onKeyPress(.upArrow) { movePaletteHighlight(-1) }
+                .onKeyPress(.return) { activatePaletteHighlight() }
+                .onChange(of: query) { _, _ in
+                    hasNavigatedWithQuery = false
+                    paletteHighlight = nil
+                }
 
             sidebarList(tokens: tokens)
         }
         .frame(width: SettingsMetrics.sidebarWidth, alignment: .topLeading)
+    }
+
+    /// The results the palette is currently showing, or `nil` when the palette
+    /// isn't on screen — the keys must stay out of the text field's way while
+    /// browsing or filtering.
+    private var paletteResults: [SettingsSearchResult]? {
+        guard case .palette(let q) = searchMode else { return nil }
+        return index.search(q, currentPage: navigator.selection)
+    }
+
+    private func movePaletteHighlight(_ delta: Int) -> KeyPress.Result {
+        guard let results = paletteResults, !results.isEmpty else { return .ignored }
+        paletteHighlight = commandMenuHighlightMoved(paletteHighlight, delta: delta, count: results.count)
+        return .handled
+    }
+
+    private func activatePaletteHighlight() -> KeyPress.Result {
+        guard let results = paletteResults, let index = paletteHighlight,
+              results.indices.contains(index) else { return .ignored }
+        navigator.navigate(to: results[index].path, in: catalog)
+        hasNavigatedWithQuery = true
+        return .handled
     }
 
     private func sidebarList(tokens: DesignTokens) -> some View {
@@ -275,7 +313,8 @@ struct SettingsOverlayView: View {
     private func detail(tokens: DesignTokens) -> some View {
         switch searchMode {
         case .palette(let q):
-            SettingsPaletteView(results: index.search(q, currentPage: navigator.selection), query: q) { path in
+            SettingsPaletteView(results: index.search(q, currentPage: navigator.selection), query: q,
+                                highlight: $paletteHighlight) { path in
                 navigator.navigate(to: path, in: catalog)
                 hasNavigatedWithQuery = true
             }

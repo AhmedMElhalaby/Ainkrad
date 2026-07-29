@@ -92,8 +92,13 @@ enum HostSettingsCatalog {
                         keywords: ["background", "wallpaper", "animation", "parallax"],
                         kind: .custom(AnyView(LivingSkySettingsView())))
                 ]),
-                SettingsGroup(path: page.appending("appIcon"), title: "App Icon",
-                              disclosure: .collapsedByDefault, fields: [
+                // Always expanded. This page is tabbed (3 groups), so the icon
+                // picker already sits behind one hiding mechanism; collapsing
+                // it too is what produced "I can't find the app icons
+                // settings". `AppIconSettingsView` draws its own "APP ICON"
+                // heading, so the tab label plus the pane heading label it
+                // fine without the catalog's disclosure header.
+                SettingsGroup(path: page.appending("appIcon"), title: "App Icon", fields: [
                     SettingsField(
                         path: page.appending("appIcon").appending("picker"),
                         label: "App icon",

@@ -11,6 +11,10 @@ import AinkradHostRuntime
 struct SettingsPaletteView: View {
     let results: [SettingsSearchResult]
     let query: String
+    /// The keyboard highlight, owned by `SettingsOverlayView` because the keys
+    /// that move it arrive at the SEARCH FIELD in the sidebar — the palette
+    /// itself is never focused, so `.onKeyPress` inside it would never fire.
+    @Binding var highlight: Int?
     let onSelect: (SettingsPath) -> Void
 
     /// `AinkradCommandMenu` is keyed by item, so it's driven by `SettingsPath`
@@ -40,7 +44,8 @@ struct SettingsPaletteView: View {
                             title: "No settings match \u{201C}\(query)\u{201D}",
                             message: "Try a shorter word, or the name of the app the setting belongs to.")
                     )
-                }
+                },
+                highlight: $highlight
             )
             .padding(AinkradSpacing.lg)
         }
