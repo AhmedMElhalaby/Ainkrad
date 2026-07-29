@@ -8,8 +8,9 @@ import AinkradHostRuntime
 /// settings, it does not own their persistence.
 ///
 /// This builds the WORKSPACE pages (General, Appearance, Sound & Voice,
-/// Keyboard) and appends the INTELLIGENCE pages from
-/// `IntelligenceSettingsCatalog`; the APPS pages arrive in a later task.
+/// Keyboard), appends the INTELLIGENCE pages from
+/// `IntelligenceSettingsCatalog`, and the APPS pages (BUILT-IN APPS /
+/// INSTALLED) from `AppSettingsCatalog`.
 @MainActor
 enum HostSettingsCatalog {
     static func build(environment: AppEnvironment) -> SettingsCatalog {
@@ -18,7 +19,8 @@ enum HostSettingsCatalog {
             appearance(environment),
             soundAndVoice(environment),
             keyboard(environment)
-        ] + IntelligenceSettingsCatalog.pages(environment: environment))
+        ] + IntelligenceSettingsCatalog.pages(environment: environment)
+          + AppSettingsCatalog.pages(environment: environment))
     }
 
     // MARK: - General
