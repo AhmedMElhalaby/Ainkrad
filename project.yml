@@ -50,7 +50,10 @@ packages:
     # symbols this copy does not define and dies at `Bundle.load()` with no
     # hint as to why. Terminal hit exactly that: same generation (8), newer
     # revision, missing `MCPResourceSpec.requiresLiveApp` setter.
-    revision: d5d994bdd8e79d530410a1c370657fa593fa4ce6
+    # Settings catalog: SettingsPath, the SettingsCatalog descriptor types, the
+    # SettingsRow/Group/Page primitives, and the optional
+    # AinkradApp.settingsCatalog(host:) contract (merge of feat/settings-catalog).
+    revision: 3900640a83ce16b64e9496646344e9e5f5f5863a
 
 targets:
   AinkradHostRuntime:

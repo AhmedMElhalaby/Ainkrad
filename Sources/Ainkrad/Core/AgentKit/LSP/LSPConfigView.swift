@@ -37,14 +37,10 @@ struct LSPConfigView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                serversSection(tokens: tokens)
-                addServerSection(tokens: tokens)
-            }
-            .padding(18)
+        VStack(alignment: .leading, spacing: 20) {
+            serversSection(tokens: tokens)
+            addServerSection(tokens: tokens)
         }
-        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Servers

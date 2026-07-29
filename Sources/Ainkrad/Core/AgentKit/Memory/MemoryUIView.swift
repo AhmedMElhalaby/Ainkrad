@@ -70,20 +70,16 @@ struct MemoryUIView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "MEMORY FILES", tokens: tokens)
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "MEMORY FILES", tokens: tokens)
 
-                ForEach(MemoryFile.allCases, id: \.self) { file in
-                    fileEditor(file, tokens: tokens)
-                }
-
-                SettingsSectionHeader(title: "WHAT THE ASSISTANT HAS LEARNED", tokens: tokens)
-                logTimeline(tokens: tokens)
+            ForEach(MemoryFile.allCases, id: \.self) { file in
+                fileEditor(file, tokens: tokens)
             }
-            .padding(18)
+
+            SettingsSectionHeader(title: "WHAT THE ASSISTANT HAS LEARNED", tokens: tokens)
+            logTimeline(tokens: tokens)
         }
-        .scrollContentBackground(.hidden)
     }
 
     // MARK: - File editors

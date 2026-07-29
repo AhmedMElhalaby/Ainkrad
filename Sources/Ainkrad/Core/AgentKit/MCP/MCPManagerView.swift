@@ -41,15 +41,11 @@ struct MCPManagerView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                appsSection(tokens: tokens)
-                serversSection(tokens: tokens)
-                addServerSection(tokens: tokens)
-            }
-            .padding(18)
+        VStack(alignment: .leading, spacing: 20) {
+            appsSection(tokens: tokens)
+            serversSection(tokens: tokens)
+            addServerSection(tokens: tokens)
         }
-        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Grouping

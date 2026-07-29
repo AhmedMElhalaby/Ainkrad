@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradAppKitContract
 import AinkradHostRuntime
 
 /// The Settings overlay — the third summonable panel (⌘, or the Launcher's
@@ -7,59 +8,66 @@ import AinkradHostRuntime
 /// Overview. A left grouped sidebar (AINKRAD / BUILT-IN APPS) selects a
 /// section shown in the detail pane on the right. See Settings Overlay Panel
 /// — Direction.md.
+///
+/// Every section — WORKSPACE, INTELLIGENCE, BUILT-IN APPS, INSTALLED — is
+/// catalog-driven; the sidebar and detail pane both read from
+/// `HostSettingsCatalog.build(environment:)` via `navigator.selection`.
 struct SettingsOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradReduceMotion) private var reduceMotion
     let onDismiss: () -> Void
 
-    @State private var selection: SettingsSection
+    @State private var navigator: SettingsNavigator
+    @State private var pendingDeepLink: SettingsPath?
+
+    @State private var query = ""
+    @State private var hasNavigatedWithQuery = false
+    @FocusState private var searchFocused: Bool
+
+    private var catalog: SettingsCatalog { HostSettingsCatalog.build(environment: environment) }
+
+    private var searchMode: SettingsSearchMode {
+        SettingsSearchMode(query: query, hasNavigated: hasNavigatedWithQuery)
+    }
+    private var index: SettingsCatalogIndex { SettingsCatalogIndex(catalog: catalog) }
+
+    /// The page actually on screen. Resolves through `pendingDeepLink` (a
+    /// field or group path) via `catalog.page(containing:)` so a deep-link's
+    /// containing page renders on the very first frame — `navigator.selection`
+    /// only catches up once `.task` runs, which is too late to avoid a flash
+    /// of the empty state if relied on directly.
+    private var displayedPage: SettingsPage? {
+        catalog.page(containing: pendingDeepLink ?? navigator.selection)
+    }
+
+    /// The field to highlight/scroll to. Mirrors `SettingsNavigator.navigate`'s
+    /// own rule (nil when the resolved path IS the page, i.e. there's nothing
+    /// more specific to point at) so the pending and post-`.task` states agree.
+    private var displayedHighlight: SettingsPath? {
+        if let pendingDeepLink {
+            return (displayedPage?.path == pendingDeepLink) ? nil : pendingDeepLink
+        }
+        return navigator.highlightedPath
+    }
 
     /// `focusedAppID` opens the overlay directly on that app's settings —
     /// e.g. summoning Settings while a Terminal is focused lands on Terminal.
     /// Otherwise it lands on General — the natural top of the reordered sidebar.
     init(focusedAppID: String? = nil, onDismiss: @escaping () -> Void) {
         self.onDismiss = onDismiss
-        _selection = State(initialValue: focusedAppID.map { .app($0) } ?? .general)
+        let initial = focusedAppID.map { SettingsPath(["app", $0]) } ?? SettingsPath(["workspace", "general"])
+        _navigator = State(initialValue: SettingsNavigator(initial: initial))
     }
 
-    /// A value snapshot of a registered app for the sidebar — iterating
-    /// `BuiltInApp.Type` metatypes in a SwiftUI container crashes the Xcode 27
-    /// beta SILGen, so rows carry plain values and the metatype is looked back
-    /// up by id when its settings view is needed.
-    private struct AppEntry: Identifiable {
-        let id: String
-        let displayName: String
-        let icon: String
-        let isBuiltIn: Bool
+    /// Lands the overlay directly on a specific field — used by ⌘, from a
+    /// focused app, error toasts, and the assistant. Old paths still resolve
+    /// via `SettingsPathAliases` so links survive the IA restructure.
+    init(deepLink: SettingsPath, onDismiss: @escaping () -> Void) {
+        self.onDismiss = onDismiss
+        let resolved = SettingsPathAliases.resolve(deepLink)
+        _navigator = State(initialValue: SettingsNavigator(initial: resolved))
+        _pendingDeepLink = State(initialValue: resolved)
     }
-
-    private enum SettingsSection: Hashable {
-        case general
-        case sound
-        case appearance
-        case livingSky
-        case appIcon
-        case shortcuts
-        case memory
-        case mcp
-        case lsp
-        case skills
-        case app(String)
-    }
-
-    /// Only enabled apps get a settings section — a disabled app is hidden here
-    /// just as it is in the Launcher (`LauncherStore` filters `enabledApps`).
-    private var appEntries: [AppEntry] {
-        environment.registry.enabledApps.map {
-            AppEntry(id: $0.id, displayName: $0.displayName, icon: $0.icon, isBuiltIn: $0.source == .builtIn)
-        }
-    }
-
-    /// Apps compiled into the host (Terminal, Git Mage, …).
-    private var builtInAppEntries: [AppEntry] { appEntries.filter(\.isBuiltIn) }
-
-    /// Apps installed from the App Store as dynamic plugin bundles.
-    private var installedAppEntries: [AppEntry] { appEntries.filter { !$0.isBuiltIn } }
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -70,12 +78,10 @@ struct SettingsOverlayView: View {
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
 
+                let size = SettingsGeometry.panelSize(in: geo.size)
                 panel(tokens: tokens)
-                    .frame(
-                        width: min(max(820, geo.size.width * 0.78), 1040),
-                        height: min(max(560, geo.size.height * 0.82), 720)
-                    )
-                    .offset(y: -30)
+                    .frame(width: size.width, height: size.height)
+                    .offset(y: SettingsMetrics.panelYOffset)
             }
         }
     }
@@ -106,7 +112,24 @@ struct SettingsOverlayView: View {
             }
         }
         .hudPanelChrome(tokens: tokens)
-        .onKeyPress(.escape) { onDismiss(); return .handled }
+        .onKeyPress(.init("f"), phases: .down) { press in
+            guard press.modifiers.contains(.command) else { return .ignored }
+            searchFocused = true
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            // Agree with `SettingsSearchMode`'s own notion of "empty" — a
+            // whitespace-only query is `.browsing`, so it must dismiss on
+            // the first press rather than silently eating the whitespace.
+            if searchMode != .browsing { query = ""; return .handled }
+            onDismiss(); return .handled
+        }
+        .task {
+            if let path = pendingDeepLink {
+                navigator.navigate(to: path, in: catalog)
+                pendingDeepLink = nil
+            }
+        }
     }
 
     private func header(tokens: DesignTokens) -> some View {
@@ -131,44 +154,35 @@ struct SettingsOverlayView: View {
     // MARK: - Sidebar
 
     private func sidebar(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSearchField(query: $query, isFocused: $searchFocused)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+                .onChange(of: query) { _, _ in hasNavigatedWithQuery = false }
+
+            sidebarList(tokens: tokens)
+        }
+        .frame(width: SettingsMetrics.sidebarWidth, alignment: .topLeading)
+    }
+
+    private func sidebarList(tokens: DesignTokens) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                groupLabel("AINKRAD", tokens: tokens)
-                sidebarRow(.general, title: "General", systemIcon: "gearshape", tokens: tokens)
-                sidebarRow(.sound, title: "Sound", systemIcon: "speaker.wave.2", tokens: tokens)
-                sidebarRow(.shortcuts, title: "Keyboard", systemIcon: "keyboard", tokens: tokens)
-                sidebarRow(.memory, title: "Memory", systemIcon: "brain", tokens: tokens)
-                sidebarRow(.mcp, title: "MCP Servers", systemIcon: "point.3.connected.trianglepath.dotted", tokens: tokens)
-                sidebarRow(.lsp, title: "Language Servers", systemIcon: "chevron.left.forwardslash.chevron.right", tokens: tokens)
-                sidebarRow(.skills, title: "Skills", systemIcon: "sparkles",
-                           badgeCount: environment.skillRegistry.proposals().count, tokens: tokens)
-
-                groupLabel("APPEARANCE", tokens: tokens)
-                    .padding(.top, 12)
-                sidebarRow(.appearance, title: "Appearance", systemIcon: "paintbrush", tokens: tokens)
-                sidebarRow(.livingSky, title: "Living Sky", systemIcon: "sparkles", tokens: tokens)
-                sidebarRow(.appIcon, title: "App Icon", systemIcon: "app.badge", tokens: tokens)
-
-                if !builtInAppEntries.isEmpty {
-                    groupLabel("BUILT-IN APPS", tokens: tokens)
-                        .padding(.top, 12)
-                    ForEach(builtInAppEntries) { app in
-                        sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
-                    }
-                }
-
-                if !installedAppEntries.isEmpty {
-                    groupLabel("INSTALLED", tokens: tokens)
-                        .padding(.top, 12)
-                    ForEach(installedAppEntries) { app in
-                        sidebarRow(.app(app.id), title: app.displayName, appID: app.id, systemIcon: app.icon, tokens: tokens)
+                ForEach(SettingsPageGroup.allCases, id: \.self) { group in
+                    let pages = catalog.pages(in: group)
+                    if !pages.isEmpty {
+                        groupLabel(group.title, tokens: tokens)
+                            .padding(.top, group == .workspace ? 0 : 12)
+                        ForEach(pages) { page in
+                            sidebarRow(page: page, tokens: tokens)
+                        }
                     }
                 }
             }
             .padding(12)
         }
         .scrollContentBackground(.hidden)
-        .frame(width: 208, alignment: .topLeading)
     }
 
     /// A group header in the HUD language: a short accent tick beside an
@@ -188,51 +202,46 @@ struct SettingsOverlayView: View {
         .padding(.bottom, 2)
     }
 
-    private func sidebarRow(
-        _ section: SettingsSection,
-        title: String,
-        appID: String? = nil,
-        systemIcon: String,
-        badgeCount: Int = 0,
-        tokens: DesignTokens
-    ) -> some View {
-        let isSelected = selection == section
-
+    /// A catalog-driven sidebar row for any page in any group.
+    private func sidebarRow(page: SettingsPage, tokens: DesignTokens) -> some View {
+        let isSelected = displayedPage?.path == page.path
         return Button {
-            selection = section
+            navigator.selection = page.path
+            navigator.clearHighlight()
+            pendingDeepLink = nil
+            // A sidebar tap is an unambiguous "take me to this page"
+            // instruction — it must always show that page, in BOTH the
+            // palette and filtering modes, not just leave the palette
+            // sitting inertly on screen. Routed through the real
+            // SettingsSearchMode.afterSidebarTap transition so production
+            // and the sidebar-tap tests exercise the same code path.
+            hasNavigatedWithQuery = searchMode.afterSidebarTap().query != nil
         } label: {
             HStack(spacing: 10) {
-                rowIcon(appID: appID, systemIcon: systemIcon, isSelected: isSelected, tokens: tokens)
-                Text(title)
+                appTile(appID: page.appID, systemIcon: page.icon, size: 22,
+                        isSelected: isSelected, tokens: tokens)
+                Text(page.title)
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
                 Spacer(minLength: 0)
-                if badgeCount > 0 {
+                // Read here rather than at catalog-build time so the count
+                // stays live while the overlay is open (Skills proposals).
+                if let badgeCount = page.badge?(), badgeCount > 0 {
                     AinkradBadge(text: "\(badgeCount)", tint: tokens.accentSecondary)
                 }
             }
             .padding(.horizontal, 8)
             .frame(height: 38)
-            .background(
-                ChamferShape(cut: AinkradRadius.md)
-                    .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear)
-            )
-            .overlay(
-                TargetingBrackets(length: 7)
-                    .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.3)
-                    .padding(1)
-            )
+            .background(ChamferShape(cut: AinkradRadius.md)
+                .fill(isSelected ? tokens.accentPrimary.opacity(0.14) : .clear))
+            .overlay(TargetingBrackets(length: 7)
+                .stroke(isSelected ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.3)
+                .padding(1))
+            .settingsRowHover(isActive: isSelected)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
-    }
-
-    /// App rows use the neon tile artwork (Launcher-matching); fixed sections
-    /// use a tinted SF Symbol.
-    @ViewBuilder
-    private func rowIcon(appID: String?, systemIcon: String, isSelected: Bool, tokens: DesignTokens) -> some View {
-        appTile(appID: appID, systemIcon: systemIcon, size: 22, isSelected: isSelected, tokens: tokens)
     }
 
     /// Shared tile renderer: the theme's neon artwork for a registered app, or
@@ -256,139 +265,53 @@ struct SettingsOverlayView: View {
 
     @ViewBuilder
     private func detail(tokens: DesignTokens) -> some View {
-        switch selection {
-        case .general:
-            GeneralSettingsView()
-        case .sound:
-            SoundSettingsView()
-        case .appearance:
-            AppearanceSettingsView()
-        case .livingSky:
-            LivingSkySettingsView()
-        case .appIcon:
-            AppIconSettingsView()
-        case .shortcuts:
-            ShortcutsSettingsView()
-        case .memory:
-            if let memoryService = environment.memoryService {
-                MemoryUIView(service: memoryService)
-            } else {
-                AinkradEmptyState(
-                    icon: "brain",
-                    title: "Memory unavailable",
-                    message: "The assistant's memory index couldn't be opened this launch, so it's running memory-less for now. Restart Ainkrad to try again."
-                )
+        switch searchMode {
+        case .palette(let q):
+            SettingsPaletteView(results: index.search(q, currentPage: navigator.selection), query: q) { path in
+                navigator.navigate(to: path, in: catalog)
+                hasNavigatedWithQuery = true
             }
-        case .mcp:
-            MCPManagerView(configStore: environment.mcpServerRegistry.configStore, registry: environment.mcpServerRegistry)
-        case .lsp:
-            LSPConfigView(registry: environment.lspServerRegistry)
-        case .skills:
-            SkillsManagerView(
-                registry: environment.skillRegistry,
-                commands: environment.skillCommandStore,
-                resyncCommands: { environment.resyncSkillCommands() }
-            )
-        case .app(let id):
-            // Look up among enabled apps only: a disabled app has no settings
-            // section, and if the selected app is disabled while the overlay is
-            // open its detail falls back to blank rather than lingering.
-            if let app = environment.registry.enabledApps.first(where: { $0.id == id }),
-               let entry = appEntries.first(where: { $0.id == id }) {
+        case .filtering(let q):
+            if let page = displayedPage {
                 VStack(alignment: .leading, spacing: 0) {
-                    appSettingsHeader(entry, tokens: tokens)
-                    app.makeSettingsView()
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    appAppearanceSection(appID: id, tokens: tokens)
-                        .padding(18)
-                    Spacer(minLength: 0)
+                    filterBanner(query: q, tokens: tokens)
+                    SettingsPageView(page: page,
+                                     matchedPaths: index.matchedPaths(q, on: page),
+                                     highlightedPath: displayedHighlight)
                 }
             } else {
-                Color.clear
+                AinkradEmptyState(icon: "gearshape", title: "Nothing here",
+                                  message: "That settings page is no longer available.")
+            }
+        case .browsing:
+            if let page = displayedPage {
+                SettingsPageView(page: page, highlightedPath: displayedHighlight)
+            } else {
+                AinkradEmptyState(icon: "gearshape", title: "Nothing here",
+                                  message: "That settings page is no longer available.")
             }
         }
     }
 
-    /// The host-provided appearance controls appended below every OTHER app's
-    /// own settings: a blur toggle (the host renders the blurred backdrop behind
-    /// a translucent pane). The Assistant owns its own appearance (opacity, blur,
-    /// and font) in its in-app Appearance tab, so the host block is suppressed
-    /// for it; plugins own their transparency, so they get only blur here.
-    @ViewBuilder
-    private func appAppearanceSection(appID: String, tokens: DesignTokens) -> some View {
-        let appearance = environment.appAppearanceStore
-
-        if appID == AssistantApp.id {
-            EmptyView()
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
-
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Blur")
-                            .font(AinkradFont.display(13, weight: .medium))
-                            .foregroundStyle(tokens.foreground.opacity(0.9))
-                        Text("Blur the workspace revealed behind this app when it's translucent.")
-                            .font(AinkradFont.display(11))
-                            .foregroundStyle(tokens.foreground.opacity(0.5))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 12)
-                    AinkradToggle(
-                        isOn: Binding(
-                            get: { appearance.blurEnabled(appID) },
-                            set: { appearance.setBlurEnabled(appID, $0) }
-                        )
-                    )
-                }
-                .padding(14)
-                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
-            }
+    /// Makes the filter escapable — a filter you cannot see or exit is the
+    /// disorienting part of System Settings' version, which we're
+    /// deliberately not copying.
+    private func filterBanner(query: String, tokens: DesignTokens) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 10))
+                .foregroundStyle(tokens.accentSecondary.opacity(0.85))
+            Text("Filtering by \u{201C}\(query)\u{201D} — non-matching settings are dimmed")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.6))
+            Spacer(minLength: 8)
+            Button("Clear") { self.query = "" }
+                .buttonStyle(.plain)
+                .font(AinkradFont.display(11, weight: .medium))
+                .foregroundStyle(tokens.accentSecondary)
         }
+        .padding(.horizontal, 18)
+        .frame(height: 34)
     }
 
-    /// A uniform identity header above every app's own settings — its neon
-    /// tile, name, and a Built-in / Installed badge — so first-party and
-    /// store-installed apps frame consistently regardless of what each app's
-    /// `makeSettingsView` renders below.
-    private func appSettingsHeader(_ entry: AppEntry, tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                appTile(appID: entry.id, systemIcon: entry.icon, size: 34, isSelected: true, tokens: tokens)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.displayName)
-                        .font(AinkradFont.display(15, weight: .semibold))
-                        .foregroundStyle(tokens.foreground.opacity(0.95))
-                    sourceBadge(isBuiltIn: entry.isBuiltIn, tokens: tokens)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-
-            LinearGradient(
-                colors: [.clear, tokens.accentPrimary.opacity(0.28), .clear],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(height: 1)
-        }
-    }
-
-    private func sourceBadge(isBuiltIn: Bool, tokens: DesignTokens) -> some View {
-        Text(isBuiltIn ? "BUILT-IN" : "INSTALLED")
-            .font(AinkradFont.mono(8, weight: .medium))
-            .kerning(1.5)
-            .foregroundStyle(isBuiltIn ? tokens.accentSecondary.opacity(0.9) : tokens.accentPrimary.opacity(0.95))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(
-                Capsule().fill((isBuiltIn ? tokens.accentSecondary : tokens.accentPrimary).opacity(0.12))
-            )
-            .overlay(
-                Capsule().strokeBorder((isBuiltIn ? tokens.accentSecondary : tokens.accentPrimary).opacity(0.35), lineWidth: 1)
-            )
-    }
 }

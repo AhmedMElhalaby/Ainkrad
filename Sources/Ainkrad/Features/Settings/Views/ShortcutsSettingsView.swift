@@ -15,42 +15,38 @@ struct ShortcutsSettingsView: View {
         let tokens = environment.themeManager.tokens
         let store = environment.shortcutStore
 
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "KEYBOARD", tokens: tokens)
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "KEYBOARD", tokens: tokens)
 
-                Text("Click Record, then press a new key combination. Press Esc to cancel.")
-                    .font(AinkradFont.display(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
+            Text("Click Record, then press a new key combination. Press Esc to cancel.")
+                .font(AinkradFont.display(11))
+                .foregroundStyle(tokens.foreground.opacity(0.5))
 
-                if let conflictMessage = recorder.conflictMessage {
-                    Text(conflictMessage)
-                        .font(AinkradFont.display(11, weight: .medium))
-                        .foregroundStyle(.red.opacity(0.85))
-                }
-
-                VStack(spacing: 8) {
-                    ForEach(ShortcutAction.allCases, id: \.self) { action in
-                        actionRow(action, store: store, tokens: tokens)
-                    }
-                }
-
-                systemSection(tokens: tokens)
-
-                Button {
-                    recorder.stop()
-                    store.resetToDefaults()
-                } label: {
-                    Text("Reset All to Defaults")
-                        .font(AinkradFont.display(12, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(tokens.accentSecondary)
-                .padding(.top, 4)
+            if let conflictMessage = recorder.conflictMessage {
+                Text(conflictMessage)
+                    .font(AinkradFont.display(11, weight: .medium))
+                    .foregroundStyle(.red.opacity(0.85))
             }
-            .padding(18)
+
+            VStack(spacing: 8) {
+                ForEach(ShortcutAction.allCases, id: \.self) { action in
+                    actionRow(action, store: store, tokens: tokens)
+                }
+            }
+
+            systemSection(tokens: tokens)
+
+            Button {
+                recorder.stop()
+                store.resetToDefaults()
+            } label: {
+                Text("Reset All to Defaults")
+                    .font(AinkradFont.display(12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(tokens.accentSecondary)
+            .padding(.top, 4)
         }
-        .scrollContentBackground(.hidden)
         .onDisappear { recorder.stop() }
     }
 

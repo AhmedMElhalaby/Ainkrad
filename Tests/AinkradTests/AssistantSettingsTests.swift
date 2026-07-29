@@ -3,38 +3,9 @@ import Testing
 @testable import Ainkrad
 import AinkradHostRuntime
 
-@Suite("Assistant settings tabs")
-struct AssistantSettingsTabTests {
-    @Test("every section belongs to exactly one tab, and all are covered") func partition() {
-        let all = AssistantSettingsTab.allCases.flatMap(\.sections)
-        #expect(Set(all).count == all.count)                            // no section in two tabs
-        #expect(Set(all) == Set(AssistantSettingsSection.allCases))     // no section missing
-    }
-    @Test("models tab is connections then model") func models() {
-        #expect(AssistantSettingsTab.models.sections == [.connections, .model])
-    }
-    @Test("access tab is permissions, sandbox, tool hooks, then remote channel") func access() {
-        #expect(AssistantSettingsTab.access.sections == [.permissions, .sandbox, .toolHooks, .remoteChannel])
-    }
-    @Test("data tab is context privacy") func data() {
-        #expect(AssistantSettingsTab.data.sections == [.contextPrivacy])
-    }
-    @Test("web tab is web, media, then video") func web() {
-        #expect(AssistantSettingsTab.web.sections == [.web, .media, .video])
-    }
-    @Test("voice tab is voice then text-to-speech") func voice() {
-        #expect(AssistantSettingsTab.voice.sections == [.voice, .textToSpeech])
-    }
-    @Test("appearance tab is appearance") func appearance() {
-        #expect(AssistantSettingsTab.appearance.sections == [.appearance])
-    }
-    @Test("titles and icons are set for every tab") func metadata() {
-        for tab in AssistantSettingsTab.allCases {
-            #expect(!tab.title.isEmpty)
-            #expect(!tab.icon.isEmpty)
-        }
-    }
-}
+// `AssistantSettingsTabTests` lived here. The Assistant's pill bar is gone —
+// its sections are top-level INTELLIGENCE pages now — so the partition
+// invariant it guarded is replaced by `SettingsIATests`.
 
 @Suite("App appearance font override")
 @MainActor
