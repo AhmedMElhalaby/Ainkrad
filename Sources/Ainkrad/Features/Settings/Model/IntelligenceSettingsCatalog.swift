@@ -154,7 +154,11 @@ enum IntelligenceSettingsCatalog {
                             commands: environment.skillCommandStore,
                             resyncCommands: { environment.resyncSkillCommands() }))))
                 ])
-            ])
+            ],
+            // Evaluated per render, not snapshotted at catalog-build time:
+            // proposals can land while the Settings overlay is open, and this
+            // badge is the only signal anywhere in the app that any are waiting.
+            badge: { environment.skillRegistry.proposals().count })
     }
 
     // MARK: - Tools

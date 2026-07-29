@@ -63,4 +63,33 @@ struct SettingsIATests {
         #expect(skills != nil)
         #expect(skills?.icon == "sparkles")
     }
+
+    /// The proposals badge is the ONLY signal in the app that skill proposals
+    /// are waiting, so it gets a test that fails if the badge is dropped —
+    /// and one that fails if it is snapshotted at catalog-build time instead
+    /// of read at render time.
+    @Test("the Skills page badges the pending proposal count, read live")
+    func skillsBadgeIsLive() throws {
+        let environment = AppEnvironment.preview()
+        let skills = HostSettingsCatalog.build(environment: environment)
+            .pages(in: .intelligence).first { $0.title == "Skills" }
+        let badge = try #require(skills?.badge, "the Skills page exposes no badge")
+
+        #expect(badge() == 0)
+
+        try environment.skillRegistry.propose(
+            name: "demo-skill", description: "A proposal awaiting review.", body: "Do the thing.")
+
+        // Same page value, same closure — a count captured when the catalog was
+        // built would still read 0 here.
+        #expect(badge() == 1)
+        #expect(badge() == environment.skillRegistry.proposals().count)
+    }
+
+    @Test("no other page carries a badge")
+    func onlySkillsBadges() {
+        for page in catalog.pages where page.title != "Skills" {
+            #expect(page.badge == nil, "\(page.title) should expose no badge")
+        }
+    }
 }

@@ -207,6 +207,11 @@ struct SettingsOverlayView: View {
                     .font(AinkradFont.display(13, weight: .medium))
                     .foregroundStyle(tokens.foreground.opacity(isSelected ? 0.95 : 0.7))
                 Spacer(minLength: 0)
+                // Read here rather than at catalog-build time so the count
+                // stays live while the overlay is open (Skills proposals).
+                if let badgeCount = page.badge?(), badgeCount > 0 {
+                    AinkradBadge(text: "\(badgeCount)", tint: tokens.accentSecondary)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: 38)
