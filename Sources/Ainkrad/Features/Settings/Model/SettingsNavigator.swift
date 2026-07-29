@@ -18,6 +18,7 @@ final class SettingsNavigator {
     /// rather than clearing the pane — a stale deep-link should be inert,
     /// not destructive.
     func navigate(to path: SettingsPath, in catalog: SettingsCatalog) {
+        let path = SettingsPathAliases.resolve(path)
         guard let page = catalog.page(containing: path) else { return }
         selection = page.path
         highlightedPath = (page.path == path) ? nil : path
