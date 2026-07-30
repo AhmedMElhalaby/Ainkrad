@@ -462,6 +462,7 @@ final class AppEnvironment {
             oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
             remoteChannelSettingsStore, remoteChannelService
         ) = bootstrapAgentSessionAndRuns(
+            rootURL: rootURL,
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
             agentPermissionStore: agentPermissionStore, agentStore: agentStore, editJournal: editJournal,

@@ -44,7 +44,8 @@ extension AppEnvironment {
         discoveredModelsStore: DiscoveredModelsStore
     ) {
         let persistence = FileDocumentStore(rootURL: rootURL ?? FileDocumentStore.defaultDocumentsURL())
-        let secrets = KeychainSecretStore()
+        // An injected root means a test context; never touch the real Keychain there.
+        let secrets: SecretStore = rootURL == nil ? KeychainSecretStore() : InMemorySecretStore()
 
         // One-time import of M1's UserDefaults settings before any store reads.
         LegacyUserDefaultsMigration.runIfNeeded(persistence: persistence, defaults: defaults)
@@ -77,7 +78,10 @@ extension AppEnvironment {
         let appAppearanceStore = AppAppearanceStore(persistence: persistence)
         let webSearchSettingsStore = WebSearchSettingsStore(persistence: persistence)
         let mediaSettingsStore = MediaSettingsStore(persistence: persistence)
-        let sessionShareStore = SessionShareStore(persistence: persistence)
+        let sessionShareStore = SessionShareStore(
+            persistence: persistence,
+            baseDirectory: rootURL.map { $0.appendingPathComponent("Shares", isDirectory: true) }
+                ?? SessionShareStore.defaultDirectory())
         // Trust policy is chosen by build configuration in ONE place
         // (`PluginTrust`), so the permissive dev policy is compiled out of
         // Release entirely and no wiring mistake can ship it.

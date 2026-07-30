@@ -23,6 +23,7 @@ extension AppEnvironment {
     }
 
     static func bootstrapAgentSessionAndRuns(
+        rootURL: URL?,
         persistence: PersistenceStore,
         secrets: SecretStore,
         streamingHTTP: URLSessionStreamingHTTPClient,
@@ -300,13 +301,15 @@ extension AppEnvironment {
         // File-based custom slash commands (project + user). Registered AFTER skill
         // commands so a colliding name can't shadow a skill binding; `CustomCommandStore`
         // already refuses builtin names, and re-registration drops stale names first.
+        let commandUserRoot = rootURL.map { $0.appendingPathComponent("Commands", isDirectory: true) }
+            ?? CustomCommandPaths.defaultUserRoot()
         let customCommandStore = CustomCommandStore(paths: CustomCommandPaths(
-            userRoot: CustomCommandPaths.defaultUserRoot(),
+            userRoot: commandUserRoot,
             projectRoot: CustomCommandPaths.projectRoot(forWorkspace: assistantWorkingDirectory)))
         var liveCustomNames = resyncCustomCommands(
             store: customCommandStore, registry: commandRegistry, previous: [])
         let customCommandWatcher = CustomCommandWatcher(
-            directory: CustomCommandPaths.defaultUserRoot()) {
+            directory: commandUserRoot) {
                 customCommandStore.reload()
                 liveCustomNames = resyncCustomCommands(
                     store: customCommandStore, registry: commandRegistry, previous: liveCustomNames)
@@ -356,7 +359,9 @@ extension AppEnvironment {
         // survive relaunch — `CheckpointCoordinator.init` loads them back from disk.
         let checkpointCoordinator = CheckpointCoordinator(
             sessionID: "main",
-            snapshots: WorkspaceSnapshotStore(root: WorkspaceSnapshotStore.defaultRoot()),
+            snapshots: WorkspaceSnapshotStore(
+                root: rootURL.map { $0.appendingPathComponent("Checkpoints", isDirectory: true) }
+                    ?? WorkspaceSnapshotStore.defaultRoot()),
             git: GitWorkingTreeSnapshotter(router: executionRouter),
             persistence: persistence,
             transcriptIndex: { [weak agentSession] in agentSession?.messages.count ?? 0 },
