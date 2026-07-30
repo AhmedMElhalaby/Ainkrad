@@ -40,9 +40,18 @@ extension AppEnvironment {
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         connectionStore: ConnectionStore,
-        discoveredModelsStore: DiscoveredModelsStore
+        discoveredModelsStore: DiscoveredModelsStore,
+        assistantDocuments: PersistenceStore
     ) {
         let persistence = FileDocumentStore(rootURL: home.shared(.config))
+        // The assistant's own documents live under `Assistant/`, not `Config/` —
+        // `agents.json` and `connections.json` sit directly in it, alongside the
+        // `memory/`, `skills/`, `commands/` and `sessions/` subdirectories. That
+        // is the published vault layout other apps in the family build against,
+        // so it is not something to leave to whichever store happened to be
+        // wired first. `VaultMigration`'s relocation table writes to exactly
+        // these roots; `VaultLayoutAgreementTests` asserts the two agree.
+        let assistantDocuments = FileDocumentStore(rootURL: home.shared(.agents))
         // Secrets NEVER live in the vault — they stay in the Keychain, which is
         // outside the Home entirely. The Keychain *namespace*, though, is derived
         // from the vault (see `Home.keychainServiceName`), so a throwaway vault
@@ -154,7 +163,7 @@ extension AppEnvironment {
         // ever runs once, from `AinkradHostApp.init`.
         sounds.play(.appLaunch)
 
-        let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
+        let connectionStore = ConnectionStore(persistence: assistantDocuments, secrets: secrets)
 
         // Shared per-connection live-discovered models (picker + router candidates).
         // Prune entries for connections that no longer exist so a deleted
@@ -166,7 +175,8 @@ extension AppEnvironment {
             persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
-            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
+            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
+            assistantDocuments
         )
     }
 

@@ -259,6 +259,9 @@ extension AppEnvironment {
     /// (builtins + `/stop`).
     static func bootstrapModelRouting(
         persistence: PersistenceStore,
+        // `agents.json` is an Assistant/ document, not a Config/ one — see
+        // `bootstrapCoreStores`. Everything else in this block is Config/.
+        assistantDocuments: PersistenceStore,
         secrets: SecretStore,
         connectionStore: ConnectionStore,
         discoveredModelsStore: DiscoveredModelsStore
@@ -278,7 +281,7 @@ extension AppEnvironment {
         commandRegistry: CommandRegistry
     ) {
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
-        let agentStore = AgentStore(persistence: persistence)
+        let agentStore = AgentStore(persistence: assistantDocuments)
 
         // Model Router / Usage / Failover wiring (M7 Slice 5b). Every one of these is
         // degrade-don't-crash: `AgentSession` treats them as optional and falls back to

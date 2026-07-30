@@ -50,7 +50,10 @@ struct VaultMigrationTests {
         #expect(report.skipped.isEmpty)
         #expect(fm.fileExists(
             atPath: t.home.shared(.config).appendingPathComponent("global-settings.json").path))
-        #expect(try String(contentsOf: t.home.shared(.config)
+        // `agents.json` is an Assistant/ document, NOT a Config/ one.
+        #expect(!fm.fileExists(
+            atPath: t.home.shared(.config).appendingPathComponent("agents.json").path))
+        #expect(try String(contentsOf: t.home.shared(.agents)
             .appendingPathComponent("agents.json"), encoding: .utf8) == #"{"payload":{"custom":[]}}"#)
     }
 
@@ -60,7 +63,12 @@ struct VaultMigrationTests {
         let t = TestHome.make("mig2")
         defer { t.cleanup() }
 
-        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        // Marking is a SEPARATE step the launch path takes only after the pointer
+        // is written — see `markMigrated`. `migrate` alone never renames.
+        #expect(!fm.fileExists(atPath: marker(legacy).path),
+                "migrate must not rename; only markMigrated does")
+        try VaultMigration.markMigrated(container: legacy, report: report)
 
         let marked = marker(legacy)
         #expect(fm.fileExists(atPath: marked.path), "migration must mark, never delete")
@@ -75,8 +83,8 @@ struct VaultMigrationTests {
         let t = TestHome.make("mig3")
         defer { t.cleanup() }
 
-        try fm.createDirectory(at: t.home.shared(.config), withIntermediateDirectories: true)
-        try "{}".write(to: t.home.shared(.config).appendingPathComponent("agents.json"),
+        try fm.createDirectory(at: t.home.shared(.agents), withIntermediateDirectories: true)
+        try "{}".write(to: t.home.shared(.agents).appendingPathComponent("agents.json"),
                        atomically: true, encoding: .utf8)
 
         let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
@@ -84,7 +92,7 @@ struct VaultMigrationTests {
         #expect(report.copied == ["global-settings.json"])
         #expect(report.skipped == ["agents.json"])
         // The pre-existing destination file is untouched.
-        #expect(try String(contentsOf: t.home.shared(.config)
+        #expect(try String(contentsOf: t.home.shared(.agents)
             .appendingPathComponent("agents.json"), encoding: .utf8) == "{}")
     }
 
@@ -114,15 +122,18 @@ struct VaultMigrationTests {
         let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
 
         #expect(report.rows.map(\.row) == [
-            "*.json", "Plugins/", "DevPlugins/", "PluginData/", "RetainedPluginData/",
+            "agents.json+connections.json", "assistant-sessions.json", "*.json",
+            "Plugins/", "DevPlugins/", "PluginData/", "RetainedPluginData/",
             "Sounds/", "../Skills/", "../Memory/", "../Commands/", "../Shares/",
         ])
-        // Rows with no legacy source are reported absent, never silently "done".
-        for row in report.rows where row.row != "*.json" {
+        // The three JSON rows all read the same `Documents/`, so all three are
+        // "present"; every directory row is absent in a JSON-only container.
+        let jsonRows = ["agents.json+connections.json", "assistant-sessions.json", "*.json"]
+        for row in report.rows where !jsonRows.contains(row.row) {
             #expect(!row.present, "\(row.row) should be absent in a JSON-only container")
             #expect(row.copied.isEmpty)
         }
-        #expect(outcome(report, "*.json")?.present == true)
+        for row in jsonRows { #expect(outcome(report, row)?.present == true) }
     }
 
     // MARK: - Directory rows (recursive)
@@ -242,7 +253,8 @@ struct VaultMigrationTests {
         try write("a", to: legacy.appendingPathComponent("Documents/PluginData/Lore/one.md"))
         try write("s", to: legacy.appendingPathComponent("Skills/pdf/SKILL.md"))
 
-        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        try VaultMigration.markMigrated(container: legacy, report: report)
 
         let marked = marker(legacy)
         #expect(fm.fileExists(atPath: marked.appendingPathComponent("PluginData/Lore/one.md").path))
@@ -317,7 +329,11 @@ struct VaultMigrationTests {
         defer { t.cleanup() }
 
         #expect(VaultMigration.needsMigration(container: legacy))
-        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        // A verified copy alone does NOT stop the container needing migration:
+        // until the pointer exists, a re-run must still be able to happen.
+        #expect(VaultMigration.needsMigration(container: legacy))
+        try VaultMigration.markMigrated(container: legacy, report: report)
         #expect(!VaultMigration.needsMigration(container: legacy))
     }
 
@@ -344,6 +360,7 @@ struct VaultMigrationTests {
         let report = try VaultMigration.migrate(fromContainer: container, into: t.home)
 
         #expect(report.copied.sorted() == ["Memory/notes.md", "Skills/pdf/SKILL.md"])
+        try VaultMigration.markMigrated(container: container, report: report)
         #expect(fm.fileExists(atPath: marker(container).path), "completion must be recorded")
         #expect(!VaultMigration.needsMigration(container: container))
         // Siblings are copies: the legacy files are still exactly where they were.
@@ -362,11 +379,11 @@ struct VaultMigrationTests {
         // guard believed it, `copyItem` would fail with "file exists" and the old
         // cleanup path would then delete this pre-existing vault entry — destroying
         // something the migration never created.
-        let config = t.home.shared(.config)
-        try fm.createDirectory(at: config, withIntermediateDirectories: true)
-        let link = config.appendingPathComponent("agents.json")
+        let assistant = t.home.shared(.agents)
+        try fm.createDirectory(at: assistant, withIntermediateDirectories: true)
+        let link = assistant.appendingPathComponent("agents.json")
         try fm.createSymbolicLink(at: link, withDestinationURL:
-            config.appendingPathComponent("nowhere-\(UUID().uuidString).json"))
+            assistant.appendingPathComponent("nowhere-\(UUID().uuidString).json"))
         #expect(!fm.fileExists(atPath: link.path), "precondition: fileExists lies here")
 
         let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)

@@ -139,10 +139,74 @@ struct LaunchResolutionTests {
             legacyContainer: legacy)
 
         #expect(FileManager.default.fileExists(
-            atPath: home.shared(.config).appendingPathComponent("agents.json").path))
+            atPath: home.shared(.agents).appendingPathComponent("agents.json").path))
         // Copy, not move: the legacy file is still there, under the marker rename.
         #expect(FileManager.default.fileExists(
             atPath: legacy.appendingPathComponent("Documents.migrated/agents.json").path))
+    }
+
+    /// The stranding scenario, and the reason the `Documents` rename happens
+    /// AFTER `adopt` rather than as migration's last step.
+    ///
+    /// A verified copy is not the end of first run — the pointer still has to be
+    /// written, and that write can fail (disk-full is exactly what a large
+    /// migration provokes). If the rename had already happened, the next launch
+    /// would be `.unset`, the user would pick a different folder, `needsMigration`
+    /// would answer false because the marker was there, and the new folder would
+    /// be adopted EMPTY while the whole dataset sat in the first one under a name
+    /// it no longer had. Nothing deleted, no signal at all.
+    @Test func anAdoptFailureAfterAVerifiedCopyLeavesTheLegacyTreeReMigratable() throws {
+        let s = sandbox("strand")
+        defer { try? FileManager.default.removeItem(at: s.base) }
+        let folderA = s.base.appendingPathComponent("A")
+        try FileManager.default.createDirectory(at: folderA, withIntermediateDirectories: true)
+
+        let legacy = s.base.appendingPathComponent("com.ainkrad.app")
+        let documents = legacy.appendingPathComponent("Documents")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        try Data(#"{"payload":{"theme":"dark"}}"#.utf8)
+            .write(to: documents.appendingPathComponent("global-settings.json"))
+
+        // Make the POINTER write fail, and only the pointer write: the pointer
+        // directory's parent is a regular file, so it can never be created. The
+        // copy above it succeeds in full first.
+        let blocker = s.base.appendingPathComponent("blocker")
+        try Data("x".utf8).write(to: blocker)
+        let doomedPointer = blocker.appendingPathComponent("pointer")
+
+        #expect(throws: (any Error).self) {
+            _ = try LaunchHomeResolver.resolveOrAdopt(
+                chooseVault: { folderA }, pointerDirectory: doomedPointer,
+                cacheRoot: s.cache, legacyContainer: legacy)
+        }
+
+        // The copy DID happen…
+        #expect(FileManager.default.fileExists(
+            atPath: folderA.appendingPathComponent("Config/global-settings.json").path))
+        // …but the legacy tree still has its ORIGINAL name, so nothing is stranded.
+        #expect(FileManager.default.fileExists(
+            atPath: documents.appendingPathComponent("global-settings.json").path),
+                "the rename must not have happened")
+        #expect(!FileManager.default.fileExists(
+            atPath: legacy.appendingPathComponent("Documents.migrated").path))
+        #expect(VaultMigration.needsMigration(container: legacy),
+                "the next launch must still see work to do")
+
+        // And the retry — the user picks a DIFFERENT folder, exactly as they would
+        // after a blank first launch — actually gets their data.
+        let folderB = s.base.appendingPathComponent("B")
+        try FileManager.default.createDirectory(at: folderB, withIntermediateDirectories: true)
+        let home = try LaunchHomeResolver.resolveOrAdopt(
+            chooseVault: { folderB }, pointerDirectory: s.pointer, cacheRoot: s.cache,
+            legacyContainer: legacy)
+
+        #expect(home.vaultRoot.standardizedFileURL == folderB.standardizedFileURL)
+        #expect(FileManager.default.fileExists(
+            atPath: folderB.appendingPathComponent("Config/global-settings.json").path),
+                "folder B must NOT come up empty")
+        // Only now, with a pointer durably written, is the legacy tree marked.
+        #expect(FileManager.default.fileExists(
+            atPath: legacy.appendingPathComponent("Documents.migrated/global-settings.json").path))
     }
 
     /// A first run that died part-way through migration leaves a marked but

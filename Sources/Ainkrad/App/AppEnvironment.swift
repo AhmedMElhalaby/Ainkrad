@@ -429,7 +429,8 @@ final class AppEnvironment {
             persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
-            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
+            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
+            assistantDocuments
         ) = bootstrapCoreStores(home: home, defaults: defaults)
 
         let (
@@ -456,7 +457,8 @@ final class AppEnvironment {
             usageTracker, runtimeOptionsStore, localModelProbe, localModelAvailability, authProfileStore,
             candidatesProvider, commandRegistry
         ) = bootstrapModelRouting(
-            persistence: persistence, secrets: secrets, connectionStore: connectionStore,
+            persistence: persistence, assistantDocuments: assistantDocuments,
+            secrets: secrets, connectionStore: connectionStore,
             discoveredModelsStore: discoveredModelsStore)
 
         let (

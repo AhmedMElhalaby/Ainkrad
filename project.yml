@@ -57,7 +57,7 @@ packages:
     # AinkradDisclosureGroup, SearchField focus binding, CommandMenu detail/
     # value/keys, SettingsRow/GroupView/PageView composition and page tabs
     # (merge of feat/settings-kit-composition).
-    revision: 935e559771d55c14f1efef1dc48fec161b5e1003
+    revision: 6ad16ff9a651d12358d53533b1a0402b4c478975
 
 targets:
   AinkradHostRuntime:

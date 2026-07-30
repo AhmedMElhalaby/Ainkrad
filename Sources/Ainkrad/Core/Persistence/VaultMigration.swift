@@ -7,8 +7,10 @@ import AinkradAppKit
 /// a full disk mid-copy — the user's files are still exactly where they have always
 /// been, and the caller has not yet written a pointer, so the next launch is a clean
 /// first run. The only rename this performs is the final marker (`Documents` →
-/// `Documents.migrated`, inside the legacy container), and it happens only after
-/// every row has been copied and verified.
+/// `Documents.migrated`, inside the legacy container), and it is not part of
+/// `migrate` at all: it is a separate `markMigrated` call the launch path makes
+/// only after the pointer is durably written. See `markMigrated`'s doc comment
+/// for why — the rename→pointer window is where a whole dataset can be stranded.
 ///
 /// Secrets are not part of the legacy tree — they live in the Keychain and are
 /// deliberately untouched here. Nothing in this type logs a file's contents.
@@ -44,6 +46,10 @@ enum VaultMigration {
         let skipped: [String]
         /// Row-by-row detail; one entry per relocation, in table order.
         let rows: [RowResult]
+
+        /// True when at least one legacy source existed, i.e. there was something
+        /// to migrate. Drives whether `markMigrated` has anything to mark.
+        var legacyDataWasPresent: Bool { rows.contains(where: \.present) }
     }
 
     // MARK: - Locating the legacy tree
@@ -70,9 +76,9 @@ enum VaultMigration {
         return rows(container: container, home: Home(vaultRoot: container, cacheRoot: container))
             .contains { row in
                 switch row.kind {
-                case .jsonFiles:
+                case .jsonFiles(let claimed):
                     let names = (try? fm.contentsOfDirectory(atPath: row.source.path)) ?? []
-                    return names.contains { $0.hasSuffix(".json") }
+                    return names.contains { selectsJSON($0, claimed: claimed) }
                 case .recursiveDirectory:
                     var isDir: ObjCBool = false
                     guard fm.fileExists(atPath: row.source.path, isDirectory: &isDir),
@@ -84,7 +90,28 @@ enum VaultMigration {
 
     // MARK: - The relocation table
 
-    private enum RowKind { case jsonFiles, recursiveDirectory }
+    private enum RowKind {
+        /// Top-level `*.json` documents only, non-recursive. `names` names the
+        /// exact documents this row claims; `nil` means "every remaining `.json`",
+        /// i.e. everything no named row above already claimed.
+        case jsonFiles(names: Set<String>?)
+        case recursiveDirectory
+    }
+
+    /// The legacy JSON documents that do NOT belong in `Config/`.
+    ///
+    /// These MUST stay in step with where the running app reads them from:
+    /// `agents.json`/`connections.json` are read by the store rooted at
+    /// `home.shared(.agents)`, and `assistant-sessions.json` by the store rooted
+    /// at `home.shared(.sessions)` (`AppEnvironment+BootstrapStores` /
+    /// `+BootstrapTools` / `+BootstrapSession`). A mismatch here does not fail —
+    /// it just makes an existing user's agents, connections or chat history
+    /// silently invisible — so `VaultLayoutAgreementTests` asserts the two agree.
+    static let assistantJSONNames: Set<String> = ["agents.json", "connections.json"]
+    static let sessionJSONNames: Set<String> = ["assistant-sessions.json"]
+    private static var relocatedJSONNames: Set<String> {
+        assistantJSONNames.union(sessionJSONNames)
+    }
 
     private struct Row {
         let label: String
@@ -95,9 +122,13 @@ enum VaultMigration {
         let kind: RowKind
     }
 
-    /// The ten relocations Task 5 performed, in table order. Sources are resolved
-    /// against the legacy `<bundle-id>` container: the first six live under its
+    /// The relocation table, in table order. Sources are resolved against the
+    /// legacy `<bundle-id>` container: the first eight live under its
     /// `Documents/`, the last four are siblings of `Documents/`.
+    ///
+    /// The three `.json` rows are ordered named-first, catch-all-last, and the
+    /// catch-all excludes the named documents — so every top-level JSON file
+    /// lands in exactly one destination.
     private static func rows(container: URL, home: Home) -> [Row] {
         let documents = container.appendingPathComponent("Documents", isDirectory: true)
         func doc(_ name: String) -> URL { documents.appendingPathComponent(name, isDirectory: true) }
@@ -105,8 +136,17 @@ enum VaultMigration {
         let apps = home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
 
         return [
+            // The assistant's own documents go to `Assistant/`, not `Config/` —
+            // the published vault layout, and where the app now reads them.
+            Row(label: "agents.json+connections.json", reportPrefix: "",
+                source: documents, destination: home.shared(.agents),
+                kind: .jsonFiles(names: assistantJSONNames)),
+            Row(label: "assistant-sessions.json", reportPrefix: "",
+                source: documents, destination: home.shared(.sessions),
+                kind: .jsonFiles(names: sessionJSONNames)),
             Row(label: "*.json", reportPrefix: "",
-                source: documents, destination: home.shared(.config), kind: .jsonFiles),
+                source: documents, destination: home.shared(.config),
+                kind: .jsonFiles(names: nil)),
             Row(label: "Plugins/", reportPrefix: "Plugins",
                 source: doc("Plugins"),
                 destination: home.cacheRoot.appendingPathComponent("Plugins", isDirectory: true),
@@ -155,7 +195,6 @@ enum VaultMigration {
     static func migrate(fromContainer legacy: URL, into home: Home) throws -> Report {
         let fm = FileManager.default
         var results: [RowResult] = []
-        var anythingPresent = false
 
         for row in rows(container: legacy, home: home) {
             var isDir: ObjCBool = false
@@ -168,37 +207,18 @@ enum VaultMigration {
 
             let (copied, skipped): ([String], [String])
             switch row.kind {
-            case .jsonFiles:
-                (copied, skipped) = try migrateJSONFiles(from: row.source, to: row.destination)
+            case .jsonFiles(let claimed):
+                (copied, skipped) = try migrateJSONFiles(
+                    from: row.source, to: row.destination, claimed: claimed)
             case .recursiveDirectory:
                 (copied, skipped) = try migrateDirectory(
                     from: row.source, to: row.destination, prefix: row.reportPrefix)
             }
             // "Present" means the legacy source existed — even if every file in it
             // was skipped. Absent and skipped must stay distinguishable.
-            anythingPresent = true
+            // `Report.legacyDataWasPresent` is derived from these flags.
             results.append(RowResult(row: row.label, destination: row.destination.path,
                                      present: true, copied: copied, skipped: skipped))
-        }
-
-        // Mark last: only a fully verified migration gets marked, so a failure
-        // anywhere above leaves the container looking exactly un-migrated.
-        if anythingPresent {
-            let documents = legacy.appendingPathComponent("Documents", isDirectory: true)
-            let marked = markerURL(container: legacy)
-            if !entryExists(at: marked) {
-                if entryExists(at: documents) {
-                    try fm.moveItem(at: documents, to: marked)
-                } else {
-                    // Sibling-only container (`Skills/`, `Memory/`, … and no
-                    // `Documents/`): a shape this routine explicitly supports, so it
-                    // needs the same completion signal. With nothing to rename, the
-                    // marker is an empty directory of the same name — `needsMigration`
-                    // only asks whether it exists, so a fully migrated container never
-                    // reports `true` again regardless of its shape.
-                    try fm.createDirectory(at: marked, withIntermediateDirectories: true)
-                }
-            }
         }
 
         return Report(copied: results.flatMap(\.copied),
@@ -206,16 +226,58 @@ enum VaultMigration {
                       rows: results)
     }
 
+    /// Renames the legacy `Documents` to `Documents.migrated` — the marker that
+    /// makes `needsMigration` return false forever after.
+    ///
+    /// **Deliberately NOT part of `migrate`.** A verified copy is not the end of
+    /// first run: the caller still has to write the pointer, and that write can
+    /// fail (disk-full is exactly what a large migration provokes). If the rename
+    /// happened first and the pointer write then threw, the next launch would be
+    /// `.unset`, the user would pick a different folder, and this marker would
+    /// make `needsMigration` answer false — adopting the new folder empty while
+    /// the entire dataset sat in the first one, under a name it no longer had.
+    /// Nothing would be deleted and the user would get no signal at all.
+    ///
+    /// So: call this LAST, only once the vault is durably claimed. Until it runs,
+    /// the legacy tree keeps its original name and the next launch re-migrates.
+    static func markMigrated(container legacy: URL, report: Report) throws {
+        guard report.legacyDataWasPresent else { return }
+        let fm = FileManager.default
+        let documents = legacy.appendingPathComponent("Documents", isDirectory: true)
+        let marked = markerURL(container: legacy)
+        guard !entryExists(at: marked) else { return }
+        if entryExists(at: documents) {
+            try fm.moveItem(at: documents, to: marked)
+        } else {
+            // Sibling-only container (`Skills/`, `Memory/`, … and no
+            // `Documents/`): a shape this routine explicitly supports, so it
+            // needs the same completion signal. With nothing to rename, the
+            // marker is an empty directory of the same name — `needsMigration`
+            // only asks whether it exists, so a fully migrated container never
+            // reports `true` again regardless of its shape.
+            try fm.createDirectory(at: marked, withIntermediateDirectories: true)
+        }
+    }
+
     // MARK: - Row strategies
 
-    /// The `*.json` row: top-level JSON documents only, non-recursive.
-    private static func migrateJSONFiles(from source: URL, to destination: URL)
+    /// Whether a top-level entry belongs to a `.jsonFiles` row. A named row takes
+    /// exactly its own documents; the catch-all takes every other `.json`.
+    private static func selectsJSON(_ name: String, claimed: Set<String>?) -> Bool {
+        guard name.hasSuffix(".json") else { return false }
+        if let claimed { return claimed.contains(name) }
+        return !relocatedJSONNames.contains(name)
+    }
+
+    /// A `.json` row: top-level JSON documents only, non-recursive.
+    private static func migrateJSONFiles(from source: URL, to destination: URL,
+                                         claimed: Set<String>?)
         throws -> ([String], [String]) {
         let fm = FileManager.default
         var copied: [String] = []
         var skipped: [String] = []
         let names = try fm.contentsOfDirectory(atPath: source.path).sorted()
-            .filter { $0.hasSuffix(".json") }
+            .filter { selectsJSON($0, claimed: claimed) }
         guard !names.isEmpty else { return ([], []) }
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
 

@@ -201,7 +201,12 @@ extension AppEnvironment {
         // Persisted history of Assistant chats, surfaced by the block's history
         // sidebar (Assistant session-history-sidebar Task 4) — one instance shared
         // via `AppEnvironment`, same pattern as `runManager`/`scheduleStore` above.
-        let assistantSessionStore = AssistantSessionStore(persistence: persistence)
+        // Chat transcripts are `Assistant/sessions/` in the published layout, not
+        // `Config/`. `SessionShareStore` already roots its exports at
+        // `home.shared(.sessions)/shares`, and `VaultMigration` relocates
+        // `assistant-sessions.json` to exactly this root.
+        let assistantSessionStore = AssistantSessionStore(
+            persistence: FileDocumentStore(rootURL: home.shared(.sessions)))
 
         // M7 Slice 7: menu-bar presence wraps the SAME `runManager` above via
         // `RunManagerMenuBarAdapter`, so the status-item popover's run list is
