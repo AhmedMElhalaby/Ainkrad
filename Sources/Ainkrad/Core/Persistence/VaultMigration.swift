@@ -66,7 +66,7 @@ enum VaultMigration {
         let fm = FileManager.default
         guard fm.fileExists(atPath: container.path) else { return false }
         // Already migrated: the Documents rename is the marker.
-        if fm.fileExists(atPath: markerURL(container: container).path) { return false }
+        if entryExists(at: markerURL(container: container)) { return false }
         return rows(container: container, home: Home(vaultRoot: container, cacheRoot: container))
             .contains { row in
                 switch row.kind {
@@ -186,8 +186,18 @@ enum VaultMigration {
         if anythingPresent {
             let documents = legacy.appendingPathComponent("Documents", isDirectory: true)
             let marked = markerURL(container: legacy)
-            if fm.fileExists(atPath: documents.path), !fm.fileExists(atPath: marked.path) {
-                try fm.moveItem(at: documents, to: marked)
+            if !entryExists(at: marked) {
+                if entryExists(at: documents) {
+                    try fm.moveItem(at: documents, to: marked)
+                } else {
+                    // Sibling-only container (`Skills/`, `Memory/`, … and no
+                    // `Documents/`): a shape this routine explicitly supports, so it
+                    // needs the same completion signal. With nothing to rename, the
+                    // marker is an empty directory of the same name — `needsMigration`
+                    // only asks whether it exists, so a fully migrated container never
+                    // reports `true` again regardless of its shape.
+                    try fm.createDirectory(at: marked, withIntermediateDirectories: true)
+                }
             }
         }
 
@@ -211,7 +221,7 @@ enum VaultMigration {
 
         for name in names {
             let target = destination.appendingPathComponent(name)
-            guard !fm.fileExists(atPath: target.path) else {
+            guard !entryExists(at: target) else {
                 skipped.append(name)
                 continue
             }
@@ -239,7 +249,11 @@ enum VaultMigration {
         var directories: [String] = []
         for case let item as URL in walker {
             let path = item.standardizedFileURL.path
-            guard path.hasPrefix(sourcePath + "/") else { continue }
+            // An entry that does not sit under the row's source cannot be given a
+            // relative path, so it could be neither copied nor verified. Silently
+            // dropping it inside a data migration is exactly the class of bug this
+            // routine exists to avoid: refuse the row instead.
+            guard path.hasPrefix(sourcePath + "/") else { throw CocoaError(.fileReadUnknown) }
             let relative = String(path.dropFirst(sourcePath.count + 1))
             var isDir: ObjCBool = false
             _ = fm.fileExists(atPath: path, isDirectory: &isDir)
@@ -262,7 +276,7 @@ enum VaultMigration {
         for file in files.sorted(by: { $0.relative < $1.relative }) {
             let target = destination.appendingPathComponent(file.relative)
             let name = prefix.isEmpty ? file.relative : "\(prefix)/\(file.relative)"
-            guard !fm.fileExists(atPath: target.path) else {
+            guard !entryExists(at: target) else {
                 skipped.append(name)
                 continue
             }
@@ -272,12 +286,18 @@ enum VaultMigration {
 
         // Directory-level verification: every source entry must now exist at the
         // destination — copied by us, or already there and deliberately skipped.
-        for relative in directories where !fm.fileExists(
-            atPath: destination.appendingPathComponent(relative, isDirectory: true).path) {
+        //
+        // NOTE the asymmetry, deliberately: entries WE copied were byte-verified in
+        // `copyVerified`; entries we SKIPPED carry no integrity guarantee at all. A
+        // pre-existing destination file may be truncated or zero-byte and still
+        // satisfy this sweep. That is the price of never overwriting what the user
+        // already has, and the skip is reported so a caller can act on it.
+        for relative in directories where !entryExists(
+            at: destination.appendingPathComponent(relative, isDirectory: true)) {
             throw CocoaError(.fileWriteUnknown)
         }
-        for file in files where !fm.fileExists(
-            atPath: destination.appendingPathComponent(file.relative).path) {
+        for file in files where !entryExists(
+            at: destination.appendingPathComponent(file.relative)) {
             throw CocoaError(.fileWriteUnknown)
         }
         return (copied, skipped)
@@ -297,10 +317,20 @@ enum VaultMigration {
         let fm = FileManager.default
         try fm.createDirectory(at: target.deletingLastPathComponent(),
                                withIntermediateDirectories: true)
+
+        // Everything lands on a scratch path THIS call created, in the target's own
+        // directory (same volume). Cleanup can then only ever remove our own scratch
+        // file — never a pre-existing vault entry — which is true by construction and
+        // does not depend on an earlier "does the target exist?" observation that a
+        // dangling symlink or a concurrent writer could invalidate.
+        let scratch = target.deletingLastPathComponent()
+            .appendingPathComponent(".ainkrad-migrate-\(UUID().uuidString)")
+        func discardScratch() { try? fm.removeItem(at: scratch) }
+
         do {
-            try fm.copyItem(at: source, to: target)
+            try fm.copyItem(at: source, to: scratch)
         } catch {
-            try? fm.removeItem(at: target)
+            discardScratch()
             throw error
         }
 
@@ -310,25 +340,46 @@ enum VaultMigration {
             .isSymbolicLink ?? false
         if isSymlink {
             let a = try? fm.destinationOfSymbolicLink(atPath: source.path)
-            let b = try? fm.destinationOfSymbolicLink(atPath: target.path)
+            let b = try? fm.destinationOfSymbolicLink(atPath: scratch.path)
             guard a != nil, a == b else {
-                try? fm.removeItem(at: target)
+                discardScratch()
                 throw CocoaError(.fileWriteUnknown)
             }
-            return
+        } else {
+            let matched: Bool
+            do {
+                matched = try verify(source, scratch)
+            } catch {
+                discardScratch()
+                throw error
+            }
+            guard matched else {
+                discardScratch()
+                throw CocoaError(.fileWriteUnknown)
+            }
         }
 
-        let matched: Bool
+        // `linkItem` is `link(2)`: it fails with EEXIST if ANYTHING is at `target`
+        // — including a dangling symlink, which `fileExists` reports as absent — and
+        // it never follows or replaces it. That makes "publish only into an empty
+        // slot" atomic rather than a check followed by a hopeful write.
         do {
-            matched = try verify(source, target)
+            try fm.linkItem(at: scratch, to: target)
         } catch {
-            try? fm.removeItem(at: target)
+            discardScratch()
             throw error
         }
-        guard matched else {
-            try? fm.removeItem(at: target)
-            throw CocoaError(.fileWriteUnknown)
-        }
+        discardScratch()
+    }
+
+    /// Existence that does not lie about symlinks: `FileManager.fileExists` follows
+    /// links and so reports a DANGLING symlink as absent. `attributesOfItem` is
+    /// `lstat`-shaped — it sees the link itself. Every "is this destination slot
+    /// occupied?" decision in this file must use this, because treating a dangling
+    /// symlink as an empty slot is how a migration ends up destroying a vault entry
+    /// it did not create.
+    static func entryExists(at url: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)) != nil
     }
 
     /// Byte-for-byte comparison, streamed in chunks so a large plugin bundle is
