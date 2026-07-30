@@ -120,6 +120,8 @@ struct SetupStepBody: View {
             SetupYouStepView(coordinator: coordinator)
         } else if step == .providers {
             SetupProvidersStepView(coordinator: coordinator)
+        } else if step == .assistant {
+            SetupAssistantStepView(coordinator: coordinator)
         } else {
             placeholder
         }

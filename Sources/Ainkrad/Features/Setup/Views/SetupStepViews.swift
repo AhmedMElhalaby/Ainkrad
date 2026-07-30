@@ -148,3 +148,181 @@ struct SetupHomeStepView: View {
         }
     }
 }
+
+/// Applies the Assistant step. `AgentStore.setActive` is a no-op unless the id is
+/// already in `agents`, so a custom profile must be added before it is activated.
+@MainActor
+enum SetupAssistant {
+    static func apply(profile: AgentProfile, model: String, effort: String,
+                      agents: AgentStore, config: AgentConfigStore) {
+        let resolved = profile.builtin ? profile : agents.add(profile)
+        agents.setActive(resolved.id)
+        config.setModel(model)
+        config.setEffort(effort)
+    }
+}
+
+/// The Assistant step: a confirmation, not an authoring task. Plan and Build —
+/// the two built-in agents — are shown with their instructions so the user can
+/// see what they do; Build is the default (matching `AgentStore.active`'s own
+/// fallback). A custom persona is a secondary path via `AgentProfile.custom`,
+/// added to the store only on Continue (never on every keystroke, unlike the
+/// You step — an agent profile isn't a fact to accumulate, it's a choice to commit).
+///
+/// Model/effort default to `AgentConfigDocument`'s own defaults
+/// (`"claude-opus-4-8"` / `"xhigh"`) rather than a live model-list call: a
+/// network fetch here could hang the wizard on a flaky connection, and the
+/// Providers step already ran before this one.
+struct SetupAssistantStepView: View {
+    @Environment(AppEnvironment.self) private var environment
+
+    let coordinator: SetupCoordinator
+
+    private static let efforts = ["low", "medium", "high", "xhigh"]
+
+    @State private var selection: AgentProfile = BuiltInAgents.build
+    @State private var isCustom = false
+    @State private var customName = ""
+    @State private var customInstructions = ""
+    @State private var model = "claude-opus-4-8"
+    @State private var effort = "xhigh"
+
+    var body: some View {
+        let tokens = environment.themeManager.tokens
+
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    intro(tokens: tokens)
+                    builtins(tokens: tokens)
+                    custom(tokens: tokens)
+                    modelAndEffort(tokens: tokens)
+                }
+                .padding(20)
+            }
+
+            HStack {
+                Spacer(minLength: 0)
+                AinkradButton(title: "Continue", style: .primary) {
+                    commit()
+                    coordinator.advance()
+                }
+                .disabled(isCustom && customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(20)
+        }
+    }
+
+    private func intro(tokens: DesignTokens) -> some View {
+        Text("Ainkrad ships with two agents, Plan and Build. Confirm which one starts "
+             + "active — or write your own persona instead. You can add and edit more "
+             + "agents later.")
+            .font(AinkradFont.display(12))
+            .foregroundStyle(tokens.foreground.opacity(0.6))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func builtins(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsSectionHeader(title: "STARTING AGENT", tokens: tokens)
+            ForEach(BuiltInAgents.all) { agent in
+                builtinRow(agent, tokens: tokens)
+            }
+        }
+    }
+
+    private func builtinRow(_ agent: AgentProfile, tokens: DesignTokens) -> some View {
+        let isSelected = !isCustom && selection.id == agent.id
+        return Button {
+            isCustom = false
+            selection = agent
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: agent.icon)
+                    .font(.system(size: 13))
+                    .foregroundStyle(isSelected ? tokens.accentSecondary : tokens.foreground.opacity(0.6))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(agent.name)
+                        .font(AinkradFont.display(13, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                    Text(agent.instructions)
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(tokens.accentSecondary)
+                }
+            }
+            .padding(12)
+            .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+            .overlay(ChamferShape(cut: AinkradRadius.md)
+                .strokeBorder(isSelected ? tokens.accentSecondary.opacity(0.5) : Color.clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func custom(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                isCustom = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12))
+                        .foregroundStyle(isCustom ? tokens.accentSecondary : tokens.foreground.opacity(0.6))
+                    Text("Write your own persona instead")
+                        .font(AinkradFont.display(12, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.85))
+                    Spacer(minLength: 0)
+                    if isCustom {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(tokens.accentSecondary)
+                    }
+                }
+                .padding(12)
+                .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.35)))
+            }
+            .buttonStyle(.plain)
+
+            if isCustom {
+                AinkradTextField(text: $customName, placeholder: "Name (e.g. Scribe)")
+                AinkradTextField(text: $customInstructions, placeholder: "Instructions")
+            }
+        }
+    }
+
+    private func modelAndEffort(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsSectionHeader(title: "MODEL", tokens: tokens)
+            HStack(spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Model").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
+                    Text(model).font(AinkradFont.display(12, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.9))
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Effort").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
+                    AinkradSegmentedPicker(
+                        items: Self.efforts,
+                        selection: $effort,
+                        label: { $0.capitalized })
+                    .fixedSize()
+                }
+            }
+        }
+    }
+
+    private func commit() {
+        let profile = isCustom
+            ? AgentProfile.custom(name: customName.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  instructions: customInstructions.trimmingCharacters(in: .whitespacesAndNewlines))
+            : selection
+        SetupAssistant.apply(profile: profile, model: model, effort: effort,
+                             agents: environment.agentStore, config: environment.agentConfigStore)
+    }
+}
