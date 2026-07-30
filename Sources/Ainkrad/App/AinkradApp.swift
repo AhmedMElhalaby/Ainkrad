@@ -212,8 +212,12 @@ struct AinkradHostApp: App {
 /// A box rather than a bare closure so it can travel through `EnvironmentValues`
 /// with a name, and so the wizard cannot reach anything else in the App: the only
 /// thing it can do is hand back a rebuilt environment and have the app adopt it.
-/// `nil` in any tree the App did not build (previews, tests), where adoption is
-/// not a thing that can happen.
+/// `nil` in any tree the App did not build (previews, tests). The Home step
+/// treats that as "adoption is not available here" and returns BEFORE calling
+/// `HomeAdoption.adoptAndRebuild` — deliberately, because that call writes the
+/// marker, migrates the legacy container and writes the pointer before `install`
+/// is reached. Skipping only the re-point would claim a real vault on disk and
+/// then keep running on the provisional one.
 struct SetupHomeInstaller {
     let install: @MainActor (AppEnvironment) -> Void
 

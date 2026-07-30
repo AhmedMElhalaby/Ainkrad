@@ -98,6 +98,17 @@ struct SetupHomeStepView: View {
     }
 
     private func choose() {
+        // Bail BEFORE adopting, not at the re-point. `adoptAndRebuild` writes the
+        // marker, migrates the real legacy container and writes the POINTER
+        // before `install` is ever called, so an optional-chained
+        // `installer?.install` would let all of that happen and skip only the
+        // re-point — leaving the app running on the provisional home while a real
+        // vault on disk had been claimed and the legacy tree renamed. Nothing at
+        // all is the only safe answer when there is nobody to hand the rebuilt
+        // environment to (previews, and any test that builds this view without an
+        // installer).
+        guard let installer else { return }
+
         var rebuilt: AppEnvironment?
         let model = SetupHomeStepModel(
             chooseVault: LaunchHomeResolver.presentFolderChooser,
@@ -111,7 +122,7 @@ struct SetupHomeStepView: View {
                     // (above all the throwaway Keychain namespace) are lifted.
                     newEnvironment.isProvisionalHome = false
                     rebuilt = newEnvironment
-                    installer?.install(newEnvironment)
+                    installer.install(newEnvironment)
                 }
                 // Recorded, not rendered: this step advances the moment it
                 // succeeds, so there is no surface left to show it on. The
@@ -125,7 +136,11 @@ struct SetupHomeStepView: View {
         switch model.choose() {
         case .adopted:
             rejection = nil
-            if let rebuilt { onAdopted(rebuilt) } else { coordinator.advance() }
+            // `install` always runs on a successful adoption, so `rebuilt` is
+            // always set here. Advancing the OUTGOING coordinator would move the
+            // wizard on while still bound to the provisional store, so there is
+            // deliberately no fallback.
+            if let rebuilt { onAdopted(rebuilt) }
         case .rejected(let message):
             rejection = message
         case .cancelled:

@@ -64,10 +64,26 @@ struct SetupOverlayView: View {
             .flatMap { outgoing.steps.indices.contains($0) ? outgoing.steps[$0] : nil }
 
         let fresh = SetupCoordinator(persistence: rebuilt.persistence, isProvisionalHome: false)
-        if let target {
-            while fresh.step != target, fresh.canAdvance { fresh.advance() }
-        }
         coordinator = fresh
+
+        switch SetupReseat.plan(fresh, toward: target) {
+        case .alreadyConfigured:
+            // A reinstall-and-restore: the adopted vault already carries a
+            // completed SetupDocument at the current version. Re-walking the
+            // wizard would re-ask questions this user has answered, and the
+            // fresh coordinator has no steps left to walk anyway. Lower the
+            // gate. Nothing is written — the marker is already there.
+            Log.persistence.info(
+                "Adopted an already-configured Home; first-run setup is complete for it")
+            rebuilt.isSetupPresented = false
+        case .resumed(let step):
+            // Never silently: if the target was unreachable the wizard would
+            // otherwise appear to have simply not moved.
+            if let target, step != target {
+                Log.persistence.error(
+                    "Setup re-seat could not reach \(target.rawValue, privacy: .public); stopped at \(step.rawValue, privacy: .public)")
+            }
+        }
     }
 
     private func header(coordinator: SetupCoordinator, tokens: DesignTokens) -> some View {
