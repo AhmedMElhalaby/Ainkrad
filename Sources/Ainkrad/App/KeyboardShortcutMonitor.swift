@@ -28,23 +28,32 @@ import SwiftUI
 /// total gate is the point, and none of them can strand the user the way an
 /// unanswerable quit dialog can.
 enum SetupGate {
-    /// Virtual key codes (ANSI) the quit confirmation needs.
+    /// Virtual key codes the quit confirmation needs. Escape, Return and keypad
+    /// Enter occupy the same physical position on every layout, so matching them
+    /// by key code is correct and layout-independent.
     private static let returnKey: UInt16 = 36
     private static let keypadEnter: UInt16 = 76
     private static let escape: UInt16 = 53
-    private static let qKey: UInt16 = 12
 
     /// `true` when the monitor must consume this keystroke without performing
     /// anything. `false` means "not the gate's business" — either the gate is
     /// down, or this is one of the exempt keys, and normal handling continues.
+    ///
+    /// `characters` is `charactersIgnoringModifiers`. ⌘Q is matched on the
+    /// CHARACTER, not the key code, and that is load-bearing: the key producing
+    /// "q" is keyCode 12 only on QWERTY — it is 39 on Dvorak and 0 on AZERTY.
+    /// AppKit matches the Quit key equivalent by character too, so matching by
+    /// key code here would swallow the real ⌘Q on those layouts (trapping the
+    /// user in the wizard) while letting an inert physical key through.
     static func swallows(
         keyCode: UInt16,
+        characters: String?,
         command: Bool,
         isSetupPresented: Bool,
         isConfirmingQuit: Bool
     ) -> Bool {
         guard isSetupPresented else { return false }
-        if command, keyCode == qKey { return false }
+        if command, characters?.lowercased() == "q" { return false }
         if isConfirmingQuit, [returnKey, keypadEnter, escape].contains(keyCode) { return false }
         return true
     }
@@ -241,6 +250,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // gate rather than a trap — as a pure, tested function.
             if SetupGate.swallows(
                 keyCode: event.keyCode,
+                characters: event.charactersIgnoringModifiers,
                 command: event.modifierFlags.contains(.command),
                 isSetupPresented: environment.isSetupPresented,
                 isConfirmingQuit: environment.quitCoordinator.isConfirming
