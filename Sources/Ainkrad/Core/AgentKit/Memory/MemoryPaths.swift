@@ -13,14 +13,4 @@ struct MemoryPaths {
     var profileURL: URL { root.appendingPathComponent("profile.json") }
     var sessionsDir: URL { root.appendingPathComponent("sessions", isDirectory: true) }
     func sessionURL(id: String) -> URL { sessionsDir.appendingPathComponent("\(id).md") }
-
-    /// `~/Library/Application Support/<bundle-id>/Memory` (mirrors
-    /// `FileDocumentStore.defaultDocumentsURL`, but the `Memory` subdir).
-    static func defaultRoot() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
-        return base.appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("Memory", isDirectory: true)
-    }
 }

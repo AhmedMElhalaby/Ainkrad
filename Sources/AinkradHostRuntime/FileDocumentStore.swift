@@ -33,15 +33,6 @@ public final class FileDocumentStore: PersistenceStore, @unchecked Sendable {
         try? fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
     }
 
-    /// `~/Library/Application Support/<bundle-id>/Documents`.
-    public static func defaultDocumentsURL() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
-        return base.appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("Documents", isDirectory: true)
-    }
-
     /// Drops the in-memory cache. Call after files are written out of band
     /// (e.g. after an import) so subsequent loads read fresh from disk.
     public func clearCache() { lock.withLock { cache.removeAll() } }

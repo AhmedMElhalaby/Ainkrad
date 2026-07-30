@@ -17,7 +17,18 @@ struct AinkradHostApp: App {
 
     init() {
         FontRegistrar.registerBundledFonts()
-        let environment = AppEnvironment.bootstrap()
+        // INTERIM (Task 8 replaces this): `bootstrap` now requires a `Home`, so
+        // launch has to name one here. This keeps the pre-refactor production
+        // location — the Application Support container — as BOTH roots, so this
+        // task changes no shipped on-disk behaviour beyond the subdirectory
+        // renames. It is not a fallback: there is no other branch, and Task 8
+        // swaps it for real pointer resolution (which terminates rather than
+        // defaulting when the configured vault is missing or foreign).
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let container = support
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.ainkrad.app", isDirectory: true)
+        let environment = AppEnvironment.bootstrap(home: Home(vaultRoot: container, cacheRoot: container))
         _environment = State(initialValue: environment)
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController

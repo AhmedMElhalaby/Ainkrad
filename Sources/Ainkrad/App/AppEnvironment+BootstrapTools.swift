@@ -2,7 +2,7 @@ import Foundation
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
+/// `AppEnvironment.bootstrap(home:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the next two sequential
 /// blocks: the sandbox/execution router + the host-facing agent tools, then
 /// the Model Router / Usage / Failover wiring (M7 Slice 5b). Pure

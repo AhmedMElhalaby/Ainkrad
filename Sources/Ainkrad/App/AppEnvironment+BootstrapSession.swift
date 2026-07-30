@@ -2,7 +2,7 @@ import Foundation
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
+/// `AppEnvironment.bootstrap(home:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the fifth block: subagent
 /// wiring (M7 Slice 3 Task 11), the background/headless run subsystem
 /// (Slice 3b Task 21), the schedule/trigger subsystem (Slice 3b), the
@@ -23,7 +23,7 @@ extension AppEnvironment {
     }
 
     static func bootstrapAgentSessionAndRuns(
-        rootURL: URL?,
+        home: Home,
         persistence: PersistenceStore,
         secrets: SecretStore,
         streamingHTTP: URLSessionStreamingHTTPClient,
@@ -301,8 +301,8 @@ extension AppEnvironment {
         // File-based custom slash commands (project + user). Registered AFTER skill
         // commands so a colliding name can't shadow a skill binding; `CustomCommandStore`
         // already refuses builtin names, and re-registration drops stale names first.
-        let commandUserRoot = rootURL.map { $0.appendingPathComponent("Commands", isDirectory: true) }
-            ?? CustomCommandPaths.defaultUserRoot()
+        // Custom commands are hand-authored markdown — vault.
+        let commandUserRoot = home.shared(.commands)
         let customCommandStore = CustomCommandStore(paths: CustomCommandPaths(
             userRoot: commandUserRoot,
             projectRoot: CustomCommandPaths.projectRoot(forWorkspace: assistantWorkingDirectory)))
@@ -359,9 +359,10 @@ extension AppEnvironment {
         // survive relaunch — `CheckpointCoordinator.init` loads them back from disk.
         let checkpointCoordinator = CheckpointCoordinator(
             sessionID: "main",
+            // Checkpoint blobs are pre-mutation copies of files that still exist in
+            // the user's workspace (and are git-recoverable) — derivable, so cache.
             snapshots: WorkspaceSnapshotStore(
-                root: rootURL.map { $0.appendingPathComponent("Checkpoints", isDirectory: true) }
-                    ?? WorkspaceSnapshotStore.defaultRoot()),
+                root: home.cacheRoot.appendingPathComponent("Checkpoints", isDirectory: true)),
             git: GitWorkingTreeSnapshotter(router: executionRouter),
             persistence: persistence,
             transcriptIndex: { [weak agentSession] in agentSession?.messages.count ?? 0 },
