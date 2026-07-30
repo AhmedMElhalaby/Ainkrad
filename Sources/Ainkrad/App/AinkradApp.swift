@@ -455,6 +455,35 @@ struct AinkradHostApp: App {
         }
         let environment = AppEnvironment.bootstrap(home: home)
         _environment = State(initialValue: environment)
+        Self.install(environment, into: appDelegate)
+    }
+
+    /// Points every holder that outlives a view body at `environment`.
+    ///
+    /// This is the ONLY place the app delegate's store references are written,
+    /// so the initial boot and the setup wizard's mid-session re-root
+    /// (`HomeAdoption.adoptAndRebuild`, whose `install:` closure calls this)
+    /// cannot diverge. A holder assigned anywhere else would keep writing to
+    /// the home the app booted against — which during setup is a temporary
+    /// directory the OS deletes.
+    ///
+    /// Everything else that outlives a view body lives INSIDE `AppEnvironment`
+    /// (`skillWatcher`, `customCommandWatcher`, `fileChangeWatcher`,
+    /// `scheduleRunner`, `remoteChannelService`, `mcpServerRegistry`,
+    /// `lspServerRegistry`, `menuBarController`) and is rebuilt wholesale by
+    /// `bootstrap`. `KeyboardShortcutMonitor.MonitoringView` re-reads its
+    /// `environment` through `updateNSView` when the `@State` swaps. The
+    /// OUTGOING environment's copies are not stopped here — see
+    /// `AppEnvironment` teardown note in the setup wizard report; the swap is
+    /// only safe while the outgoing home is a scratch home with no schedules,
+    /// no watched paths and no enabled remote channel.
+    private static func install(_ environment: AppEnvironment, into appDelegate: AinkradAppDelegate) {
+        // Retire the outgoing status item first: `NSStatusBar` would otherwise
+        // keep showing it, still bound to the previous environment's presence.
+        // No-op on the initial boot, where there is no previous controller.
+        if appDelegate.menuBarController !== environment.menuBarController {
+            appDelegate.menuBarController?.teardown()
+        }
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController
         appDelegate.assistantSessionStore = environment.assistantSessionStore
