@@ -35,6 +35,25 @@ enum SetupGate {
     private static let keypadEnter: UInt16 = 76
     private static let escape: UInt16 = 53
 
+    /// Whether the first-run gate goes up at LAUNCH.
+    ///
+    /// Two reasons, and they are different: no Home has been chosen yet
+    /// (`provisionalHome`), or a real Home exists whose setup never finished —
+    /// a force-quit mid-wizard — or which owes steps added in a newer
+    /// `setupVersion` (`!setupIsComplete`).
+    ///
+    /// This is a launch-time decision only. It does NOT contradict the wizard's
+    /// mid-session lowering (`SetupReseat.Outcome.alreadyConfigured`, and
+    /// `SetupDoneStepView.finish()`): both lower the gate only once a completed
+    /// marker at the current version exists in the adopted Home's store, which
+    /// is exactly the state that makes `setupIsComplete` true here on the next
+    /// launch. Read this at boot against the freshly bootstrapped environment's
+    /// persistence; never re-evaluate it mid-session, where it would race the
+    /// swap and re-raise a gate the user has legitimately cleared.
+    static func raisedAtLaunch(provisionalHome: Bool, setupIsComplete: Bool) -> Bool {
+        provisionalHome || !setupIsComplete
+    }
+
     /// `true` when the monitor must consume this keystroke without performing
     /// anything. `false` means "not the gate's business" — either the gate is
     /// down, or this is one of the exempt keys, and normal handling continues.

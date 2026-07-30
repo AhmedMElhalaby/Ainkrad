@@ -60,7 +60,24 @@ struct AinkradHostApp: App {
         }
         let environment = AppEnvironment.bootstrap(home: home)
         environment.isProvisionalHome = provisional
-        environment.isSetupPresented = provisional
+        // Re-gate on an incomplete marker: a real Home whose wizard was
+        // force-quit part-way, or one completed at an older `setupVersion` that
+        // owes newly added steps, raises the gate exactly as a first run does.
+        // The coordinator is built against the just-bootstrapped environment's
+        // persistence — the vault's `Config/` store — so this reads the marker
+        // from the Home the app actually booted against.
+        //
+        // Skipped under the test host: it boots against a provisional scratch
+        // Home with `provisional == false`, which would otherwise put a gate
+        // over the hosted test run for no reason.
+        if LaunchHomeResolver.isRunningTests {
+            environment.isSetupPresented = false
+        } else {
+            let coordinator = SetupCoordinator(persistence: environment.persistence,
+                                               isProvisionalHome: provisional)
+            environment.isSetupPresented = SetupGate.raisedAtLaunch(
+                provisionalHome: provisional, setupIsComplete: coordinator.isComplete)
+        }
         _environment = State(initialValue: environment)
         Self.install(environment, into: appDelegate)
     }

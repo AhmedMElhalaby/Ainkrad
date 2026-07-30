@@ -122,6 +122,8 @@ struct SetupStepBody: View {
             SetupProvidersStepView(coordinator: coordinator)
         } else if step == .assistant {
             SetupAssistantStepView(coordinator: coordinator)
+        } else if step == .done {
+            SetupDoneStepView(coordinator: coordinator)
         } else {
             placeholder
         }
@@ -135,19 +137,11 @@ struct SetupStepBody: View {
             Spacer(minLength: 0)
             HStack {
                 Spacer(minLength: 0)
-                // `.done` is deliberately inert here: this placeholder must never
-                // write a completion marker. `coordinator.complete()` persists
-                // SetupDocument to disk immediately, which would suppress the
-                // gate on every future launch — including during Task 4/10
-                // hand-verification, before any real step content exists.
-                // Task 10 owns wiring the real "Finish" action.
-                if step == .done {
-                    AinkradButton(title: "Finish", style: .primary) {}
-                        .disabled(true)
-                } else {
-                    AinkradButton(title: "Continue", style: .primary) {
-                        coordinator.advance()
-                    }
+                // Only `.welcome` still reaches this placeholder; `.done` now has
+                // real content (SetupDoneStepView), which is the one and only
+                // caller of `coordinator.complete()`.
+                AinkradButton(title: "Continue", style: .primary) {
+                    coordinator.advance()
                 }
             }
         }
