@@ -2,6 +2,73 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
+/// Resolves the Home at launch.
+///
+/// INTERIM: `.unset` auto-adopts `~/Ainkrad` so this branch is shippable before
+/// the setup wizard exists. The wizard replaces that with a real folder picker;
+/// delete `defaultVaultLocation` and that branch when it lands. `.missing` and
+/// `.foreign` deliberately throw — the recovery UI ships with the wizard, and
+/// falling back to a fresh vault is the exact failure this design forbids.
+enum LaunchHomeResolver {
+    enum Failure: Error, Equatable {
+        case vaultMissing(path: String)
+        case notAnAinkradHome(path: String)
+        /// A `Resolution` case added by a newer AinkradAppKit than this host knows.
+        /// `Resolution` is resilient (library evolution), so this is reachable.
+        /// Throwing is the only safe answer: an unknown outcome must never be
+        /// treated as "unset" and adopted over.
+        case unrecognizedResolution
+    }
+
+    static func defaultVaultLocation() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Ainkrad", isDirectory: true)
+    }
+
+    static func resolveOrAdopt(
+        defaultVault: URL = LaunchHomeResolver.defaultVaultLocation(),
+        pointerDirectory: URL = AinkradHome.defaultPointerDirectory(),
+        cacheRoot: URL = AinkradHome.defaultCacheRoot(
+            bundleID: Bundle.main.bundleIdentifier ?? "com.ainkrad.app")
+    ) throws -> Home {
+        switch AinkradHome.resolve(pointerDirectory: pointerDirectory, cacheRoot: cacheRoot) {
+        case .ready(let home):
+            return home
+
+        case .missing(let path):
+            throw Failure.vaultMissing(path: path)
+
+        case .foreign(let url):
+            throw Failure.notAnAinkradHome(path: url.path)
+
+        case .unset:
+            // INTERIM — replaced by the wizard's folder picker.
+            try FileManager.default.createDirectory(at: defaultVault,
+                                                    withIntermediateDirectories: true)
+            let home = Home(vaultRoot: defaultVault, cacheRoot: cacheRoot)
+
+            // Migrate BEFORE adopting. `adopt` is what writes the pointer, and a
+            // pointer is the app's claim that this vault is authoritative. If the
+            // copy fails part-way, no pointer exists, so the next launch is a clean
+            // first run over the same untouched legacy tree — the guarantee
+            // VaultMigration is built around. Adopting first would leave a pointer
+            // to a half-populated vault that never gets migrated again.
+            if let container = VaultMigration.legacyContainerURL(),
+               VaultMigration.needsMigration(container: container) {
+                try VaultMigration.migrate(fromContainer: container, into: home)
+            }
+
+            // `adopt` writes the marker and pointer; it returns an equivalent Home.
+            return try AinkradHome.adopt(defaultVault,
+                                         pointerDirectory: pointerDirectory,
+                                         cacheRoot: cacheRoot)
+
+        @unknown default:
+            throw Failure.unrecognizedResolution
+        }
+    }
+}
+
 // Named `AinkradHostApp` (not `AinkradApp`) so the identifier doesn't collide
 // with `AinkradAppKit.AinkradApp` — the SDK protocol plugin bundles conform
 // to (`PluginLoader.swift`). A same-module type always shadows an imported
@@ -17,18 +84,15 @@ struct AinkradHostApp: App {
 
     init() {
         FontRegistrar.registerBundledFonts()
-        // INTERIM (Task 8 replaces this): `bootstrap` now requires a `Home`, so
-        // launch has to name one here. This keeps the pre-refactor production
-        // location — the Application Support container — as BOTH roots, so this
-        // task changes no shipped on-disk behaviour beyond the subdirectory
-        // renames. It is not a fallback: there is no other branch, and Task 8
-        // swaps it for real pointer resolution (which terminates rather than
-        // defaulting when the configured vault is missing or foreign).
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let container = support
-            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.ainkrad.app", isDirectory: true)
-        let environment = AppEnvironment.bootstrap(home: Home(vaultRoot: container, cacheRoot: container))
+        let home: Home
+        do {
+            home = try LaunchHomeResolver.resolveOrAdopt()
+        } catch {
+            // No recovery UI until the setup wizard ships. Failing loudly is
+            // correct: silently adopting a different vault is unrecoverable.
+            fatalError("Ainkrad Home unavailable: \(error)")
+        }
+        let environment = AppEnvironment.bootstrap(home: home)
         _environment = State(initialValue: environment)
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController
