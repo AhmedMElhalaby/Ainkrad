@@ -28,7 +28,19 @@ enum SetupReseat {
 
     static func plan(_ fresh: SetupCoordinator, toward target: SetupStep?) -> Outcome {
         guard !fresh.isComplete else { return .alreadyConfigured }
-        if let target {
+        // Only walk toward a target the fresh list actually contains. Walking
+        // blindly runs `advance()` until it can advance no further — i.e. all
+        // the way to `.done` — which is not "stalled where the target was", it
+        // is "skipped every step the user still owes".
+        //
+        // This is the `setupVersion` bump path, not a hypothetical: a user who
+        // adopts a vault with an older completed marker gets a step list of
+        // only the newly introduced steps plus `.done`, while the outgoing
+        // coordinator's successor to `.home` is whatever came next in the FULL
+        // list. Those disagree by construction. Landing on the first owed step
+        // (which is where `init` already put `fresh`) asks the new step; landing
+        // on `.done` writes the new version's marker having asked nothing.
+        if let target, fresh.steps.contains(target) {
             while fresh.step != target, fresh.canAdvance { fresh.advance() }
         }
         return .resumed(fresh.step)

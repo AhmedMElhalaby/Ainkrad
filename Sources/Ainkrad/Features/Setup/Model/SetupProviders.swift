@@ -12,6 +12,20 @@ enum SetupProviders {
     enum Outcome: Equatable {
         case connected(message: String)
         case failed(message: String)
+
+        /// The single reading of "did this attempt connect?".
+        ///
+        /// It lives on the outcome rather than on view state so a caller can
+        /// answer the question from the value it was just handed. Deriving it
+        /// from a `@State` property assigned moments earlier is not the same
+        /// thing: SwiftUI does not contract that a `State` write is visible to
+        /// a read-back outside `body`, and a stale `true` there would leave
+        /// `SetupSubscriptionFlow.pending` holding a connection
+        /// `finishSubscription` had already rolled out of the store.
+        var isConnected: Bool {
+            if case .connected = self { return true }
+            return false
+        }
     }
 
     typealias Verifier = (ProviderKind, String, ProviderCredential) async -> ConnectionTestResult

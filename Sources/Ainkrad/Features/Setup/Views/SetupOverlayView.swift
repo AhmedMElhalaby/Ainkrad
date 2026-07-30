@@ -8,6 +8,10 @@ import AinkradHostRuntime
 struct SetupOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var coordinator: SetupCoordinator?
+    /// Set by the Home step's adoption. Survives the environment swap for the
+    /// same reason the coordinator does — same view identity, same `@State` —
+    /// and is read four steps later by `.done`.
+    @State private var didMigrateLegacyData = false
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -41,7 +45,11 @@ struct SetupOverlayView: View {
             header(coordinator: coordinator, tokens: tokens)
             SetupStepBody(step: coordinator.step,
                           coordinator: coordinator,
-                          onAdopted: { rebuilt in reseat(after: coordinator, using: rebuilt) })
+                          didMigrateLegacyData: didMigrateLegacyData,
+                          onAdopted: { rebuilt, migrated in
+                              didMigrateLegacyData = migrated
+                              reseat(after: coordinator, using: rebuilt)
+                          })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .hudPanelChrome(tokens: tokens)
@@ -76,6 +84,10 @@ struct SetupOverlayView: View {
             Log.persistence.info(
                 "Adopted an already-configured Home; first-run setup is complete for it")
             rebuilt.isSetupPresented = false
+            // The other gate-lowering site (see `SetupDoneStepView.finish()`):
+            // the status item is suppressed while the gate is up and nothing
+            // re-installs it on its own, so it has to be brought back here too.
+            rebuilt.menuBarController?.install()
         case .resumed(let step):
             // Never silently: if the target was unreachable the wizard would
             // otherwise appear to have simply not moved.
@@ -106,45 +118,38 @@ struct SetupOverlayView: View {
 struct SetupStepBody: View {
     let step: SetupStep
     let coordinator: SetupCoordinator
-    /// Called with the rebuilt environment once the Home step adopts a vault.
-    let onAdopted: (AppEnvironment) -> Void
+    /// True once the Home step's adoption migrated a legacy container into the
+    /// adopted vault. Carried to `.done`, which is the only screen left to
+    /// acknowledge it on — see `SetupDoneStepView`.
+    let didMigrateLegacyData: Bool
+    /// Called with the rebuilt environment, and whether adoption migrated a
+    /// legacy container, once the Home step adopts a vault.
+    let onAdopted: (AppEnvironment, Bool) -> Void
 
+    /// A `switch`, not an if/else chain: every `SetupStep` now has a real view,
+    /// and exhaustiveness is what makes the compiler — rather than a user
+    /// staring at an empty panel — catch the next step that ships without one.
+    /// The `.welcome` case shipped as a bare placeholder for exactly that
+    /// reason, and it was the first screen anyone saw.
     var body: some View {
-        if step == .home {
+        switch step {
+        case .welcome:
+            SetupWelcomeStepView(coordinator: coordinator)
+        case .home:
             SetupHomeStepView(coordinator: coordinator, onAdopted: onAdopted)
-        } else if step == .appearance {
+        case .appearance:
             SetupAppearanceStepView(coordinator: coordinator)
-        } else if step == .motionAndSound {
+        case .motionAndSound:
             SetupMotionSoundStepView(coordinator: coordinator)
-        } else if step == .you {
+        case .you:
             SetupYouStepView(coordinator: coordinator)
-        } else if step == .providers {
+        case .providers:
             SetupProvidersStepView(coordinator: coordinator)
-        } else if step == .assistant {
+        case .assistant:
             SetupAssistantStepView(coordinator: coordinator)
-        } else if step == .done {
-            SetupDoneStepView(coordinator: coordinator)
-        } else {
-            placeholder
+        case .done:
+            SetupDoneStepView(coordinator: coordinator,
+                              didMigrateLegacyData: didMigrateLegacyData)
         }
-    }
-
-    private var placeholder: some View {
-        VStack(spacing: AinkradSpacing.md) {
-            Spacer(minLength: 0)
-            Text(step.title)
-                .font(AinkradFont.display(20, weight: .semibold))
-            Spacer(minLength: 0)
-            HStack {
-                Spacer(minLength: 0)
-                // Only `.welcome` still reaches this placeholder; `.done` now has
-                // real content (SetupDoneStepView), which is the one and only
-                // caller of `coordinator.complete()`.
-                AinkradButton(title: "Continue", style: .primary) {
-                    coordinator.advance()
-                }
-            }
-        }
-        .padding(20)
     }
 }

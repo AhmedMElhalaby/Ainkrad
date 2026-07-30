@@ -61,4 +61,28 @@ struct SetupHomeStepTests {
         // apart from a normal transition.
         #expect(SetupReseat.plan(fresh, toward: .appearance) != .resumed(.done))
     }
+
+    /// The `setupVersion` re-gating mechanism, exercised for real.
+    ///
+    /// When `currentSetupVersion` is bumped, a user who adopts a vault carrying
+    /// an OLDER completed marker owes only the newly added steps — so the
+    /// outgoing coordinator's successor to `.home` is very likely NOT in the
+    /// fresh list. Walking blindly toward an absent target runs the coordinator
+    /// all the way to `.done`, landing the user on the closing screen having
+    /// never been asked the step the bump exists for; Start then writes the new
+    /// version's marker and the step is lost permanently.
+    ///
+    /// `.home` stands in for any unreachable target: the non-provisional step
+    /// list excludes it unconditionally, so it can never be walked to.
+    @Test func reseatingTowardAnUnreachableStepLandsOnTheFirstOwedStep() throws {
+        let store = InMemoryPersistenceStore()
+        let fresh = SetupCoordinator(persistence: store, isProvisionalHome: false)
+        let first = try #require(fresh.steps.first)
+        #expect(!fresh.steps.contains(.home), "the target must genuinely be unreachable")
+
+        #expect(SetupReseat.plan(fresh, toward: .home) == .resumed(first))
+        #expect(fresh.step == first)
+        // The failure this pins: skipping every owed step to the closing screen.
+        #expect(fresh.step != .done)
+    }
 }

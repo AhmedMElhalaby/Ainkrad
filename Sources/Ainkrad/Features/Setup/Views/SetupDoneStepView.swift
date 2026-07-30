@@ -19,6 +19,22 @@ struct SetupDoneStepView: View {
 
     let coordinator: SetupCoordinator
 
+    /// True when the Home step's adoption migrated a legacy container into the
+    /// vault. Adoption moves the old data in and renames the original to
+    /// `Documents.migrated`; without this line that rename happens with zero UI
+    /// acknowledgement anywhere, and the user meets it as an unexplained folder
+    /// in Finder weeks later. `HomeAdoption.Result.migrated` reports exactly
+    /// what happened (it is sampled before `adopt` and gated on the identical
+    /// predicate), so this cannot claim a migration that did not occur.
+    let didMigrateLegacyData: Bool
+
+    /// `~/Library/Application Support/<bundle-id>`, where the renamed original
+    /// still sits. Named literally so the user can find it.
+    private var legacyCopyPath: String {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
+        return "~/Library/Application Support/\(bundleID)/Documents.migrated"
+    }
+
     var body: some View {
         let tokens = environment.themeManager.tokens
 
@@ -37,6 +53,18 @@ struct SetupDoneStepView: View {
                               + "Ainkrad comes with it.",
                           icon: "folder",
                           tokens: tokens)
+
+                    if didMigrateLegacyData {
+                        point(title: "Your existing data was moved in",
+                              body: "Ainkrad found data from an earlier version and copied "
+                                  + "it into your new Home folder — it is all there, nothing "
+                                  + "was lost. The original copy has not been deleted: it is "
+                                  + "still on this Mac at \(legacyCopyPath). You can remove "
+                                  + "it once you are happy everything came across.",
+                              icon: "arrow.right.doc.on.clipboard",
+                              tokens: tokens)
+                            .accessibilityIdentifier("setup.done.migrated")
+                    }
 
                     point(title: "Not in your Home folder: your API keys",
                           body: "API keys are stored in this Mac's Keychain, never in "
@@ -78,6 +106,13 @@ struct SetupDoneStepView: View {
     private func finish() {
         coordinator.complete()
         environment.isSetupPresented = false
+        // Order matters: `isSuppressed` reads `isSetupPresented`, so the flag
+        // must already be down or this install refuses. The status item was
+        // suppressed for the whole wizard (it is the one surface the gate's
+        // in-window scrim cannot cover — see `MenuBarController.isSuppressed`),
+        // and nothing else installs it after launch, so this is where the menu
+        // bar comes back. `install()` is guarded idempotent.
+        environment.menuBarController?.install()
     }
 
     private func point(title: String, body: String, icon: String,

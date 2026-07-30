@@ -32,10 +32,10 @@ struct SetupProvidersStepView: View {
     @State private var flowRevision = 0     // redraw trigger; the flow is not @Observable
     @State private var routeError: String?
 
-    private var isConnected: Bool {
-        if case .connected = outcome { return true }
-        return false
-    }
+    /// View-level convenience only (Continue's enablement, clearing the token
+    /// field). Decisions made inside async work read the returned
+    /// `SetupProviders.Outcome` directly — see `settleSubscription`.
+    private var isConnected: Bool { outcome?.isConnected ?? false }
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -240,14 +240,19 @@ struct SetupProvidersStepView: View {
         defer { isBusy = false }
         routeError = nil
         let service = environment.modelCatalogService
-        outcome = await SetupProviders.connect(
+        // Same read-back rule as `settleSubscription`: decide from the returned
+        // value, not from the `@State` just assigned. Harmless here (a stale
+        // read only leaves the field populated) but the two routes should not
+        // disagree about how they read their own result.
+        let result = await SetupProviders.connect(
             preset: preset, token: token, baseURL: baseURL,
             connections: environment.connectionStore,
             agentConfig: environment.agentConfigStore,
             verify: { kind, url, credential in
                 await service.test(kind: kind, baseURL: url, credential: credential)
             })
-        if isConnected { token = "" }
+        outcome = result
+        if result.isConnected { token = "" }
     }
 
     private func runImport() async {
@@ -315,7 +320,13 @@ struct SetupProvidersStepView: View {
         let oauthStore = environment.oauthStore
         let credential = (try? await oauthStore.liveCredential(for: connection)) ?? .apiKey("")
 
-        outcome = await SetupProviders.finishSubscription(
+        // Bound to a local first. `flow.settled` must be told what
+        // `finishSubscription` ACTUALLY returned, not what `@State outcome`
+        // reads back as — the write below is not contractually visible to a
+        // read outside `body`, and a stale `true` would keep `flow.pending`
+        // holding a connection the failed probe had already removed from the
+        // store, handing OAuth a dead connection id on the next attempt.
+        let settled = await SetupProviders.finishSubscription(
             connection: connection, credential: credential,
             connections: environment.connectionStore,
             agentConfig: environment.agentConfigStore,
@@ -323,8 +334,9 @@ struct SetupProvidersStepView: View {
             verify: { kind, url, cred in
                 await service.test(kind: kind, baseURL: url, credential: cred)
             })
+        outcome = settled
         routeError = nil
-        flow.settled(connected: isConnected)
+        flow.settled(connected: settled.isConnected)
     }
 
 }

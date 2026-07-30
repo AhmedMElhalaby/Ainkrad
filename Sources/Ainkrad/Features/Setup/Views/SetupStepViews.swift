@@ -58,7 +58,12 @@ struct SetupHomeStepView: View {
     /// that still points at the provisional home (notably the coordinator's
     /// `PersistenceStore`, which would otherwise write setup state into a
     /// temporary directory the OS deletes).
-    let onAdopted: (AppEnvironment) -> Void
+    ///
+    /// The `Bool` is `HomeAdoption.Result.migrated`: adoption may have moved an
+    /// existing legacy container into the vault and renamed the original, and
+    /// this step advances the instant it succeeds, so it has no surface of its
+    /// own to say so. The overlay carries it to the closing step.
+    let onAdopted: (AppEnvironment, Bool) -> Void
 
     @State private var rejection: String?
 
@@ -107,9 +112,18 @@ struct SetupHomeStepView: View {
         // all is the only safe answer when there is nobody to hand the rebuilt
         // environment to (previews, and any test that builds this view without an
         // installer).
-        guard let installer else { return }
+        // Logged, not silent: returning is correct, but this step's ONLY button
+        // then does nothing at all, with no rejection text and no alert — a
+        // wizard that appears frozen on its one irreversible screen. Anyone who
+        // hits it in a preview or a hand-built tree needs to be told why.
+        guard let installer else {
+            Log.persistence.error(
+                "Setup Home step has no SetupHomeInstaller; adoption is unavailable in this view tree")
+            return
+        }
 
         var rebuilt: AppEnvironment?
+        var migrated = false
         let model = SetupHomeStepModel(
             chooseVault: LaunchHomeResolver.presentFolderChooser,
             adopt: { url in
@@ -124,10 +138,13 @@ struct SetupHomeStepView: View {
                     rebuilt = newEnvironment
                     installer.install(newEnvironment)
                 }
-                // Recorded, not rendered: this step advances the moment it
-                // succeeds, so there is no surface left to show it on. The
-                // closing step is where a "we moved your existing data" line
-                // belongs — see the Task 4 report's proposals.
+                // Carried, not just logged. This step advances the moment it
+                // succeeds so it has no surface of its own left to render on,
+                // but a user whose container was moved and whose old copy was
+                // renamed `Documents.migrated` must be told somewhere — and
+                // `.done` is that somewhere. Dropping it here is how the rename
+                // became a thing users would only ever discover in Finder.
+                migrated = result.migrated
                 if result.migrated {
                     Log.persistence.info("Setup migrated the legacy container into the adopted Home")
                 }
@@ -140,7 +157,7 @@ struct SetupHomeStepView: View {
             // always set here. Advancing the OUTGOING coordinator would move the
             // wizard on while still bound to the provisional store, so there is
             // deliberately no fallback.
-            if let rebuilt { onAdopted(rebuilt) }
+            if let rebuilt { onAdopted(rebuilt, migrated) }
         case .rejected(let message):
             rejection = message
         case .cancelled:
