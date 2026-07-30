@@ -13,6 +13,7 @@ extension AppEnvironment {
     /// set (read/edit/workspace/terminal/git, memory tools if available,
     /// skill tools, MCP registry, and the Live Canvas render tool).
     static func bootstrapExecutionAndTools(
+        home: Home,
         persistence: PersistenceStore,
         secrets: SecretStore,
         lspServerRegistry: LSPServerRegistry,
@@ -214,6 +215,10 @@ extension AppEnvironment {
                 huggingface: HuggingFaceImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
                 auxHTTP: URLSessionDataHTTPClient()),
             store: canvasStore))
+        // Generated media (image/video/speech output) is irreplaceable —
+        // re-running a prompt yields different output — so it lives in the
+        // vault, not the cache. Shared across the video and speech tools.
+        let generatedMediaStore = GeneratedMediaStore(baseDirectory: home.shared(.media))
         agentTools.append(VideoGenerateTool(
             backend: RoutingVideoBackend(
                 persistence: persistence,
@@ -222,7 +227,7 @@ extension AppEnvironment {
                 luma: LumaVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
                 fal: FalVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
                 auxHTTP: URLSessionDataHTTPClient()),
-            store: canvasStore))
+            store: canvasStore, mediaStore: generatedMediaStore))
         agentTools.append(SpeakTool(
             synth: RoutingSpeechSynthesizer(
                 persistence: persistence, secrets: secrets, onDevice: SystemSpeechSynthesizer(),
@@ -230,7 +235,7 @@ extension AppEnvironment {
             producer: RoutingSpeechAudioProducer(
                 persistence: persistence, secrets: secrets, http: URLSessionDataHTTPClient(),
                 onDevice: OnDeviceSpeechAudioProducer()),
-            store: canvasStore))
+            store: canvasStore, mediaStore: generatedMediaStore))
 
         // M8 code-search tools (read-class). Share the assistant workspace root,
         // resolved live so a folder change is reflected without re-registering —

@@ -27,7 +27,7 @@ struct SpeakTool: AgentTool {
     /// existing call sites/tests compile unchanged.
     var producer: (any SpeechAudioProducing)? = nil
     var store: CanvasStore? = nil
-    var mediaStore = GeneratedMediaStore()
+    let mediaStore: GeneratedMediaStore
     var player: any AudioPlaying = SystemAudioPlayer()
 
     let name = "speak"

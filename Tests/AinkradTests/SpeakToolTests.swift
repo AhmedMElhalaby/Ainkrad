@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import Ainkrad
 
 @Suite("SpeakTool")
@@ -8,18 +9,22 @@ struct SpeakToolTests {
         var spoken: [String] = []
         func speak(_ text: String) { spoken.append(text) }
     }
+    private func tempStore() -> GeneratedMediaStore {
+        GeneratedMediaStore(baseDirectory: URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ainkrad-test-\(UUID().uuidString)", isDirectory: true))
+    }
     @Test func speaksText() async throws {
         let spy = SpyseSynth()
-        let r = try await SpeakTool(synth: spy).execute(.object(["text": .string("hello")]))
+        let r = try await SpeakTool(synth: spy, mediaStore: tempStore()).execute(.object(["text": .string("hello")]))
         #expect(!r.isError)
         #expect(spy.spoken == ["hello"])
     }
     @Test func requiresText() async {
         await #expect(throws: ToolError.self) {
-            _ = try await SpeakTool(synth: SpyseSynth()).execute(.object([:]))
+            _ = try await SpeakTool(synth: SpyseSynth(), mediaStore: tempStore()).execute(.object([:]))
         }
     }
     @Test func permissionIsRead() {
-        #expect(SpeakTool(synth: SpyseSynth()).permission == .read)
+        #expect(SpeakTool(synth: SpyseSynth(), mediaStore: tempStore()).permission == .read)
     }
 }
