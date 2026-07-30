@@ -114,6 +114,8 @@ struct SetupStepBody: View {
             SetupHomeStepView(coordinator: coordinator, onAdopted: onAdopted)
         } else if step == .appearance {
             SetupAppearanceStepView(coordinator: coordinator)
+        } else if step == .motionAndSound {
+            SetupMotionSoundStepView(coordinator: coordinator)
         } else {
             placeholder
         }
