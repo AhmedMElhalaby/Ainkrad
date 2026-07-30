@@ -118,6 +118,8 @@ struct SetupStepBody: View {
             SetupMotionSoundStepView(coordinator: coordinator)
         } else if step == .you {
             SetupYouStepView(coordinator: coordinator)
+        } else if step == .providers {
+            SetupProvidersStepView(coordinator: coordinator)
         } else {
             placeholder
         }
