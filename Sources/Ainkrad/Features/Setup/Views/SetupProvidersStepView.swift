@@ -2,76 +2,6 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// Connects and verifies a provider. Verification is injected so the step can be
-/// tested without network access; production passes `ModelCatalogService.test`.
-///
-/// The rule this enum exists to enforce: **verify BEFORE saving**. A saved but
-/// broken connection looks configured, passes the gate, and then fails later
-/// somewhere else with no obvious cause.
-@MainActor
-enum SetupProviders {
-    enum Outcome: Equatable {
-        case connected(message: String)
-        case failed(message: String)
-    }
-
-    typealias Verifier = (ProviderKind, String, ProviderCredential) async -> ConnectionTestResult
-
-    /// API-key route. Nothing is written until the probe says ok — so a failure
-    /// leaves no connection, no Keychain item, and no active-connection id.
-    ///
-    /// A keyless preset (`ollama`) passes `token: ""` and is probed with
-    /// `.apiKey("")`, exactly as `AssistantSettingsView+Connections.testConnection`
-    /// does for a connection with no stored secret.
-    static func connect(preset: ProviderPreset,
-                        token: String,
-                        baseURL: String,
-                        connections: ConnectionStore,
-                        agentConfig: AgentConfigStore,
-                        verify: Verifier) async -> Outcome {
-        let result = await verify(preset.kind, baseURL, .apiKey(token))
-        guard result.ok else { return .failed(message: result.message) }
-
-        let connection = connections.addConnection(
-            preset: preset,
-            displayName: preset.displayName,
-            baseURL: baseURL,
-            token: token,
-            authMode: .apiKey)
-        agentConfig.setActiveConnectionID(connection.id)
-        return .connected(message: result.message)
-    }
-
-    /// Subscription route (OAuth sign-in and Claude Code import both land here).
-    ///
-    /// Unlike the API-key route this one cannot verify first: both
-    /// `ClaudeOAuthLoginController` and `OAuthCredentialStore` key their token by
-    /// `connection.id`, so a connection must exist before a credential can be
-    /// obtained at all. The invariant is preserved by rolling back instead — a
-    /// failed probe signs the credential out (clearing its Keychain item) and
-    /// removes the connection, leaving the same clean slate as a failed
-    /// API-key attempt. The credential is never trusted just because it came
-    /// from a trusted source; it is probed like any other.
-    static func finishSubscription(connection: Connection,
-                                   credential: ProviderCredential,
-                                   connections: ConnectionStore,
-                                   agentConfig: AgentConfigStore,
-                                   oauth: OAuthCredentialStore,
-                                   verify: Verifier) async -> Outcome {
-        let result = await verify(connection.kind, connection.baseURL, credential)
-        guard result.ok else {
-            oauth.signOut(connection.id)
-            connections.removeConnection(connection)
-            if agentConfig.activeConnectionID == connection.id {
-                agentConfig.setActiveConnectionID(nil)
-            }
-            return .failed(message: result.message)
-        }
-        agentConfig.setActiveConnectionID(connection.id)
-        return .connected(message: result.message)
-    }
-}
-
 /// The Providers step — the one step the user cannot pass without a working AI
 /// connection. Continue is enabled only after a probe returned ok.
 ///
@@ -98,8 +28,8 @@ struct SetupProvidersStepView: View {
     @State private var outcome: SetupProviders.Outcome?
     @State private var pasteText = ""
     @State private var oauthController: ClaudeOAuthLoginController?
-    @State private var pendingSubscription: Connection?
-    @State private var usePasteFallback = false
+    @State private var flow = SetupSubscriptionFlow()
+    @State private var flowRevision = 0     // redraw trigger; the flow is not @Observable
     @State private var routeError: String?
 
     private var isConnected: Bool {
@@ -135,6 +65,12 @@ struct SetupProvidersStepView: View {
                 oauthController = ClaudeOAuthLoginController(
                     store: environment.oauthStore,
                     flow: ClaudeOAuthFlow(clientVersion: ClaudeProvider.claudeCodeVersion))
+                // Clear anything an abandoned attempt (quit during the loopback
+                // wait, wizard left with a paste outstanding) left on disk.
+                SetupProviders.cleanUpAbandonedSubscriptions(
+                    connections: environment.connectionStore,
+                    agentConfig: environment.agentConfigStore,
+                    oauth: environment.oauthStore)
             }
         }
     }
@@ -168,7 +104,17 @@ struct SetupProvidersStepView: View {
             }
             .disabled(isBusy)
 
-            if usePasteFallback {
+            if flow.awaitingPaste {
+                if let url = oauthController?.authorizeURL {
+                    // The loopback couldn't bind, so this URL is the only way
+                    // back to the consent screen if the tab was closed or
+                    // NSWorkspace.open failed.
+                    Link(destination: url) {
+                        Text("Open the Claude sign-in page again")
+                            .font(AinkradFont.display(11, weight: .medium))
+                            .foregroundStyle(tokens.accentSecondary)
+                    }
+                }
                 HStack(spacing: 10) {
                     NeonSecureField(text: $pasteText,
                                     placeholder: "Paste the redirect URL or code",
@@ -307,58 +253,62 @@ struct SetupProvidersStepView: View {
     private func runImport() async {
         guard let controller = oauthController, !isBusy else { return }
         isBusy = true
-        defer { isBusy = false }
-        let connection = subscriptionConnection()
+        defer { isBusy = false; flowRevision += 1 }
+        let connection = flow.connection(connections: environment.connectionStore)
         controller.importFromClaudeCode(for: connection)
-        await settleSubscription(connection, controller: controller)
+        await settleSubscription(connection, controller: controller, duringPaste: false)
     }
 
     private func runSignIn() async {
         guard let controller = oauthController, !isBusy else { return }
         isBusy = true
-        defer { isBusy = false }
-        let connection = subscriptionConnection()
+        defer { isBusy = false; flowRevision += 1 }
+        let connection = flow.connection(connections: environment.connectionStore)
         await controller.beginLogin(for: connection)
         // `beginLogin` never throws and returns nothing: a loopback bind failure
         // sets `usePasteFallback`, in which case the flow is not finished yet and
         // the connection stays pending for `runPaste`.
         if controller.usePasteFallback {
-            usePasteFallback = true
-            routeError = nil
+            flow.needsPaste()
+            // Surface (rather than discard) whatever the controller last said, so
+            // "nothing happened" is never indistinguishable from a real error.
+            routeError = controller.errorMessage
             return
         }
-        await settleSubscription(connection, controller: controller)
+        await settleSubscription(connection, controller: controller, duringPaste: false)
     }
 
     private func runPaste(_ raw: String) async {
-        guard let controller = oauthController,
-              let connection = pendingSubscription, !isBusy else { return }
+        guard let controller = oauthController, !isBusy else { return }
+        // The flow guarantees a pending connection whenever the paste field is
+        // shown. If that ever fails to hold, say so rather than doing nothing.
+        guard let connection = flow.pending else {
+            routeError = "That sign-in attempt has expired. Start it again with Sign in with Claude."
+            flow.settled(connected: false)
+            flowRevision += 1
+            return
+        }
         isBusy = true
-        defer { isBusy = false }
+        defer { isBusy = false; flowRevision += 1 }
         await controller.pasteCode(raw, for: connection)
-        await settleSubscription(connection, controller: controller)
-    }
-
-    /// Reuses the pending subscription connection across a paste round-trip so a
-    /// retry doesn't strand an orphan record.
-    private func subscriptionConnection() -> Connection {
-        if let pendingSubscription { return pendingSubscription }
-        let claude = ProviderPreset.preset(id: "claude")
-        let created = environment.connectionStore.addConnection(
-            preset: claude, displayName: claude.displayName,
-            baseURL: claude.defaultBaseURL, token: "", authMode: .subscription)
-        pendingSubscription = created
-        return created
+        await settleSubscription(connection, controller: controller, duringPaste: true)
     }
 
     /// Resolves a subscription credential exactly the way
     /// `AssistantSettingsView+Connections.testConnection` does, probes it, and
     /// commits or rolls back.
     private func settleSubscription(_ connection: Connection,
-                                    controller: ClaudeOAuthLoginController) async {
+                                    controller: ClaudeOAuthLoginController,
+                                    duringPaste: Bool) async {
         if let message = controller.errorMessage {
             routeError = message
-            rollback(connection)
+            // A failed paste keeps the route retryable — a mistyped code is the
+            // exact case the fallback exists for. Any other failure tears the
+            // flow down so the user is returned to the sign-in button.
+            flow.attemptFailed(duringPaste: duringPaste,
+                               connections: environment.connectionStore,
+                               agentConfig: environment.agentConfigStore,
+                               oauth: environment.oauthStore)
             return
         }
         let service = environment.modelCatalogService
@@ -374,17 +324,7 @@ struct SetupProvidersStepView: View {
                 await service.test(kind: kind, baseURL: url, credential: cred)
             })
         routeError = nil
-        usePasteFallback = false
-        // `finishSubscription` already removed the connection on failure.
-        pendingSubscription = isConnected ? connection : nil
+        flow.settled(connected: isConnected)
     }
 
-    private func rollback(_ connection: Connection) {
-        environment.oauthStore.signOut(connection.id)
-        environment.connectionStore.removeConnection(connection)
-        if environment.agentConfigStore.activeConnectionID == connection.id {
-            environment.agentConfigStore.setActiveConnectionID(nil)
-        }
-        pendingSubscription = nil
-    }
 }
