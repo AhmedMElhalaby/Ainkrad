@@ -39,10 +39,35 @@ struct SetupOverlayView: View {
     private func panel(coordinator: SetupCoordinator, tokens: DesignTokens) -> some View {
         VStack(spacing: 0) {
             header(coordinator: coordinator, tokens: tokens)
-            SetupStepBody(step: coordinator.step, coordinator: coordinator)
+            SetupStepBody(step: coordinator.step,
+                          coordinator: coordinator,
+                          onAdopted: { rebuilt in reseat(after: coordinator, using: rebuilt) })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .hudPanelChrome(tokens: tokens)
+    }
+
+    /// Re-seats the coordinator onto the ADOPTED home's `PersistenceStore` after
+    /// the Home step swaps the environment.
+    ///
+    /// The coordinator held here was built against the provisional home. Left
+    /// alone it survives the swap (same view identity, same `@State`) and would
+    /// write the completion marker into a temporary directory the OS deletes —
+    /// so the gate would come back on every future launch. Rebuilding it with
+    /// `isProvisionalHome: false` also drops `.home` from the remaining steps,
+    /// which is the correct answer: a Home is now configured and must never be
+    /// re-asked. `complete()` is NOT called here — Task 10 owns completion.
+    private func reseat(after outgoing: SetupCoordinator, using rebuilt: AppEnvironment) {
+        // Where the outgoing coordinator was about to go.
+        let target: SetupStep? = outgoing.steps.firstIndex(of: .home)
+            .map { $0 + 1 }
+            .flatMap { outgoing.steps.indices.contains($0) ? outgoing.steps[$0] : nil }
+
+        let fresh = SetupCoordinator(persistence: rebuilt.persistence, isProvisionalHome: false)
+        if let target {
+            while fresh.step != target, fresh.canAdvance { fresh.advance() }
+        }
+        coordinator = fresh
     }
 
     private func header(coordinator: SetupCoordinator, tokens: DesignTokens) -> some View {
@@ -65,8 +90,18 @@ struct SetupOverlayView: View {
 struct SetupStepBody: View {
     let step: SetupStep
     let coordinator: SetupCoordinator
+    /// Called with the rebuilt environment once the Home step adopts a vault.
+    let onAdopted: (AppEnvironment) -> Void
 
     var body: some View {
+        if step == .home {
+            SetupHomeStepView(coordinator: coordinator, onAdopted: onAdopted)
+        } else {
+            placeholder
+        }
+    }
+
+    private var placeholder: some View {
         VStack(spacing: AinkradSpacing.md) {
             Spacer(minLength: 0)
             Text(step.title)

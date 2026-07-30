@@ -134,6 +134,19 @@ struct AinkradHostApp: App {
         WindowGroup {
             RootView()
                 .environment(environment)
+                // The setup wizard's ONLY route to a re-root. Constructed here,
+                // in the App, because this is the one place that can both write
+                // the `@State` the whole view tree reads and reach
+                // `appDelegate` — so the swap goes through the same
+                // `Self.install(_:into:)` the initial boot uses, instead of the
+                // wizard re-pointing holders at its own call site. `@State`'s
+                // setter is nonmutating, so assigning from this escaping
+                // closure is legal, and it is what re-renders the tree onto the
+                // adopted Home.
+                .environment(\.setupHomeInstaller, SetupHomeInstaller { rebuilt in
+                    environment = rebuilt
+                    Self.install(rebuilt, into: appDelegate)
+                })
                 // Bridges the host's theme/typography into the SDK's env
                 // keys so `AinkradAppKit` components (Gallery, and any
                 // plugin that opts in) render theme-correctly. Reading
@@ -191,5 +204,31 @@ struct AinkradHostApp: App {
                 .disabled(isGated)
             }
         }
+    }
+}
+
+/// The setup wizard's handle on `AinkradHostApp.install(_:into:)`.
+///
+/// A box rather than a bare closure so it can travel through `EnvironmentValues`
+/// with a name, and so the wizard cannot reach anything else in the App: the only
+/// thing it can do is hand back a rebuilt environment and have the app adopt it.
+/// `nil` in any tree the App did not build (previews, tests), where adoption is
+/// not a thing that can happen.
+struct SetupHomeInstaller {
+    let install: @MainActor (AppEnvironment) -> Void
+
+    init(_ install: @escaping @MainActor (AppEnvironment) -> Void) {
+        self.install = install
+    }
+}
+
+private struct SetupHomeInstallerKey: EnvironmentKey {
+    static let defaultValue: SetupHomeInstaller? = nil
+}
+
+extension EnvironmentValues {
+    var setupHomeInstaller: SetupHomeInstaller? {
+        get { self[SetupHomeInstallerKey.self] }
+        set { self[SetupHomeInstallerKey.self] = newValue }
     }
 }
