@@ -1,29 +1,53 @@
 import AppKit
 import SwiftUI
 
-/// Which shortcuts survive the first-run setup gate. The answer is none: while
-/// setup is presented the workspace behind it must not be reachable, so every
-/// `ShortcutAction` is inert.
+/// Which keystrokes survive the first-run setup gate. The answer is almost none:
+/// while setup is presented the workspace behind it must not be reachable, so the
+/// keyboard monitor swallows every key it sees — named `ShortcutAction` bindings
+/// and the hardcoded checks alike (⌘1-9, ⌘arrows, ⌘M, ⌘D, ⌥←/→).
 ///
-/// It is a named seam rather than a bare `if` for two reasons. It makes the
-/// intent testable and greppable — a future author adding a shortcut can find
-/// the one place that decides whether it survives the gate, instead of quietly
-/// assuming it does. And taking `isSetupPresented` as a parameter (rather than
-/// hardcoding `true`) keeps the test meaningful: it asserts both that everything
-/// is suppressed while the gate is up AND that everything works again once it is
-/// down, which a constant-`true` predicate could not satisfy.
+/// The decision lives here, as a pure function of the keystroke and the gate's
+/// state, so the behaviour that actually ships is testable: `handle` takes an
+/// `NSEvent`, which a unit test cannot meaningfully synthesise, but this can be
+/// called directly. It is also the one greppable place a future author adding a
+/// shortcut can find, instead of quietly assuming it survives the gate.
 ///
-/// `⌘Q` is deliberately out of scope: it is not a `ShortcutAction` and is not
-/// routed through `KeyboardShortcutMonitor` at all, so it still quits.
+/// Two exemptions, both of which exist so the gate is a gate and not a trap:
+///
+/// 1. **⌘Q always passes.** This monitor runs BEFORE the menu bar's key
+///    equivalents, so swallowing ⌘Q would stop it ever reaching `NSApp.terminate`
+///    → `AinkradAppDelegate` → `QuitCoordinator`.
+/// 2. **Return / Enter / Escape pass while the quit confirmation is showing.**
+///    `QuitConfirmationView` drives Quit and Cancel off `.defaultAction`,
+///    `.cancelAction` and `.onKeyPress(.escape)`, all of which need the keyDown to
+///    reach SwiftUI. Without this, ⌘Q raises a dialog only the mouse can answer —
+///    the same trap one level down. `confirmBeforeQuit` defaults on, so this is
+///    the normal quit path, not an edge case.
+///
+/// Everything else is deliberately consumed while gated, including ⌘W/⌘H/⌘M: a
+/// total gate is the point, and none of them can strand the user the way an
+/// unanswerable quit dialog can.
 enum SetupGate {
-    static func suppresses(_ action: ShortcutAction, isSetupPresented: Bool) -> Bool {
-        _ = action   // No action is exempt — the gate is total, by design.
-        return isSetupPresented
-    }
+    /// Virtual key codes (ANSI) the quit confirmation needs.
+    private static let returnKey: UInt16 = 36
+    private static let keypadEnter: UInt16 = 76
+    private static let escape: UInt16 = 53
+    private static let qKey: UInt16 = 12
 
-    /// The whole-monitor form: the gate swallows raw key handling too, not just
-    /// the named actions (⌘1-9, ⌘arrows, ⌘M and friends are hardcoded checks).
-    static func suppressesAll(isSetupPresented: Bool) -> Bool { isSetupPresented }
+    /// `true` when the monitor must consume this keystroke without performing
+    /// anything. `false` means "not the gate's business" — either the gate is
+    /// down, or this is one of the exempt keys, and normal handling continues.
+    static func swallows(
+        keyCode: UInt16,
+        command: Bool,
+        isSetupPresented: Bool,
+        isConfirmingQuit: Bool
+    ) -> Bool {
+        guard isSetupPresented else { return false }
+        if command, keyCode == qKey { return false }
+        if isConfirmingQuit, [returnKey, keypadEnter, escape].contains(keyCode) { return false }
+        return true
+    }
 }
 
 /// Installs a local `keyDown` monitor for the app-wide shortcuts (⌘K,
@@ -209,25 +233,18 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
-            // First-run setup is a blocking gate: the workspace renders behind it
-            // but nothing in it may be reached, so every shortcut this monitor
-            // owns is swallowed rather than performed. Returning `true` consumes
-            // the event (see the local monitor above), so it never reaches the
-            // workspace either. ⌘Q does not come through here — it is a menu-bar
-            // key equivalent handled by AppKit → `AinkradAppDelegate` — so quitting
-            // still works while the gate is up. A gate the user cannot leave is a
-            // trap, not a gate.
-            if SetupGate.suppressesAll(isSetupPresented: environment.isSetupPresented) {
-                // ...with ONE exemption. This monitor runs BEFORE the menu bar's
-                // key equivalents, so swallowing ⌘Q here would stop it ever
-                // reaching `NSApp.terminate` → `AinkradAppDelegate` and would
-                // trap the user inside the wizard with no way out. Returning
-                // `false` passes the event on untouched; the quit confirmation
-                // HUD renders above the gate (`RootView`) so it stays clickable.
-                if event.modifierFlags.contains(.command),
-                   event.charactersIgnoringModifiers?.lowercased() == "q" {
-                    return false
-                }
+            // First-run setup is a blocking gate: the workspace renders behind
+            // it but nothing in it may be reached. Returning `true` consumes the
+            // event (see the local monitor above), so it reaches neither a
+            // shortcut action nor the workspace. `SetupGate` owns the decision —
+            // including the ⌘Q and quit-confirmation exemptions that keep this a
+            // gate rather than a trap — as a pure, tested function.
+            if SetupGate.swallows(
+                keyCode: event.keyCode,
+                command: event.modifierFlags.contains(.command),
+                isSetupPresented: environment.isSetupPresented,
+                isConfirmingQuit: environment.quitCoordinator.isConfirming
+            ) {
                 return true
             }
 

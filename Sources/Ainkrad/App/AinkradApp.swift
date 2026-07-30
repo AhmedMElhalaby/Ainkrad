@@ -161,22 +161,34 @@ struct AinkradHostApp: App {
             // keyboard delivery goes through KeyboardShortcutMonitor's
             // local event monitor, which is reliable regardless of how
             // the app was launched — see its doc comment.
+            // Every item here is disabled while the first-run gate is up. They
+            // are mouse-reachable even though the keyboard monitor swallows their
+            // chords, and they are NOT all harmless: "New Workspace" mutates and
+            // PERSISTS into the provisional Home, a write Task 4's swap then
+            // silently discards — precisely the loss this design exists to
+            // prevent. "Workspaces…" would latch its overlay invisibly beneath
+            // the gate and pop it open the moment setup finishes.
             CommandGroup(after: .newItem) {
+                let isGated = environment.isSetupPresented
+
                 Button("Open Launcher") {
                     environment.isLauncherPresented = true
                 }
                 .keyboardShortcut("k", modifiers: .command)
+                .disabled(isGated)
 
                 Button("New Workspace") {
                     environment.workspaceManager.createWorkspace()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(isGated)
 
                 Button("Workspaces…") {
                     environment.isLauncherPresented = false
                     environment.isWorkspaceOverviewPresented.toggle()
                 }
                 .keyboardShortcut(.tab, modifiers: .option)
+                .disabled(isGated)
             }
         }
     }
