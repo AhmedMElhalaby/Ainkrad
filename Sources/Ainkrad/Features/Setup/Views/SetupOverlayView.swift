@@ -74,10 +74,17 @@ struct SetupStepBody: View {
             Spacer(minLength: 0)
             HStack {
                 Spacer(minLength: 0)
-                AinkradButton(title: step == .done ? "Finish" : "Continue", style: .primary) {
-                    if step == .done {
-                        coordinator.complete()
-                    } else {
+                // `.done` is deliberately inert here: this placeholder must never
+                // write a completion marker. `coordinator.complete()` persists
+                // SetupDocument to disk immediately, which would suppress the
+                // gate on every future launch — including during Task 4/10
+                // hand-verification, before any real step content exists.
+                // Task 10 owns wiring the real "Finish" action.
+                if step == .done {
+                    AinkradButton(title: "Finish", style: .primary) {}
+                        .disabled(true)
+                } else {
+                    AinkradButton(title: "Continue", style: .primary) {
                         coordinator.advance()
                     }
                 }
