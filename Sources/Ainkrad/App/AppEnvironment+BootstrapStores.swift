@@ -197,6 +197,7 @@ extension AppEnvironment {
         agentContextService: AgentContextService,
         agentPermissionStore: AgentPermissionStore,
         memoryService: MemoryService?,
+        userProfileStore: UserProfileStore,
         lspServerRegistry: LSPServerRegistry,
         editJournal: EditJournal,
         skillRegistry: SkillRegistry,
@@ -228,6 +229,20 @@ extension AppEnvironment {
         let memoryService = try? MemoryService(
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
+
+        // The user profile (M7 Slice 1's structured half, wired up by the
+        // first-run "You" step). Every `set` re-projects the facts into
+        // `USER.md` under the same memory root, so the assistant reads them
+        // through its always-loaded set. It needs the file-level `MemoryStore`,
+        // not the `MemoryService` facade — and `memoryService` is optional
+        // (the FTS index may not open). Rather than make the profile optional
+        // too, fall back to a bare `MemoryStore` on the same paths: the
+        // profile still persists and `USER.md` is still written; only the
+        // search index is missing, which is exactly what "memory-less this
+        // launch" already means everywhere else.
+        let userProfileStore = UserProfileStore(
+            persistence: persistence,
+            memory: memoryService?.store ?? MemoryStore(paths: MemoryPaths(root: memoryRoot)))
 
         // LSP (M7 Slice 2): configured language servers backing `EditFileTool`'s
         // advisory diagnostics/formatting. Uses `LSPServerRegistry.defaultClientFactory`
@@ -268,8 +283,8 @@ extension AppEnvironment {
 
         return (
             streamingHTTP, agentConfigStore, agentContextSettingsStore, agentContextService,
-            agentPermissionStore, memoryService, lspServerRegistry, editJournal, skillRegistry,
-            skillCommandStore, skillWatcher
+            agentPermissionStore, memoryService, userProfileStore, lspServerRegistry, editJournal,
+            skillRegistry, skillCommandStore, skillWatcher
         )
     }
 }

@@ -147,6 +147,11 @@ final class AppEnvironment {
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
     let memoryService: MemoryService?
+    /// Structured user facts (name, what to call you, role, timezone) collected
+    /// by the first-run "You" step. Non-optional even when `memoryService` is
+    /// `nil`: it only needs the memory files, not the FTS index. Every write
+    /// re-projects into `USER.md`, so the assistant reads these facts.
+    let userProfileStore: UserProfileStore
     /// The Skills subsystem (M7 Slice 4): active-skill registry backing
     /// `use_skill`/`propose_skill`, the skill-index context source, and the
     /// skill `/name` slash commands.
@@ -304,6 +309,7 @@ final class AppEnvironment {
         assistantWorkingDirectory: URL,
         workspaceFileIndex: WorkspaceFileIndex,
         memoryService: MemoryService?,
+        userProfileStore: UserProfileStore,
         skillRegistry: SkillRegistry,
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
@@ -373,6 +379,7 @@ final class AppEnvironment {
         self.assistantWorkingDirectory = assistantWorkingDirectory
         self.workspaceFileIndex = workspaceFileIndex
         self.memoryService = memoryService
+        self.userProfileStore = userProfileStore
         self.skillRegistry = skillRegistry
         self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
@@ -443,8 +450,8 @@ final class AppEnvironment {
 
         let (
             streamingHTTP, agentConfigStore, agentContextSettingsStore, agentContextService,
-            agentPermissionStore, memoryService, lspServerRegistry, editJournal, skillRegistry,
-            skillCommandStore, skillWatcher
+            agentPermissionStore, memoryService, userProfileStore, lspServerRegistry, editJournal,
+            skillRegistry, skillCommandStore, skillWatcher
         ) = bootstrapAgentKitCore(
             persistence: persistence, workspaceManager: workspaceManager, agentContextHub: agentContextHub,
             skillsRoot: skillsRoot, home: home)
@@ -544,6 +551,7 @@ final class AppEnvironment {
             assistantWorkingDirectory: assistantWorkingDirectory,
             workspaceFileIndex: workspaceFileIndex,
             memoryService: memoryService,
+            userProfileStore: userProfileStore,
             skillRegistry: skillRegistry,
             skillWatcher: skillWatcher,
             skillCommandStore: skillCommandStore,

@@ -159,6 +159,10 @@ final class AppEnvironmentTests {
             assistantWorkingDirectory: FileManager.default.homeDirectoryForCurrentUser,
             workspaceFileIndex: WorkspaceFileIndex(root: FileManager.default.homeDirectoryForCurrentUser),
             memoryService: nil,
+            userProfileStore: UserProfileStore(
+                persistence: persistence,
+                memory: MemoryStore(paths: MemoryPaths(
+                    root: root.appendingPathComponent("Memory", isDirectory: true)))),
             skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
             skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
             skillCommandStore: SkillCommandStore(persistence: persistence),
