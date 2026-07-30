@@ -596,6 +596,11 @@ final class AppEnvironment {
             .appendingPathComponent("AinkradPreview-\(UUID().uuidString)", isDirectory: true)
         let suiteName = "com.ainkrad.preview.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        // A per-call temp vault, which is also what keeps `preview()` out of the
+        // real Keychain: `Home.keychainServiceName` derives the Keychain service
+        // from the vault path, so this throwaway vault gets a throwaway namespace
+        // (see `Home+KeychainService.swift`). Several test suites use `preview()`,
+        // so that is load-bearing, not incidental.
         let home = Home(vaultRoot: root.appendingPathComponent("vault", isDirectory: true),
                         cacheRoot: root.appendingPathComponent("cache", isDirectory: true))
         let environment = bootstrap(home: home, defaults: defaults)

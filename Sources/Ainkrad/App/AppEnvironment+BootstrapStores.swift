@@ -44,9 +44,11 @@ extension AppEnvironment {
     ) {
         let persistence = FileDocumentStore(rootURL: home.shared(.config))
         // Secrets NEVER live in the vault — they stay in the Keychain, which is
-        // outside the Home entirely. Tests isolate by passing a throwaway `Home`,
-        // not by swapping this store.
-        let secrets: SecretStore = KeychainSecretStore()
+        // outside the Home entirely. The Keychain *namespace*, though, is derived
+        // from the vault (see `Home.keychainServiceName`), so a throwaway vault
+        // gets a throwaway service and a test can never read or overwrite the
+        // developer's real API keys. Production vaults keep the canonical service.
+        let secrets: SecretStore = KeychainSecretStore(service: home.keychainServiceName)
 
         // One-time import of M1's UserDefaults settings before any store reads.
         LegacyUserDefaultsMigration.runIfNeeded(persistence: persistence, defaults: defaults)
