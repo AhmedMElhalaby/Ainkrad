@@ -112,6 +112,8 @@ struct SetupStepBody: View {
     var body: some View {
         if step == .home {
             SetupHomeStepView(coordinator: coordinator, onAdopted: onAdopted)
+        } else if step == .appearance {
+            SetupAppearanceStepView(coordinator: coordinator)
         } else {
             placeholder
         }
