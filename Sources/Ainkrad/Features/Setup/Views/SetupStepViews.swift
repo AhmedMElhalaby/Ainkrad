@@ -155,10 +155,38 @@ struct SetupHomeStepView: View {
 enum SetupAssistant {
     static func apply(profile: AgentProfile, model: String, effort: String,
                       agents: AgentStore, config: AgentConfigStore) {
-        let resolved = profile.builtin ? profile : agents.add(profile)
+        let resolved: AgentProfile
+        if profile.builtin {
+            resolved = profile
+        } else if agents.agents.contains(where: { $0.id == profile.id }) {
+            // Back-then-Continue on the same custom persona: update the
+            // existing entry in place rather than appending a duplicate.
+            // `commit()` reuses the same `AgentProfile.id` across the step's
+            // session, so this branch is what makes that reuse matter.
+            agents.update(profile)
+            resolved = profile
+        } else {
+            resolved = agents.add(profile)
+        }
         agents.setActive(resolved.id)
         config.setModel(model)
         config.setEffort(effort)
+    }
+
+    /// The model to seed the step with: the active connection's first curated
+    /// model, mirroring `AssistantModelPickerModel.selectConnection`
+    /// (Sources/Ainkrad/Features/Assistant/AssistantModelPicker.swift
+    /// ~lines 178-180) — the existing precedent for defaulting a model off a
+    /// connection rather than a hardcoded Anthropic id. Falls back to
+    /// `AgentConfigDocument`'s own default only when there is no connection
+    /// to key off (a fresh install with nothing configured yet). Static
+    /// `curatedModels` data — no live network call.
+    static func defaultModel(connections: [Connection], activeConnectionID: UUID?) -> String {
+        let connection = activeConnectionID.flatMap { id in connections.first { $0.id == id } }
+            ?? connections.first
+        guard let connection else { return AgentConfigDocument().model }
+        return ProviderPreset.preset(id: connection.presetID).curatedModels.first
+            ?? AgentConfigDocument().model
     }
 }
 
@@ -169,10 +197,17 @@ enum SetupAssistant {
 /// added to the store only on Continue (never on every keystroke, unlike the
 /// You step — an agent profile isn't a fact to accumulate, it's a choice to commit).
 ///
-/// Model/effort default to `AgentConfigDocument`'s own defaults
-/// (`"claude-opus-4-8"` / `"xhigh"`) rather than a live model-list call: a
-/// network fetch here could hang the wizard on a flaky connection, and the
-/// Providers step already ran before this one.
+/// Model defaults to the active connection's curated model (see
+/// `SetupAssistant.defaultModel`) rather than a live model-list call: in this
+/// developer's judgment (informed by this task's dispatch context, not a
+/// stated brief requirement) a network fetch here could hang the wizard on a
+/// flaky connection, and curated data is static and instant. Effort defaults
+/// to `AgentConfigDocument`'s own default (`"xhigh"`).
+///
+/// Model and effort persist immediately on change (plain scalars, no
+/// partial-typing risk — same convention as the Appearance/You steps); only
+/// the custom-persona commit stays gated on Continue, since a half-typed
+/// name/instructions shouldn't become the active agent mid-edit.
 struct SetupAssistantStepView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -184,8 +219,12 @@ struct SetupAssistantStepView: View {
     @State private var isCustom = false
     @State private var customName = ""
     @State private var customInstructions = ""
-    @State private var model = "claude-opus-4-8"
-    @State private var effort = "xhigh"
+    @State private var model = AgentConfigDocument().model
+    @State private var effort = AgentConfigDocument().effort
+    /// The id of the custom persona this step session has already added to
+    /// `agents`, if any — reused on subsequent commits so Back-then-Continue
+    /// updates the existing entry instead of appending a duplicate.
+    @State private var customProfileID: UUID?
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -207,10 +246,34 @@ struct SetupAssistantStepView: View {
                     commit()
                     coordinator.advance()
                 }
-                .disabled(isCustom && customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isCustom && (
+                    customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
             }
             .padding(20)
         }
+        .onAppear {
+            model = SetupAssistant.defaultModel(
+                connections: environment.connectionStore.connections,
+                activeConnectionID: environment.agentConfigStore.activeConnectionID)
+            environment.agentConfigStore.setModel(model)
+        }
+        .onChange(of: effort) { _, newValue in
+            environment.agentConfigStore.setEffort(newValue)
+        }
+    }
+
+    /// Effort only means anything to `ClaudeProvider` (see
+    /// `AgentSession.effortString`); Settings gates its own effort picker on
+    /// `active?.kind == .claude` (AssistantSettingsView+Sections.swift
+    /// ~line 91), so this step mirrors that rather than showing a control
+    /// that silently does nothing for OpenAI/Ollama/Groq/etc.
+    private var activeConnectionIsClaude: Bool {
+        let connections = environment.connectionStore.connections
+        let active = environment.agentConfigStore.activeConnectionID.flatMap { id in
+            connections.first { $0.id == id }
+        } ?? connections.first
+        return active?.kind == .claude
     }
 
     private func intro(tokens: DesignTokens) -> some View {
@@ -305,23 +368,36 @@ struct SetupAssistantStepView: View {
                     Text(model).font(AinkradFont.display(12, weight: .medium))
                         .foregroundStyle(tokens.foreground.opacity(0.9))
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Effort").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
-                    AinkradSegmentedPicker(
-                        items: Self.efforts,
-                        selection: $effort,
-                        label: { $0.capitalized })
-                    .fixedSize()
+                if activeConnectionIsClaude {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Effort").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
+                        AinkradSegmentedPicker(
+                            items: Self.efforts,
+                            selection: $effort,
+                            label: { $0.capitalized })
+                        .fixedSize()
+                    }
                 }
             }
         }
     }
 
     private func commit() {
-        let profile = isCustom
-            ? AgentProfile.custom(name: customName.trimmingCharacters(in: .whitespacesAndNewlines),
-                                  instructions: customInstructions.trimmingCharacters(in: .whitespacesAndNewlines))
-            : selection
+        let profile: AgentProfile
+        if isCustom {
+            // Reuse the same id across Back-then-Continue within this step
+            // session so `SetupAssistant.apply` updates the existing custom
+            // persona instead of appending a duplicate.
+            let id = customProfileID ?? UUID()
+            customProfileID = id
+            profile = AgentProfile(
+                id: id,
+                name: customName.trimmingCharacters(in: .whitespacesAndNewlines),
+                instructions: customInstructions.trimmingCharacters(in: .whitespacesAndNewlines),
+                toolPolicy: .all)
+        } else {
+            profile = selection
+        }
         SetupAssistant.apply(profile: profile, model: model, effort: effort,
                              agents: environment.agentStore, config: environment.agentConfigStore)
     }
