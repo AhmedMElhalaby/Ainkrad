@@ -9,7 +9,7 @@ import AinkradHostRuntime
 struct VideoGenerateTool: AgentTool {
     let backend: any VideoBackend
     let store: CanvasStore
-    var mediaStore = GeneratedMediaStore()
+    let mediaStore: GeneratedMediaStore
 
     let name = "video_generate"
     let description = "Generate a short video from a text prompt and render it as a video card on the Live Canvas."

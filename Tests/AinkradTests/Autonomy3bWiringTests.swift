@@ -39,13 +39,10 @@ struct Autonomy3bWiringTests {
 
     @Test("bootstrap wires the 3b autonomy subsystem into AppEnvironment")
     func bootstrapWiresAutonomy3b() {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ainkrad-3b-wiring-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: root) }
-        let suiteName = "com.ainkrad.tests.3bwiring.\(UUID().uuidString)"
-        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
-        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
+        let t = TestHome.make("3b-wiring")
+        defer { t.cleanup() }
 
-        let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
+        let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
 
         // The stored properties exist (non-optional), are freshly-constructed
         // (empty), and the tool registry gained the scripted-batch tool wired

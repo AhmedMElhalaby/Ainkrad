@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 @testable import Ainkrad
+import AinkradAppKit
 import AinkradHostRuntime
 
 @Suite("Skill wiring")
@@ -37,18 +38,14 @@ struct SkillWiringTests {
     /// skill exists on disk, and a bound `/name` command lands in the live
     /// `CommandRegistry` (Task 11's guard against shadowing builtins holds too).
     @Test func bootstrapWiresSkillsSubsystem() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sw-boot-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: root) }
-        let skillsRoot = root.appendingPathComponent("Skills", isDirectory: true)
-        let url = SkillPaths(root: skillsRoot).skillFile("demo")
+        let t = TestHome.make("sw-boot")
+        defer { t.cleanup() }
+        let url = SkillPaths(root: t.home.shared(.skills)).skillFile("demo")
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true)
         try "---\nname: demo\ndescription: a demo\n---\nbody".write(to: url, atomically: true, encoding: .utf8)
 
-        let suiteName = "com.ainkrad.tests.skillwiring.\(UUID().uuidString)"
-        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
-        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
-        let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
+        let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
 
         // Registry constructed + loaded the on-disk skill.
         #expect(environment.skillRegistry.skill(named: "demo") != nil)

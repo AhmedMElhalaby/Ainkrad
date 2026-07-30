@@ -3,7 +3,7 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
+/// `AppEnvironment.bootstrap(home:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the final, post-construction
 /// wiring block: it runs AFTER the real `AppEnvironment` instance exists, so
 /// closures can capture it (weakly) directly, mirroring `bootstrap()`'s

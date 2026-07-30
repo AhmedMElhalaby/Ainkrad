@@ -420,15 +420,18 @@ final class AppEnvironment {
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
-    /// the Keychain. `rootURL` defaults to Application Support; tests pass a
-    /// temp directory. `defaults` is the legacy import source (`.standard`).
-    static func bootstrap(rootURL: URL? = nil, defaults: UserDefaults = .standard) -> AppEnvironment {
+    /// the Keychain. Every on-disk location is derived from `home` — there is no
+    /// default and no fallback, so no subsystem can compute a storage path of
+    /// its own. Tests pass a throwaway `Home` (`TestHome.make()`).
+    /// `defaults` is the legacy import source (`.standard`).
+    static func bootstrap(home: Home, defaults: UserDefaults = .standard) -> AppEnvironment {
         let (
-            persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
+            persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
-            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
-        ) = bootstrapCoreStores(rootURL: rootURL, defaults: defaults)
+            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
+            assistantDocuments
+        ) = bootstrapCoreStores(home: home, defaults: defaults)
 
         let (
             streamingHTTP, agentConfigStore, agentContextSettingsStore, agentContextService,
@@ -436,12 +439,13 @@ final class AppEnvironment {
             skillCommandStore, skillWatcher
         ) = bootstrapAgentKitCore(
             persistence: persistence, workspaceManager: workspaceManager, agentContextHub: agentContextHub,
-            skillsRoot: skillsRoot, rootURL: rootURL, documentsRoot: documentsRoot)
+            skillsRoot: skillsRoot, home: home)
 
         let (
             sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
             toolStreamStore, terminalController
         ) = bootstrapExecutionAndTools(
+            home: home,
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
             editJournal: editJournal, workspaceManager: workspaceManager, agentActionHub: agentActionHub,
             agentContextHub: agentContextHub, memoryService: memoryService, mcpConfigStore: mcpConfigStore,
@@ -453,7 +457,8 @@ final class AppEnvironment {
             usageTracker, runtimeOptionsStore, localModelProbe, localModelAvailability, authProfileStore,
             candidatesProvider, commandRegistry
         ) = bootstrapModelRouting(
-            persistence: persistence, secrets: secrets, connectionStore: connectionStore,
+            persistence: persistence, assistantDocuments: assistantDocuments,
+            secrets: secrets, connectionStore: connectionStore,
             discoveredModelsStore: discoveredModelsStore)
 
         let (
@@ -462,6 +467,7 @@ final class AppEnvironment {
             oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
             remoteChannelSettingsStore, remoteChannelService
         ) = bootstrapAgentSessionAndRuns(
+            home: home,
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
             agentPermissionStore: agentPermissionStore, agentStore: agentStore, editJournal: editJournal,
@@ -593,7 +599,14 @@ final class AppEnvironment {
             .appendingPathComponent("AinkradPreview-\(UUID().uuidString)", isDirectory: true)
         let suiteName = "com.ainkrad.preview.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
-        let environment = bootstrap(rootURL: root, defaults: defaults)
+        // A per-call temp vault, which is also what keeps `preview()` out of the
+        // real Keychain: `Home.keychainServiceName` derives the Keychain service
+        // from the vault path, so this throwaway vault gets a throwaway namespace
+        // (see `Home+KeychainService.swift`). Several test suites use `preview()`,
+        // so that is load-bearing, not incidental.
+        let home = Home(vaultRoot: root.appendingPathComponent("vault", isDirectory: true),
+                        cacheRoot: root.appendingPathComponent("cache", isDirectory: true))
+        let environment = bootstrap(home: home, defaults: defaults)
         environment.previewTeardown = {
             try? FileManager.default.removeItem(at: root)
             UserDefaults().removePersistentDomain(forName: suiteName)

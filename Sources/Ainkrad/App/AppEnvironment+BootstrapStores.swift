@@ -2,7 +2,7 @@ import Foundation
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
+/// `AppEnvironment.bootstrap(home:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the first two sequential
 /// blocks: core persistence/plugin/appearance stores, then the AgentKit
 /// core services (memory, LSP, skills, edit journal). Each helper is a pure
@@ -14,13 +14,12 @@ extension AppEnvironment {
     /// layer, the legacy-defaults migration, plugin loading/App Store
     /// plumbing, app appearance/icon/sound stores, and the connection +
     /// discovered-models stores.
-    static func bootstrapCoreStores(rootURL: URL?, defaults: UserDefaults) -> (
+    static func bootstrapCoreStores(home: Home, defaults: UserDefaults) -> (
         persistence: PersistenceStore,
         secrets: SecretStore,
         registry: BuiltInAppRegistry,
         themeManager: ThemeManager,
         workspaceManager: WorkspaceManager,
-        documentsRoot: URL,
         pluginDirs: [URL],
         pluginDataRoot: URL,
         retainedDataRoot: URL,
@@ -41,10 +40,24 @@ extension AppEnvironment {
         skySettingsStore: SkySettingsStore,
         sounds: SoundPlaying,
         connectionStore: ConnectionStore,
-        discoveredModelsStore: DiscoveredModelsStore
+        discoveredModelsStore: DiscoveredModelsStore,
+        assistantDocuments: PersistenceStore
     ) {
-        let persistence = FileDocumentStore(rootURL: rootURL ?? FileDocumentStore.defaultDocumentsURL())
-        let secrets = KeychainSecretStore()
+        let persistence = FileDocumentStore(rootURL: home.shared(.config))
+        // The assistant's own documents live under `Assistant/`, not `Config/` —
+        // `agents.json` and `connections.json` sit directly in it, alongside the
+        // `memory/`, `skills/`, `commands/` and `sessions/` subdirectories. That
+        // is the published vault layout other apps in the family build against,
+        // so it is not something to leave to whichever store happened to be
+        // wired first. `VaultMigration`'s relocation table writes to exactly
+        // these roots; `VaultLayoutAgreementTests` asserts the two agree.
+        let assistantDocuments = FileDocumentStore(rootURL: home.shared(.agents))
+        // Secrets NEVER live in the vault — they stay in the Keychain, which is
+        // outside the Home entirely. The Keychain *namespace*, though, is derived
+        // from the vault (see `Home.keychainServiceName`), so a throwaway vault
+        // gets a throwaway service and a test can never read or overwrite the
+        // developer's real API keys. Production vaults keep the canonical service.
+        let secrets: SecretStore = KeychainSecretStore(service: home.keychainServiceName)
 
         // One-time import of M1's UserDefaults settings before any store reads.
         LegacyUserDefaultsMigration.runIfNeeded(persistence: persistence, defaults: defaults)
@@ -57,7 +70,6 @@ extension AppEnvironment {
         // Plugin loading/App Store plumbing needs to exist before
         // `AppEnvironment` is constructed, since `appStore` is one of its
         // stored dependencies.
-        let documentsRoot = rootURL ?? FileDocumentStore.defaultDocumentsURL()
         // `DevPlugins/` is an UNMANAGED sideload directory: anything that can
         // write a `.bundle` there gets in-process execution. It is scanned in
         // Debug only (`PluginTrust.scansDevPluginsDirectory`); in Release the
@@ -65,19 +77,28 @@ extension AppEnvironment {
         // below then gates. Order matters — dev last, so a sideloaded build
         // overrides an installed release of the same app (see
         // `PluginLoader.loadAll`'s dedup).
-        var pluginDirs = [documentsRoot.appendingPathComponent("Plugins", isDirectory: true)]
+        //
+        // Plugin BINARIES are cache: every one of them is re-downloadable from the
+        // catalog, so wiping the cache costs a reinstall and nothing more. Plugin
+        // DATA is vault: it is what the user authored inside each app.
+        let pluginsDir = home.cacheRoot.appendingPathComponent("Plugins", isDirectory: true)
+        var pluginDirs = [pluginsDir]
         if PluginTrust.scansDevPluginsDirectory {
-            pluginDirs.append(documentsRoot.appendingPathComponent("DevPlugins", isDirectory: true))
+            pluginDirs.append(home.cacheRoot.appendingPathComponent("DevPlugins", isDirectory: true))
         }
-        let pluginDataRoot = documentsRoot.appendingPathComponent("PluginData", isDirectory: true)
-        let retainedDataRoot = documentsRoot.appendingPathComponent("RetainedPluginData", isDirectory: true)
+        let pluginDataRoot = home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
+        let retainedDataRoot = home.vaultRoot
+            .appendingPathComponent("Apps", isDirectory: true)
+            .appendingPathComponent(".retained", isDirectory: true)
         let agentContextHub = AgentContextRegistryHub()
         let agentActionHub = AgentActionRegistryHub()
         let pluginLaunchHub = PluginLaunchHub()
         let appAppearanceStore = AppAppearanceStore(persistence: persistence)
         let webSearchSettingsStore = WebSearchSettingsStore(persistence: persistence)
         let mediaSettingsStore = MediaSettingsStore(persistence: persistence)
-        let sessionShareStore = SessionShareStore(persistence: persistence)
+        let sessionShareStore = SessionShareStore(
+            persistence: persistence,
+            baseDirectory: home.shared(.sessions).appendingPathComponent("shares", isDirectory: true))
         // Trust policy is chosen by build configuration in ONE place
         // (`PluginTrust`), so the permissive dev policy is compiled out of
         // Release entirely and no wiring mistake can ship it.
@@ -97,7 +118,9 @@ extension AppEnvironment {
             persistence: persistence)
         let installer = PluginInstaller(
             http: URLSessionHTTPClient(), unzipper: DittoUnzipper(),
-            pluginsDir: documentsRoot.appendingPathComponent("Plugins", isDirectory: true),
+            // Same directory `pluginDirs`'s first entry scans — the installer must
+            // write exactly where the loader reads.
+            pluginsDir: pluginsDir,
             pluginDataDir: pluginDataRoot,
             retainedDataDir: retainedDataRoot,
             persistence: persistence, registry: registry,
@@ -109,14 +132,11 @@ extension AppEnvironment {
         // versa.
         let mcpConfigStore = MCPServerConfigStore(persistence: persistence, secrets: secrets)
         let mcpInstaller = MCPServerInstaller(configStore: mcpConfigStore, persistence: persistence)
-        // Mirrors `memoryRoot` below: when a test injects `rootURL`, Skills lives
-        // under that isolated root rather than the real Application Support path,
-        // so `make test` never touches (or scans) the developer's real skill
-        // library. The installer and the registry share this same root — they
-        // read/write the same on-disk `Skills/` tree.
-        let skillsRoot = rootURL != nil
-            ? documentsRoot.appendingPathComponent("Skills", isDirectory: true)
-            : SkillPaths.defaultRoot()
+        // Skills are authored content (hand-written SKILL.md files, or installed
+        // ones the user then edits) — vault, via the shared `skills` domain. The
+        // installer and the registry share this same root: they read/write the
+        // same on-disk tree.
+        let skillsRoot = home.shared(.skills)
         let skillInstaller = SkillInstaller(
             http: URLSessionHTTPClient(), paths: SkillPaths(root: skillsRoot),
             persistence: persistence)
@@ -136,14 +156,14 @@ extension AppEnvironment {
         // User-data override dir for AIN-108's sound-pack overrides (e.g. via
         // scripts/install-sao-sounds.sh) — need not exist; SoundEngine falls
         // back to the bundled synth wavs when a given override is absent.
-        let soundOverrideDirectory = documentsRoot.appendingPathComponent("Sounds", isDirectory: true)
+        let soundOverrideDirectory = home.shared(.sounds)
         let sounds = SoundEngine(settings: generalSettingsStore, overrideDirectory: soundOverrideDirectory)
         // Plays exactly once per process, here rather than in a view's
         // `.onAppear` (which SwiftUI can re-fire) — `bootstrap()` itself only
         // ever runs once, from `AinkradHostApp.init`.
         sounds.play(.appLaunch)
 
-        let connectionStore = ConnectionStore(persistence: persistence, secrets: secrets)
+        let connectionStore = ConnectionStore(persistence: assistantDocuments, secrets: secrets)
 
         // Shared per-connection live-discovered models (picker + router candidates).
         // Prune entries for connections that no longer exist so a deleted
@@ -152,10 +172,11 @@ extension AppEnvironment {
         discoveredModelsStore.prune(keeping: Set(connectionStore.connections.map(\.id)))
 
         return (
-            persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
+            persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
-            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
+            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
+            assistantDocuments
         )
     }
 
@@ -168,8 +189,7 @@ extension AppEnvironment {
         workspaceManager: WorkspaceManager,
         agentContextHub: AgentContextRegistryHub,
         skillsRoot: URL,
-        rootURL: URL?,
-        documentsRoot: URL
+        home: Home
     ) -> (
         streamingHTTP: URLSessionStreamingHTTPClient,
         agentConfigStore: AgentConfigStore,
@@ -198,13 +218,13 @@ extension AppEnvironment {
         // Assistant memory (M7 Slice 1). Degrade-don't-crash: if the FTS index can't
         // open, the assistant runs memory-less this launch (mirrors FileDocumentStore's
         // corrupt-file quarantine posture) rather than taking the app down.
-        // Mirrors `pluginDataRoot`/`retainedDataRoot` above: when a test injects
-        // `rootURL`, the memory subdir is derived from that same isolated root
-        // rather than the real Application Support path, so `make test` never
-        // touches (or reindexes) the real on-disk memory store.
-        let memoryRoot = rootURL != nil
-            ? documentsRoot.appendingPathComponent("Memory", isDirectory: true)
-            : MemoryPaths.defaultRoot()
+        // Memory is vault. Its markdown files and profile are authored/curated,
+        // and its per-session transcripts are irreplaceable: re-running a prompt
+        // produces different output, so a lost transcript is not recoverable.
+        // (`index.sqlite` under the same root IS derivable — it is rebuilt from
+        // those files — but it is not worth splitting one subsystem's root in
+        // two to relocate a rebuildable index.)
+        let memoryRoot = home.shared(.memory)
         let memoryService = try? MemoryService(
             paths: MemoryPaths(root: memoryRoot),
             persistence: persistence)
