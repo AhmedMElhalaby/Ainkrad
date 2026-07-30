@@ -38,6 +38,23 @@ enum HomeAdoption {
         // Asked BEFORE `adopt`, because `adopt` ends by marking the legacy tree
         // as migrated — after which `needsMigration` answers false and the
         // answer to "did we just migrate?" would be lost.
+        //
+        // Sampling early is only sound because this reports what ACTUALLY
+        // happened, and it does: `adopt` gates its migration on the identical
+        // expression (`VaultMigration.needsMigration(container:)` on the same
+        // `legacyContainer`), and nothing between this line and that gate
+        // touches the legacy container — `validate` and the `HomeMarker` write
+        // both act on `chosen`. So `needed == true` implies `migrate` ran, and
+        // `false` implies it did not. There is no path on which `adopt` skips a
+        // migration this predicate asked for, which is what would make the
+        // wizard show the user a migration that never occurred.
+        //
+        // The one way to break that equivalence is `chosen == legacyContainer`,
+        // where the `HomeMarker` write would mutate the container between the
+        // two evaluations. `validate` closes it first: `needed == true` means
+        // the container holds legacy data, so a `chosen` equal to it is a
+        // populated directory that is not already a Home, and `validate` throws
+        // `HomeError.notEmpty` before the marker is ever written.
         let needed = legacyContainer.map { VaultMigration.needsMigration(container: $0) } ?? false
 
         // Throws before anything is installed: validation, marker, migration and

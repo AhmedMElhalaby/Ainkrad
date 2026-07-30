@@ -472,17 +472,51 @@ struct AinkradHostApp: App {
     /// `scheduleRunner`, `remoteChannelService`, `mcpServerRegistry`,
     /// `lspServerRegistry`, `menuBarController`) and is rebuilt wholesale by
     /// `bootstrap`. `KeyboardShortcutMonitor.MonitoringView` re-reads its
-    /// `environment` through `updateNSView` when the `@State` swaps. The
-    /// OUTGOING environment's copies are not stopped here — see
-    /// `AppEnvironment` teardown note in the setup wizard report; the swap is
-    /// only safe while the outgoing home is a scratch home with no schedules,
-    /// no watched paths and no enabled remote channel.
+    /// `environment` through `updateNSView` when the `@State` swaps.
+    ///
+    /// **Conditions under which a mid-session swap is safe.** The OUTGOING
+    /// environment's long-lived members are not stopped here — `AppEnvironment`
+    /// has no `shutdown()`. The swap is therefore only safe while the outgoing
+    /// home is a provisional scratch home that satisfies all of:
+    ///
+    /// 1. No enabled `.fileChange`/`.gitChange` schedules — otherwise the
+    ///    outgoing `FileChangeWatcher`'s FSEvents streams (which strongly
+    ///    capture `triggerDispatcher` → `runManager` → the OLD `persistence`)
+    ///    outlive the swap and keep firing against the scratch home.
+    /// 2. No enabled remote channel — otherwise the outgoing `WebhookServer`
+    ///    keeps its 127.0.0.1 port bound, routing into the old run graph.
+    /// 3. No in-flight agent turn or queued run.
+    /// 4. **No secret written while the home is provisional.**
+    ///    `Home.keychainServiceName` resolves a vault under the temporary
+    ///    directory to a hashed throwaway namespace and a real vault to the
+    ///    canonical one (see `Home+KeychainService.swift`). An API key entered
+    ///    before adoption therefore lands in a namespace the rebuilt
+    ///    environment never reads — the user would see it accepted and then
+    ///    find it gone, with no error at all. Any wizard step that collects a
+    ///    credential MUST come after Choose Home; `Home.isProvisional` is the
+    ///    predicate to assert against.
+    ///
+    /// `ScheduleRunner` is instantiated and `start()`ed unconditionally
+    /// (`AppEnvironment+BootstrapSession.swift`), so unlike 1 and 2 it always
+    /// exists across a swap. It is nonetheless inert: its `Timer` block is
+    /// `[weak self]` and a scratch home has no schedules, so `tick` is a no-op.
     private static func install(_ environment: AppEnvironment, into appDelegate: AinkradAppDelegate) {
         // Retire the outgoing status item first: `NSStatusBar` would otherwise
         // keep showing it, still bound to the previous environment's presence.
         // No-op on the initial boot, where there is no previous controller.
-        if appDelegate.menuBarController !== environment.menuBarController {
-            appDelegate.menuBarController?.teardown()
+        //
+        // Re-installing the incoming one happens HERE rather than being left to
+        // the caller. On the initial boot `applicationDidFinishLaunching` does
+        // the install, but by swap time that has long since fired — a caller
+        // who merely assigned would be left with a torn-down status item and no
+        // menu bar, and nothing in the code would say so. Gated on there having
+        // BEEN an outgoing controller, so the boot path is untouched and the
+        // delegate still owns the first install. (`MenuBarController.install()`
+        // is guarded idempotent anyway: `guard statusItem == nil`.)
+        if appDelegate.menuBarController !== environment.menuBarController,
+           let outgoing = appDelegate.menuBarController {
+            outgoing.teardown()
+            environment.menuBarController?.install()
         }
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController
