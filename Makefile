@@ -17,7 +17,11 @@ PROJECT := Ainkrad.xcodeproj
 .DEFAULT_GOAL := generate
 .PHONY: generate open build test release clean help sample devhost
 
-DEV_PLUGINS := $(HOME)/Library/Application Support/com.ainkrad.app/Documents/DevPlugins
+# The sideload directory is `<cacheRoot>/DevPlugins`, and cacheRoot is
+# `~/Library/Application Support/<bundle-id>/Cache` (see AinkradHome.defaultCacheRoot
+# and AppEnvironment+BootstrapStores). It is deliberately NOT under the user's
+# Ainkrad Home: dev plugin bundles are rebuildable machine state, not vault data.
+DEV_PLUGINS := $(HOME)/Library/Application Support/com.ainkrad.app/Cache/DevPlugins
 
 generate: ## Generate the Xcode project from project.yml
 	xcodegen generate
