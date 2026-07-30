@@ -1,0 +1,364 @@
+import Foundation
+import Testing
+@testable import Ainkrad
+import AinkradAppKit
+
+@Suite("Vault migration")
+struct VaultMigrationTests {
+    private let fm = FileManager.default
+
+    /// A legacy `<bundle-id>` container holding only `Documents/*.json` —
+    /// the minimum shape the brief's original tests assumed.
+    private func legacyContainer() throws -> URL {
+        let container = fm.temporaryDirectory
+            .appendingPathComponent("legacy-\(UUID().uuidString)", isDirectory: true)
+        let documents = container.appendingPathComponent("Documents", isDirectory: true)
+        try fm.createDirectory(at: documents, withIntermediateDirectories: true)
+        try #"{"payload":{"theme":"dark"}}"#
+            .write(to: documents.appendingPathComponent("global-settings.json"),
+                   atomically: true, encoding: .utf8)
+        try #"{"payload":{"custom":[]}}"#
+            .write(to: documents.appendingPathComponent("agents.json"),
+                   atomically: true, encoding: .utf8)
+        return container
+    }
+
+    private func write(_ text: String, to url: URL) throws {
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func marker(_ container: URL) -> URL {
+        container.appendingPathComponent("Documents.migrated", isDirectory: true)
+    }
+
+    private func outcome(_ report: VaultMigration.Report, _ row: String) -> VaultMigration.RowResult? {
+        report.rows.first { $0.row == row }
+    }
+
+    // MARK: - The `*.json` row
+
+    @Test func documentsAreCopiedIntoTheVaultConfigDirectory() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig")
+        defer { t.cleanup() }
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(report.copied.sorted() == ["agents.json", "global-settings.json"])
+        #expect(report.skipped.isEmpty)
+        #expect(fm.fileExists(
+            atPath: t.home.shared(.config).appendingPathComponent("global-settings.json").path))
+        #expect(try String(contentsOf: t.home.shared(.config)
+            .appendingPathComponent("agents.json"), encoding: .utf8) == #"{"payload":{"custom":[]}}"#)
+    }
+
+    @Test func theLegacyTreeIsPreservedNotDeleted() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig2")
+        defer { t.cleanup() }
+
+        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        let marked = marker(legacy)
+        #expect(fm.fileExists(atPath: marked.path), "migration must mark, never delete")
+        #expect(fm.fileExists(atPath: marked.appendingPathComponent("global-settings.json").path))
+        #expect(!fm.fileExists(atPath: legacy.appendingPathComponent("Documents").path),
+                "the marker is the renamed Documents directory")
+    }
+
+    @Test func migrationIsSkippedWhenTheVaultAlreadyHasTheDocument() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig3")
+        defer { t.cleanup() }
+
+        try fm.createDirectory(at: t.home.shared(.config), withIntermediateDirectories: true)
+        try "{}".write(to: t.home.shared(.config).appendingPathComponent("agents.json"),
+                       atomically: true, encoding: .utf8)
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(report.copied == ["global-settings.json"])
+        #expect(report.skipped == ["agents.json"])
+        // The pre-existing destination file is untouched.
+        #expect(try String(contentsOf: t.home.shared(.config)
+            .appendingPathComponent("agents.json"), encoding: .utf8) == "{}")
+    }
+
+    @Test func nonJSONFilesInDocumentsAreNotCopied() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig4")
+        defer { t.cleanup() }
+
+        try write("noise", to: legacy.appendingPathComponent("Documents/scratch.txt"))
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(!report.copied.contains("scratch.txt"))
+        #expect(!fm.fileExists(
+            atPath: t.home.shared(.config).appendingPathComponent("scratch.txt").path))
+    }
+
+    // MARK: - Every row is accounted for
+
+    @Test func everyRelocationRowAppearsInTheReport() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig5")
+        defer { t.cleanup() }
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(report.rows.map(\.row) == [
+            "*.json", "Plugins/", "DevPlugins/", "PluginData/", "RetainedPluginData/",
+            "Sounds/", "../Skills/", "../Memory/", "../Commands/", "../Shares/",
+        ])
+        // Rows with no legacy source are reported absent, never silently "done".
+        for row in report.rows where row.row != "*.json" {
+            #expect(!row.present, "\(row.row) should be absent in a JSON-only container")
+            #expect(row.copied.isEmpty)
+        }
+        #expect(outcome(report, "*.json")?.present == true)
+    }
+
+    // MARK: - Directory rows (recursive)
+
+    @Test func pluginDataDirectoryIsCopiedRecursively() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig6")
+        defer { t.cleanup() }
+
+        try write("a", to: legacy.appendingPathComponent("Documents/PluginData/Lore/notes/one.md"))
+        try write("b", to: legacy.appendingPathComponent("Documents/PluginData/Lore/state.json"))
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        let apps = t.home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
+        #expect(try String(contentsOf: apps.appendingPathComponent("Lore/notes/one.md"),
+                           encoding: .utf8) == "a")
+        #expect(try String(contentsOf: apps.appendingPathComponent("Lore/state.json"),
+                           encoding: .utf8) == "b")
+        #expect(outcome(report, "PluginData/")?.copied.sorted() ==
+                ["PluginData/Lore/notes/one.md", "PluginData/Lore/state.json"])
+        #expect(report.copied.contains("PluginData/Lore/state.json"))
+    }
+
+    @Test func pluginBinariesAreCopiedNotSkipped() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig7")
+        defer { t.cleanup() }
+
+        try write("plist", to: legacy.appendingPathComponent(
+            "Documents/Plugins/Lore.bundle/Contents/Info.plist"))
+        try write("dev", to: legacy.appendingPathComponent(
+            "Documents/DevPlugins/Dev.bundle/Contents/Info.plist"))
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(fm.fileExists(atPath: t.home.cacheRoot
+            .appendingPathComponent("Plugins/Lore.bundle/Contents/Info.plist").path))
+        #expect(fm.fileExists(atPath: t.home.cacheRoot
+            .appendingPathComponent("DevPlugins/Dev.bundle/Contents/Info.plist").path))
+        #expect(outcome(report, "Plugins/")?.copied == ["Plugins/Lore.bundle/Contents/Info.plist"])
+        #expect(outcome(report, "DevPlugins/")?.copied ==
+                ["DevPlugins/Dev.bundle/Contents/Info.plist"])
+    }
+
+    @Test func existingDestinationFilesInADirectoryRowAreSkipped() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig8")
+        defer { t.cleanup() }
+
+        try write("new", to: legacy.appendingPathComponent("Documents/Sounds/ping.wav"))
+        try write("old", to: t.home.shared(.sounds).appendingPathComponent("ping.wav"))
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(outcome(report, "Sounds/")?.skipped == ["Sounds/ping.wav"])
+        #expect(outcome(report, "Sounds/")?.copied.isEmpty == true)
+        #expect(try String(contentsOf: t.home.shared(.sounds)
+            .appendingPathComponent("ping.wav"), encoding: .utf8) == "old")
+    }
+
+    // MARK: - Sibling rows
+
+    @Test func siblingDirectoriesOutsideDocumentsAreMigrated() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig9")
+        defer { t.cleanup() }
+
+        try write("---\nname: pdf\n---", to: legacy.appendingPathComponent("Skills/pdf/SKILL.md"))
+        try write("# memory", to: legacy.appendingPathComponent("Memory/notes.md"))
+        try write("# cmd", to: legacy.appendingPathComponent("Commands/ship.md"))
+        try write("<html>", to: legacy.appendingPathComponent("Shares/abc/index.html"))
+
+        let report = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(fm.fileExists(atPath: t.home.shared(.skills)
+            .appendingPathComponent("pdf/SKILL.md").path))
+        #expect(fm.fileExists(atPath: t.home.shared(.memory)
+            .appendingPathComponent("notes.md").path))
+        #expect(fm.fileExists(atPath: t.home.shared(.commands)
+            .appendingPathComponent("ship.md").path))
+        #expect(fm.fileExists(atPath: t.home.shared(.sessions)
+            .appendingPathComponent("shares/abc/index.html").path))
+        #expect(outcome(report, "../Skills/")?.copied == ["Skills/pdf/SKILL.md"])
+        #expect(outcome(report, "../Shares/")?.copied == ["Shares/abc/index.html"])
+        // Siblings are copied, never renamed: the legacy tree stays put.
+        #expect(fm.fileExists(atPath: legacy.appendingPathComponent("Skills/pdf/SKILL.md").path))
+    }
+
+    @Test func retainedPluginDataLandsUnderTheDotRetainedDirectory() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig10")
+        defer { t.cleanup() }
+
+        try write("kept", to: legacy.appendingPathComponent(
+            "Documents/RetainedPluginData/Lore/keep.json"))
+
+        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        #expect(try String(contentsOf: t.home.vaultRoot
+            .appendingPathComponent("Apps/.retained/Lore/keep.json"), encoding: .utf8) == "kept")
+    }
+
+    // MARK: - Safety discipline
+
+    @Test func nothingIsDeletedFromTheLegacyTree() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig11")
+        defer { t.cleanup() }
+
+        try write("a", to: legacy.appendingPathComponent("Documents/PluginData/Lore/one.md"))
+        try write("s", to: legacy.appendingPathComponent("Skills/pdf/SKILL.md"))
+
+        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+
+        let marked = marker(legacy)
+        #expect(fm.fileExists(atPath: marked.appendingPathComponent("PluginData/Lore/one.md").path))
+        #expect(fm.fileExists(atPath: marked.appendingPathComponent("global-settings.json").path))
+        #expect(fm.fileExists(atPath: legacy.appendingPathComponent("Skills/pdf/SKILL.md").path))
+    }
+
+    @Test func aFailedCopyThrowsAndLeavesNoMarker() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig12")
+        defer { t.cleanup() }
+
+        // Simulate a mid-copy failure: the destination for the `Sounds/` row is a
+        // regular FILE, so creating the directory under it fails part-way through.
+        try write("blocker", to: t.home.shared(.sounds))
+        try write("wav", to: legacy.appendingPathComponent("Documents/Sounds/ping.wav"))
+
+        #expect(throws: (any Error).self) {
+            _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        }
+
+        // Legacy data is exactly where it always was, and nothing was marked —
+        // so the next launch is a clean first run.
+        #expect(!fm.fileExists(atPath: marker(legacy).path))
+        #expect(fm.fileExists(atPath: legacy.appendingPathComponent("Documents/Sounds/ping.wav").path))
+        #expect(fm.fileExists(
+            atPath: legacy.appendingPathComponent("Documents/global-settings.json").path))
+    }
+
+    @Test func aCorruptedCopyIsDetectedAndRemoved() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig13")
+        defer { t.cleanup() }
+
+        let source = legacy.appendingPathComponent("Documents/PluginData/Lore/one.md")
+        try write("original", to: source)
+
+        #expect(throws: (any Error).self) {
+            try VaultMigration.copyVerified(
+                from: source,
+                to: t.home.vaultRoot.appendingPathComponent("Apps/Lore/one.md"),
+                verify: { _, _ in false })
+        }
+        #expect(!fm.fileExists(
+            atPath: t.home.vaultRoot.appendingPathComponent("Apps/Lore/one.md").path))
+        #expect(fm.fileExists(atPath: source.path), "the source is never touched")
+    }
+
+    @Test func verificationComparesContentNotJustExistence() throws {
+        let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? fm.removeItem(at: base) }
+        try fm.createDirectory(at: base, withIntermediateDirectories: true)
+        let a = base.appendingPathComponent("a")
+        let b = base.appendingPathComponent("b")
+        let c = base.appendingPathComponent("c")
+        try write(String(repeating: "x", count: 200_000), to: a)
+        try write(String(repeating: "x", count: 200_000), to: b)
+        try write(String(repeating: "x", count: 199_999) + "y", to: c)
+
+        #expect(try VaultMigration.contentsMatch(a, b))
+        #expect(try VaultMigration.contentsMatch(a, c) == false)
+    }
+
+    // MARK: - needsMigration / discovery
+
+    @Test func needsMigrationIsFalseOnceMarked() throws {
+        let legacy = try legacyContainer()
+        defer { try? fm.removeItem(at: legacy) }
+        let t = TestHome.make("mig14")
+        defer { t.cleanup() }
+
+        #expect(VaultMigration.needsMigration(container: legacy))
+        _ = try VaultMigration.migrate(fromContainer: legacy, into: t.home)
+        #expect(!VaultMigration.needsMigration(container: legacy))
+    }
+
+    @Test func needsMigrationIsTrueForSiblingOnlyContainers() throws {
+        let container = fm.temporaryDirectory
+            .appendingPathComponent("legacy-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: container) }
+        try write("s", to: container.appendingPathComponent("Skills/pdf/SKILL.md"))
+
+        #expect(VaultMigration.needsMigration(container: container))
+    }
+
+    @Test func needsMigrationIsFalseForAnEmptyOrMissingContainer() throws {
+        let container = fm.temporaryDirectory
+            .appendingPathComponent("legacy-\(UUID().uuidString)", isDirectory: true)
+        #expect(!VaultMigration.needsMigration(container: container))
+        try fm.createDirectory(at: container, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: container) }
+        #expect(!VaultMigration.needsMigration(container: container))
+    }
+
+    @Test func migratingAnEmptyContainerIsANoOpWithoutAMarker() throws {
+        let container = fm.temporaryDirectory
+            .appendingPathComponent("legacy-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: container, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: container) }
+        let t = TestHome.make("mig15")
+        defer { t.cleanup() }
+
+        let report = try VaultMigration.migrate(fromContainer: container, into: t.home)
+
+        #expect(report.copied.isEmpty)
+        #expect(report.rows.allSatisfy { !$0.present })
+        #expect(!fm.fileExists(atPath: marker(container).path))
+    }
+
+    @Test func legacyContainerURLIsTheBundleIdentifierDirectory() throws {
+        let container = try #require(VaultMigration.legacyContainerURL())
+        #expect(container.lastPathComponent == (Bundle.main.bundleIdentifier ?? "com.ainkrad.app"))
+        #expect(VaultMigration.legacyDocumentsURL()?.lastPathComponent == "Documents")
+        #expect(VaultMigration.legacyDocumentsURL()?.deletingLastPathComponent().path
+                == container.path)
+    }
+}
