@@ -18,17 +18,33 @@ struct AinkradHostApp: App {
     init() {
         FontRegistrar.registerBundledFonts()
         let home: Home
+        // First run: no pointer, so nothing to resolve. The app does NOT ask for a
+        // folder here any more — it boots against a provisional Home so the whole
+        // environment loads, and raises the setup gate over it. The wizard's Choose
+        // Home step adopts the user's real vault and swaps the environment
+        // in-session. Nothing is adopted, no pointer is written, and nothing the
+        // user authors may be written while this flag is up.
+        var provisional = false
         do {
-            // The test bundle is hosted by this app, so this initialiser also runs
-            // under `xcodebuild test`. Resolving for real there would present a
-            // modal folder chooser and hang the suite forever on any machine
-            // without a configured Home — and would write a pointer and migrate the
-            // developer's real container as a side effect of running tests. A
-            // scratch Home keeps the host inert; `LaunchHomeResolver` is tested
-            // directly rather than through this initialiser.
-            home = LaunchHomeResolver.isRunningTests
-                ? LaunchHomeResolver.scratchHomeForTestHost()
-                : try LaunchHomeResolver.resolveWithRecovery()
+            if case .unset = AinkradHome.resolve() {
+                home = LaunchHomeResolver.provisionalHome()
+                provisional = true
+            } else if LaunchHomeResolver.isRunningTests {
+                // The test bundle is hosted by this app, so this initialiser also
+                // runs under `xcodebuild test`. Resolving for real there would
+                // present a modal folder chooser and hang the suite forever on any
+                // machine without a configured Home — and would write a pointer and
+                // migrate the developer's real container as a side effect of
+                // running tests. A provisional Home keeps the host inert;
+                // `LaunchHomeResolver` is tested directly, not through this
+                // initialiser.
+                home = LaunchHomeResolver.provisionalHome()
+            } else {
+                // `.missing`/`.foreign` keep their native-alert recovery: those are
+                // not first run, and the user already has a Home to be reunited
+                // with rather than a wizard to walk through.
+                home = try LaunchHomeResolver.resolveWithRecovery()
+            }
         } catch {
             // Either the user closed the folder chooser, or they chose Quit from a
             // recovery alert. Both are decisions, not crashes, so `exit(0)` and not
@@ -43,6 +59,8 @@ struct AinkradHostApp: App {
             exit(0)
         }
         let environment = AppEnvironment.bootstrap(home: home)
+        environment.isProvisionalHome = provisional
+        environment.isSetupPresented = provisional
         _environment = State(initialValue: environment)
         Self.install(environment, into: appDelegate)
     }

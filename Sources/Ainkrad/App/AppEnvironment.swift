@@ -213,6 +213,14 @@ final class AppEnvironment {
     /// entries to drop before re-registering the current binding set, without
     /// ever touching a builtin name it didn't register itself.
     private var registeredSkillCommandNames: Set<String> = []
+    /// Blocking first-run gate. Unlike every other overlay this is not dismissible:
+    /// the workspace renders behind it but nothing in it can be reached.
+    var isSetupPresented = false
+
+    /// True while the app is running against a provisional Home that the user has
+    /// not yet chosen. Nothing authored may be written until this clears.
+    var isProvisionalHome = false
+
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false

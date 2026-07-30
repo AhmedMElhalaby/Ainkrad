@@ -220,18 +220,25 @@ enum LaunchHomeResolver {
     /// The environment variable ALONE, deliberately. A `NSClassFromString("XCTestCase")`
     /// probe would also answer true in any shipped build that ever linked XCTest —
     /// and a release app that believes it is under test silently runs on
-    /// `scratchHomeForTestHost()`, writing every authored byte to a temporary
+    /// `provisionalHome()`, writing every authored byte to a temporary
     /// directory the OS deletes. The env var is set by the test runner and by
     /// nothing else.
     static var isRunningTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
-    /// A disposable Home under the temporary directory, for the test host only.
-    /// Never adopted, so no pointer is written and no real vault is claimed.
-    static func scratchHomeForTestHost() -> Home {
+    /// A disposable Home under the temporary directory. Never adopted, so no
+    /// pointer is written and no real vault is claimed.
+    ///
+    /// Two callers, one behaviour. The test host uses it to stay inert; first-run
+    /// setup uses it so the full environment boots — island, workspaces, the lot —
+    /// behind the setup gate, on a Home the user has not chosen yet. Because it is
+    /// under the temporary directory it is `isProvisional`, so nothing the user
+    /// authors (and above all no secret) may be written to it: see
+    /// `Home+KeychainService.swift`. Task 4's adoption swaps it out in-session.
+    static func provisionalHome() -> Home {
         let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ainkrad-test-host-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("ainkrad-provisional-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return Home(vaultRoot: base.appendingPathComponent("vault", isDirectory: true),
                     cacheRoot: base.appendingPathComponent("cache", isDirectory: true))

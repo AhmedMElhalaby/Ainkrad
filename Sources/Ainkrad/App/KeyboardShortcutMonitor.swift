@@ -1,6 +1,31 @@
 import AppKit
 import SwiftUI
 
+/// Which shortcuts survive the first-run setup gate. The answer is none: while
+/// setup is presented the workspace behind it must not be reachable, so every
+/// `ShortcutAction` is inert.
+///
+/// It is a named seam rather than a bare `if` for two reasons. It makes the
+/// intent testable and greppable — a future author adding a shortcut can find
+/// the one place that decides whether it survives the gate, instead of quietly
+/// assuming it does. And taking `isSetupPresented` as a parameter (rather than
+/// hardcoding `true`) keeps the test meaningful: it asserts both that everything
+/// is suppressed while the gate is up AND that everything works again once it is
+/// down, which a constant-`true` predicate could not satisfy.
+///
+/// `⌘Q` is deliberately out of scope: it is not a `ShortcutAction` and is not
+/// routed through `KeyboardShortcutMonitor` at all, so it still quits.
+enum SetupGate {
+    static func suppresses(_ action: ShortcutAction, isSetupPresented: Bool) -> Bool {
+        _ = action   // No action is exempt — the gate is total, by design.
+        return isSetupPresented
+    }
+
+    /// The whole-monitor form: the gate swallows raw key handling too, not just
+    /// the named actions (⌘1-9, ⌘arrows, ⌘M and friends are hardcoded checks).
+    static func suppressesAll(isSetupPresented: Bool) -> Bool { isSetupPresented }
+}
+
 /// Installs a local `keyDown` monitor for the app-wide shortcuts (⌘K,
 /// ⌘1-⌘9, ⌘⇧N, ⌘W) — see ADR-0008 App Launcher & Workspace Switching.
 /// A local monitor fires before the event reaches the menu bar's key
@@ -184,6 +209,28 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
+            // First-run setup is a blocking gate: the workspace renders behind it
+            // but nothing in it may be reached, so every shortcut this monitor
+            // owns is swallowed rather than performed. Returning `true` consumes
+            // the event (see the local monitor above), so it never reaches the
+            // workspace either. ⌘Q does not come through here — it is a menu-bar
+            // key equivalent handled by AppKit → `AinkradAppDelegate` — so quitting
+            // still works while the gate is up. A gate the user cannot leave is a
+            // trap, not a gate.
+            if SetupGate.suppressesAll(isSetupPresented: environment.isSetupPresented) {
+                // ...with ONE exemption. This monitor runs BEFORE the menu bar's
+                // key equivalents, so swallowing ⌘Q here would stop it ever
+                // reaching `NSApp.terminate` → `AinkradAppDelegate` and would
+                // trap the user inside the wizard with no way out. Returning
+                // `false` passes the event on untouched; the quit confirmation
+                // HUD renders above the gate (`RootView`) so it stays clickable.
+                if event.modifierFlags.contains(.command),
+                   event.charactersIgnoringModifiers?.lowercased() == "q" {
+                    return false
+                }
+                return true
+            }
+
             // While the Settings recorder is capturing a chord, this monitor
             // must not act on anything — including a chord that happens to
             // match an existing binding — so it can't fire that action's
@@ -216,6 +263,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // ⌘⌥←/→ cycle to the previous/next workspace (wrapping around),
             // the quick companion to the ⌘1-9 direct jumps.
             if isOption,
+               !environment.isSetupPresented,
                !environment.isLauncherPresented,
                !environment.isWorkspaceOverviewPresented,
                !environment.isSettingsPresented,
@@ -237,7 +285,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
             // only while no overlay owns the keyboard (and never when ⌥ is
             // held, which is the workspace-cycle chord above).
-            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isAppStorePresented {
+            if !isOption, !environment.isSetupPresented, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isAppStorePresented {
                 let direction: PaneDirection? = switch event.keyCode {
                 case 123: .left
                 case 124: .right
