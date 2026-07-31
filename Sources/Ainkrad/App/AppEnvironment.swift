@@ -147,6 +147,11 @@ final class AppEnvironment {
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
     let memoryService: MemoryService?
+    /// Structured user facts (name, what to call you, role, timezone) collected
+    /// by the first-run "You" step. Non-optional even when `memoryService` is
+    /// `nil`: it only needs the memory files, not the FTS index. Every write
+    /// re-projects into `USER.md`, so the assistant reads these facts.
+    let userProfileStore: UserProfileStore
     /// The Skills subsystem (M7 Slice 4): active-skill registry backing
     /// `use_skill`/`propose_skill`, the skill-index context source, and the
     /// skill `/name` slash commands.
@@ -213,6 +218,24 @@ final class AppEnvironment {
     /// entries to drop before re-registering the current binding set, without
     /// ever touching a builtin name it didn't register itself.
     private var registeredSkillCommandNames: Set<String> = []
+    /// Blocking first-run gate. Unlike every other overlay this is not dismissible:
+    /// the workspace renders behind it but nothing in it can be reached.
+    var isSetupPresented = false
+
+    /// Setup steps the user was let past without satisfying, mirrored from the
+    /// `SetupDocument` marker so the workspace can be honest about it without
+    /// re-reading persistence on every redraw.
+    ///
+    /// Written in exactly two places — launch (`AinkradApp.init`) and the
+    /// wizard's closing step (`SetupDoneStepView.finish`) — which are the only
+    /// two moments the marker changes. `.providers` here means the assistant
+    /// cannot work, and drives the persistent banner in `RootView`.
+    var deferredSetupSteps: Set<SetupStep> = []
+
+    /// True while the app is running against a provisional Home that the user has
+    /// not yet chosen. Nothing authored may be written until this clears.
+    var isProvisionalHome = false
+
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -296,6 +319,7 @@ final class AppEnvironment {
         assistantWorkingDirectory: URL,
         workspaceFileIndex: WorkspaceFileIndex,
         memoryService: MemoryService?,
+        userProfileStore: UserProfileStore,
         skillRegistry: SkillRegistry,
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
@@ -365,6 +389,7 @@ final class AppEnvironment {
         self.assistantWorkingDirectory = assistantWorkingDirectory
         self.workspaceFileIndex = workspaceFileIndex
         self.memoryService = memoryService
+        self.userProfileStore = userProfileStore
         self.skillRegistry = skillRegistry
         self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
@@ -420,28 +445,32 @@ final class AppEnvironment {
     }
 
     /// Assembles a real `AppEnvironment` backed by the file document store and
-    /// the Keychain. `rootURL` defaults to Application Support; tests pass a
-    /// temp directory. `defaults` is the legacy import source (`.standard`).
-    static func bootstrap(rootURL: URL? = nil, defaults: UserDefaults = .standard) -> AppEnvironment {
+    /// the Keychain. Every on-disk location is derived from `home` — there is no
+    /// default and no fallback, so no subsystem can compute a storage path of
+    /// its own. Tests pass a throwaway `Home` (`TestHome.make()`).
+    /// `defaults` is the legacy import source (`.standard`).
+    static func bootstrap(home: Home, defaults: UserDefaults = .standard) -> AppEnvironment {
         let (
-            persistence, secrets, registry, themeManager, workspaceManager, documentsRoot, pluginDirs,
+            persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
-            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore
-        ) = bootstrapCoreStores(rootURL: rootURL, defaults: defaults)
+            generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
+            assistantDocuments
+        ) = bootstrapCoreStores(home: home, defaults: defaults)
 
         let (
             streamingHTTP, agentConfigStore, agentContextSettingsStore, agentContextService,
-            agentPermissionStore, memoryService, lspServerRegistry, editJournal, skillRegistry,
-            skillCommandStore, skillWatcher
+            agentPermissionStore, memoryService, userProfileStore, lspServerRegistry, editJournal,
+            skillRegistry, skillCommandStore, skillWatcher
         ) = bootstrapAgentKitCore(
             persistence: persistence, workspaceManager: workspaceManager, agentContextHub: agentContextHub,
-            skillsRoot: skillsRoot, rootURL: rootURL, documentsRoot: documentsRoot)
+            skillsRoot: skillsRoot, home: home)
 
         let (
             sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
             toolStreamStore, terminalController
         ) = bootstrapExecutionAndTools(
+            home: home,
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
             editJournal: editJournal, workspaceManager: workspaceManager, agentActionHub: agentActionHub,
             agentContextHub: agentContextHub, memoryService: memoryService, mcpConfigStore: mcpConfigStore,
@@ -453,7 +482,8 @@ final class AppEnvironment {
             usageTracker, runtimeOptionsStore, localModelProbe, localModelAvailability, authProfileStore,
             candidatesProvider, commandRegistry
         ) = bootstrapModelRouting(
-            persistence: persistence, secrets: secrets, connectionStore: connectionStore,
+            persistence: persistence, assistantDocuments: assistantDocuments,
+            secrets: secrets, connectionStore: connectionStore,
             discoveredModelsStore: discoveredModelsStore)
 
         let (
@@ -462,6 +492,7 @@ final class AppEnvironment {
             oauthStore, toolHooksStore, customCommandStore, customCommandWatcher,
             remoteChannelSettingsStore, remoteChannelService
         ) = bootstrapAgentSessionAndRuns(
+            home: home,
             persistence: persistence, secrets: secrets, streamingHTTP: streamingHTTP, connectionStore: connectionStore,
             agentConfigStore: agentConfigStore, agentContextService: agentContextService,
             agentPermissionStore: agentPermissionStore, agentStore: agentStore, editJournal: editJournal,
@@ -530,6 +561,7 @@ final class AppEnvironment {
             assistantWorkingDirectory: assistantWorkingDirectory,
             workspaceFileIndex: workspaceFileIndex,
             memoryService: memoryService,
+            userProfileStore: userProfileStore,
             skillRegistry: skillRegistry,
             skillWatcher: skillWatcher,
             skillCommandStore: skillCommandStore,
@@ -556,4 +588,60 @@ final class AppEnvironment {
 
         return environment
     }
+
+    #if DEBUG
+    /// Set only by `preview()`, so this instance's `deinit` knows to remove
+    /// the temp directory and defaults suite `preview()` created for it.
+    /// `nil` for every environment built by real `bootstrap()` callers (the
+    /// app itself, and every non-preview test) — those never own throwaway
+    /// storage and must never have it cleaned up from under them.
+    /// `nonisolated(unsafe)`: written once by `preview()` right after init,
+    /// read once by `deinit` (which Swift always runs `nonisolated`, even on
+    /// a `@MainActor` class). Never mutated concurrently — a preview
+    /// environment is never shared across threads before it's torn down.
+    private nonisolated(unsafe) var previewTeardown: (() -> Void)?
+
+    /// A fully-wired `AppEnvironment` for previews and tests that need real
+    /// descriptor→store bindings (e.g. `HostSettingsCatalog`) without a real
+    /// app launch. Each call gets its own temp directory and an isolated
+    /// `UserDefaults` suite, so callers never see another call's state and
+    /// nothing touches the developer's real `~/Library/Application Support`
+    /// or `.standard` defaults. Reuses the production `bootstrap()` wiring
+    /// rather than a bespoke stub graph — `isRunningUnderTests` already gates
+    /// the network/TCC-prompting I/O (model probe, MCP connect, LSP
+    /// autodetect) when hosted under `xcodebuild test`, so this is safe and
+    /// fast in that context; call sites outside tests should expect that
+    /// gating to relax and real I/O to occur.
+    ///
+    /// Cleanup is tied to the returned instance's lifetime (`deinit` below)
+    /// rather than, say, a shared/reused environment, because reuse would
+    /// mean two tests running back-to-back could observe each other's
+    /// mutations — the exact cross-test contamination every later task's
+    /// catalog tests depend on NOT happening. Per-call isolation is kept;
+    /// only the on-disk/on-suite footprint is reclaimed, once the caller
+    /// drops its last reference.
+    static func preview() -> AppEnvironment {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AinkradPreview-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "com.ainkrad.preview.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        // A per-call temp vault, which is also what keeps `preview()` out of the
+        // real Keychain: `Home.keychainServiceName` derives the Keychain service
+        // from the vault path, so this throwaway vault gets a throwaway namespace
+        // (see `Home+KeychainService.swift`). Several test suites use `preview()`,
+        // so that is load-bearing, not incidental.
+        let home = Home(vaultRoot: root.appendingPathComponent("vault", isDirectory: true),
+                        cacheRoot: root.appendingPathComponent("cache", isDirectory: true))
+        let environment = bootstrap(home: home, defaults: defaults)
+        environment.previewTeardown = {
+            try? FileManager.default.removeItem(at: root)
+            UserDefaults().removePersistentDomain(forName: suiteName)
+        }
+        return environment
+    }
+
+    nonisolated deinit {
+        previewTeardown?()
+    }
+    #endif
 }

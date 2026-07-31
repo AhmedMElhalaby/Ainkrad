@@ -232,6 +232,7 @@ extension RegisteredApp {
         )
         registered.teardown = teardown
         registered.mcpServerFactory = mcpServerFactory
+        registered.settingsCatalog = { app.settingsCatalog(host: host) }
         return registered
     }
 }

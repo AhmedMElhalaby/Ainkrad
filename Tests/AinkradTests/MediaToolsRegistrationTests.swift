@@ -25,7 +25,9 @@ struct MediaToolsRegistrationTests {
     }
 
     @Test func speakIsReadClass() {
-        let registry = AgentToolRegistry(tools: [SpeakTool(synth: SystemSpeechSynthesizer())])
+        let mediaStore = GeneratedMediaStore(baseDirectory: URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ainkrad-test-\(UUID().uuidString)", isDirectory: true))
+        let registry = AgentToolRegistry(tools: [SpeakTool(synth: SystemSpeechSynthesizer(), mediaStore: mediaStore)])
         #expect(registry.tool(named: "speak")?.permission == .read)
     }
 }

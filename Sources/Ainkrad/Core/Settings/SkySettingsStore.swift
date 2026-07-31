@@ -71,6 +71,31 @@ final class SkySettingsStore {
     /// The supported animation-speed band.
     static let speedRange = 0.5...1.5
 
+    /// The named speeds every surface offers. The store accepts the whole
+    /// `speedRange`, but users are only ever shown these three.
+    ///
+    /// Defined ONCE, here, because two surfaces render it: Settings → Living
+    /// Sky and the first-run Motion & Sound step. They had diverged — the
+    /// wizard shipped a continuous slider where Settings had this picker, so
+    /// the same setting looked like two different settings depending on where
+    /// you met it. Every value is inside `speedRange`, so `setMotionSpeed`
+    /// never has anything to clamp when the input comes from here.
+    static let speedPresets: [(title: String, value: Double)] = [
+        ("Calm", 0.6), ("Normal", 1.0), ("Lively", 1.5),
+    ]
+
+    /// The preset the current speed reads as, or the raw value when a
+    /// hand-edited document sits between two presets — a picker must not claim
+    /// a selection the store does not actually hold.
+    static func nearestPreset(to speed: Double) -> Double {
+        speedPresets.first { abs(speed - $0.value) < 0.01 }?.value ?? speed
+    }
+
+    /// The label for a preset value, empty for anything that is not one.
+    static func presetTitle(_ value: Double) -> String {
+        speedPresets.first { $0.value == value }?.title ?? ""
+    }
+
     private(set) var motionEnabled: Bool
     private(set) var motionSpeed: Double
     /// Per-effect switches (missing key = enabled) — only explicit opt-outs

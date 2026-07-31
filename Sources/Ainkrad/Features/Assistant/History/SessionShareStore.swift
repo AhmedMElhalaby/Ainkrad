@@ -38,10 +38,10 @@ final class SessionShareStore {
     private let baseDirectory: URL
     private let now: () -> Date
 
-    /// `baseDirectory` defaults to `~/Library/Application Support/<bundle>/Shares`
-    /// (same base as `MemoryPaths.defaultRoot()`); tests inject a temp dir.
+    /// `baseDirectory` is required: bootstrap derives it from the resolved `Home`,
+    /// tests inject a temp dir. This type never computes a storage path itself.
     init(persistence: PersistenceStore,
-         baseDirectory: URL = SessionShareStore.defaultDirectory(),
+         baseDirectory: URL,
          now: @escaping () -> Date = Date.init) {
         self.persistence = persistence
         self.baseDirectory = baseDirectory
@@ -61,14 +61,6 @@ final class SessionShareStore {
     private static func artifactURL(base: URL, id: UUID) -> URL {
         base.appendingPathComponent(id.uuidString, isDirectory: true)
             .appendingPathComponent("index.html")
-    }
-
-    static func defaultDirectory() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
-        return base.appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("Shares", isDirectory: true)
     }
 
     @discardableResult

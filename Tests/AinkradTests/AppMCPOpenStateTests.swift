@@ -18,11 +18,10 @@ import AinkradAppKit
 @MainActor
 struct AppMCPOpenStateTests {
     func bootstrapEnvironment() -> AppEnvironment {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ain-mcp-openstate-\(UUID().uuidString)")
-        let suiteName = "com.ainkrad.tests.mcp-openstate.\(UUID().uuidString)"
-        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
-        return AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
+        // Leaked deliberately, as before: these tests hold the environment past
+        // the helper's return, so there is no scope to run a cleanup in.
+        let t = TestHome.make("mcp-openstate")
+        return AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
     }
 
     @Test("an overlay-presented app counts as open even with no tiled block")

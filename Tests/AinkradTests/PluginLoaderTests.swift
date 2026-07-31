@@ -317,9 +317,18 @@ struct PluginLoadDiagnosticsTests {
     @Test("SDK skew is named in plain language, with the raw symbol kept")
     func sdkSkewIsExplained() {
         let d = PluginLoadDiagnostics.diagnose(loadError(debugDescription: Self.skewDyldText))
-        #expect(d.banner.contains("newer AinkradAppKit than this host embeds"))
-        #expect(d.banner.contains("bump the host's SDK pin or rebuild the plugin"))
+        #expect(d.banner.contains("different AinkradAppKit revision than this host embeds"))
+        #expect(d.banner.contains("repin the plugin to the host's SDK revision and rebuild"))
         #expect(d.banner.contains(Self.skewSymbol))
+
+        // It must NOT claim which side is ahead. A missing symbol proves the two
+        // disagree and nothing more — and the first real occurrence had the
+        // plugins pinned BEHIND the host, so the old "newer" wording sent the
+        // reader to bump the host pin, which moves it further away.
+        #expect(!d.banner.lowercased().contains("newer"))
+        #expect(!d.banner.lowercased().contains("older"))
+        #expect(!d.banner.contains("bump the host"))
+
         // Fit for the banner: one line, not the three-line dyld dump.
         #expect(!d.banner.contains("\n"))
         // …but the log keeps every line of it.

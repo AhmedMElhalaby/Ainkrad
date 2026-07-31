@@ -17,28 +17,24 @@ struct AppearanceSettingsView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
 
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(Theme.allCases, id: \.self) { theme in
-                        themeCard(theme, tokens: tokens)
-                    }
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(Theme.allCases, id: \.self) { theme in
+                    themeCard(theme, tokens: tokens)
                 }
-
-                typographySection(tokens: tokens)
-                    .padding(.top, 8)
-
-                motionSection(tokens: tokens)
-                    .padding(.top, 8)
-
-                overlaysSection(tokens: tokens)
-                    .padding(.top, 8)
             }
-            .padding(18)
+
+            typographySection(tokens: tokens)
+                .padding(.top, 8)
+
+            motionSection(tokens: tokens)
+                .padding(.top, 8)
+
+            overlaysSection(tokens: tokens)
+                .padding(.top, 8)
         }
-        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Typography (AIN-143: font size/family + custom accent color)

@@ -3,9 +3,10 @@ import Foundation
 /// Resolves the on-disk layout for custom commands:
 ///   <userRoot>/<name>.md               global (app-managed, all workspaces)
 ///   <workspace>/.ainkrad/commands/*.md  project-scoped (checked into the repo)
-/// `projectRoot` is nil when there is no active workspace folder. Both roots are
-/// injectable so tests point at per-test temp dirs; `defaultUserRoot()` resolves
-/// the real Application Support location (mirrors `SkillPaths.defaultRoot()`).
+/// `projectRoot` is nil when there is no active workspace folder. `userRoot` is
+/// always supplied by the caller — bootstrap derives it from the resolved `Home`
+/// (`shared(.commands)`), tests from a per-test temp dir. There is deliberately
+/// no default user root: this type cannot compute a storage path.
 struct CustomCommandPaths {
     let userRoot: URL
     let projectRoot: URL?
@@ -30,16 +31,6 @@ struct CustomCommandPaths {
             }
         }
         return out
-    }
-
-    /// `~/Library/Application Support/<bundle-id>/Commands` (mirrors
-    /// `SkillPaths.defaultRoot()`, but the `Commands` subdir).
-    static func defaultUserRoot() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
-        return base.appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("Commands", isDirectory: true)
     }
 
     static func projectRoot(forWorkspace workspace: URL) -> URL {

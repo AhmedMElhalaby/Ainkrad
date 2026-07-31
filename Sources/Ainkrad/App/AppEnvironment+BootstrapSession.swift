@@ -2,7 +2,7 @@ import Foundation
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
+/// `AppEnvironment.bootstrap(home:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the fifth block: subagent
 /// wiring (M7 Slice 3 Task 11), the background/headless run subsystem
 /// (Slice 3b Task 21), the schedule/trigger subsystem (Slice 3b), the
@@ -23,6 +23,7 @@ extension AppEnvironment {
     }
 
     static func bootstrapAgentSessionAndRuns(
+        home: Home,
         persistence: PersistenceStore,
         secrets: SecretStore,
         streamingHTTP: URLSessionStreamingHTTPClient,
@@ -200,7 +201,12 @@ extension AppEnvironment {
         // Persisted history of Assistant chats, surfaced by the block's history
         // sidebar (Assistant session-history-sidebar Task 4) — one instance shared
         // via `AppEnvironment`, same pattern as `runManager`/`scheduleStore` above.
-        let assistantSessionStore = AssistantSessionStore(persistence: persistence)
+        // Chat transcripts are `Assistant/sessions/` in the published layout, not
+        // `Config/`. `SessionShareStore` already roots its exports at
+        // `home.shared(.sessions)/shares`, and `VaultMigration` relocates
+        // `assistant-sessions.json` to exactly this root.
+        let assistantSessionStore = AssistantSessionStore(
+            persistence: FileDocumentStore(rootURL: home.shared(.sessions)))
 
         // M7 Slice 7: menu-bar presence wraps the SAME `runManager` above via
         // `RunManagerMenuBarAdapter`, so the status-item popover's run list is
@@ -300,13 +306,15 @@ extension AppEnvironment {
         // File-based custom slash commands (project + user). Registered AFTER skill
         // commands so a colliding name can't shadow a skill binding; `CustomCommandStore`
         // already refuses builtin names, and re-registration drops stale names first.
+        // Custom commands are hand-authored markdown — vault.
+        let commandUserRoot = home.shared(.commands)
         let customCommandStore = CustomCommandStore(paths: CustomCommandPaths(
-            userRoot: CustomCommandPaths.defaultUserRoot(),
+            userRoot: commandUserRoot,
             projectRoot: CustomCommandPaths.projectRoot(forWorkspace: assistantWorkingDirectory)))
         var liveCustomNames = resyncCustomCommands(
             store: customCommandStore, registry: commandRegistry, previous: [])
         let customCommandWatcher = CustomCommandWatcher(
-            directory: CustomCommandPaths.defaultUserRoot()) {
+            directory: commandUserRoot) {
                 customCommandStore.reload()
                 liveCustomNames = resyncCustomCommands(
                     store: customCommandStore, registry: commandRegistry, previous: liveCustomNames)
@@ -356,7 +364,10 @@ extension AppEnvironment {
         // survive relaunch — `CheckpointCoordinator.init` loads them back from disk.
         let checkpointCoordinator = CheckpointCoordinator(
             sessionID: "main",
-            snapshots: WorkspaceSnapshotStore(root: WorkspaceSnapshotStore.defaultRoot()),
+            // Checkpoint blobs are pre-mutation copies of files that still exist in
+            // the user's workspace (and are git-recoverable) — derivable, so cache.
+            snapshots: WorkspaceSnapshotStore(
+                root: home.cacheRoot.appendingPathComponent("Checkpoints", isDirectory: true)),
             git: GitWorkingTreeSnapshotter(router: executionRouter),
             persistence: persistence,
             transcriptIndex: { [weak agentSession] in agentSession?.messages.count ?? 0 },

@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import Ainkrad
+import AinkradAppKit
 import AinkradHostRuntime
 
 private struct NoOpCatalogSource: CatalogSource {
@@ -115,7 +116,10 @@ final class AppEnvironmentTests {
             appAppearanceStore: appAppearanceStore,
             webSearchSettingsStore: WebSearchSettingsStore(persistence: persistence),
             mediaSettingsStore: MediaSettingsStore(persistence: persistence),
-            sessionShareStore: SessionShareStore(persistence: persistence),
+            sessionShareStore: SessionShareStore(
+                persistence: persistence,
+                baseDirectory: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("share-\(UUID().uuidString)", isDirectory: true)),
             skySettingsStore: SkySettingsStore(persistence: persistence),
             sounds: sounds,
             agentContextHub: agentContextHub,
@@ -155,6 +159,10 @@ final class AppEnvironmentTests {
             assistantWorkingDirectory: FileManager.default.homeDirectoryForCurrentUser,
             workspaceFileIndex: WorkspaceFileIndex(root: FileManager.default.homeDirectoryForCurrentUser),
             memoryService: nil,
+            userProfileStore: UserProfileStore(
+                persistence: persistence,
+                memory: MemoryStore(paths: MemoryPaths(
+                    root: root.appendingPathComponent("Memory", isDirectory: true)))),
             skillRegistry: SkillRegistry(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))),
             skillWatcher: SkillWatcher(paths: SkillPaths(root: root.appendingPathComponent("Skills", isDirectory: true))) { },
             skillCommandStore: SkillCommandStore(persistence: persistence),
@@ -196,10 +204,9 @@ final class AppEnvironmentTests {
         // LegacyUserDefaultsMigration against `defaults`, so a shared
         // `.standard` would import stray real `com.ainkrad.app` state and
         // make these assertions non-hermetic on any machine/CI runner.
-        let suiteName = "com.ainkrad.tests.\(UUID().uuidString)"
-        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
-        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
-        let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
+        let t = TestHome.make("appenv-boot")
+        defer { t.cleanup() }
+        let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
         // Terminal is an App Store plugin, not built-in; Assistant and Canvas
         // are the compiled-in built-ins the host registers itself (M5 Phase B,
@@ -212,12 +219,11 @@ final class AppEnvironmentTests {
         #expect(environment.isFullScreen == false)
         #expect(environment.generalSettingsStore.showFullScreenStatusBar == true)
         // Regression guard for the test-isolation leak: the memory subsystem
-        // must be constructed under the injected `root`, never the real
+        // must be constructed under the injected `Home`, never the real
         // `~/Library/Application Support/<bundle-id>/Memory` — otherwise every
         // `make test` run reindexes the developer's real memory store.
         #expect(environment.memoryService != nil)
-        let isolatedMemoryIndex = root.appendingPathComponent("Memory", isDirectory: true)
-            .appendingPathComponent("index.sqlite")
+        let isolatedMemoryIndex = t.home.shared(.memory).appendingPathComponent("index.sqlite")
         #expect(FileManager.default.fileExists(atPath: isolatedMemoryIndex.path))
     }
 }

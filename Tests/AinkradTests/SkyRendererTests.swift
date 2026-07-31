@@ -1,6 +1,7 @@
 import Testing
 import SwiftUI
 @testable import Ainkrad
+import AinkradAppKit
 import AinkradHostRuntime
 
 /// Pixel-level regression tests for the sky's large-area gradient layers.
@@ -42,10 +43,9 @@ struct SkyRendererTests {
     /// which are smooth by construction.
     @Test("the animated sky's structure produces no horizontal banding")
     func animatedStructureHasNoBands() throws {
-        let environment = AppEnvironment.bootstrap(
-            rootURL: FileManager.default.temporaryDirectory
-                .appendingPathComponent("sky-structure-\(UUID().uuidString)")
-        )
+        let t = TestHome.make("sky-structure")
+        defer { t.cleanup() }
+        let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
         environment.skySettingsStore.setMotionEnabled(true)
         for effect in SkyEffect.allCases {
             environment.skySettingsStore.setEnabled(false, for: effect)
