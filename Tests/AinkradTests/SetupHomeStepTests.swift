@@ -110,6 +110,41 @@ struct SetupHomeStepTests {
         }
     }
 
+    /// **The gate on a new shared domain.**
+    ///
+    /// `SharedDomain` is non-frozen across the module boundary, so
+    /// `SetupHomePreview.description(of:)` is forced to carry an
+    /// `@unknown default` and cannot fail to compile when a case is added. This
+    /// is therefore where a new domain gets caught: every domain's top-level
+    /// folder must appear in the listing, so adding one that creates a new
+    /// folder at the root of the vault fails here until someone decides what to
+    /// tell the user about it. A domain that lives inside an existing folder
+    /// (as `.memory` and friends do inside `Assistant/`) passes, correctly.
+    @Test func everySharedDomainIsAccountedForInTheFolderPreview() {
+        let root = URL(fileURLWithPath: "/tmp/preview-home", isDirectory: true)
+        let home = Home(vaultRoot: root, cacheRoot: root)
+        let listed = Set(SetupHomePreview.entries.map(\.name))
+
+        for domain in SharedDomain.allCases {
+            let folder = (home.shared(domain).pathComponents
+                .dropFirst(root.pathComponents.count).first ?? "?") + "/"
+            let complaint = "\(domain) creates \(folder) at the vault root, which the "
+                + "Home step never tells the user about"
+            #expect(listed.contains(folder), Comment(rawValue: complaint))
+        }
+    }
+
+    /// The domains that live inside `Assistant/` fold into its one row rather
+    /// than appearing as phantom top-level folders.
+    @Test func theFolderPreviewFoldsAssistantSubdirectoriesIntoOneRow() {
+        let names = SetupHomePreview.entries.map(\.name)
+        #expect(Set(names).count == names.count, "no folder may be listed twice")
+        #expect(names.contains("Assistant/"))
+        for absent in ["memory/", "skills/", "commands/", "sessions/"] {
+            #expect(!names.contains(absent), "\(absent) is inside Assistant/, not top level")
+        }
+    }
+
     // MARK: - The migration warning, derived BEFORE adoption
 
     /// Nothing to move, nothing said. The overwhelmingly common case: a fresh
@@ -172,6 +207,33 @@ struct SetupHomeStepTests {
         _ = SetupHomeMigrationNotice.make(legacyContainer: container,
                                           needsMigration: { asked.append($0); return true })
         #expect(asked == [container])
+    }
+
+    /// One wizard, one notation. This screen says where the old copy WILL be
+    /// and `SetupDoneStepView` says where it IS; a user comparing them must see
+    /// the same string, not `/Users/you/Library/…` in one and `~/Library/…` in
+    /// the other. The Done screen builds the tilde form literally, so this is
+    /// pinned by asserting the abbreviation the notice applies.
+    @Test func theWarningNamesTheLegacyCopyTheSameWayTheDoneScreenDoes() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let container = home
+            .appendingPathComponent("Library/Application Support/com.ainkrad.test",
+                                    isDirectory: true)
+        let notice = try #require(
+            SetupHomeMigrationNotice.make(legacyContainer: container,
+                                          needsMigration: { _ in true }))
+        #expect(notice.legacyCopyPath
+            == "~/Library/Application Support/com.ainkrad.test/Documents.migrated")
+        #expect(!notice.legacyCopyPath.hasPrefix("/Users"))
+
+        // A path outside the home directory is left exactly as it is, rather
+        // than mangled — which is what an injected temp container gets.
+        #expect(SetupHomeMigrationNotice.abbreviatingHome("/tmp/elsewhere")
+            == "/tmp/elsewhere")
+        // And a directory whose name merely STARTS with the home path is not a
+        // child of it.
+        #expect(SetupHomeMigrationNotice.abbreviatingHome(home.path + "-sibling")
+            == home.path + "-sibling")
     }
 
     // MARK: - Headline

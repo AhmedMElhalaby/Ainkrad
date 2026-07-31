@@ -139,15 +139,22 @@ struct SetupHomeStepView: View {
 
                 // The one failure state on this screen, and deliberately the
                 // plainest thing on it: a refusal has to be READ, so it gets a
-                // tint and an icon and nothing else. It keeps its own scroll
-                // clamp because `HomeError.notEmpty`'s message can run long.
+                // tint and an icon and nothing else.
+                //
+                // It has NO scroller and no height clamp of its own. It used to
+                // have both, which was correct when this step's content did not
+                // scroll — now that it does, an inner vertical scroller inside
+                // an outer vertical scroller is a gesture and sizing hazard, and
+                // a long `HomeError.notEmpty` message is exactly the case the
+                // brief says must stay readable. One scroller on this axis: the
+                // rejection lays out at its full height and the step's own
+                // scroller carries it.
                 if let rejection {
                     notice(title: "That folder can't be used",
                            message: rejection,
                            icon: "exclamationmark.circle",
                            tint: tokens.accentTertiary,
-                           tokens: tokens,
-                           maxHeight: 180)
+                           tokens: tokens)
                         .accessibilityIdentifier("setup.home.rejection")
                 }
             }
@@ -190,7 +197,16 @@ struct SetupHomeStepView: View {
         let geometry = SetupStageMotion.layerGeometry(.content,
                                                       reduceMotion: reduceMotion,
                                                       isForward: true)
-        let travel = geometry.map { _ in CGFloat(10) } ?? 0
+        // The stage's own `.content` travel, scaled down — these are rows
+        // settling inside a panel, not the panel arriving. Scaled rather than
+        // hardcoded so the rows still track `SetupStageMotion`'s vocabulary if
+        // that geometry is ever retuned.
+        //
+        // `isForward: true` above is not a direction claim: the stage already
+        // owns directional entry for the step as a whole, and this is a settle
+        // that runs once on appear. It is asked in the forward orientation
+        // purely to take the magnitude and the reduce-motion gate.
+        let travel = geometry.map { $0.travel * 0.22 } ?? 0
         let delay = geometry.map { $0.delay + Double(index) * 0.05 } ?? 0
 
         return HStack(alignment: .top, spacing: 10) {
@@ -226,9 +242,11 @@ struct SetupHomeStepView: View {
     /// only in tint. They are the same kind of thing — something the user has to
     /// read before choosing — and giving them two different treatments would
     /// make the rarer one look like a decoration.
+    ///
+    /// Neither variant scrolls. The step owns the only scroller on this axis —
+    /// see the rejection's call site.
     private func notice(title: String, message: String, icon: String,
-                        tint: Color, tokens: DesignTokens,
-                        maxHeight: CGFloat? = nil) -> some View {
+                        tint: Color, tokens: DesignTokens) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 12))
@@ -238,21 +256,12 @@ struct SetupHomeStepView: View {
                 Text(title)
                     .font(AinkradFont.display(12, weight: .medium))
                     .foregroundStyle(tint)
-                let body = Text(message)
+                Text(message)
                     .font(AinkradFont.display(12))
                     .foregroundStyle(tokens.foreground.opacity(0.72))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                // Only the clamped variant gets its own scroller. An
-                // unconstrained `ScrollView` nested inside the step's scroller
-                // collapses to zero height, which is how a warning nobody can
-                // read gets shipped.
-                if let maxHeight {
-                    ScrollView { body }.frame(maxHeight: maxHeight)
-                } else {
-                    body
-                }
             }
         }
         .padding(14)
