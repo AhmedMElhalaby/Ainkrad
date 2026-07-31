@@ -207,7 +207,13 @@ struct SetupHomeStepView: View {
         // that runs once on appear. It is asked in the forward orientation
         // purely to take the magnitude and the reduce-motion gate.
         let travel = geometry.map { $0.travel * 0.22 } ?? 0
-        let delay = geometry.map { $0.delay + Double(index) * 0.05 } ?? 0
+        // Per-index stagger ONLY. `SetupStageMotion.animation(layer: .content)`
+        // already carries that layer's 0.11s delay; adding `geometry.delay` to
+        // it — as this line originally did — counted the same delay twice and
+        // held the first row off screen for 0.22s before the list began
+        // assembling. `geometry` is still what is consulted, because `nil` is
+        // the reduce-motion seam.
+        let delay = geometry.map { _ in Double(index) * 0.05 } ?? 0
 
         return HStack(alignment: .top, spacing: 10) {
             Image(systemName: entry.icon)

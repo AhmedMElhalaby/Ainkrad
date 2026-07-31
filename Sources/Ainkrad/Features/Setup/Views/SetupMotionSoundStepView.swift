@@ -106,11 +106,17 @@ struct SetupMotionSoundStepView: View {
         return staged(index: 0) {
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("Turn the motion off")
+                    // Names the STATE the switch produces when it is on, not an
+                    // instruction. "Turn the motion off" shipped first and read
+                    // well as prose and badly as a control: on meant off. It is
+                    // also the exact name Settings → Appearance uses, and the
+                    // one VoiceOver already announced — so sighted and
+                    // screen-reader users now hear the same word.
+                    Text("Reduce motion")
                         .font(AinkradFont.display(16, weight: .medium))
                         .foregroundStyle(tokens.foreground.opacity(0.95))
                     Text("Ainkrad drifts, parallaxes and springs by default. If that kind of "
-                         + "movement makes you queasy, switch it off — the rest of this setup "
+                         + "movement makes you queasy, turn this on — the rest of this setup "
                          + "will stop animating on the very next screen, so you can see it "
                          + "worked. This is the only time Ainkrad asks; it lives in "
                          + "Settings → Appearance afterwards.")
@@ -281,7 +287,13 @@ struct SetupMotionSoundStepView: View {
                                                       reduceMotion: reduceMotion,
                                                       isForward: true)
         let lift = geometry.map { $0.lift * 0.6 } ?? 0
-        let delay = geometry.map { $0.delay + Double(index) * 0.06 } ?? 0
+        // ONLY the per-index stagger. `SetupStageMotion.animation(layer:)`
+        // already carries the layer's own delay (0.11s for `.content`), so
+        // adding `geometry.delay` on top of it — as the first version of this
+        // did — made every section wait 0.22s before anything appeared at all,
+        // which reads as lag rather than composition. `geometry` is still what
+        // is consulted, because `nil` is the reduce-motion seam.
+        let delay = geometry.map { _ in Double(index) * 0.06 } ?? 0
 
         return content()
             .opacity(hasSettled ? 1 : 0)

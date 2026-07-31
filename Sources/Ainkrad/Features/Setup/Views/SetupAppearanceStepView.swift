@@ -87,8 +87,12 @@ struct SetupAppearanceStepView: View {
                           tokens: tokens) {
                         accentColorRow(tokens: tokens, manager: environment.themeManager)
                     }
+                    // "Type" first, which reads as a verb before it reads as a
+                    // noun — an instruction to start typing, on a screen whose
+                    // best line ("Look at the Dock") IS an instruction. Named
+                    // for the two controls under it instead.
                     group(index: 3,
-                          title: "Type",
+                          title: "Typeface and size",
                           hint: "Every word in the app, including the ones you are reading now.",
                           tokens: tokens) {
                         typographyControls(tokens: tokens)
@@ -316,7 +320,12 @@ struct SetupAppearanceStepView: View {
                                                       reduceMotion: reduceMotion,
                                                       isForward: true)
         let lift = geometry.map { $0.lift * 0.6 } ?? 0
-        let delay = geometry.map { $0.delay + Double(index) * 0.06 } ?? 0
+        // ONLY the per-index stagger — `SetupStageMotion.animation(layer:)`
+        // already carries `.content`'s own 0.11s delay, and adding
+        // `geometry.delay` to it double-counted, holding the first group off
+        // screen for 0.22s. `geometry` is still consulted because `nil` is the
+        // reduce-motion seam.
+        let delay = geometry.map { _ in Double(index) * 0.06 } ?? 0
 
         return content()
             .opacity(hasSettled ? 1 : 0)
