@@ -49,6 +49,53 @@ struct SetupStageTests {
         #expect(aheadNoneComplete)
     }
 
+    // `transition` is only ONE of the three reduce-motion seams. This is the
+    // second: `animation` returning nil is what makes the container's and the
+    // rail's `.animation(_, value:)` no-ops. Without this test its guard could
+    // be deleted and the rail would keep animating with the suite still green.
+    @Test func reduceMotionRemovesTheStageAnimation() {
+        for layer in SetupStageMotion.Layer.allCases {
+            #expect(SetupStageMotion.animation(reduceMotion: true, layer: layer) == nil)
+            #expect(SetupStageMotion.animation(reduceMotion: false, layer: layer) != nil)
+        }
+    }
+
+    // The third seam: the per-layer geometry, which is what `layerTransition`
+    // falls back to `.identity` on.
+    @Test func reduceMotionRemovesEveryLayerGeometry() {
+        for layer in SetupStageMotion.Layer.allCases {
+            #expect(SetupStageMotion.layerGeometry(layer, reduceMotion: true,
+                                                   isForward: true) == nil)
+            #expect(SetupStageMotion.layerGeometry(layer, reduceMotion: true,
+                                                   isForward: false) == nil)
+            #expect(SetupStageMotion.layerGeometry(layer, reduceMotion: false,
+                                                   isForward: true) != nil)
+        }
+    }
+
+    // Each layer must travel a different distance, or they read as one plane
+    // sliding rather than separated live layers.
+    @Test func layersTravelIndependently() {
+        let distances = SetupStageMotion.Layer.allCases.compactMap {
+            SetupStageMotion.layerGeometry($0, reduceMotion: false, isForward: true)
+        }
+        #expect(distances.count == SetupStageMotion.Layer.allCases.count)
+        #expect(Set(distances.map(\.travel)).count == distances.count)
+        #expect(Set(distances.map(\.delay)).count == distances.count)
+    }
+
+    // Direction is a pure function of the two step indices so the stage can
+    // compute it DURING body evaluation. Deriving it afterwards (in onChange)
+    // left every transition one step behind, and the first Back animated as a
+    // forward.
+    @Test func directionComesFromTheStepIndicesAlone() {
+        #expect(SetupStageMotion.isForward(from: 2, to: 3))
+        #expect(!SetupStageMotion.isForward(from: 3, to: 2))
+        // No movement is not "backwards": the first render compares a step
+        // against itself and must not animate in reverse.
+        #expect(SetupStageMotion.isForward(from: 0, to: 0))
+    }
+
     // Forward and back must be directionally distinct, so the policy has to
     // carry a direction and collapse it only under reduce-motion.
     @Test func directionSurvivesUntilReduceMotionCollapsesIt() {

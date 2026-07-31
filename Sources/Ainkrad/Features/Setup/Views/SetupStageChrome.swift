@@ -65,8 +65,47 @@ enum SetupStageMotion {
         case rail = 0, heading, content
     }
 
+    /// How far and how late a layer moves. Pure data so the geometry — and the
+    /// reduce-motion guard in front of it — can be asserted without SwiftUI.
+    struct LayerGeometry: Equatable {
+        /// Signed horizontal travel of the ENTERING layer, in points. Negative
+        /// when going back, which is what makes the two directions distinct.
+        let travel: CGFloat
+        let lift: CGFloat
+        let delay: Double
+    }
+
+    /// Direction of travel between two steps. A free function of the two step
+    /// indices, so it can be computed during body evaluation from the step being
+    /// rendered rather than recovered afterwards.
+    static func isForward(from previousIndex: Int, to nextIndex: Int) -> Bool {
+        nextIndex >= previousIndex
+    }
+
     static func transition(reduceMotion: Bool, isForward: Bool = true) -> Transition {
         reduceMotion ? .none : .layered(isForward: isForward)
+    }
+
+    /// `nil` under reduce-motion — the seam that makes `layerTransition` fall
+    /// back to `.identity`.
+    static func layerGeometry(_ layer: Layer,
+                              reduceMotion: Bool,
+                              isForward: Bool) -> LayerGeometry? {
+        guard case .layered = transition(reduceMotion: reduceMotion, isForward: isForward) else {
+            return nil
+        }
+        // A `switch`, not an indexed array: a fourth Layer case must fail to
+        // compile rather than silently inherit the third one's geometry.
+        let distance: CGFloat
+        let lift: CGFloat
+        switch layer {
+        case .rail:    distance = 26; lift = 0
+        case .heading: distance = 34; lift = 6
+        case .content: distance = 46; lift = 10
+        }
+        return LayerGeometry(travel: isForward ? distance : -distance,
+                             lift: lift,
+                             delay: Double(layer.rawValue) * 0.055)
     }
 
     /// `nil` under reduce-motion, which makes every `withAnimation` /
@@ -84,18 +123,17 @@ enum SetupStageMotion {
     static func layerTransition(_ layer: Layer,
                                 reduceMotion: Bool,
                                 isForward: Bool) -> AnyTransition {
-        guard case .layered = transition(reduceMotion: reduceMotion, isForward: isForward) else {
+        guard let geometry = layerGeometry(layer,
+                                           reduceMotion: reduceMotion,
+                                           isForward: isForward) else {
             return .identity
         }
-        let travel: CGFloat = isForward ? 1 : -1
-        let distance: CGFloat = [26, 34, 46][min(layer.rawValue, 2)]
-        let lift: CGFloat = [0, 6, 10][min(layer.rawValue, 2)]
 
         let insertion = AnyTransition
-            .offset(x: travel * distance, y: lift)
+            .offset(x: geometry.travel, y: geometry.lift)
             .combined(with: .opacity)
         let removal = AnyTransition
-            .offset(x: -travel * distance * 0.6, y: 0)
+            .offset(x: -geometry.travel * 0.6, y: 0)
             .combined(with: .opacity)
 
         return AnyTransition
@@ -123,6 +161,11 @@ struct SetupRail: View {
                     .fill(fill(for: item))
                     .frame(height: item.isCurrent ? 4 : 2)
                     .frame(maxWidth: .infinity)
+                    // Explicit: SwiftUI does not reliably expose a decorative
+                    // shape as an accessibility element, so without this the
+                    // labels below never reach VoiceOver despite the
+                    // `children: .contain` group.
+                    .accessibilityElement()
                     .accessibilityLabel(item.isCurrent
                                         ? "Current step: \(item.title)"
                                         : item.title)
@@ -164,10 +207,26 @@ struct SetupStage<Content: View>: View {
     let reduceMotion: Bool
     @ViewBuilder let content: (SetupStep) -> Content
 
-    /// Direction of travel, so forward and back feel distinct. Seeded true —
-    /// the first appearance is always forward.
-    @State private var isForward = true
+    /// The index the stage was LAST rendering. Updated in `onChange`, i.e. after
+    /// the render that observed the step change — which is exactly why direction
+    /// is computed from it in `body` rather than assigned there.
+    ///
+    /// An earlier version assigned `isForward` inside `onChange` and read it
+    /// from `body`. `onChange` runs after the update that observed the change,
+    /// so every transition was computed from the PREVIOUS direction and the
+    /// first Back animated as a forward. Deriving it during body evaluation
+    /// means the transition and the direction it depends on come from the same
+    /// change.
     @State private var lastIndex = 0
+
+    private var currentIndex: Int {
+        coordinator.steps.firstIndex(of: coordinator.step) ?? 0
+    }
+
+    /// Seeded forward: the first appearance has nowhere to have come back from.
+    private var isForward: Bool {
+        SetupStageMotion.isForward(from: lastIndex, to: currentIndex)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -198,13 +257,13 @@ struct SetupStage<Content: View>: View {
                        value: coordinator.step)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Only ever CATCHES UP; it never decides the direction. `body` has
+        // already rendered this change using the old value, which is the point.
         .onChange(of: coordinator.step) { _, newValue in
-            let index = coordinator.steps.firstIndex(of: newValue) ?? 0
-            isForward = index >= lastIndex
-            lastIndex = index
+            lastIndex = coordinator.steps.firstIndex(of: newValue) ?? 0
         }
         .onAppear {
-            lastIndex = coordinator.steps.firstIndex(of: coordinator.step) ?? 0
+            lastIndex = currentIndex
         }
     }
 
