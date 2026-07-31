@@ -85,4 +85,107 @@ struct SetupHomeStepTests {
         // The failure this pins: skipping every owed step to the closing screen.
         #expect(fresh.step != .done)
     }
+
+    // MARK: - What the folder preview promises
+
+    /// The listing is the explanation, so it must not drift from the layout the
+    /// app actually writes. Every named folder has to be a real first component
+    /// under the vault root.
+    @Test func theFolderPreviewNamesRealVaultDirectories() {
+        let root = URL(fileURLWithPath: "/tmp/preview-home", isDirectory: true)
+        let home = Home(vaultRoot: root, cacheRoot: root)
+        var real = Set(SharedDomain.allCases.compactMap { domain -> String? in
+            home.shared(domain).pathComponents
+                .dropFirst(root.pathComponents.count).first
+        })
+        // `Apps/` has no `SharedDomain`; it is `Home.vault(app:)`'s root.
+        real.insert(home.vault(app: AppID("probe")).pathComponents
+            .dropFirst(root.pathComponents.count).first ?? "")
+
+        #expect(!SetupHomePreview.entries.isEmpty)
+        for entry in SetupHomePreview.entries {
+            let name = String(entry.name.dropLast())  // trailing "/"
+            #expect(real.contains(name), "\(entry.name) is not a real vault directory")
+            #expect(!entry.detail.isEmpty)
+        }
+    }
+
+    // MARK: - The migration warning, derived BEFORE adoption
+
+    /// Nothing to move, nothing said. The overwhelmingly common case: a fresh
+    /// install has no legacy container at all.
+    @Test func noWarningWhenThereIsNoLegacyContainer() {
+        #expect(SetupHomeMigrationNotice.make(legacyContainer: nil,
+                                              needsMigration: { _ in
+            Issue.record("needsMigration must not be asked without a container")
+            return true
+        }) == nil)
+    }
+
+    /// **The distinction this task exists for.**
+    ///
+    /// The warning is derived from `VaultMigration.needsMigration(container:)`
+    /// — a question answerable BEFORE the user chooses a folder — and not from
+    /// `HomeAdoption.Result.migrated`, which does not exist until the migration
+    /// has already run and the container has already been renamed.
+    ///
+    /// Driven through the REAL predicate against real directories, in both
+    /// states, so this cannot pass against a stub that happens to agree:
+    ///
+    /// 1. A container holding legacy data, un-migrated → warned, in advance.
+    /// 2. The SAME container after migration (the `Documents.migrated` rename
+    ///    is the marker) → silent, even though a migration demonstrably did
+    ///    happen. A warning built from a post-hoc "did we migrate" flag would
+    ///    fire here, on a screen where the move is already in the past.
+    @Test func theWarningIsDerivedFromNeedsMigrationNotFromAPostMigrationFlag() throws {
+        let container = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("legacy-\(UUID().uuidString)", isDirectory: true)
+        let documents = container.appendingPathComponent("Documents", isDirectory: true)
+        try FileManager.default.createDirectory(at: documents,
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: container) }
+        try Data("{}".utf8).write(to: documents.appendingPathComponent("settings.json"))
+
+        // 1 — before: the real predicate says yes, and the notice exists.
+        #expect(VaultMigration.needsMigration(container: container))
+        let before = try #require(SetupHomeMigrationNotice.make(legacyContainer: container))
+        #expect(before.legacyCopyPath.hasSuffix("Documents.migrated"))
+        #expect(before.message.contains(before.legacyCopyPath),
+                "the warning must say where the old copy will end up")
+        #expect(before.message.contains("not deleted"))
+
+        // 2 — after: the migration HAS run. A flag set by the migration would be
+        // true here; `needsMigration` is false, and so is the notice.
+        try FileManager.default.moveItem(
+            at: documents,
+            to: container.appendingPathComponent("Documents.migrated", isDirectory: true))
+        #expect(!VaultMigration.needsMigration(container: container))
+        #expect(SetupHomeMigrationNotice.make(legacyContainer: container) == nil)
+    }
+
+    /// And it asks about the container it was given, rather than reaching for
+    /// the real Application Support tree — the seam the view relies on to stay
+    /// honest, and the reason the test above can run at all.
+    @Test func theWarningAsksAboutTheContainerItWasGiven() {
+        let container = URL(fileURLWithPath: "/tmp/legacy-probe")
+        var asked: [URL] = []
+        _ = SetupHomeMigrationNotice.make(legacyContainer: container,
+                                          needsMigration: { asked.append($0); return true })
+        #expect(asked == [container])
+    }
+
+    // MARK: - Headline
+
+    /// The rail label and the 30pt stage headline are different jobs. Welcome's
+    /// label stays "Welcome"; its headline says what the product is.
+    @Test func welcomeHeadlineSaysWhatAinkradIsWithoutChangingItsRailLabel() {
+        #expect(SetupStep.welcome.title == "Welcome")
+        #expect(SetupStep.welcome.headline != SetupStep.welcome.title)
+        #expect(SetupStep.welcome.headline.contains("Ainkrad"))
+        // Every other step's rail label still reads well large, so none of them
+        // pays for a second string.
+        for step in SetupStep.allCases where step != .welcome {
+            #expect(step.headline == step.title)
+        }
+    }
 }

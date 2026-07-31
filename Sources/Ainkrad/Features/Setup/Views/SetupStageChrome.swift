@@ -270,7 +270,9 @@ struct SetupStage<Content: View>: View {
     /// Its own layer: the heading enters ahead of the controls rather than with
     /// them. One idea per screen, stated large.
     private var heading: some View {
-        Text(coordinator.step.title)
+        // `headline`, not `title`: the rail still labels this step "Welcome",
+        // but the stage says what Ainkrad actually is. See `SetupStep.headline`.
+        Text(coordinator.step.headline)
             .font(AinkradFont.display(30, weight: .semibold))
             .foregroundStyle(tokens.foreground)
             .fixedSize(horizontal: false, vertical: true)

@@ -67,11 +67,30 @@ struct SetupHomeStepView: View {
 
     @State private var rejection: String?
 
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    /// Asked BEFORE the user chooses, which is the entire point of this task:
+    /// `VaultMigration.needsMigration(container:)` is answerable up front, so a
+    /// user whose data is about to be moved and whose old container is about to
+    /// be renamed is told first rather than on the closing screen after the
+    /// fact. Never derived from `HomeAdoption.Result.migrated` — that value
+    /// does not exist until the migration has already run.
+    ///
+    /// Computed once in `onAppear` rather than per body evaluation: it hits the
+    /// file system, and the answer cannot change while this screen is up (the
+    /// only thing that changes it is an adoption, which ends this screen).
+    @State private var migrationNotice: SetupHomeMigrationNotice?
+
+    /// Flipped once, by the first preview row to appear, to stage the folder
+    /// listing in. Never reset — Back to this step re-mounts the view.
+    @State private var hasSettled = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
+                .onAppear { migrationNotice = SetupHomeMigrationNotice.make() }
             // Back here returns to Welcome, and is safe precisely because
             // nothing has been adopted yet — this step is only ever reached on
             // a provisional home. The instant adoption succeeds the coordinator
@@ -90,32 +109,155 @@ struct SetupHomeStepView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
+    /// The folder is the idea, so the folder is what is drawn: a listing of
+    /// what will exist inside whatever the user picks. Someone looking at this
+    /// is choosing a place for their work to live, not filling in a path.
     private var content: some View {
-        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
-            Text("Ainkrad keeps everything you make — workspaces, notes, skills, "
-                 + "agent history — in one folder you own, called your Home.")
-                .font(AinkradFont.display(14))
-                .fixedSize(horizontal: false, vertical: true)
+        let tokens = environment.themeManager.tokens
 
-            Text("Choose an empty folder, or create a new one. Ainkrad will not take "
-                 + "over a folder that already has files in it.")
-                .font(AinkradFont.display(13))
-                .opacity(0.72)
-                .fixedSize(horizontal: false, vertical: true)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Pick an empty folder, or make a new one anywhere you like — "
+                     + "your Documents, an external drive, a synced folder. Ainkrad "
+                     + "will never take over a folder that already has files in it.")
+                    .font(AinkradFont.display(14))
+                    .foregroundStyle(tokens.foreground.opacity(0.78))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 560, alignment: .leading)
 
-            if let rejection {
-                ScrollView {
-                    Text(rejection)
-                        .font(AinkradFont.display(12))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                folderPreview(tokens: tokens)
+
+                if let migrationNotice {
+                    notice(title: migrationNotice.title,
+                           message: migrationNotice.message,
+                           icon: "arrow.right.doc.on.clipboard",
+                           tint: tokens.accentSecondary,
+                           tokens: tokens)
+                        .accessibilityIdentifier("setup.home.migrationWarning")
                 }
-                .frame(maxHeight: 180)
-                .accessibilityIdentifier("setup.home.rejection")
+
+                // The one failure state on this screen, and deliberately the
+                // plainest thing on it: a refusal has to be READ, so it gets a
+                // tint and an icon and nothing else. It keeps its own scroll
+                // clamp because `HomeError.notEmpty`'s message can run long.
+                if let rejection {
+                    notice(title: "That folder can't be used",
+                           message: rejection,
+                           icon: "exclamationmark.circle",
+                           tint: tokens.accentTertiary,
+                           tokens: tokens,
+                           maxHeight: 180)
+                        .accessibilityIdentifier("setup.home.rejection")
+                }
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    /// A live folder listing. No separator lines between the rows — one
+    /// seamless recessed surface, per the design language — and each row
+    /// arrives a beat after the one above it so the list assembles rather than
+    /// appearing as a block. Flat under reduce-motion.
+    private func folderPreview(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(tokens.accentPrimary)
+                Text("Inside it")
+                    .font(AinkradFont.display(12, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.5))
             }
 
-            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(Array(SetupHomePreview.entries.enumerated()), id: \.element.id) {
+                    index, entry in
+                    entryRow(entry, index: index, tokens: tokens)
+                }
+            }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.md)
+            .fill(tokens.surfaceElevated.opacity(0.35)))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("What Ainkrad will create in the folder you choose")
+    }
+
+    private func entryRow(_ entry: SetupHomePreview.Entry, index: Int,
+                          tokens: DesignTokens) -> some View {
+        let geometry = SetupStageMotion.layerGeometry(.content,
+                                                      reduceMotion: reduceMotion,
+                                                      isForward: true)
+        let travel = geometry.map { _ in CGFloat(10) } ?? 0
+        let delay = geometry.map { $0.delay + Double(index) * 0.05 } ?? 0
+
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: entry.icon)
+                .font(.system(size: 12))
+                .foregroundStyle(tokens.accentSecondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.name)
+                    .font(AinkradFont.mono(12))
+                    .foregroundStyle(tokens.foreground.opacity(0.9))
+                Text(entry.detail)
+                    .font(AinkradFont.display(12))
+                    .foregroundStyle(tokens.foreground.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(hasSettled ? 1 : 0)
+        .offset(x: hasSettled ? 0 : travel)
+        // Through `SetupStageMotion`, never a bare `.animation` — reduce-motion
+        // makes this `nil` and the rows are simply present.
+        .animation(SetupStageMotion.animation(reduceMotion: reduceMotion,
+                                              layer: .content)?.delay(delay),
+                   value: hasSettled)
+        .onAppear {
+            guard !hasSettled else { return }
+            hasSettled = true
+        }
+    }
+
+    /// One shape for both the migration warning and the rejection, differing
+    /// only in tint. They are the same kind of thing — something the user has to
+    /// read before choosing — and giving them two different treatments would
+    /// make the rarer one look like a decoration.
+    private func notice(title: String, message: String, icon: String,
+                        tint: Color, tokens: DesignTokens,
+                        maxHeight: CGFloat? = nil) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(tint)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(AinkradFont.display(12, weight: .medium))
+                    .foregroundStyle(tint)
+                let body = Text(message)
+                    .font(AinkradFont.display(12))
+                    .foregroundStyle(tokens.foreground.opacity(0.72))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Only the clamped variant gets its own scroller. An
+                // unconstrained `ScrollView` nested inside the step's scroller
+                // collapses to zero height, which is how a warning nobody can
+                // read gets shipped.
+                if let maxHeight {
+                    ScrollView { body }.frame(maxHeight: maxHeight)
+                } else {
+                    body
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tint.opacity(0.09)))
     }
 
     private func choose() {
