@@ -11,6 +11,68 @@ struct SetupProvidersStepTests {
                    expiresAt: Date().addingTimeInterval(3600), scopes: ["user:inference"])
     }
 
+    // MARK: - Connecting more than one provider
+    //
+    // Reported from hand-testing: connect OpenRouter, connect OpenAI, come back
+    // to OpenRouter — and nothing on screen said the first was still connected.
+    // The step read "am I connected" from the last attempt's MESSAGE, which the
+    // provider picker cleared on every switch.
+
+    /// The store is the persistent answer, and it must accumulate rather than
+    /// replace. This is what the step's CONNECTED list is rendered from.
+    @Test func connectingASecondProviderKeepsTheFirst() async {
+        let t = TestHome.make("prov-multi")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+        let ok = { @Sendable (_: ProviderKind, _: String, _: ProviderCredential) async in
+            ConnectionTestResult(ok: true, message: "Connected")
+        }
+
+        _ = await SetupProviders.connect(
+            preset: ProviderPreset.preset(id: "openrouter"), token: "sk-a",
+            baseURL: ProviderPreset.preset(id: "openrouter").defaultBaseURL,
+            connections: env.connectionStore, agentConfig: env.agentConfigStore, verify: ok)
+        _ = await SetupProviders.connect(
+            preset: ProviderPreset.preset(id: "openai"), token: "sk-b",
+            baseURL: ProviderPreset.preset(id: "openai").defaultBaseURL,
+            connections: env.connectionStore, agentConfig: env.agentConfigStore, verify: ok)
+
+        let presets = Set(env.connectionStore.connections.map(\.presetID))
+        #expect(presets == ["openrouter", "openai"],
+                "both connections must survive; the step lists them from here")
+        #expect(env.connectionStore.connections.count == 2)
+    }
+
+    /// The requirement is "a working connection exists", and once one does, a
+    /// LATER failed attempt at a different provider must not revoke it. The step
+    /// latches `hasVerifiedConnection` for exactly this reason; here the rule
+    /// itself is pinned.
+    @Test func aFailedSecondAttemptDoesNotUnsatisfyTheStep() async {
+        let t = TestHome.make("prov-latch")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+
+        let first = await SetupProviders.connect(
+            preset: ProviderPreset.preset(id: "openrouter"), token: "sk-a",
+            baseURL: ProviderPreset.preset(id: "openrouter").defaultBaseURL,
+            connections: env.connectionStore, agentConfig: env.agentConfigStore,
+            verify: { _, _, _ in ConnectionTestResult(ok: true, message: "Connected") })
+        #expect(first.isConnected)
+
+        let second = await SetupProviders.connect(
+            preset: ProviderPreset.preset(id: "openai"), token: "bad",
+            baseURL: ProviderPreset.preset(id: "openai").defaultBaseURL,
+            connections: env.connectionStore, agentConfig: env.agentConfigStore,
+            verify: { _, _, _ in ConnectionTestResult(ok: false, message: "HTTP 401") })
+        #expect(!second.isConnected)
+
+        // Verify-before-save: the failure left nothing behind, so the working
+        // connection is still the only one — and the step is still satisfied.
+        #expect(env.connectionStore.connections.count == 1)
+        #expect(SetupValidation.canAdvance(from: .providers,
+                                           values: ["isConnected": "true", "isDeferred": "false"]))
+    }
+
     @Test func averifiedConnectionIsSavedAndMadeActive() async {
         let t = TestHome.make("prov")
         defer { t.cleanup() }

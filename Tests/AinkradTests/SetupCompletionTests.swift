@@ -71,10 +71,23 @@ struct SetupCompletionTests {
     /// Back on the closing step must never be able to re-ask for a Home. After
     /// adoption the coordinator is rebuilt with `isProvisionalHome: false`,
     /// which drops `.home` from `steps` — so walking back cannot reach it.
-    @Test func backFromDoneCannotReturnToTheHomeStep() {
+    /// The re-raised gate: setup COMPLETED in this vault once, and the user is
+    /// back only for a step they deferred. The folder is settled, so no amount
+    /// of Back may offer to move it.
+    ///
+    /// Narrowed from "any non-provisional coordinator" when `.home` became
+    /// reachable during an unfinished setup — see
+    /// `SetupCoordinatorTests.backReachesTheHomeStepWhileSetupIsUnfinished`.
+    /// The completed marker is what makes this the settled case rather than the
+    /// mid-wizard one.
+    @Test func backFromDoneCannotReturnToTheHomeStepOnACompletedVault() {
         let store = InMemoryPersistenceStore()
+        store.save(SetupDocument(completedAt: Date(),
+                                 setupVersion: SetupCoordinator.currentSetupVersion,
+                                 deferredSteps: [SetupStep.providers.rawValue]))
         let reseated = SetupCoordinator(persistence: store, isProvisionalHome: false)
         #expect(!reseated.steps.contains(.home))
+        #expect(reseated.steps.count > 1, "otherwise Back has nowhere to go and this proves nothing")
 
         while reseated.canAdvance { reseated.advance() }
         #expect(reseated.step == .done)

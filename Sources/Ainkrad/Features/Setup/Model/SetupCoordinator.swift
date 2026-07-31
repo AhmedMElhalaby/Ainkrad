@@ -21,14 +21,33 @@ final class SetupCoordinator {
         let deferred = Set(doc.deferredSteps.compactMap(SetupStep.init(rawValue:)))
 
         let resolvedSteps: [SetupStep]
-        if isProvisionalHome {
-            // No vault chosen yet: the full wizard, always.
+        if isProvisionalHome || completedVersion < 0 {
+            // The full wizard, always — in TWO cases, and the second is the
+            // subtle one:
+            //
+            // 1. No vault chosen yet.
+            // 2. A vault HAS just been adopted, but setup has never completed
+            //    in it. The user is still walking the wizard, so `.home` stays
+            //    in the list and Back can return to it to pick a different
+            //    folder. An earlier version dropped `.home` the instant a folder
+            //    was adopted, which made the step vanish mid-wizard and left the
+            //    choice unchangeable until setup finished — for the one screen
+            //    that decides where all of the user's work will live.
+            //
+            // Derived from the marker rather than a flag passed in: "has setup
+            // ever completed here" is the real question, and a caller cannot get
+            // it wrong.
             resolvedSteps = SetupStep.allCases
         } else {
-            // Only steps introduced since the version the user completed — or
-            // deferred by them, which owes the step for the same reason and is
-            // resolved by the same filter — plus the closing screen. `.home` is
-            // never re-asked: a configured vault stands.
+            // Setup HAS completed in this vault before, so this is the re-raised
+            // gate: only steps introduced since the version the user completed —
+            // or deferred by them, which owes the step for the same reason and
+            // is resolved by the same filter — plus the closing screen.
+            //
+            // `.home` is never re-asked HERE, and only here: a vault whose setup
+            // is finished stands, and re-offering to move it is not a first-run
+            // question. Changing it afterwards belongs in Settings, not in a
+            // gate the user cannot dismiss.
             resolvedSteps = SetupStep.allCases.filter {
                 $0 == .done
                     || ($0 != .home && ($0.introducedIn > completedVersion || deferred.contains($0)))

@@ -59,6 +59,7 @@ enum SetupAppearance {
 struct SetupAppearanceStepView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradReduceMotion) private var reduceMotion
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     let coordinator: SetupCoordinator
 
@@ -71,7 +72,7 @@ struct SetupAppearanceStepView: View {
 
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 14) {
                     lead(tokens: tokens)
                     group(index: 1,
                           title: "Theme",
@@ -105,7 +106,15 @@ struct SetupAppearanceStepView: View {
                     }
                 }
                 .padding(20)
-                .frame(maxWidth: 620, alignment: .leading)
+                // FILLS the group, exactly as the Home step's folder listing
+                // does. Capping the whole column instead left every panel hard
+                // against the left edge with a void beside it — the layout read
+                // as broken rather than as composed, because the empty space was
+                // INSIDE the group rather than around it.
+                //
+                // Prose within the column is capped individually; see the
+                // section hints.
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onAppear { hasSettled = true }
 
@@ -129,6 +138,8 @@ struct SetupAppearanceStepView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.85))
                 .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                       alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -201,11 +212,9 @@ struct SetupAppearanceStepView: View {
     /// wizard to presets while Settings allows any color would be a
     /// regression the moment the user opens Settings afterward.
     private func accentColorRow(tokens: DesignTokens, manager: ThemeManager) -> some View {
-        let presets = Theme.allCases.map(\.tokens.accentPrimary)
-
-        return HStack(spacing: 10) {
-            ForEach(Array(presets.enumerated()), id: \.offset) { _, color in
-                accentSwatch(color, tokens: tokens, manager: manager)
+        HStack(spacing: 9) {
+            ForEach(Theme.allCases, id: \.self) { theme in
+                accentSwatch(theme, tokens: tokens, manager: manager)
             }
             AinkradColorPicker(
                 selection: Binding(
@@ -213,48 +222,82 @@ struct SetupAppearanceStepView: View {
                     set: { manager.setAccentColorHex($0.hexString) }
                 )
             )
-            .frame(width: 26, height: 26)
+            .frame(width: 30, height: 30)
+            .help("Any other colour")
+            .accessibilityLabel("Choose any other accent colour")
         }
     }
 
-    private func accentSwatch(_ color: Color, tokens: DesignTokens, manager: ThemeManager) -> some View {
-        let isSelected = manager.accentColorHex != nil && manager.accentColorHex == color.hexString
+    /// One accent preset.
+    ///
+    /// Chamfered rather than round, to match the theme cards above it — the two
+    /// rows were a grid of chamfers over a row of circles, which read as two
+    /// unrelated controls rather than as one screen.
+    ///
+    /// The selected state also accounts for INHERITANCE. `accentColorHex` is nil
+    /// until the user picks an accent explicitly, and the old check keyed only
+    /// off that — so on arrival nothing was selected at all, even though the
+    /// workspace visibly had an accent. It now shows the theme's own accent as
+    /// the current one, which is what the user is actually looking at.
+    private func accentSwatch(_ theme: Theme, tokens: DesignTokens,
+                              manager: ThemeManager) -> some View {
+        let color = theme.tokens.accentPrimary
+        let hex = color.hexString
+        let isExplicit = manager.accentColorHex == hex
+        let isInherited = manager.accentColorHex == nil
+            && manager.currentTheme.tokens.accentPrimary.hexString == hex
+        let isSelected = isExplicit || isInherited
+
         return Button {
-            manager.setAccentColorHex(color.hexString)
+            manager.setAccentColorHex(hex)
         } label: {
-            Circle()
+            ChamferShape(cut: 7)
                 .fill(color)
-                .frame(width: 22, height: 22)
+                .frame(width: 30, height: 30)
                 .overlay(
-                    Circle().strokeBorder(
-                        isSelected ? tokens.foreground.opacity(0.9) : .white.opacity(0.18),
+                    ChamferShape(cut: 7).strokeBorder(
+                        isSelected ? tokens.foreground.opacity(0.95) : .white.opacity(0.16),
                         lineWidth: isSelected ? 2 : 1
                     )
                 )
+                .overlay(
+                    // A tick, not just a ring: at 30pt a 2pt ring alone is easy
+                    // to miss, and this control has no other confirmation.
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.4), radius: 2)
+                        .opacity(isSelected ? 1 : 0)
+                )
         }
         .buttonStyle(.plain)
+        .help(theme.displayName)
+        .accessibilityLabel("\(theme.displayName) accent")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Typography
 
     private func typographyControls(tokens: DesignTokens) -> some View {
         let manager = environment.themeManager
-        return VStack(alignment: .leading, spacing: 10) {
-            AinkradSegmentedPicker(
-                items: UIFontFamily.allCases,
-                selection: Binding(get: { manager.uiFontFamily }, set: { manager.setFontFamily($0) }),
-                label: fontFamilyTitle
-            )
-            AinkradSegmentedPicker(
-                items: UIFontScale.allCases,
-                selection: Binding(get: { manager.uiFontScale }, set: { manager.setFontScale($0) }),
-                label: fontScaleTitle
-            )
+        return VStack(alignment: .leading, spacing: 9) {
+            captioned("Typeface", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: UIFontFamily.allCases,
+                    selection: Binding(get: { manager.uiFontFamily },
+                                       set: { manager.setFontFamily($0) }),
+                    label: fontFamilyTitle
+                )
+            }
+            captioned("Size", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: UIFontScale.allCases,
+                    selection: Binding(get: { manager.uiFontScale },
+                                       set: { manager.setFontScale($0) }),
+                    label: fontScaleTitle
+                )
+            }
         }
-        // The two pickers lost their "FONT FAMILY" / "FONT SIZE" labels because
-        // their contents already say what they are ("Exo 2 / JetBrains Mono /
-        // System" over "Small / Medium / Large"). VoiceOver, which cannot see
-        // that, still gets told.
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Font family and size")
     }
@@ -263,20 +306,53 @@ struct SetupAppearanceStepView: View {
 
     private func appIconControls(tokens: DesignTokens) -> some View {
         let store = environment.appIconStore
-        return VStack(alignment: .leading, spacing: 10) {
-            AinkradSegmentedPicker(
-                items: AppIconChoice.allCases,
-                selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
-                label: iconColorTitle
-            )
-            AinkradSegmentedPicker(
-                items: AppIconAppearance.allCases,
-                selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),
-                label: iconAppearanceTitle
-            )
+        return VStack(alignment: .leading, spacing: 9) {
+            captioned("Colour", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: AppIconChoice.allCases,
+                    selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
+                    label: iconColorTitle
+                )
+            }
+            captioned("Light or dark", tokens: tokens) {
+                AinkradSegmentedPicker(
+                    items: AppIconAppearance.allCases,
+                    selection: Binding(get: { store.appearance },
+                                       set: { store.selectAppearance($0) }),
+                    label: iconAppearanceTitle
+                )
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("App icon color and appearance")
+    }
+
+    /// A control with a caption in a fixed leading column.
+    ///
+    /// Both of the paired sections on this screen — typeface/size and icon
+    /// colour/appearance — are TWO AXES, and rendering them as two identical
+    /// rows of pills made them read as one flat list of six options. "Auto,
+    /// Blue, Purple, System, Light, Dark" is unparseable without knowing where
+    /// one control ends and the next begins.
+    ///
+    /// An earlier comment argued the contents said what they were. That is true
+    /// of "Small / Medium / Large" and false of everything else here, and it is
+    /// never true of the RELATIONSHIP between the two rows.
+    ///
+    /// The caption column is a fixed width so the two controls align down the
+    /// screen, which is what makes them read as a form rather than as loose
+    /// buttons.
+    private func captioned<Content: View>(_ caption: String, tokens: DesignTokens,
+                                          @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(caption)
+                .font(AinkradFont.display(11, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.45))
+                .frame(width: 86, alignment: .leading)
+                .accessibilityHidden(true)
+            content()
+            Spacer(minLength: 0)
+        }
     }
 
     // MARK: - Group + staging
@@ -289,19 +365,39 @@ struct SetupAppearanceStepView: View {
                                       tokens: DesignTokens,
                                       @ViewBuilder _ content: () -> Content) -> some View {
         staged(index: index) {
-            VStack(alignment: .leading, spacing: 9) {
-                Text(title)
-                    .font(AinkradFont.display(15, weight: .medium))
-                    .foregroundStyle(tokens.foreground.opacity(0.95))
-                Text(hint)
-                    .font(AinkradFont.display(12))
-                    .foregroundStyle(tokens.foreground.opacity(0.55))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(AinkradFont.display(15, weight: .medium))
+                        .foregroundStyle(tokens.foreground.opacity(0.95))
+                    Text(hint)
+                        .font(AinkradFont.display(12))
+                        .foregroundStyle(tokens.foreground.opacity(0.55))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        // Capped where the CONTROLS below are not: the column
+                        // fills the group so the theme cards can use the room,
+                        // but a one-line hint stretched to 1000pt is unreadable.
+                        .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                               alignment: .leading)
+                }
+
                 content()
-                    .padding(.top, 2)
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // A recessed surface per section, exactly as the Home step draws its
+            // folder listing. Without one, four sections of bare text and loose
+            // controls float on the scrim with nothing but vertical space
+            // separating them, and the screen reads as a settings dump rather
+            // than as a composed step.
+            //
+            // Still no separator LINES — the surface is what does the dividing,
+            // which is the design language's rule rather than an exception to it.
+            .background(
+                ChamferShape(cut: AinkradRadius.md)
+                    .fill(tokens.surfaceElevated.opacity(0.32))
+            )
         }
     }
 

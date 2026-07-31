@@ -16,6 +16,10 @@ struct SetupOverlayView: View {
     /// same reason the coordinator does — same view identity, same `@State` —
     /// and is read four steps later by `.done`.
     @State private var didMigrateLegacyData = false
+    /// Raised by a step when it needs a blocking answer. Owned here so the modal
+    /// is centred on the WHOLE gate rather than inside the step's content group,
+    /// which is scrollable and can carry its buttons below the fold.
+    @State private var modals = SetupModalPresenter()
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -29,8 +33,18 @@ struct SetupOverlayView: View {
 
             if let coordinator {
                 stage(coordinator: coordinator, tokens: tokens)
+                    .environment(modals)
+            }
+
+            // Above the stage, always. A step raises this only for a decision
+            // that blocks the wizard; refusals stay inline in the step.
+            if let modal = modals.modal {
+                SetupModalView(modal: modal, tokens: tokens)
+                    .transition(.opacity)
+                    .zIndex(10)
             }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: modals.modal?.id)
         .onAppear {
             if coordinator == nil {
                 coordinator = SetupCoordinator(

@@ -11,21 +11,63 @@ final class SetupHomeStepModel {
         case adopted
         case rejected(String)
         case cancelled
+        /// The folder is ALREADY an Ainkrad Home with work in it. Adopting it is
+        /// legitimate — it is the reinstall-and-restore path — but it is not
+        /// what someone who meant to pick an empty folder expects, so it is
+        /// confirmed rather than done silently.
+        ///
+        /// A folder that is not empty and NOT an Ainkrad Home is refused
+        /// outright by `AinkradHome.validate`; there is no confirmation for that
+        /// case, because there is no version of it that is safe.
+        case needsConfirmation(url: URL, entryCount: Int)
     }
 
     private let chooseVault: LaunchHomeResolver.VaultChooser
     private let adopt: (URL) throws -> Void
+    private let inspect: (URL) -> ExistingVault?
+
+    /// What an already-populated Ainkrad Home looks like from outside.
+    struct ExistingVault: Equatable {
+        /// Entries in the folder, excluding the marker itself and `.DS_Store` —
+        /// i.e. how much of the user's own work is in there.
+        let entryCount: Int
+    }
 
     init(chooseVault: @escaping LaunchHomeResolver.VaultChooser,
-         adopt: @escaping (URL) throws -> Void) {
+         adopt: @escaping (URL) throws -> Void,
+         inspect: @escaping (URL) -> ExistingVault? = { SetupHomeStepModel.inspectVault(at: $0) }) {
         self.chooseVault = chooseVault
         self.adopt = adopt
+        self.inspect = inspect
+    }
+
+    /// Reports an existing Home with contents, or `nil` for anything else —
+    /// including an EMPTY existing Home, which is indistinguishable from a fresh
+    /// folder as far as the user is concerned and needs no confirmation.
+    nonisolated static func inspectVault(at url: URL) -> ExistingVault? {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: HomeMarker.url(in: url).path) else { return nil }
+        let entries = ((try? fm.contentsOfDirectory(atPath: url.path)) ?? [])
+            .filter { $0 != HomeMarker.filename && $0 != ".DS_Store" }
+        return entries.isEmpty ? nil : ExistingVault(entryCount: entries.count)
     }
 
     func choose() -> Outcome {
         guard let chosen = chooseVault() else { return .cancelled }
+        if let existing = inspect(chosen) {
+            return .needsConfirmation(url: chosen, entryCount: existing.entryCount)
+        }
+        return adoptNow(chosen)
+    }
+
+    /// Adopt a folder the user has confirmed. Separate from `choose()` so the
+    /// confirmation cannot be bypassed by accident: the only path that skips it
+    /// is the one where `inspect` found nothing to confirm.
+    func adoptConfirmed(_ url: URL) -> Outcome { adoptNow(url) }
+
+    private func adoptNow(_ url: URL) -> Outcome {
         do {
-            try adopt(chosen)
+            try adopt(url)
             return .adopted
         } catch {
             // Reuse the recovery copy so the wizard and the launch-time alerts
@@ -44,14 +86,22 @@ final class SetupHomeStepModel {
 /// `AinkradHostApp.install(_:into:)` — reached here only via the injected
 /// `SetupHomeInstaller`, never by re-pointing anything at this call site.
 ///
-/// A refusal (a populated folder, a nested Home, an unwritable one) is rendered
-/// INLINE rather than in a modal alert: the user is already inside a modal gate,
-/// and stacking a second modal over it is how the launch-time alerts became
-/// unverifiable. Nothing is written on a refusal — `adoptAndRebuild` throws
-/// before `install` runs — so the step simply stays where it is.
+/// A refusal (a populated folder, a nested Home, an unwritable one) and the
+/// "this folder is already a vault" confirmation are both raised through
+/// `SetupModalPresenter`, over the whole gate. They were inline first, on the
+/// reasoning that a second modal over a modal gate is what made the launch-time
+/// alerts unverifiable — but hand-testing found both of them below the fold on
+/// this step's own scroller, which is worse than unverifiable: it is invisible.
+///
+/// Nothing is written on a refusal — `adoptAndRebuild` throws before `install`
+/// runs — so the step simply stays where it is.
 struct SetupHomeStepView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.setupHomeInstaller) private var installer
+    /// Where the "this folder is already a vault" decision is raised. Presented
+    /// by `SetupOverlayView` over the whole gate — an inline version of it sat
+    /// on this step's scroller and its buttons landed below the fold.
+    @Environment(SetupModalPresenter.self) private var modals
 
     let coordinator: SetupCoordinator
     /// Handed the REBUILT environment so the overlay can re-seat anything it owns
@@ -65,9 +115,33 @@ struct SetupHomeStepView: View {
     /// own to say so. The overlay carries it to the closing step.
     let onAdopted: (AppEnvironment, Bool) -> Void
 
-    @State private var rejection: String?
+
+    /// The environment rebuilt against the adopted vault, and whether adoption
+    /// moved a legacy container into it. Held as state rather than as locals
+    /// because adoption can now be reached from two places — the chooser and the
+    /// confirmation — and both hand the same values on.
+    @State private var adoptedEnvironment: AppEnvironment?
+    @State private var didMigrate = false
+
+    /// True once a folder has been adopted, which on this step means the user
+    /// arrived back here through Back and already has a Home.
+    private var hasAdoptedHome: Bool { !environment.isProvisionalHome }
+
+    /// The adopted vault's path, in tilde form, or `nil` while the home is still
+    /// provisional.
+    ///
+    /// Read from `AinkradHome.resolve()` — the POINTER that adoption writes —
+    /// rather than from this view's own state. State would be wrong on the path
+    /// that matters: the step is re-created when the user comes Back to it, so
+    /// anything remembered here is gone by the time they most need to see which
+    /// folder they picked.
+    private var adoptedPath: String? {
+        guard hasAdoptedHome, case .ready(let home) = AinkradHome.resolve() else { return nil }
+        return SetupHomeMigrationNotice.abbreviatingHome(home.vaultRoot.path)
+    }
 
     @Environment(\.ainkradReduceMotion) private var reduceMotion
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     /// Asked BEFORE the user chooses, which is the entire point of this task:
     /// `VaultMigration.needsMigration(container:)` is answerable up front, so a
@@ -91,22 +165,130 @@ struct SetupHomeStepView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
                 .onAppear { migrationNotice = SetupHomeMigrationNotice.make() }
-            // Back here returns to Welcome, and is safe precisely because
-            // nothing has been adopted yet — this step is only ever reached on
-            // a provisional home. The instant adoption succeeds the coordinator
-            // is rebuilt without `.home` at all, so Back can never return to it.
+            // The footer has two shapes, because this step has two states.
             //
-            // No `SetupRequirementNote` here, unlike the other gated steps, and
-            // the primary is never disabled: this step's requirement IS its
-            // primary button. "Choose a folder to continue" printed above a
-            // button reading "Choose Folder…" would be noise, not an
-            // explanation. The rule still lives in `SetupValidation` so
-            // `canAdvance(from: .home,)` tells a programmatic caller the truth.
-            SetupStepFooter(coordinator: coordinator,
-                            primaryTitle: "Choose Folder…",
-                            primaryIdentifier: "setup.home.choose") { choose() }
+            // BEFORE a folder is chosen the primary IS the requirement — there
+            // is no Continue, because there is nothing to continue to. No
+            // `SetupRequirementNote` either, unlike the other gated steps:
+            // "Choose a folder to continue" printed above a button reading
+            // "Choose Folder…" would be noise, not an explanation. The rule
+            // still lives in `SetupValidation` so `canAdvance(from: .home,)`
+            // tells a programmatic caller the truth.
+            //
+            // AFTER one is adopted the user can be back here via Back, so the
+            // primary becomes Continue and changing the folder moves to a
+            // secondary. Without that, returning to this step would trap them:
+            // its only button would re-open a folder chooser they may have come
+            // back merely to look at.
+            if hasAdoptedHome {
+                adoptedFooter
+            } else {
+                SetupStepFooter(coordinator: coordinator,
+                                primaryTitle: "Choose Folder…",
+                                primaryIdentifier: "setup.home.choose") { choose() }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    /// Names the folder that is currently the Home.
+    ///
+    /// Shown only once one is adopted, and placed ABOVE the "Inside it" preview
+    /// so the order reads as a statement then its explanation: this is your
+    /// folder, and this is what is in it. Someone who came Back to this step did
+    /// so to check or change the folder, and the first thing they need is which
+    /// one it currently is.
+    private func selectedFolder(_ path: String, tokens: DesignTokens) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 9) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(tokens.accentSecondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your Ainkrad Home")
+                    .font(AinkradFont.display(11, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.5))
+                Text(path)
+                    // Monospaced: this is a path, and a path set in the UI face
+                    // is harder to read back character by character — which is
+                    // exactly what someone verifying a folder is doing.
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(tokens.foreground)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.md)
+            .fill(tokens.accentSecondary.opacity(0.09)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Your Ainkrad Home is \(path)")
+        .accessibilityIdentifier("setup.home.selected")
+    }
+
+    /// The "this folder already holds a vault" decision.
+    ///
+    /// It states the COUNT, because "this folder is already an Ainkrad Home" and
+    /// "this folder has 214 things in it" land very differently, and the second
+    /// is the one that stops someone who picked the wrong folder.
+    ///
+    /// The safe action is the secondary, so dismissing the modal by any route —
+    /// including a stray click on the scrim — picks again rather than claiming
+    /// the vault.
+    /// A folder the app will not claim.
+    ///
+    /// ONE button, and it re-opens the chooser rather than merely closing: the
+    /// user is mid-task and the only thing they can do next is pick again, so
+    /// making them dismiss and then find the button again is a step for nothing.
+    private func refusalModal(_ message: String) -> SetupModalPresenter.Modal {
+        SetupModalPresenter.Modal(
+            title: "That folder can't be used",
+            message: message,
+            icon: "exclamationmark.circle",
+            tone: .caution,
+            primaryTitle: "Choose Another Folder",
+            primary: {
+                modals.dismiss()
+                choose()
+            },
+            onDismiss: { modals.dismiss() })
+    }
+
+    private func existingVaultModal(url: URL, entryCount: Int) -> SetupModalPresenter.Modal {
+        SetupModalPresenter.Modal(
+            title: "This folder is already an Ainkrad Home",
+            message: "\(SetupHomeMigrationNotice.abbreviatingHome(url.path)) already holds an "
+                + "Ainkrad vault with \(entryCount) item\(entryCount == 1 ? "" : "s") in it.\n\n"
+                + "Using it keeps everything that is already there — this is how you reconnect "
+                + "to your work after reinstalling, or on a new Mac. Nothing is deleted or "
+                + "overwritten.",
+            icon: "clock.arrow.circlepath",
+            tone: .informational,
+            primaryTitle: "Use This Vault",
+            primary: { confirm(url) },
+            secondaryTitle: "Pick a Different Folder",
+            secondary: { modals.dismiss() },
+            onDismiss: { modals.dismiss() })
+    }
+
+    /// The footer once a Home exists: Continue leads, Change is secondary.
+    ///
+    /// Change sits beside Back rather than as the primary, because by the time
+    /// the user is standing here again the folder is settled — moving it is the
+    /// exception, and the exception should not be the button under their thumb.
+    private var adoptedFooter: some View {
+        HStack {
+            if coordinator.canGoBack {
+                AinkradButton(title: "Back", style: .secondary) { coordinator.back() }
+                    .accessibilityIdentifier("setup.back")
+            }
+            AinkradButton(title: "Change Folder…", style: .secondary) { choose() }
+                .accessibilityIdentifier("setup.home.change")
+            Spacer(minLength: 0)
+            AinkradButton(title: "Continue", style: .primary) { coordinator.advance() }
+                .accessibilityIdentifier("setup.continue")
+        }
+        .padding(20)
     }
 
     /// The folder is the idea, so the folder is what is drawn: a listing of
@@ -124,7 +306,14 @@ struct SetupHomeStepView: View {
                     .foregroundStyle(tokens.foreground.opacity(0.78))
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 560, alignment: .leading)
+                    // Prose, so the READING measure — the folder listing below
+                    // is what uses the extra width.
+                    .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                           alignment: .leading)
+
+                if let adoptedPath {
+                    selectedFolder(adoptedPath, tokens: tokens)
+                }
 
                 folderPreview(tokens: tokens)
 
@@ -137,26 +326,7 @@ struct SetupHomeStepView: View {
                         .accessibilityIdentifier("setup.home.migrationWarning")
                 }
 
-                // The one failure state on this screen, and deliberately the
-                // plainest thing on it: a refusal has to be READ, so it gets a
-                // tint and an icon and nothing else.
-                //
-                // It has NO scroller and no height clamp of its own. It used to
-                // have both, which was correct when this step's content did not
-                // scroll — now that it does, an inner vertical scroller inside
-                // an outer vertical scroller is a gesture and sizing hazard, and
-                // a long `HomeError.notEmpty` message is exactly the case the
-                // brief says must stay readable. One scroller on this axis: the
-                // rejection lays out at its full height and the step's own
-                // scroller carries it.
-                if let rejection {
-                    notice(title: "That folder can't be used",
-                           message: rejection,
-                           icon: "exclamationmark.circle",
-                           tint: tokens.accentTertiary,
-                           tokens: tokens)
-                        .accessibilityIdentifier("setup.home.rejection")
-                }
+
             }
             .padding(.bottom, 4)
         }
@@ -244,13 +414,16 @@ struct SetupHomeStepView: View {
         }
     }
 
-    /// One shape for both the migration warning and the rejection, differing
-    /// only in tint. They are the same kind of thing — something the user has to
-    /// read before choosing — and giving them two different treatments would
-    /// make the rarer one look like a decoration.
+    /// The inline notice, now used only by the migration warning.
     ///
-    /// Neither variant scrolls. The step owns the only scroller on this axis —
-    /// see the rejection's call site.
+    /// It once also carried the refusal. That moved to a modal
+    /// (`SetupModalPresenter`) because the user could not see it — a five-line
+    /// explanation rendered below the fold on this step's scroller. What is left
+    /// here is the right shape for THIS job: the migration warning is not a
+    /// response to anything the user just did, it is part of the screen they are
+    /// reading before they choose, so interrupting them with it would be wrong.
+    ///
+    /// It does not scroll. The step owns the only scroller on this axis.
     private func notice(title: String, message: String, icon: String,
                         tint: Color, tokens: DesignTokens) -> some View {
         HStack(alignment: .top, spacing: 10) {
@@ -286,17 +459,60 @@ struct SetupHomeStepView: View {
         // environment to (previews, and any test that builds this view without an
         // installer).
         // Logged, not silent: returning is correct, but this step's ONLY button
-        // then does nothing at all, with no rejection text and no alert — a
-        // wizard that appears frozen on its one irreversible screen. Anyone who
-        // hits it in a preview or a hand-built tree needs to be told why.
+        // then does nothing at all, with no refusal and no modal — a wizard that
+        // appears frozen on its one irreversible screen. Anyone who hits it in a
+        // preview or a hand-built tree needs to be told why.
         guard let installer else {
             Log.persistence.error(
                 "Setup Home step has no SetupHomeInstaller; adoption is unavailable in this view tree")
             return
         }
 
-        var rebuilt: AppEnvironment?
-        var migrated = false
+        let outcome = withModel(installer) { $0.choose() }
+        apply(outcome)
+    }
+
+    /// Adopt a folder the user has just confirmed in the notice below.
+    private func confirm(_ url: URL) {
+        guard let installer else {
+            Log.persistence.error(
+                "Setup Home step has no SetupHomeInstaller; adoption is unavailable in this view tree")
+            return
+        }
+        modals.dismiss()
+        apply(withModel(installer) { $0.adoptConfirmed(url) })
+    }
+
+    private func apply(_ outcome: SetupHomeStepModel.Outcome) {
+        switch outcome {
+        case .adopted:
+            modals.dismiss()
+        case .rejected(let message):
+            modals.present(refusalModal(message))
+        case .needsConfirmation(let url, let entryCount):
+            modals.present(existingVaultModal(url: url, entryCount: entryCount))
+        case .cancelled:
+            break
+        }
+        // `install` always runs on a successful adoption, so `adoptedEnvironment`
+        // is set by the time `.adopted` comes back. Advancing the OUTGOING
+        // coordinator would move the wizard on while still bound to the
+        // provisional store, so there is deliberately no fallback.
+        if case .adopted = outcome, let rebuilt = adoptedEnvironment {
+            onAdopted(rebuilt, didMigrate)
+        }
+    }
+
+    /// Builds the model, runs `body` against it, and leaves the rebuilt
+    /// environment in `adoptedEnvironment` for `apply` to hand on.
+    ///
+    /// Shared by `choose()` and `confirm(_:)` so the adoption path — which
+    /// writes the marker, migrates the legacy container and re-points every
+    /// holder — exists exactly once regardless of whether a confirmation was
+    /// required.
+    private func withModel(_ installer: SetupHomeInstaller,
+                           _ body: (SetupHomeStepModel) -> SetupHomeStepModel.Outcome)
+        -> SetupHomeStepModel.Outcome {
         let model = SetupHomeStepModel(
             chooseVault: LaunchHomeResolver.presentFolderChooser,
             adopt: { url in
@@ -308,7 +524,7 @@ struct SetupHomeStepView: View {
                     // The real vault is claimed, so the provisional restrictions
                     // (above all the throwaway Keychain namespace) are lifted.
                     newEnvironment.isProvisionalHome = false
-                    rebuilt = newEnvironment
+                    adoptedEnvironment = newEnvironment
                     installer.install(newEnvironment)
                 }
                 // Carried, not just logged. This step advances the moment it
@@ -317,24 +533,12 @@ struct SetupHomeStepView: View {
                 // renamed `Documents.migrated` must be told somewhere — and
                 // `.done` is that somewhere. Dropping it here is how the rename
                 // became a thing users would only ever discover in Finder.
-                migrated = result.migrated
+                didMigrate = result.migrated
                 if result.migrated {
                     Log.persistence.info("Setup migrated the legacy container into the adopted Home")
                 }
             })
 
-        switch model.choose() {
-        case .adopted:
-            rejection = nil
-            // `install` always runs on a successful adoption, so `rebuilt` is
-            // always set here. Advancing the OUTGOING coordinator would move the
-            // wizard on while still bound to the provisional store, so there is
-            // deliberately no fallback.
-            if let rebuilt { onAdopted(rebuilt, migrated) }
-        case .rejected(let message):
-            rejection = message
-        case .cancelled:
-            break
-        }
+        return body(model)
     }
 }

@@ -49,7 +49,11 @@ struct SetupMotionSoundStepTests {
         let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
         let store = env.generalSettingsStore
 
-        // Default: motion on, and the stage animates.
+        // Set the starting state explicitly rather than leaning on the default:
+        // what is under test is that the toggle takes effect immediately, and
+        // seeding from the default would make this test silently change meaning
+        // the next time the default moves — which it has, twice.
+        store.setUiReduceMotion(false)
         #expect(!store.uiReduceMotion)
         #expect(SetupStageMotion.transition(reduceMotion: store.uiReduceMotion)
                 == .layered(isForward: true))

@@ -36,6 +36,158 @@ struct SetupHomeStepTests {
         #expect(message.lowercased().contains("empty"))
     }
 
+    // MARK: - Adopting a folder that is already a vault
+    //
+    // Three outcomes for a folder with things in it, and keeping them apart is
+    // the whole point:
+    //   - not an Ainkrad Home        → REFUSED, no way through
+    //   - an Ainkrad Home with work  → CONFIRMED, then adopted
+    //   - an Ainkrad Home that's empty → adopted, nothing to confirm
+
+    @Test func anExistingVaultWithWorkInItAsksBeforeAdopting() {
+        let url = URL(fileURLWithPath: "/tmp/existing-vault")
+        let model = SetupHomeStepModel(
+            chooseVault: { url },
+            adopt: { _ in Issue.record("must not adopt before the user confirms") },
+            inspect: { _ in .init(entryCount: 214) })
+
+        #expect(model.choose() == .needsConfirmation(url: url, entryCount: 214))
+    }
+
+    /// The confirmation is the ONLY thing standing between the user and a vault
+    /// they may have picked by mistake, so nothing may be written while it is up.
+    @Test func nothingIsWrittenWhileTheConfirmationIsPending() {
+        var adoptCalls = 0
+        let model = SetupHomeStepModel(
+            chooseVault: { URL(fileURLWithPath: "/tmp/existing-vault") },
+            adopt: { _ in adoptCalls += 1 },
+            inspect: { _ in .init(entryCount: 3) })
+
+        _ = model.choose()
+        #expect(adoptCalls == 0)
+    }
+
+    @Test func confirmingAdoptsTheSameFolder() {
+        let url = URL(fileURLWithPath: "/tmp/existing-vault")
+        var adopted: URL?
+        let model = SetupHomeStepModel(
+            chooseVault: { url },
+            adopt: { adopted = $0 },
+            inspect: { _ in .init(entryCount: 9) })
+
+        guard case .needsConfirmation(let pending, _) = model.choose() else {
+            Issue.record("expected .needsConfirmation"); return
+        }
+        #expect(model.adoptConfirmed(pending) == .adopted)
+        #expect(adopted == url)
+    }
+
+    /// An empty existing Home is indistinguishable from a fresh folder as far as
+    /// the user is concerned. Confirming it would be a question with one
+    /// sensible answer, which is noise.
+    @Test func anEmptyExistingVaultNeedsNoConfirmation() {
+        let model = SetupHomeStepModel(
+            chooseVault: { URL(fileURLWithPath: "/tmp/empty-vault") },
+            adopt: { _ in },
+            inspect: { _ in nil })
+
+        #expect(model.choose() == .adopted)
+    }
+
+    /// The refusal has NO confirmation path. A folder that is full of someone
+    /// else's files is not something the user can be asked to accept, because
+    /// there is no version of claiming it that is safe.
+    @Test func aFolderThatIsNotAVaultIsRefusedNotConfirmed() {
+        let url = URL(fileURLWithPath: "/tmp/someone-elses-project")
+        let model = SetupHomeStepModel(
+            chooseVault: { url },
+            adopt: { _ in throw HomeError.notEmpty(url) },
+            // Not a Home, so nothing to confirm — the refusal comes from adopt.
+            inspect: { _ in nil })
+
+        guard case .rejected = model.choose() else {
+            Issue.record("a populated non-vault must be refused, never confirmed"); return
+        }
+    }
+
+    /// `inspectVault` is the real predicate the view uses, and it must key off
+    /// the MARKER rather than off emptiness — otherwise every populated folder
+    /// would be offered as a restore.
+    @Test func inspectionRequiresTheMarkerNotJustContents() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        // Populated, but no marker: not a vault.
+        try "x".write(to: root.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
+        #expect(SetupHomeStepModel.inspectVault(at: root) == nil)
+
+        // Add the marker and it becomes a restorable vault, counting only the
+        // user's own entries — not the marker, and not .DS_Store.
+        try "{}".write(to: HomeMarker.url(in: root), atomically: true, encoding: .utf8)
+        try "".write(to: root.appendingPathComponent(".DS_Store"), atomically: true, encoding: .utf8)
+        #expect(SetupHomeStepModel.inspectVault(at: root)?.entryCount == 1)
+    }
+
+    // MARK: - The confirmation is a modal, not an inline notice
+
+    /// It shipped inline first and the user could not see it: the step's content
+    /// scrolls, and the two buttons landed below the fold. A decision that
+    /// BLOCKS the wizard has to be presented over it.
+    @Test func presentingAModalReplacesAnyPreviousOneAndDismissesCleanly() {
+        let presenter = SetupModalPresenter()
+        #expect(presenter.modal == nil)
+
+        presenter.present(.init(title: "First", message: "m", icon: "circle",
+                                tone: .informational, primaryTitle: "Yes",
+                                primary: {}, secondaryTitle: "No", secondary: {},
+                                onDismiss: {}))
+        let first = presenter.modal?.id
+        #expect(first != nil)
+
+        presenter.present(.init(title: "Second", message: "m", icon: "circle",
+                                tone: .informational, primaryTitle: "Yes",
+                                primary: {}, secondaryTitle: "No", secondary: {},
+                                onDismiss: {}))
+        #expect(presenter.modal?.title == "Second")
+        #expect(presenter.modal?.id != first, "a new modal must be a new identity, or it will not animate")
+
+        presenter.dismiss()
+        #expect(presenter.modal == nil)
+    }
+
+    /// Dismissing — including a stray click on the scrim — must never be the
+    /// action that claims a vault.
+    @Test func dismissingIsNeverTheActionThatAdopts() {
+        var claimed = false
+        var dismissed = false
+        let modal = SetupModalPresenter.Modal(
+            title: "t", message: "m", icon: "circle", tone: .informational,
+            primaryTitle: "Use This Vault",
+            primary: { claimed = true },
+            secondaryTitle: "Pick a Different Folder",
+            secondary: { dismissed = true },
+            onDismiss: { dismissed = true })
+
+        modal.onDismiss()
+        #expect(dismissed)
+        #expect(!claimed)
+    }
+
+    /// A refusal has ONE way out. Rendering an invented second button would make
+    /// it look like a choice the user does not actually have.
+    @Test func aRefusalHasNoSecondButton() {
+        let refusal = SetupModalPresenter.Modal(
+            title: "That folder can't be used", message: "…", icon: "exclamationmark.circle",
+            tone: .caution, primaryTitle: "Choose Another Folder",
+            primary: {}, onDismiss: {})
+
+        #expect(refusal.secondaryTitle == nil)
+        #expect(refusal.secondary == nil)
+        #expect(refusal.tone == .caution)
+    }
+
     /// After the swap the coordinator is rebuilt against the ADOPTED home's
     /// store and walked to the step after `.home`.
     @Test func reseatingResumesAtTheStepAfterHome() {
@@ -43,7 +195,10 @@ struct SetupHomeStepTests {
         let fresh = SetupCoordinator(persistence: store, isProvisionalHome: false)
         #expect(SetupReseat.plan(fresh, toward: .appearance) == .resumed(.appearance))
         #expect(fresh.step == .appearance)
-        #expect(!fresh.steps.contains(.home), "a configured Home must never be re-asked")
+        // `.home` is WALKED PAST, not removed: setup has not completed in this
+        // vault yet, so the folder stays changeable via Back. Removing it here
+        // is what previously made the step vanish the moment it was answered.
+        #expect(fresh.steps.contains(.home))
     }
 
     /// Reinstall-and-restore: the chosen folder is an existing Home whose setup
@@ -75,12 +230,22 @@ struct SetupHomeStepTests {
     /// `.home` stands in for any unreachable target: the non-provisional step
     /// list excludes it unconditionally, so it can never be walked to.
     @Test func reseatingTowardAnUnreachableStepLandsOnTheFirstOwedStep() throws {
+        // A vault whose setup completed at the current version but which owes a
+        // deferred step. Its list is that step plus `.done`, so `.appearance` is
+        // genuinely unreachable — the version-bump shape this test exists for.
+        //
+        // Previously this used `.home` as the unreachable target against an
+        // empty store; `.home` is now reachable during an unfinished setup, so
+        // that no longer constructs the case.
         let store = InMemoryPersistenceStore()
+        store.save(SetupDocument(completedAt: Date(),
+                                 setupVersion: SetupCoordinator.currentSetupVersion,
+                                 deferredSteps: [SetupStep.providers.rawValue]))
         let fresh = SetupCoordinator(persistence: store, isProvisionalHome: false)
         let first = try #require(fresh.steps.first)
-        #expect(!fresh.steps.contains(.home), "the target must genuinely be unreachable")
+        #expect(!fresh.steps.contains(.appearance), "the target must genuinely be unreachable")
 
-        #expect(SetupReseat.plan(fresh, toward: .home) == .resumed(first))
+        #expect(SetupReseat.plan(fresh, toward: .appearance) == .resumed(first))
         #expect(fresh.step == first)
         // The failure this pins: skipping every owed step to the closing screen.
         #expect(fresh.step != .done)

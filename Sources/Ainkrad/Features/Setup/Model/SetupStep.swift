@@ -47,6 +47,21 @@ enum SetupStep: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// True when the step shows the brand mark as its SUBJECT — large, centred,
+    /// above the headline — rather than as a small mark beside it.
+    ///
+    /// Only `.welcome`. It is the one screen whose job is the first impression,
+    /// so it is a centred composition rather than a left-aligned column; every
+    /// other step is a form and reads correctly left-aligned.
+    ///
+    /// The stage renders ONE mark either way and moves it between the two
+    /// arrangements, so this also decides where that mark travels to when the
+    /// user leaves Welcome.
+    ///
+    /// Expressed as a property rather than a `case .welcome` inside `SetupStage`
+    /// so the stage stays free of per-step knowledge.
+    var usesHeroMark: Bool { self == .welcome }
+
     /// The `setupVersion` this step was introduced in. Every case ships in
     /// version 1 today; a later release can add a step at version 2 and
     /// re-gate existing users on only that step.

@@ -67,6 +67,7 @@ enum SetupMotionSound {
 struct SetupMotionSoundStepView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradReduceMotion) private var reduceMotion
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     let coordinator: SetupCoordinator
 
@@ -85,7 +86,15 @@ struct SetupMotionSoundStepView: View {
                     soundSection(tokens: tokens)
                 }
                 .padding(20)
-                .frame(maxWidth: 620, alignment: .leading)
+                // FILLS the group, exactly as the Home step's folder listing
+                // does. Capping the whole column instead left every panel hard
+                // against the left edge with a void beside it — the layout read
+                // as broken rather than as composed, because the empty space was
+                // INSIDE the group rather than around it.
+                //
+                // Prose within the column is capped individually; see the
+                // section hints.
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onAppear { hasSettled = true }
 
@@ -124,6 +133,10 @@ struct SetupMotionSoundStepView: View {
                         .foregroundStyle(tokens.foreground.opacity(0.72))
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
+                        // Prose is capped even though the column fills — see the
+                        // column's own comment.
+                        .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                               alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 AinkradToggle(isOn: Binding(get: { store.uiReduceMotion },

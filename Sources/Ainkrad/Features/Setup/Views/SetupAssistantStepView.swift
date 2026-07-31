@@ -63,6 +63,7 @@ enum SetupAssistant {
 /// name/instructions shouldn't become the active agent mid-edit.
 struct SetupAssistantStepView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     let coordinator: SetupCoordinator
 
@@ -116,6 +117,15 @@ struct SetupAssistantStepView: View {
                     modelAndEffort(tokens: tokens)
                 }
                 .padding(20)
+                // FILLS the group, exactly as the Home step's folder listing
+                // does. Capping the whole column instead left every panel hard
+                // against the left edge with a void beside it — the layout read
+                // as broken rather than as composed, because the empty space was
+                // INSIDE the group rather than around it.
+                //
+                // Prose within the column is capped individually; see the
+                // section hints.
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             SetupStepFooter(coordinator: coordinator,
@@ -155,6 +165,10 @@ struct SetupAssistantStepView: View {
             .font(AinkradFont.display(12))
             .foregroundStyle(tokens.foreground.opacity(0.6))
             .fixedSize(horizontal: false, vertical: true)
+            // Prose is capped even though the column fills, so the agent rows
+            // below can use the room without the intro running with them.
+            .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                   alignment: .leading)
     }
 
     private func builtins(tokens: DesignTokens) -> some View {

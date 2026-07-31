@@ -16,6 +16,7 @@ import AinkradHostRuntime
 /// saying it plainly here is cheaper than that bug.
 struct SetupDoneStepView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     let coordinator: SetupCoordinator
 
@@ -45,42 +46,56 @@ struct SetupDoneStepView: View {
                         .font(AinkradFont.display(14))
                         .foregroundStyle(tokens.foreground)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                               alignment: .leading)
 
-                    point(title: "In your Home folder",
-                          body: "Workspaces, notes, skills, commands, agent history and "
-                              + "your settings all live in the folder you chose. It is "
-                              + "yours: back it up or copy it to another Mac and your "
-                              + "Ainkrad comes with it.",
-                          icon: "folder",
-                          tokens: tokens)
-
-                    if didMigrateLegacyData {
-                        point(title: "Your existing data was moved in",
-                              body: "Ainkrad found data from an earlier version and copied "
-                                  + "it into your new Home folder — it is all there, nothing "
-                                  + "was lost. The original copy has not been deleted: it is "
-                                  + "still on this Mac at \(legacyCopyPath). You can remove "
-                                  + "it once you are happy everything came across.",
-                              icon: "arrow.right.doc.on.clipboard",
+                    // One point per row, each card full width. A flowing grid
+                    // was tried and rejected here for the same reason it was on
+                    // the You step: the wizard reads as a single top-to-bottom
+                    // sequence, and a second column asks the reader to work out
+                    // an order that carries no meaning.
+                    VStack(alignment: .leading, spacing: 12) {
+                        point(title: "In your Home folder",
+                              body: "Workspaces, notes, skills, commands, agent history and "
+                                  + "your settings all live in the folder you chose. It is "
+                                  + "yours: back it up or copy it to another Mac and your "
+                                  + "Ainkrad comes with it.",
+                              icon: "folder",
                               tokens: tokens)
-                            .accessibilityIdentifier("setup.done.migrated")
-                    }
 
-                    point(title: "Not in your Home folder: your API keys",
-                          body: "API keys are stored in this Mac's Keychain, never in "
-                              + "your Home folder, and they will not travel with it. If "
-                              + "you copy your Home to another Mac, reconnect your "
-                              + "providers there once — everything else is already in "
-                              + "place.",
-                          icon: "key",
-                          tokens: tokens)
+                        if didMigrateLegacyData {
+                            point(title: "Your existing data was moved in",
+                                  body: "Ainkrad found data from an earlier version and copied "
+                                      + "it into your new Home folder — it is all there, nothing "
+                                      + "was lost. The original copy has not been deleted: it is "
+                                      + "still on this Mac at \(legacyCopyPath). You can remove "
+                                      + "it once you are happy everything came across.",
+                                  icon: "arrow.right.doc.on.clipboard",
+                                  tokens: tokens)
+                                .accessibilityIdentifier("setup.done.migrated")
+                        }
+
+                        point(title: "Not in your Home folder: your API keys",
+                              body: "API keys are stored in this Mac's Keychain, never in "
+                                  + "your Home folder, and they will not travel with it. If "
+                                  + "you copy your Home to another Mac, reconnect your "
+                                  + "providers there once — everything else is already in "
+                                  + "place.",
+                              icon: "key",
+                              tokens: tokens)
+                    }
 
                     Text("You can change any of these choices later in Settings.")
                         .font(AinkradFont.display(12))
                         .foregroundStyle(tokens.foreground.opacity(0.6))
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                               alignment: .leading)
                 }
                 .padding(20)
+                // FILLS the group, like every other step. The point cards hold
+                // their own width through the grid above.
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // This step's Back used to be hand-rolled here — it was the only one
@@ -139,6 +154,7 @@ struct SetupDoneStepView: View {
             }
         }
         .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.4)))
     }
 }

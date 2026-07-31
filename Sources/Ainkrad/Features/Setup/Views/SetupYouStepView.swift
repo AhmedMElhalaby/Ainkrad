@@ -42,6 +42,7 @@ enum SetupYou {
 /// case where the user simply continues.
 struct SetupYouStepView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     let coordinator: SetupCoordinator
 
@@ -68,25 +69,13 @@ struct SetupYouStepView: View {
                     intro(tokens: tokens)
                     VStack(alignment: .leading, spacing: 10) {
                         SettingsSectionHeader(title: "ABOUT YOU", tokens: tokens)
-                        field(tokens: tokens, title: "Name",
-                              subtitle: "Your full name.",
-                              placeholder: "Ada Lovelace",
-                              text: $name, key: "name")
-                        field(tokens: tokens, title: "What to call you",
-                              subtitle: "How the assistant addresses you.",
-                              placeholder: "Ada",
-                              text: $callMe, key: "callMe")
-                        field(tokens: tokens, title: "Role",
-                              subtitle: "What you do — it shapes the assistant's defaults.",
-                              placeholder: "Engineer",
-                              text: $role, key: "role")
-                        field(tokens: tokens, title: "Timezone",
-                              subtitle: "Used for scheduling and time-aware answers.",
-                              placeholder: TimeZone.current.identifier,
-                              text: $timezone, key: "timezone")
+                        fieldGrid(tokens: tokens)
                     }
                 }
                 .padding(20)
+                // FILLS the group, like every other step. The FIELDS are what
+                // hold their own width — see `fieldGrid`.
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             SetupStepFooter(coordinator: coordinator,
@@ -131,6 +120,39 @@ struct SetupYouStepView: View {
             .font(AinkradFont.display(12))
             .foregroundStyle(tokens.foreground.opacity(0.6))
             .fixedSize(horizontal: false, vertical: true)
+            // Prose is capped even though the column fills.
+            .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                   alignment: .leading)
+    }
+
+    /// The four fields, each one full width, stacked.
+    ///
+    /// A single column by decision, not by default: an adaptive two-column grid
+    /// was tried and rejected. One field per row keeps the form a single
+    /// top-to-bottom sequence — there is no reading order to work out, and the
+    /// labels all start on the same left edge.
+    ///
+    /// The cards therefore take the whole column, which on a wide window means a
+    /// wide text field. That is the accepted trade.
+    private func fieldGrid(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            field(tokens: tokens, title: "Name",
+                  subtitle: "Your full name.",
+                  placeholder: "Ada Lovelace",
+                  text: $name, key: "name")
+            field(tokens: tokens, title: "What to call you",
+                  subtitle: "How the assistant addresses you.",
+                  placeholder: "Ada",
+                  text: $callMe, key: "callMe")
+            field(tokens: tokens, title: "Role",
+                  subtitle: "What you do — it shapes the assistant's defaults.",
+                  placeholder: "Engineer",
+                  text: $role, key: "role")
+            field(tokens: tokens, title: "Timezone",
+                  subtitle: "Used for scheduling and time-aware answers.",
+                  placeholder: TimeZone.current.identifier,
+                  text: $timezone, key: "timezone")
+        }
     }
 
     private func field(tokens: DesignTokens, title: String, subtitle: String,
@@ -166,6 +188,7 @@ struct SetupYouStepView: View {
             }
         }
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
         .overlay(ChamferShape(cut: AinkradRadius.md).strokeBorder(tokens.accentPrimary.opacity(0.15), lineWidth: 1))
     }

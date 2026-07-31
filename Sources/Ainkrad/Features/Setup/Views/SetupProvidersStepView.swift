@@ -18,6 +18,7 @@ import AinkradHostRuntime
 /// key.
 struct SetupProvidersStepView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.setupGroupWidth) private var groupWidth
 
     let coordinator: SetupCoordinator
 
@@ -41,10 +42,38 @@ struct SetupProvidersStepView: View {
     /// verified. The user is let through; the step stays owed.
     @State private var adoptionWarning: String?
 
+    /// True once ANY route has established a verified connection during this
+    /// step. Separate from `outcome`, which is the last attempt's message and is
+    /// deliberately cleared when the user switches provider.
+    ///
+    /// Without this, connecting a provider and then merely SWITCHING the picker
+    /// disabled Continue — the requirement was being read from a transient
+    /// message rather than from whether a connection exists. Connecting a second
+    /// provider and having it fail did the same thing, throwing away a working
+    /// first connection.
+    @State private var hasVerifiedConnection = false
+
     /// View-level convenience only (Continue's enablement, clearing the token
     /// field). Decisions made inside async work read the returned
     /// `SetupProviders.Outcome` directly — see `settleSubscription`.
-    private var isConnected: Bool { outcome?.isConnected ?? false }
+    ///
+    /// Latched: once something has verified, a later failed attempt at a
+    /// DIFFERENT provider cannot un-connect the user.
+    private var isConnected: Bool { hasVerifiedConnection || (outcome?.isConnected ?? false) }
+
+    /// Every connection saved so far, which is the persistent answer to "what
+    /// have I connected". Read from the store rather than from this view's own
+    /// state, because the store is what survives switching provider, leaving the
+    /// step and coming back to it.
+    private var savedConnections: [Connection] {
+        environment.connectionStore.connections
+    }
+
+    /// The presets that already have a saved connection, so a route can say so
+    /// instead of presenting an empty key field for something already done.
+    private var connectedPresetIDs: Set<String> {
+        Set(savedConnections.map(\.presetID))
+    }
 
 
     /// The rule and its copy live in `SetupValidation`, not here.
@@ -71,12 +100,22 @@ struct SetupProvidersStepView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     intro(tokens: tokens)
+                    connectedList(tokens: tokens)
                     claudeRoutes(tokens: tokens)
                     apiKeyRoute(tokens: tokens)
                     status(tokens: tokens)
                     deferAffordance(tokens: tokens)
                 }
                 .padding(20)
+                // FILLS the group, exactly as the Home step's folder listing
+                // does. Capping the whole column instead left every panel hard
+                // against the left edge with a void beside it — the layout read
+                // as broken rather than as composed, because the empty space was
+                // INSIDE the group rather than around it.
+                //
+                // Prose within the column is capped individually; see the
+                // section hints.
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // Back matters most on THIS step: it is mandatory and the
@@ -116,56 +155,224 @@ struct SetupProvidersStepView: View {
             .font(AinkradFont.display(12))
             .foregroundStyle(tokens.foreground.opacity(0.6))
             .fixedSize(horizontal: false, vertical: true)
+            // Prose is capped even though the column fills, so the provider rows
+            // below can use the room without the intro running with them.
+            .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                   alignment: .leading)
     }
 
+    /// What the user has actually connected, listed.
+    ///
+    /// This is the answer to the question the step could not previously answer:
+    /// connect OpenRouter, connect OpenAI, come back to OpenRouter, and nothing
+    /// on screen said the first one was still there. The routes below are about
+    /// ADDING a connection; this is the record of what exists, and it is read
+    /// from the store so it survives every switch, Back and return.
+    @ViewBuilder
+    private func connectedList(tokens: DesignTokens) -> some View {
+        if !savedConnections.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                SettingsSectionHeader(title: "CONNECTED", tokens: tokens)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(savedConnections) { connection in
+                        connectedRow(connection, tokens: tokens)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ChamferShape(cut: AinkradRadius.md)
+                .fill(tokens.accentSecondary.opacity(0.08)))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Connected providers")
+        }
+    }
+
+    private func connectedRow(_ connection: Connection, tokens: DesignTokens) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(tokens.accentSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(connection.displayName)
+                    .font(AinkradFont.display(13, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.92))
+                // The host, not the whole URL: it identifies WHICH endpoint
+                // without turning the row into a path nobody reads.
+                Text(URL(string: connection.baseURL)?.host ?? connection.baseURL)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(tokens.foreground.opacity(0.45))
+            }
+            Spacer(minLength: 0)
+            Button {
+                environment.connectionStore.removeConnection(connection)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11))
+                    .foregroundStyle(tokens.foreground.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+            .help("Remove this connection")
+            .accessibilityLabel("Remove \(connection.displayName)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The Claude routes, as two explained CHOICES rather than a stack of
+    /// controls.
+    ///
+    /// The previous version put an unlabelled icon-button, a primary button and
+    /// a pair of paste fields in one column with no indication that they were
+    /// alternatives to each other, and rendered any failure in a shared status
+    /// row far below — so a sign-in error appeared nowhere near the thing that
+    /// failed, under an unrelated section.
+    ///
+    /// Each route now says what it does and what it costs the user (a browser
+    /// round trip, or nothing at all), and the failure lands inside this section
+    /// with the alternatives still on screen beside it.
     @ViewBuilder
     private func claudeRoutes(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SettingsSectionHeader(title: "CLAUDE SUBSCRIPTION", tokens: tokens)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                SettingsSectionHeader(title: "CLAUDE SUBSCRIPTION", tokens: tokens)
+                Text("Use a Claude Pro or Max plan you already pay for, instead of an API "
+                     + "key billed per token.")
+                    .font(AinkradFont.display(11))
+                    .foregroundStyle(tokens.foreground.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
+                           alignment: .leading)
+            }
 
             if oauthController?.canImportFromClaudeCode == true {
-                routeButton(tokens: tokens, icon: "arrow.down.doc",
-                            title: "Use your existing Claude Code login") {
+                // Listed FIRST and marked as the quick one: it needs no browser
+                // and no typing, and it is the route that still works when the
+                // sign-in endpoint is refusing.
+                claudeRoute(tokens: tokens,
+                            icon: "arrow.down.doc.fill",
+                            title: "Use your existing Claude Code login",
+                            detail: "Found on this Mac. Nothing to type — reuses the login "
+                                  + "Claude Code already has.",
+                            isRecommended: true) {
                     Task { await runImport() }
                 }
             }
 
-            AinkradButton(title: "Sign in with Claude", style: .primary,
-                          icon: "person.badge.key", isLoading: isBusy) {
+            claudeRoute(tokens: tokens,
+                        icon: "person.badge.key.fill",
+                        title: "Sign in with Claude",
+                        detail: "Opens your browser to approve Ainkrad, then comes back here.",
+                        isRecommended: false) {
                 Task { await runSignIn() }
             }
-            .disabled(isBusy)
 
             if flow.awaitingPaste {
-                if let url = oauthController?.authorizeURL {
-                    // The loopback couldn't bind, so this URL is the only way
-                    // back to the consent screen if the tab was closed or
-                    // NSWorkspace.open failed.
-                    Link(destination: url) {
-                        Text("Open the Claude sign-in page again")
-                            .font(AinkradFont.display(11, weight: .medium))
-                            .foregroundStyle(tokens.accentSecondary)
-                    }
-                }
-                HStack(spacing: 10) {
-                    NeonSecureField(text: $pasteText,
-                                    placeholder: "Paste the redirect URL or code",
-                                    tokens: tokens)
-                    Button {
-                        let raw = pasteText
-                        pasteText = ""
-                        Task { await runPaste(raw) }
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(tokens.accentSecondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+                pasteFallback(tokens: tokens)
+            }
+
+            // The failure belongs HERE, beside the routes it is about — not in a
+            // shared status row under the API-key section.
+            if let routeError {
+                statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
+                          text: routeError, color: tokens.accentTertiary)
+                    .accessibilityIdentifier("setup.providers.routeError")
             }
         }
         .padding(14)
-        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.32)))
+    }
+
+    /// One Claude route: what it is, what it will do, and whether it is the easy
+    /// one. A whole-row button, so the target is the card rather than the words.
+    private func claudeRoute(tokens: DesignTokens, icon: String, title: String,
+                             detail: String, isRecommended: Bool,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 11) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(isRecommended ? tokens.accentSecondary
+                                                   : tokens.foreground.opacity(0.55))
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Text(title)
+                            .font(AinkradFont.display(13, weight: .medium))
+                            .foregroundStyle(tokens.foreground.opacity(0.92))
+                        if isRecommended {
+                            Text("FASTEST")
+                                .font(AinkradFont.display(9, weight: .medium)).kerning(0.6)
+                                .foregroundStyle(tokens.accentSecondary)
+                        }
+                    }
+                    Text(detail)
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 8)
+                if isBusy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(tokens.foreground.opacity(0.3))
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ChamferShape(cut: AinkradRadius.sm)
+                .fill(tokens.surfaceElevated.opacity(isRecommended ? 0.62 : 0.42)))
+            .overlay(ChamferShape(cut: AinkradRadius.sm).strokeBorder(
+                isRecommended ? tokens.accentSecondary.opacity(0.3) : .clear, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
+        .accessibilityHint(detail)
+    }
+
+    /// Shown only when the loopback port could not bind, so the browser has
+    /// nowhere to redirect back to and the user has to carry the code across by
+    /// hand.
+    private func pasteFallback(tokens: DesignTokens) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Paste the code from your browser")
+                .font(AinkradFont.display(12, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+            if let url = oauthController?.authorizeURL {
+                // The loopback couldn't bind, so this URL is the only way back
+                // to the consent screen if the tab was closed or
+                // NSWorkspace.open failed.
+                Link(destination: url) {
+                    Text("Open the Claude sign-in page again")
+                        .font(AinkradFont.display(11, weight: .medium))
+                        .foregroundStyle(tokens.accentSecondary)
+                }
+            }
+            HStack(spacing: 10) {
+                NeonSecureField(text: $pasteText,
+                                placeholder: "Paste the redirect URL or code",
+                                tokens: tokens)
+                Button {
+                    let raw = pasteText
+                    pasteText = ""
+                    Task { await runPaste(raw) }
+                } label: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(tokens.accentSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Submit the pasted code")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.5)))
     }
 
     private func apiKeyRoute(tokens: DesignTokens) -> some View {
@@ -181,6 +388,11 @@ struct SetupProvidersStepView: View {
                         preset = p
                         baseURL = p.defaultBaseURL
                         token = ""
+                        // Clears the last attempt's MESSAGE only. It used to
+                        // clear the connected state with it, so switching
+                        // provider silently un-did a working connection and
+                        // disabled Continue. What survives is
+                        // `hasVerifiedConnection` and the store itself.
                         outcome = nil
                     }
                 ),
@@ -192,6 +404,25 @@ struct SetupProvidersStepView: View {
                 NeonSecureField(text: $baseURL, placeholder: "Base URL", tokens: tokens)
             }
 
+            // Says so when the SELECTED provider is already connected. Without
+            // it, returning to a provider you connected five minutes ago shows
+            // an empty key field and no acknowledgement — which reads as having
+            // lost the connection.
+            if connectedPresetIDs.contains(preset.id) {
+                HStack(spacing: 7) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(tokens.accentSecondary)
+                    Text("\(preset.displayName) is connected. Enter a key below only to "
+                         + "replace it.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("setup.providers.presetConnected")
+            }
+
             HStack(spacing: 10) {
                 if preset.requiresKey {
                     NeonSecureField(text: $token, placeholder: "API key", tokens: tokens)
@@ -200,7 +431,8 @@ struct SetupProvidersStepView: View {
                         .font(AinkradFont.display(11))
                         .foregroundStyle(tokens.foreground.opacity(0.45))
                 }
-                AinkradButton(title: "Connect", style: .secondary, isLoading: isBusy) {
+                AinkradButton(title: connectedPresetIDs.contains(preset.id) ? "Replace" : "Connect",
+                              style: .secondary, isLoading: isBusy) {
                     Task { await runAPIKey() }
                 }
                 .disabled(isBusy || !canConnect)
@@ -263,10 +495,10 @@ struct SetupProvidersStepView: View {
             statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
                       text: message, color: tokens.accentTertiary)
         case nil:
-            if let routeError {
-                statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
-                          text: routeError, color: tokens.accentTertiary)
-            } else if let message = unmet.first?.message {
+            // `routeError` is rendered inside the Claude section now, beside the
+            // route that produced it. Repeating it here would print the same
+            // failure twice on one screen.
+            if routeError == nil, let message = unmet.first?.message {
                 // Nothing attempted yet: Continue is off and, without this,
                 // nothing on screen says why. The copy comes from
                 // `SetupValidation` like every other requirement message — this
@@ -331,6 +563,7 @@ struct SetupProvidersStepView: View {
         outcome = result
         if case .failed(_, let failure) = result { escape.note(failure) }
         if result.isConnected {
+            hasVerifiedConnection = true
             token = ""
             clearDeferral()
         }
@@ -430,7 +663,10 @@ struct SetupProvidersStepView: View {
         routeError = nil
         routeFailure = nil
         if case .failed(_, let failure) = settled { escape.note(failure) }
-        if settled.isConnected { clearDeferral() }
+        if settled.isConnected {
+            hasVerifiedConnection = true
+            clearDeferral()
+        }
         flow.settled(connected: settled.isConnected)
     }
 
@@ -466,6 +702,7 @@ struct SetupProvidersStepView: View {
             break
         case .verified(let message):
             outcome = .connected(message: message)
+            hasVerifiedConnection = true
             clearDeferral()
         case .unverified(let message):
             adoptionWarning = message

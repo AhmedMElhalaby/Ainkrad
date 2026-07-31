@@ -21,6 +21,13 @@ struct SetupStepFooter: View {
     /// only decides whether the button is live.
     var isPrimaryDisabled: Bool = false
     var primaryIdentifier: String?
+    /// Centres the primary action rather than pushing it to the trailing edge.
+    ///
+    /// For Welcome, which is a centred composition with a single action and no
+    /// Back: a lone button hard against the right edge of a centred title card
+    /// reads as left over from a form. Every other step IS a form, and the
+    /// trailing edge is where its Continue belongs.
+    var centersPrimary: Bool = false
     let primaryAction: () -> Void
 
     var body: some View {
@@ -33,6 +40,12 @@ struct SetupStepFooter: View {
             AinkradButton(title: primaryTitle, style: .primary, action: primaryAction)
                 .disabled(isPrimaryDisabled)
                 .accessibilityIdentifier(primaryIdentifier ?? "setup.continue")
+            // The balancing spacer is what centres the button, and it is only
+            // added when there is no Back — with one, "centred" would mean
+            // "shoved right by the width of the Back button", which is neither.
+            if centersPrimary, !coordinator.canGoBack {
+                Spacer(minLength: 0)
+            }
         }
         .padding(20)
     }

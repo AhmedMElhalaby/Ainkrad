@@ -210,6 +210,18 @@ struct AinkradHostApp: App {
                 .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
+        // Without this the window opens at whatever size AppKit picks, which on
+        // a large display is the full visible frame — every resize edge flush
+        // against a screen boundary. With `.hiddenTitleBar` there is no title
+        // bar to drag either, and `isMovableByWindowBackground` is off (it would
+        // steal in-app drags), so the window could not be moved OR resized
+        // without zooming it first. A deliberate opening size leaves margin on
+        // all four edges.
+        //
+        // This governs the FIRST launch only: macOS restores a window's frame
+        // once the user has moved or resized it, and that restored frame
+        // correctly wins over this.
+        .defaultSize(width: 1280, height: 840)
         .commands {
             // Menu items for discoverability/mouse use. The actual
             // keyboard delivery goes through KeyboardShortcutMonitor's
