@@ -51,6 +51,21 @@ extension Home {
         return "\(Home.canonicalKeychainService).vault.\(digest)"
     }
 
+    /// True when this Home is a throwaway — the first-run wizard's provisional
+    /// Home, or a test's `TestHome`.
+    ///
+    /// Named for the invariant it exists to state: **no secret may be written
+    /// while this is true**, because `keychainServiceName` above namespaces a
+    /// provisional Home's secrets under a hashed throwaway service that the
+    /// environment rebuilt against the user's real vault never reads. A
+    /// credential entered before adoption is accepted, stored, and then
+    /// silently unreachable. See `AinkradHostApp.install(_:into:)`.
+    ///
+    /// This is exactly the predicate `keychainServiceName` branches on, exposed
+    /// under a name a caller can assert against rather than left implicit in
+    /// the derivation.
+    var isProvisional: Bool { Home.isThrowawayLocation(vaultRoot) }
+
     /// True when `url` sits inside a system temporary directory — the one place no
     /// genuine user vault ever is, and the place every test vault is.
     static func isThrowawayLocation(_ url: URL) -> Bool {

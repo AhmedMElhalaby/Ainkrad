@@ -20,8 +20,28 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// Test-only visibility into whether the status item is currently installed.
     var hasStatusItemForTesting: Bool { statusItem != nil }
 
+    /// True while the status item must not exist — today, while the first-run
+    /// setup gate is up. Wired in `AinkradHostApp.install(_:into:)`.
+    ///
+    /// The gate is a full-screen scrim inside the WINDOW plus a window-local
+    /// `keyDown` monitor. The status item is neither: it lives on
+    /// `NSStatusBar.system` and its popover is an `NSPopover` anchored to the
+    /// status button, so it is reachable with the mouse while every in-window
+    /// surface is blocked. Through it the whole Assistant is reachable, and
+    /// every action there (a composed message, an agent switch, a pinned model,
+    /// "Open in the Assistant pane") persists into the PROVISIONAL home that the
+    /// Home step's swap then silently discards — the same class of bug the
+    /// `.commands` block was gated for. `onManageConnections` is worse still: it
+    /// latches `isSettingsPresented` invisibly beneath the gate.
+    ///
+    /// Suppression is enforced at BOTH ends — no status item is created while
+    /// the gate is up, and a click on one that somehow exists does nothing —
+    /// because the gate can be raised after an install only in principle, and a
+    /// silent reachable Assistant is not a failure worth being subtle about.
+    var isSuppressed: () -> Bool = { false }
+
     func install() {
-        guard statusItem == nil else { return }
+        guard statusItem == nil, !isSuppressed() else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "sparkles",
@@ -37,7 +57,14 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         popover.contentViewController = NSHostingController(rootView: content())
     }
 
-    @objc private func statusButtonClicked() { togglePopover() }
+    @objc private func statusButtonClicked() {
+        guard !isSuppressed() else { return }
+        togglePopover()
+    }
+
+    /// Test-only entry to the button's real action, so the suppression guard is
+    /// covered rather than only the code path around it.
+    func statusButtonClickedForTesting() { statusButtonClicked() }
 
     // Driven by `presence.isPopoverOpen` rather than `popover.isShown`: this
     // class is the sole mutator of both, so they stay in lockstep, and it

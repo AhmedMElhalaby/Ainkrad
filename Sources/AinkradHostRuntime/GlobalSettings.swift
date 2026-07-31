@@ -28,7 +28,12 @@ public struct GlobalSettings: PersistableDocument {
     public var showFullScreenStatusBar: Bool = true
     /// Whether UI sound effects (open/close/install/etc — see AIN-108) play
     /// at all. Muting takes effect immediately, on the very next sound.
-    public var soundEnabled: Bool = true
+    ///
+    /// Default OFF. Sound is something a user opts into, not something an app
+    /// they have just installed starts doing at them; the first-run wizard's
+    /// Motion & Sound step is where they turn it on, with the switch in front
+    /// of them rather than buried in Settings after the fact.
+    public var soundEnabled: Bool = false
     /// Playback volume (0...1) for UI sound effects — see AIN-108.
     public var soundVolume: Double = 0.7
     /// Per-event enable switches, keyed by `UISound.rawValue`. A missing key
@@ -58,6 +63,12 @@ public struct GlobalSettings: PersistableDocument {
     public var overlayBlurEnabled: Bool = true
     /// AINKRAD-controlled motion preference, independent of the macOS
     /// system-level Reduce Motion toggle. Default false = motion on.
+    ///
+    /// Note the polarity when reading this flag: it is named for the REDUCTION,
+    /// so `false` means motion PLAYS. Motion is first-class in this product —
+    /// the first-run wizard's opening screen is a moving composition — and the
+    /// Motion & Sound step is where a user turns it off. Sound is the opposite
+    /// (see `soundEnabled`): noise is opt-in, movement is not.
     public var uiReduceMotion: Bool = false
 
     public init(theme: Theme = .neonBlue,
@@ -69,7 +80,7 @@ public struct GlobalSettings: PersistableDocument {
          uiFontFamily: UIFontFamily = .exo2,
          accentColorHex: String? = nil,
          showFullScreenStatusBar: Bool = true,
-         soundEnabled: Bool = true,
+         soundEnabled: Bool = false,
          soundVolume: Double = 0.7,
          soundEventEnabled: [String: Bool] = [:],
          soundEventEffects: [String: String] = [:],
@@ -111,7 +122,11 @@ public struct GlobalSettings: PersistableDocument {
         uiFontFamily = try container.decodeIfPresent(UIFontFamily.self, forKey: .uiFontFamily) ?? .exo2
         accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex)
         showFullScreenStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showFullScreenStatusBar) ?? true
-        soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
+        // These two fallbacks are the answer for a settings file written before
+        // the key existed, so they must agree with the property defaults above
+        // or the same install would answer "is sound on?" two different ways
+        // depending on whether it had ever saved settings.
+        soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? false
         soundVolume = try container.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.7
         soundEventEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .soundEventEnabled) ?? [:]
         soundEventEffects = try container.decodeIfPresent([String: String].self, forKey: .soundEventEffects) ?? [:]

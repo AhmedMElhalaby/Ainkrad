@@ -8,7 +8,7 @@ struct RootView: View {
     @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     private var isOverlayPresented: Bool {
-        var presented = environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
+        var presented = environment.isSetupPresented || environment.isLauncherPresented || environment.isWorkspaceOverviewPresented || environment.isSettingsPresented
             || environment.isAppStorePresented || environment.isQuickAskPresented || environment.quitCoordinator.isConfirming
             || environment.presentedOverlayAppID != nil
         #if DEBUG
@@ -39,6 +39,15 @@ struct RootView: View {
                 // it reveal on top-edge hover (see `HUDBar`).
                 VStack(spacing: 0) {
                     HUDBar()
+
+                    // Persistent, undismissable: the app genuinely cannot do
+                    // its main job in this state, and the user chose to postpone
+                    // fixing it. Hidden while the gate is up so the wizard it
+                    // summons is not shouted at from behind.
+                    if environment.deferredSetupSteps.contains(.providers),
+                       !environment.isSetupPresented {
+                        SetupDeferredProvidersBanner()
+                    }
 
                     // ALL workspaces stay in the hierarchy — switching
                     // only toggles visibility, so PTY-backed sessions in
@@ -101,6 +110,10 @@ struct RootView: View {
             if environment.quitCoordinator.isConfirming {
                 QuitConfirmationView()
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    // Above everything, including the first-run gate: ⌘Q must
+                    // still quit while setup is up, and a confirmation HUD the
+                    // gate covered would be exactly the trap the gate must not be.
+                    .zIndex(200)
             }
 
             if let id = environment.presentedOverlayAppID,
@@ -109,6 +122,17 @@ struct RootView: View {
                     environment.presentedOverlayAppID = nil
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
+
+            // The first-run gate. Deliberately no `onDismiss` closure, no scrim
+            // tap and no escape handler — that trio is exactly what makes every
+            // overlay above dismissible, and this one must not be. It sits last
+            // in the ZStack and carries the highest zIndex so it is above every
+            // other overlay, always, whatever order they were raised in.
+            if environment.isSetupPresented {
+                SetupOverlayView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    .zIndex(100)
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isOverlayPresented)

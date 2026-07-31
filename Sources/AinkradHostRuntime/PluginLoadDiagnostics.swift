@@ -80,8 +80,23 @@ public enum PluginLoadDiagnostics {
         }
         // The sentence that would have saved the session. The raw symbol stays
         // in it: it is what makes the diagnosis certain rather than plausible.
+        //
+        // Deliberately does NOT claim a DIRECTION. A missing symbol proves the
+        // plugin and the host disagree about the SDK; it says nothing about
+        // which side is ahead. This message used to assert "built against a
+        // NEWER AinkradAppKit" and advise bumping the host's pin — and the first
+        // time it fired in anger the truth was the opposite: the plugins were
+        // pinned BEHIND the host, to a revision where
+        // `AinkradSearchField.init(text:placeholder:onSubmit:)` still existed
+        // before a `focus:` parameter was added to it. Bumping the host would
+        // have moved it further from the plugins, not closer.
+        //
+        // Rebuilding the plugin against the host's revision is the action that
+        // is correct in BOTH directions, so that is the one named.
         return Diagnosis(
-            banner: "was built against a newer \(sdkName) than this host embeds; bump the host's SDK pin or rebuild the plugin (missing symbol \(symbol))",
+            banner: "was built against a different \(sdkName) revision than this host embeds — "
+                  + "repin the plugin to the host's SDK revision and rebuild it "
+                  + "(missing symbol \(symbol))",
             log: log)
     }
 

@@ -147,6 +147,11 @@ final class AppEnvironment {
     /// couldn't be opened at launch — the app degrades to memory-less rather
     /// than crashing (see `bootstrap()`).
     let memoryService: MemoryService?
+    /// Structured user facts (name, what to call you, role, timezone) collected
+    /// by the first-run "You" step. Non-optional even when `memoryService` is
+    /// `nil`: it only needs the memory files, not the FTS index. Every write
+    /// re-projects into `USER.md`, so the assistant reads these facts.
+    let userProfileStore: UserProfileStore
     /// The Skills subsystem (M7 Slice 4): active-skill registry backing
     /// `use_skill`/`propose_skill`, the skill-index context source, and the
     /// skill `/name` slash commands.
@@ -213,6 +218,24 @@ final class AppEnvironment {
     /// entries to drop before re-registering the current binding set, without
     /// ever touching a builtin name it didn't register itself.
     private var registeredSkillCommandNames: Set<String> = []
+    /// Blocking first-run gate. Unlike every other overlay this is not dismissible:
+    /// the workspace renders behind it but nothing in it can be reached.
+    var isSetupPresented = false
+
+    /// Setup steps the user was let past without satisfying, mirrored from the
+    /// `SetupDocument` marker so the workspace can be honest about it without
+    /// re-reading persistence on every redraw.
+    ///
+    /// Written in exactly two places — launch (`AinkradApp.init`) and the
+    /// wizard's closing step (`SetupDoneStepView.finish`) — which are the only
+    /// two moments the marker changes. `.providers` here means the assistant
+    /// cannot work, and drives the persistent banner in `RootView`.
+    var deferredSetupSteps: Set<SetupStep> = []
+
+    /// True while the app is running against a provisional Home that the user has
+    /// not yet chosen. Nothing authored may be written until this clears.
+    var isProvisionalHome = false
+
     var isLauncherPresented = false
     var isWorkspaceOverviewPresented = false
     var isSettingsPresented = false
@@ -296,6 +319,7 @@ final class AppEnvironment {
         assistantWorkingDirectory: URL,
         workspaceFileIndex: WorkspaceFileIndex,
         memoryService: MemoryService?,
+        userProfileStore: UserProfileStore,
         skillRegistry: SkillRegistry,
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
@@ -365,6 +389,7 @@ final class AppEnvironment {
         self.assistantWorkingDirectory = assistantWorkingDirectory
         self.workspaceFileIndex = workspaceFileIndex
         self.memoryService = memoryService
+        self.userProfileStore = userProfileStore
         self.skillRegistry = skillRegistry
         self.skillWatcher = skillWatcher
         self.skillCommandStore = skillCommandStore
@@ -435,8 +460,8 @@ final class AppEnvironment {
 
         let (
             streamingHTTP, agentConfigStore, agentContextSettingsStore, agentContextService,
-            agentPermissionStore, memoryService, lspServerRegistry, editJournal, skillRegistry,
-            skillCommandStore, skillWatcher
+            agentPermissionStore, memoryService, userProfileStore, lspServerRegistry, editJournal,
+            skillRegistry, skillCommandStore, skillWatcher
         ) = bootstrapAgentKitCore(
             persistence: persistence, workspaceManager: workspaceManager, agentContextHub: agentContextHub,
             skillsRoot: skillsRoot, home: home)
@@ -536,6 +561,7 @@ final class AppEnvironment {
             assistantWorkingDirectory: assistantWorkingDirectory,
             workspaceFileIndex: workspaceFileIndex,
             memoryService: memoryService,
+            userProfileStore: userProfileStore,
             skillRegistry: skillRegistry,
             skillWatcher: skillWatcher,
             skillCommandStore: skillCommandStore,
