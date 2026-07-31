@@ -7,6 +7,10 @@ import AinkradHostRuntime
 /// ⌘Q still quits; it is not routed through KeyboardShortcutMonitor.
 struct SetupOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
+    /// Read live from `GeneralSettingsStore.uiReduceMotion` (injected in
+    /// `AinkradApp`), so the Motion & Sound step's toggle stops the remaining
+    /// steps animating the instant it is flipped.
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     @State private var coordinator: SetupCoordinator?
     /// Set by the Home step's adoption. Survives the environment swap for the
     /// same reason the coordinator does — same view identity, same `@State` —
@@ -16,16 +20,15 @@ struct SetupOverlayView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        GeometryReader { geo in
-            ZStack {
-                Color.black.opacity(OverlayChrome.backdropOpacity)
-                    .ignoresSafeArea()          // no .onTapGesture — intentional
+        ZStack {
+            // The scrim stays; the PANEL is what went away. The island keeps
+            // living behind it — that is the point of running the wizard after
+            // bootstrap. Still no .onTapGesture — intentional.
+            Color.black.opacity(OverlayChrome.backdropOpacity)
+                .ignoresSafeArea()
 
-                if let coordinator {
-                    panel(coordinator: coordinator, tokens: tokens)
-                        .frame(width: min(geo.size.width * 0.62, 720),
-                               height: min(geo.size.height * 0.72, 640))
-                }
+            if let coordinator {
+                stage(coordinator: coordinator, tokens: tokens)
             }
         }
         .onAppear {
@@ -40,19 +43,19 @@ struct SetupOverlayView: View {
         // `SetupGate.swallows`, not handled here.
     }
 
-    private func panel(coordinator: SetupCoordinator, tokens: DesignTokens) -> some View {
-        VStack(spacing: 0) {
-            header(coordinator: coordinator, tokens: tokens)
-            SetupStepBody(step: coordinator.step,
+    /// Full-bleed: rail, heading, step, nav — no panel chrome, no fixed size.
+    private func stage(coordinator: SetupCoordinator, tokens: DesignTokens) -> some View {
+        SetupStage(coordinator: coordinator,
+                   tokens: tokens,
+                   reduceMotion: reduceMotion) { step in
+            SetupStepBody(step: step,
                           coordinator: coordinator,
                           didMigrateLegacyData: didMigrateLegacyData,
                           onAdopted: { rebuilt, migrated in
                               didMigrateLegacyData = migrated
                               reseat(after: coordinator, using: rebuilt)
                           })
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .hudPanelChrome(tokens: tokens)
     }
 
     /// Re-seats the coordinator onto the ADOPTED home's `PersistenceStore` after
@@ -98,18 +101,10 @@ struct SetupOverlayView: View {
         }
     }
 
-    private func header(coordinator: SetupCoordinator, tokens: DesignTokens) -> some View {
-        HStack {
-            Text(coordinator.step.title)
-                .font(AinkradFont.display(16, weight: .semibold))
-                .foregroundStyle(tokens.foreground)
-            Spacer()
-            Text("\((coordinator.steps.firstIndex(of: coordinator.step) ?? 0) + 1) of \(coordinator.steps.count)")
-                .font(AinkradFont.display(12))
-                .foregroundStyle(tokens.foreground.opacity(0.62))
-        }
-        .padding(20)
-    }
+    // The "n of m" header is gone with the panel. The rail replaces it, and is
+    // spatial on purpose: the counter's denominator changed at the vault swap
+    // ("3 of 8" → "2 of 7"), which the rail cannot contradict because it only
+    // ever draws the steps actually owed.
 }
 
 /// Minimal per-step content: a title and a Continue button. Tasks 4-9 replace
