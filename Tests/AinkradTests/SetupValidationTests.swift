@@ -51,12 +51,44 @@ struct SetupValidationTests {
         }
     }
 
-    /// Home and Providers enforce their requirement structurally (a vault must
-    /// be adopted; a connection must pass a live probe), so the dictionary has
-    /// no field-level rule to add for them.
-    @Test func structurallyEnforcedStepsHaveNoFieldRules() {
-        for step in [SetupStep.home, .providers] {
-            #expect(SetupValidation.unmet(for: step, values: [:]).isEmpty)
+    /// Home and Providers enforce their requirement structurally rather than
+    /// through a text field — but `canAdvance` must still say so, or a caller
+    /// that trusts the function's name walks a user past Providers with no
+    /// connection at all.
+    @Test func providersRequiresAVerifiedConnection() {
+        #expect(!SetupValidation.canAdvance(from: .providers, values: [:]))
+        #expect(!SetupValidation.canAdvance(from: .providers, values: ["isConnected": "false"]))
+        #expect(SetupValidation.canAdvance(from: .providers, values: ["isConnected": "true"]))
+    }
+
+    @Test func homeRequiresAnAdoptedFolder() {
+        #expect(!SetupValidation.canAdvance(from: .home, values: [:]))
+        #expect(!SetupValidation.canAdvance(from: .home, values: ["hasHome": "false"]))
+        #expect(SetupValidation.canAdvance(from: .home, values: ["hasHome": "true"]))
+    }
+
+    /// Structural or not, an unmet requirement carries user-facing copy — the
+    /// whole point is that the reason is visible, never a silent no-op.
+    @Test func everyUnmetRequirementCarriesAMessage() {
+        for step in SetupStep.allCases {
+            for requirement in SetupValidation.unmet(for: step, values: ["isCustom": "true"]) {
+                #expect(!requirement.field.isEmpty)
+                #expect(!requirement.message.isEmpty,
+                        "\(step.rawValue).\(requirement.field) blocks with no explanation")
+            }
+        }
+    }
+
+    /// The one step whose requirement is not expressible as a value would be a
+    /// hole in `canAdvance`. There is none: every blocking step is covered.
+    @Test func canAdvanceIsTrueForEveryStepOnceItsValuesAreSatisfied() {
+        let satisfied = ["name": "Ahmed", "role": "Engineer",
+                         "hasHome": "true", "isConnected": "true",
+                         "isCustom": "true", "personaName": "Scribe",
+                         "personaInstructions": "Be terse."]
+        for step in SetupStep.allCases {
+            #expect(SetupValidation.canAdvance(from: step, values: satisfied),
+                    "\(step.rawValue) blocks even when every value is supplied")
         }
     }
 }

@@ -37,6 +37,12 @@ struct SetupProvidersStepView: View {
     /// `SetupProviders.Outcome` directly — see `settleSubscription`.
     private var isConnected: Bool { outcome?.isConnected ?? false }
 
+    /// The rule and its copy live in `SetupValidation`, not here.
+    private var unmet: [SetupValidation.Requirement] {
+        SetupValidation.unmet(for: .providers,
+                              values: ["isConnected": isConnected ? "true" : "false"])
+    }
+
     var body: some View {
         let tokens = environment.themeManager.tokens
 
@@ -56,7 +62,7 @@ struct SetupProvidersStepView: View {
             // pass. Without Back, a failing connection is a dead end. It is
             // therefore not gated on `isConnected` — only Continue is.
             SetupStepFooter(coordinator: coordinator,
-                            isPrimaryDisabled: !isConnected) {
+                            isPrimaryDisabled: !unmet.isEmpty) {
                 coordinator.advance()
             }
         }
@@ -198,15 +204,14 @@ struct SetupProvidersStepView: View {
             if let routeError {
                 statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
                           text: routeError, color: tokens.accentTertiary)
-            } else {
+            } else if let message = unmet.first?.message {
                 // Nothing attempted yet: Continue is off and, without this,
-                // nothing on screen says why. This step's requirement is a live
-                // probe rather than a field, so its explanation belongs beside
-                // the routes that satisfy it.
-                SetupRequirementNote(
-                    message: "Connect a provider above to continue — the connection is "
-                           + "checked before Ainkrad accepts it.",
-                    tokens: tokens)
+                // nothing on screen says why. The copy comes from
+                // `SetupValidation` like every other requirement message — this
+                // step's requirement being a probe rather than a field changes
+                // nothing about where the rule lives.
+                SetupRequirementNote(message: message, tokens: tokens)
+                    .accessibilityIdentifier("setup.providers.isConnected.requirement")
             }
         }
     }

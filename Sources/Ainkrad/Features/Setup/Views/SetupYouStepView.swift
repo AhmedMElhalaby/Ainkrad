@@ -49,6 +49,15 @@ struct SetupYouStepView: View {
     @State private var callMe = ""
     @State private var role = ""
     @State private var timezone = TimeZone.current.identifier
+    /// Fields the user has typed in. A requirement note appears only for a
+    /// field they have touched — see `message(for:)`.
+    @State private var touched: Set<String> = []
+    /// Which fields this step requires, asked of `SetupValidation` with every
+    /// value blank so the answer is "what is required", not "what is missing".
+    /// Derived rather than hardcoded: a rule added to `SetupValidation` shows
+    /// up here without touching this view.
+    private static let requiredFields = Set(
+        SetupValidation.unmet(for: .you, values: [:]).map(\.field))
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -97,8 +106,21 @@ struct SetupYouStepView: View {
         ])
     }
 
+    /// The warning for `key`, shown only once the user has typed in that field
+    /// and left it blank.
+    ///
+    /// Shown unconditionally, a first-time user arrives to two warnings about
+    /// fields they have not yet been given the chance to answer, which reads as
+    /// an error state on a blank form. What keeps the reason visible from
+    /// arrival instead is the persistent "Required" marker beside those fields
+    /// — a statement of the rule rather than an accusation. The warning is the
+    /// escalation when the rule has actually been broken.
+    ///
+    /// Either way Continue stays disabled the whole time: this gates the note,
+    /// never the gate.
     private func message(for key: String) -> String? {
-        unmet.first { $0.field == key }?.message
+        guard touched.contains(key) else { return nil }
+        return unmet.first { $0.field == key }?.message
     }
 
     private func intro(tokens: DesignTokens) -> some View {
@@ -114,14 +136,29 @@ struct SetupYouStepView: View {
     private func field(tokens: DesignTokens, title: String, subtitle: String,
                        placeholder: String, text: Binding<String>, key: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(AinkradFont.display(13, weight: .medium))
-                .foregroundStyle(tokens.foreground.opacity(0.9))
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(AinkradFont.display(13, weight: .medium))
+                    .foregroundStyle(tokens.foreground.opacity(0.9))
+                // Visible from arrival, for required fields only. This is what
+                // keeps the rule on screen without greeting a blank form with
+                // warnings — see `message(for:)`.
+                if Self.requiredFields.contains(key) {
+                    Text("Required")
+                        .font(AinkradFont.display(9, weight: .medium)).kerning(0.5)
+                        .foregroundStyle(tokens.accentTertiary)
+                        .accessibilityIdentifier("setup.you.\(key).required")
+                }
+                Spacer(minLength: 0)
+            }
             Text(subtitle)
                 .font(AinkradFont.display(11))
                 .foregroundStyle(tokens.foreground.opacity(0.5))
             AinkradTextField(text: text, placeholder: placeholder)
-                .onChange(of: text.wrappedValue) { _, new in write(new, for: key) }
+                .onChange(of: text.wrappedValue) { _, new in
+                    touched.insert(key)
+                    write(new, for: key)
+                }
             // Beside the field it is about, not only at the Continue button.
             if let message = message(for: key) {
                 SetupRequirementNote(message: message, tokens: tokens)

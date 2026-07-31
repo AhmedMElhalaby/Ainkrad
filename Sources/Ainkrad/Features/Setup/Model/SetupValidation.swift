@@ -17,6 +17,16 @@ import Foundation
 /// stores. Each step's view builds the dictionary from its own `@State` (the
 /// Assistant step's `isCustom` lives in the view, and arrives here as
 /// `"isCustom": "true"`).
+///
+/// Steps whose requirement is STRUCTURAL rather than a text field — Home wants
+/// an adopted folder, Providers wants a connection that passed a live probe —
+/// are expressed here too, as a flag in the same dictionary
+/// (`"hasHome"`, `"isConnected"`). They were briefly left out on the grounds
+/// that a probe result "isn't a field"; that was wrong on both counts. The
+/// Assistant step already passes pure view state (`isCustom`) the same way, so
+/// the shape never needed to flex — and leaving them out made `canAdvance`
+/// return `true` for two steps the UI blocks, which is a trap for any future
+/// caller that reads the function's name and believes it.
 enum SetupValidation {
     struct Requirement: Equatable {
         let field: String
@@ -56,10 +66,22 @@ enum SetupValidation {
             }
             return unmet
 
-        // Home and Providers enforce their own requirement structurally — a vault
-        // must be adopted, and a connection must pass a live probe — so there is
-        // no field-level rule to add here.
-        case .welcome, .home, .appearance, .motionAndSound, .providers, .done:
+        case .home:
+            // Enforced structurally in the view too (the step advances only on a
+            // successful adoption), but stated here so `canAdvance` tells the
+            // truth for this step rather than waving it through.
+            guard values["hasHome"] != "true" else { return [] }
+            return [Requirement(field: "hasHome",
+                                message: "Choose a folder for your Ainkrad Home to continue.")]
+
+        case .providers:
+            guard values["isConnected"] != "true" else { return [] }
+            return [Requirement(
+                field: "isConnected",
+                message: "Connect a provider above to continue — the connection is checked "
+                       + "before Ainkrad accepts it.")]
+
+        case .welcome, .appearance, .motionAndSound, .done:
             return []
         }
     }

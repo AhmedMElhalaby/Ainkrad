@@ -53,7 +53,11 @@ struct SetupRequirementNote: View {
                 .font(AinkradFont.display(11))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(tokens.accentSecondary)
+        // `accentTertiary`, deliberately: it is what the Providers step already
+        // uses for a FAILED connection, while `accentSecondary` is that step's
+        // success colour (`checkmark.seal.fill`). An unmet requirement drawn in
+        // the wizard's success colour is a contradiction.
+        .foregroundStyle(tokens.accentTertiary)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

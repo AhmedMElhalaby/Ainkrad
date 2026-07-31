@@ -76,8 +76,16 @@ struct SetupHomeStepView: View {
             // nothing has been adopted yet — this step is only ever reached on
             // a provisional home. The instant adoption succeeds the coordinator
             // is rebuilt without `.home` at all, so Back can never return to it.
+            //
+            // No `SetupRequirementNote` here, unlike the other gated steps, and
+            // the primary is never disabled: this step's requirement IS its
+            // primary button. "Choose a folder to continue" printed above a
+            // button reading "Choose Folder…" would be noise, not an
+            // explanation. The rule still lives in `SetupValidation` so
+            // `canAdvance(from: .home,)` tells a programmatic caller the truth.
             SetupStepFooter(coordinator: coordinator,
-                            primaryTitle: "Choose Folder…") { choose() }
+                            primaryTitle: "Choose Folder…",
+                            primaryIdentifier: "setup.home.choose") { choose() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }

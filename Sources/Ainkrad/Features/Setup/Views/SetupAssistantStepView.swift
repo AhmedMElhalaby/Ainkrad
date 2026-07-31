@@ -80,8 +80,15 @@ struct SetupAssistantStepView: View {
         ])
     }
 
+    /// Same rule as the You step's: the warning appears once the user has typed
+    /// in the field and left it blank, not the instant the custom-persona
+    /// fields appear. Two warnings under two fields the user has only just
+    /// revealed reads as an error state rather than guidance, and both steps
+    /// should answer "when does a warning appear" the same way. Continue stays
+    /// disabled throughout either way.
     private func message(for field: String) -> String? {
-        unmet.first { $0.field == field }?.message
+        guard touched.contains(field) else { return nil }
+        return unmet.first { $0.field == field }?.message
     }
 
     @State private var selection: AgentProfile = BuiltInAgents.build
@@ -94,6 +101,8 @@ struct SetupAssistantStepView: View {
     /// `agents`, if any — reused on subsequent commits so Back-then-Continue
     /// updates the existing entry instead of appending a duplicate.
     @State private var customProfileID: UUID?
+    /// Custom-persona fields the user has typed in — see `message(for:)`.
+    @State private var touched: Set<String> = []
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -221,6 +230,7 @@ struct SetupAssistantStepView: View {
                 // explanation is the failure mode this avoids.
                 VStack(alignment: .leading, spacing: 4) {
                     AinkradTextField(text: $customName, placeholder: "Name (e.g. Scribe)")
+                        .onChange(of: customName) { _, _ in touched.insert("personaName") }
                     if let message = message(for: "personaName") {
                         SetupRequirementNote(message: message, tokens: tokens)
                             .accessibilityIdentifier("setup.assistant.personaName.requirement")
@@ -228,6 +238,9 @@ struct SetupAssistantStepView: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     AinkradTextField(text: $customInstructions, placeholder: "Instructions")
+                        .onChange(of: customInstructions) { _, _ in
+                            touched.insert("personaInstructions")
+                        }
                     if let message = message(for: "personaInstructions") {
                         SetupRequirementNote(message: message, tokens: tokens)
                             .accessibilityIdentifier("setup.assistant.personaInstructions.requirement")
