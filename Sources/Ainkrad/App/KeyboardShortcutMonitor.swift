@@ -1,83 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Which keystrokes survive the first-run setup gate. The answer is almost none:
-/// while setup is presented the workspace behind it must not be reachable, so the
-/// keyboard monitor swallows every key it sees — named `ShortcutAction` bindings
-/// and the hardcoded checks alike (⌘1-9, ⌘arrows, ⌘M, ⌘D, ⌥←/→).
-///
-/// The decision lives here, as a pure function of the keystroke and the gate's
-/// state, so the behaviour that actually ships is testable: `handle` takes an
-/// `NSEvent`, which a unit test cannot meaningfully synthesise, but this can be
-/// called directly. It is also the one greppable place a future author adding a
-/// shortcut can find, instead of quietly assuming it survives the gate.
-///
-/// Two exemptions, both of which exist so the gate is a gate and not a trap:
-///
-/// 1. **⌘Q always passes.** This monitor runs BEFORE the menu bar's key
-///    equivalents, so swallowing ⌘Q would stop it ever reaching `NSApp.terminate`
-///    → `AinkradAppDelegate` → `QuitCoordinator`.
-/// 2. **Return / Enter / Escape pass while the quit confirmation is showing.**
-///    `QuitConfirmationView` drives Quit and Cancel off `.defaultAction`,
-///    `.cancelAction` and `.onKeyPress(.escape)`, all of which need the keyDown to
-///    reach SwiftUI. Without this, ⌘Q raises a dialog only the mouse can answer —
-///    the same trap one level down. `confirmBeforeQuit` defaults on, so this is
-///    the normal quit path, not an edge case.
-///
-/// Everything else is deliberately consumed while gated, including ⌘W/⌘H/⌘M: a
-/// total gate is the point, and none of them can strand the user the way an
-/// unanswerable quit dialog can.
-enum SetupGate {
-    /// Virtual key codes the quit confirmation needs. Escape, Return and keypad
-    /// Enter occupy the same physical position on every layout, so matching them
-    /// by key code is correct and layout-independent.
-    private static let returnKey: UInt16 = 36
-    private static let keypadEnter: UInt16 = 76
-    private static let escape: UInt16 = 53
-
-    /// Whether the first-run gate goes up at LAUNCH.
-    ///
-    /// Two reasons, and they are different: no Home has been chosen yet
-    /// (`provisionalHome`), or a real Home exists whose setup never finished —
-    /// a force-quit mid-wizard — or which owes steps added in a newer
-    /// `setupVersion` (`!setupIsComplete`).
-    ///
-    /// This is a launch-time decision only. It does NOT contradict the wizard's
-    /// mid-session lowering (`SetupReseat.Outcome.alreadyConfigured`, and
-    /// `SetupDoneStepView.finish()`): both lower the gate only once a completed
-    /// marker at the current version exists in the adopted Home's store, which
-    /// is exactly the state that makes `setupIsComplete` true here on the next
-    /// launch. Read this at boot against the freshly bootstrapped environment's
-    /// persistence; never re-evaluate it mid-session, where it would race the
-    /// swap and re-raise a gate the user has legitimately cleared.
-    static func raisedAtLaunch(provisionalHome: Bool, setupIsComplete: Bool) -> Bool {
-        provisionalHome || !setupIsComplete
-    }
-
-    /// `true` when the monitor must consume this keystroke without performing
-    /// anything. `false` means "not the gate's business" — either the gate is
-    /// down, or this is one of the exempt keys, and normal handling continues.
-    ///
-    /// `characters` is `charactersIgnoringModifiers`. ⌘Q is matched on the
-    /// CHARACTER, not the key code, and that is load-bearing: the key producing
-    /// "q" is keyCode 12 only on QWERTY — it is 39 on Dvorak and 0 on AZERTY.
-    /// AppKit matches the Quit key equivalent by character too, so matching by
-    /// key code here would swallow the real ⌘Q on those layouts (trapping the
-    /// user in the wizard) while letting an inert physical key through.
-    static func swallows(
-        keyCode: UInt16,
-        characters: String?,
-        command: Bool,
-        isSetupPresented: Bool,
-        isConfirmingQuit: Bool
-    ) -> Bool {
-        guard isSetupPresented else { return false }
-        if command, characters?.lowercased() == "q" { return false }
-        if isConfirmingQuit, [returnKey, keypadEnter, escape].contains(keyCode) { return false }
-        return true
-    }
-}
-
 /// Installs a local `keyDown` monitor for the app-wide shortcuts (⌘K,
 /// ⌘1-⌘9, ⌘⇧N, ⌘W) — see ADR-0008 App Launcher & Workspace Switching.
 /// A local monitor fires before the event reaches the menu bar's key
@@ -261,18 +184,35 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
+            let command = event.modifierFlags.contains(.command)
+            let isShifted = event.modifierFlags.contains(.shift)
+            let isOption = event.modifierFlags.contains(.option)
+            // Resolved once, here, and reused for both the gate and the
+            // dispatch below — a second lookup could drift from this one.
+            let action = environment.shortcutStore.bindings.action(matching: event)
+
             // First-run setup is a blocking gate: the workspace renders behind
             // it but nothing in it may be reached. Returning `true` consumes the
-            // event (see the local monitor above), so it reaches neither a
-            // shortcut action nor the workspace. `SetupGate` owns the decision —
-            // including the ⌘Q and quit-confirmation exemptions that keep this a
-            // gate rather than a trap — as a pure, tested function.
+            // event (see the local monitor above) WITHOUT performing anything.
+            // The overlay owns focus, so only the workspace shortcuts are
+            // consumed — everything else must reach its text fields.
+            // `SetupGate` owns the decision — including the ⌘Q and
+            // quit-confirmation exemptions that keep this a gate rather than a
+            // trap — as a pure, tested function.
             if SetupGate.swallows(
-                keyCode: event.keyCode,
-                characters: event.charactersIgnoringModifiers,
-                command: event.modifierFlags.contains(.command),
                 isSetupPresented: environment.isSetupPresented,
-                isConfirmingQuit: environment.quitCoordinator.isConfirming
+                isConfirmingQuit: environment.quitCoordinator.isConfirming,
+                isRegisteredShortcut: action != nil,
+                isWorkspaceChord: WorkspaceChord.matches(
+                    keyCode: event.keyCode,
+                    characters: event.charactersIgnoringModifiers?.lowercased(),
+                    command: command,
+                    option: isOption,
+                    shift: isShifted
+                ),
+                command: command,
+                characters: event.charactersIgnoringModifiers,
+                keyCode: event.keyCode
             ) {
                 return true
             }
@@ -291,7 +231,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // the user's current bindings, not a hardcoded key check — this
             // also covers the ⌥Tab Workspace Overview toggle, which used to
             // be special-cased here.
-            if let action = environment.shortcutStore.bindings.action(matching: event) {
+            if let action {
                 if action == .pushToTalk {
                     // Forward-dependency seam (Task 13 wires the real
                     // `environment.voiceService.pushToTalk`) — see
@@ -302,53 +242,41 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 return perform(action, in: environment)
             }
 
-            guard event.modifierFlags.contains(.command) else { return false }
-            let isShifted = event.modifierFlags.contains(.shift)
-            let isOption = event.modifierFlags.contains(.option)
+            guard command else { return false }
 
             // ⌘⌥←/→ cycle to the previous/next workspace (wrapping around),
             // the quick companion to the ⌘1-9 direct jumps.
-            if isOption,
-               !environment.isSetupPresented,
+            if !environment.isSetupPresented,
                !environment.isLauncherPresented,
                !environment.isWorkspaceOverviewPresented,
                !environment.isSettingsPresented,
-               !environment.isAppStorePresented {
-                switch event.keyCode {
-                case 123:
-                    environment.workspaceManager.switchToPreviousWorkspace()
-                    window?.makeFirstResponder(nil)
-                    return true
-                case 124:
-                    environment.workspaceManager.switchToNextWorkspace()
-                    window?.makeFirstResponder(nil)
-                    return true
-                default:
-                    break
+               !environment.isAppStorePresented,
+               let cycle = WorkspaceChord.cycleDirection(keyCode: event.keyCode,
+                                                         command: command, option: isOption) {
+                switch cycle {
+                case .previous: environment.workspaceManager.switchToPreviousWorkspace()
+                case .next: environment.workspaceManager.switchToNextWorkspace()
                 }
+                window?.makeFirstResponder(nil)
+                return true
             }
 
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
             // only while no overlay owns the keyboard (and never when ⌥ is
             // held, which is the workspace-cycle chord above).
-            if !isOption, !environment.isSetupPresented, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isAppStorePresented {
-                let direction: PaneDirection? = switch event.keyCode {
-                case 123: .left
-                case 124: .right
-                case 125: .down
-                case 126: .up
-                default: nil
+            if !environment.isSetupPresented, !environment.isLauncherPresented,
+               !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented,
+               !environment.isAppStorePresented,
+               let direction = WorkspaceChord.paneDirection(keyCode: event.keyCode,
+                                                            command: command, option: isOption) {
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                if isShifted {
+                    layout.resizeFocused(direction)
+                } else {
+                    layout.focusNeighbor(direction)
+                    window?.makeFirstResponder(nil)
                 }
-                if let direction {
-                    let layout = environment.workspaceManager.activeWorkspace.tileLayout
-                    if isShifted {
-                        layout.resizeFocused(direction)
-                    } else {
-                        layout.focusNeighbor(direction)
-                        window?.makeFirstResponder(nil)
-                    }
-                    return true
-                }
+                return true
             }
 
             // `charactersIgnoringModifiers` still applies Shift, so a shifted
@@ -373,8 +301,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 layout.splitFocused(isShifted ? .bottom : .trailing)
                 return true
             default:
-                if !isShifted, let number = Int(characters), (1...9).contains(number) {
-                    environment.workspaceManager.switchToWorkspace(at: number - 1)
+                if let index = WorkspaceChord.workspaceIndex(characters: characters,
+                                                             command: command, shift: isShifted) {
+                    environment.workspaceManager.switchToWorkspace(at: index)
                     window?.makeFirstResponder(nil)
                     return true
                 }
