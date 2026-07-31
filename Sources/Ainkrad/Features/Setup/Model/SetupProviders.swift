@@ -113,6 +113,69 @@ enum SetupProviders {
         }
     }
 
+    /// What an already-configured connection is worth to this step.
+    enum Adoption: Equatable {
+        /// Nothing is active — the step is asked normally.
+        case none
+        /// An active connection exists AND passed a live probe. The step is
+        /// satisfied for real and the deferral debt is settled.
+        case verified(message: String)
+        /// An active connection exists but did NOT pass. The user is let
+        /// through anyway — they are not locked out over this — but the debt
+        /// STAYS recorded, so the step is still owed and the banner still shows.
+        case unverified(message: String)
+    }
+
+    /// Recognises a connection the user already has, without ever blocking on it.
+    ///
+    /// Two properties have to hold at once, and neither may be traded away:
+    ///
+    /// 1. **A user who is already correctly configured is not re-gated.** They
+    ///    deferred, connected through Settings, and must not be asked to re-type
+    ///    a key they already have — while the gate is up, Settings is
+    ///    unreachable, so there is nowhere to point at it.
+    /// 2. **A credential nobody verified does not satisfy a step whose entire
+    ///    purpose is verification.** An earlier version of this asserted that
+    ///    "nothing can become active without having passed a probe". That is
+    ///    false: `AssistantSettingsView+Connections.addConnection` writes a
+    ///    connection AND its Keychain token with no probe at all, and
+    ///    `AssistantModelPicker.selectConnection` makes any connection active
+    ///    unconditionally. So defer → banner → Settings → add a typo'd key →
+    ///    select it → relaunch would have silently cleared the debt.
+    ///
+    /// Both survive because the probe is **non-blocking**: it decides whether the
+    /// debt is settled, never whether the user may proceed. A failure of any
+    /// kind — transient or not — still lets them into the workspace, and still
+    /// leaves the step owed. There is no path from here to a locked-out user.
+    ///
+    /// Credential resolution mirrors
+    /// `AssistantSettingsView+Connections.testConnection` exactly: a subscription
+    /// connection authenticates with its OAuth bearer, everything else with its
+    /// stored key.
+    static func adoptExistingConnection(connections: ConnectionStore,
+                                        agentConfig: AgentConfigStore,
+                                        oauth: OAuthCredentialStore,
+                                        verify: Verifier) async -> Adoption {
+        guard let id = agentConfig.activeConnectionID,
+              let connection = connections.connections.first(where: { $0.id == id })
+        else { return .none }
+
+        let credential: ProviderCredential
+        if connection.authMode == .subscription {
+            credential = (try? await oauth.liveCredential(for: connection)) ?? .apiKey("")
+        } else {
+            credential = .apiKey(connections.token(for: connection) ?? "")
+        }
+
+        let result = await verify(connection.kind, connection.baseURL, credential)
+        guard result.ok else {
+            return .unverified(message: "Using your existing \(connection.displayName) connection, "
+                                      + "but Ainkrad couldn't check it just now — AI features may "
+                                      + "not work until it does.")
+        }
+        return .verified(message: "Already connected · \(connection.displayName)")
+    }
+
     /// Removes subscription connections left behind by an abandoned attempt.
     ///
     /// `SetupSubscriptionFlow.connection(connections:)` must persist a connection before OAuth can key
@@ -207,5 +270,66 @@ final class SetupSubscriptionFlow {
         }
         pending = nil
         awaitingPaste = false
+    }
+}
+
+/// The "Set this up later" offer, lifted OUT of the view so its rules are
+/// reachable from a plain applier test — the same reason `SetupSubscriptionFlow`
+/// lives here rather than in `SetupProvidersStepView`.
+///
+/// The two bugs this shape exists to prevent, both found in review:
+///
+/// 1. **The offer must survive the launch it causes.** A step recorded as
+///    deferred re-raises the gate on itself; if the offer were derived only from
+///    this session's attempts, the user would have to reproduce a transient
+///    upstream failure to get past a step they had already been permitted to
+///    postpone — with `.providers` first in `steps`, Back absent and the overlay
+///    non-dismissible, that leaves only `⌘Q`. Hence `alreadyOwed`.
+/// 2. **The offer must not be confiscated by a later mistake.** It is latched
+///    (`earned`), not recomputed from the most recent attempt: an OAuth 429
+///    offers it, and a subsequently mistyped API key returning 401 must not take
+///    it away.
+struct SetupEscape: Equatable {
+    /// Seeded from `SetupCoordinator.deferredSteps` — the marker's record that
+    /// this step was already postponed once.
+    var alreadyOwed = false
+    /// Latched by `note(_:)` the moment any attempt fails in a way the user
+    /// cannot fix. Never cleared by a subsequent failure.
+    private(set) var earned = false
+    /// The user took the offer. Satisfies the step's requirement without a probe.
+    private(set) var taken = false
+
+    /// The ONE place a classification becomes the offer. Reads
+    /// `ConnectionFailure.allowsDeferral` and nothing else — never a message.
+    mutating func note(_ failure: ConnectionFailure?) {
+        if failure?.allowsDeferral == true { earned = true }
+    }
+
+    mutating func take() { taken = true }
+
+    /// A connection was established (or adopted and verified): the offer is moot
+    /// and the debt is settled. `earned` is cleared too — leaving it set would
+    /// re-offer the escape if the user later switched presets and cleared the
+    /// outcome.
+    mutating func resolve() {
+        taken = false
+        earned = false
+        alreadyOwed = false
+    }
+
+    /// Whether "Set this up later" is on screen.
+    func isOffered(isConnected: Bool) -> Bool {
+        guard !taken, !isConnected else { return false }
+        return earned || alreadyOwed
+    }
+
+    /// Why the offer is there. The two states need different sentences: on a
+    /// relaunch with no attempt made yet there is no failure on screen, and
+    /// "that failure is on the provider's side" is then a non-sequitur pointing
+    /// at nothing.
+    var offerCopy: String {
+        earned
+            ? "That failure is on the provider's side, not yours."
+            : "You chose to set this up later. You can connect now, or leave it for later again."
     }
 }

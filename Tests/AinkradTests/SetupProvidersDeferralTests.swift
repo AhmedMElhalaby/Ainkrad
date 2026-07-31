@@ -194,23 +194,87 @@ struct SetupProvidersDeferralTests {
         let relaunched = SetupCoordinator(persistence: store, isProvisionalHome: false)
         #expect(relaunched.steps == [.providers, .done])
         #expect(!relaunched.canGoBack, "the deferred step is first, so Back is not a way out")
-        // The view reads exactly this to keep "Set this up later" on screen.
-        #expect(relaunched.deferredSteps.contains(.providers))
+
+        // Seeded exactly as the view seeds it in `onAppear`.
+        var escape = SetupEscape()
+        escape.alreadyOwed = relaunched.deferredSteps.contains(.providers)
+        #expect(escape.isOffered(isConnected: false),
+                "the escape must be on screen before anything is attempted")
+
+        // The full trap: the provider has recovered, the user has no key, types
+        // a wrong one, and gets a 401. The offer must still be there.
+        escape.note(.unauthorized(status: 401))
+        #expect(escape.isOffered(isConnected: false),
+                "a 401 on a step already permitted to be deferred must not be a dead end")
     }
 
     /// The escape, once earned, is not confiscated by a later mistake: an OAuth
     /// 429 offers it, and a subsequently mistyped API key returning 401 must not
     /// take it away.
+    ///
+    /// Drives `SetupEscape` itself — the type the view holds — rather than
+    /// restating the rule in the test body.
     @Test func theEscapeIsLatchedNotRecomputed() {
-        // The view latches on any `allowsDeferral` verdict and never clears it
-        // except on a successful connection; these are the two verdicts involved.
-        let transient = SetupProviders.Outcome.failed(message: "rate limited",
-                                                     failure: .rateLimited(status: 429))
-        let blocking = SetupProviders.Outcome.failed(message: "bad key",
-                                                    failure: .unauthorized(status: 401))
-        var escapeEarned = false
-        for outcome in [transient, blocking] where outcome.canDefer { escapeEarned = true }
-        #expect(escapeEarned, "a blocking failure after a deferrable one must not erase the offer")
+        var escape = SetupEscape()
+        #expect(!escape.isOffered(isConnected: false))
+
+        escape.note(.rateLimited(status: 429))       // OAuth was rate limited
+        #expect(escape.isOffered(isConnected: false))
+
+        escape.note(.unauthorized(status: 401))      // then a mistyped API key
+        #expect(escape.isOffered(isConnected: false),
+                "a blocking failure after a deferrable one must not erase the offer")
+
+        escape.note(nil)                             // and an unclassified failure
+        #expect(escape.isOffered(isConnected: false))
+    }
+
+    /// The latch is set ONLY from a classification, and only a deferrable one.
+    @Test func onlyADeferrableClassificationEarnsTheEscape() {
+        for blocking: ConnectionFailure in [.unauthorized(status: 401), .unauthorized(status: 403),
+                                            .rejected(status: 400), .invalidBaseURL] {
+            var escape = SetupEscape()
+            escape.note(blocking)
+            #expect(!escape.isOffered(isConnected: false), "\(blocking) must not earn an escape")
+        }
+        for deferrable: ConnectionFailure in [.rateLimited(status: 429), .serverError(status: 503),
+                                              .notFound(status: 404), .unreachable] {
+            var escape = SetupEscape()
+            escape.note(deferrable)
+            #expect(escape.isOffered(isConnected: false), "\(deferrable) must earn an escape")
+        }
+    }
+
+    /// A recorded deferral alone offers the escape, with nothing attempted — and
+    /// says something that makes sense with no failure on screen.
+    @Test func arecordedDeferralAloneOffersTheEscapeWithItsOwnCopy() {
+        var escape = SetupEscape()
+        escape.alreadyOwed = true
+        #expect(escape.isOffered(isConnected: false))
+        #expect(!escape.offerCopy.contains("failure"),
+                "with nothing attempted there is no failure on screen to refer to")
+
+        var earned = SetupEscape()
+        earned.note(.rateLimited(status: 429))
+        #expect(earned.offerCopy.contains("provider's side"))
+        #expect(earned.offerCopy != escape.offerCopy)
+    }
+
+    /// A connection makes the offer moot, and taking it satisfies the step.
+    @Test func aconnectionRetiresTheOfferAndTakingItSatisfiesTheStep() {
+        var escape = SetupEscape()
+        escape.note(.rateLimited(status: 429))
+        #expect(!escape.isOffered(isConnected: true), "a connection makes the offer moot")
+
+        escape.take()
+        #expect(escape.taken)
+        #expect(SetupValidation.canAdvance(from: .providers,
+                                           values: ["isDeferred": escape.taken ? "true" : "false"]))
+        #expect(!escape.isOffered(isConnected: false), "the offer is gone once taken")
+
+        escape.resolve()
+        #expect(!escape.taken)
+        #expect(!escape.isOffered(isConnected: false))
     }
 
     /// Deferring during a RE-RAISED session must survive a quit before Finish:
@@ -240,10 +304,12 @@ struct SetupProvidersDeferralTests {
         #expect(SetupCoordinator(persistence: store, isProvisionalHome: true).steps == SetupStep.allCases)
     }
 
+    // MARK: - Adopting a connection the user already has (review finding 4 + round 3)
+
     /// A user who defers, then connects a provider through Settings, must not be
     /// asked to re-enter the key from scratch at the next launch — while the gate
     /// is up, Settings is unreachable, so there is no way to point at it.
-    @Test func anExistingVerifiedConnectionSatisfiesTheReRaisedStep() {
+    @Test func averifiedExistingConnectionSatisfiesTheStepAndSettlesTheDebt() async {
         let t = TestHome.make("prov14")
         defer { t.cleanup() }
         let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
@@ -253,24 +319,108 @@ struct SetupProvidersDeferralTests {
             baseURL: "https://example.invalid/v1", token: "sk-test", authMode: .apiKey)
         env.agentConfigStore.setActiveConnectionID(existing.id)
 
-        // What the step's `adoptExistingConnection` reads.
-        let active = env.agentConfigStore.activeConnectionID
-            .flatMap { id in env.connectionStore.connections.first { $0.id == id } }
-        #expect(active?.id == existing.id)
-
-        // ...and it is not swept away as an abandoned attempt.
-        let removed = SetupProviders.cleanUpAbandonedSubscriptions(
+        let adoption = await SetupProviders.adoptExistingConnection(
             connections: env.connectionStore, agentConfig: env.agentConfigStore,
-            oauth: env.oauthStore)
-        #expect(removed == 0)
-        #expect(env.agentConfigStore.activeConnectionID == existing.id)
+            oauth: env.oauthStore,
+            verify: { _, _, _ in ConnectionTestResult(ok: true, message: "Connected · 9 models") })
 
-        // Recognising it clears the debt.
-        let c = SetupCoordinator(persistence: env.persistence, isProvisionalHome: false)
-        c.setDeferred(.providers, true)
-        c.setDeferred(.providers, false)
-        c.complete()
-        #expect(c.isComplete)
+        #expect(adoption == .verified(message: "Already connected · OpenAI"))
+    }
+
+    /// The premise an earlier version of this asserted — "nothing can become
+    /// active without having passed a probe" — is FALSE:
+    /// `AssistantSettingsView+Connections.addConnection` writes a connection and
+    /// its Keychain token with no probe, and `AssistantModelPicker` makes any
+    /// connection active unconditionally. So an unverified credential must not
+    /// silently satisfy the one step whose entire purpose is verification.
+    @Test func anunverifiedExistingConnectionDoesNotSettleTheDebt() async {
+        let t = TestHome.make("prov16")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+
+        let typoed = env.connectionStore.addConnection(
+            preset: ProviderPreset.preset(id: "openai"), displayName: "OpenAI",
+            baseURL: "https://example.invalid/v1", token: "sk-typo", authMode: .apiKey)
+        env.agentConfigStore.setActiveConnectionID(typoed.id)
+
+        let adoption = await SetupProviders.adoptExistingConnection(
+            connections: env.connectionStore, agentConfig: env.agentConfigStore,
+            oauth: env.oauthStore,
+            verify: { _, _, _ in
+                ConnectionTestResult(ok: false, message: "HTTP 401",
+                                     failure: .unauthorized(status: 401))
+            })
+
+        guard case .unverified = adoption else {
+            Issue.record("an unverified connection must not settle the debt: \(adoption)")
+            return
+        }
+        // ...and it still does not lock anyone out: the connection is untouched
+        // and the user proceeds.
+        #expect(env.connectionStore.connections.count == 1)
+        #expect(env.agentConfigStore.activeConnectionID == typoed.id)
+    }
+
+    /// The probe is non-blocking in BOTH directions. A transient failure while
+    /// adopting must not gate a user whose setup may well be fine — that is the
+    /// very bug this task exists to kill — so it too returns `.unverified`.
+    @Test func atransientFailureWhileAdoptingStillLetsTheUserThrough() async {
+        let t = TestHome.make("prov17")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+
+        let existing = env.connectionStore.addConnection(
+            preset: ProviderPreset.preset(id: "openai"), displayName: "OpenAI",
+            baseURL: "https://example.invalid/v1", token: "sk-test", authMode: .apiKey)
+        env.agentConfigStore.setActiveConnectionID(existing.id)
+
+        for failure: ConnectionFailure in [.rateLimited(status: 429), .unreachable] {
+            let adoption = await SetupProviders.adoptExistingConnection(
+                connections: env.connectionStore, agentConfig: env.agentConfigStore,
+                oauth: env.oauthStore,
+                verify: { _, _, _ in ConnectionTestResult(ok: false, message: "x", failure: failure) })
+            guard case .unverified = adoption else {
+                Issue.record("\(failure) must let the user through, not gate them: \(adoption)")
+                return
+            }
+        }
+    }
+
+    /// No active connection: nothing to adopt, and above all no probe fired at a
+    /// user who has not configured anything.
+    @Test func nothingIsAdoptedWhenNoConnectionIsActive() async {
+        let t = TestHome.make("prov18")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+
+        var probed = false
+        let adoption = await SetupProviders.adoptExistingConnection(
+            connections: env.connectionStore, agentConfig: env.agentConfigStore,
+            oauth: env.oauthStore,
+            verify: { _, _, _ in probed = true; return ConnectionTestResult(ok: true, message: "x") })
+
+        #expect(adoption == .none)
+        #expect(!probed)
+    }
+
+    /// A dangling `activeConnectionID` (the connection was removed) is not a
+    /// connection either.
+    @Test func adanglingActiveConnectionIDIsNotAdopted() async {
+        let t = TestHome.make("prov19")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+
+        let gone = env.connectionStore.addConnection(
+            preset: ProviderPreset.preset(id: "openai"), displayName: "OpenAI",
+            baseURL: "https://example.invalid/v1", token: "sk", authMode: .apiKey)
+        env.agentConfigStore.setActiveConnectionID(gone.id)
+        env.connectionStore.removeConnection(gone)
+
+        let adoption = await SetupProviders.adoptExistingConnection(
+            connections: env.connectionStore, agentConfig: env.agentConfigStore,
+            oauth: env.oauthStore,
+            verify: { _, _, _ in ConnectionTestResult(ok: true, message: "x") })
+        #expect(adoption == .none)
     }
 
     /// 404 reaches the escape through the same path as a 429.
