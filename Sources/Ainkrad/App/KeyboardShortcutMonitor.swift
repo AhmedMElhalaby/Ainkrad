@@ -285,9 +285,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // fire regardless of case.
             guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
 
-            switch characters {
-            case "m" where !isShifted:
-                // Toggle Focus Mode / Split Mode for the active workspace.
+            // Toggle Focus Mode / Split Mode for the active workspace.
+            if WorkspaceChord.togglesFocusMode(characters: characters,
+                                               command: command, shift: isShifted) {
                 let workspace = environment.workspaceManager.activeWorkspace
                 workspace.viewMode = workspace.viewMode == .focus ? WorkspaceViewMode.split : WorkspaceViewMode.focus
                 environment.workspaceManager.persist()
@@ -295,20 +295,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 // ⌘M was the one focus-mode entry point without it.
                 environment.sounds.play(.focusMode)
                 return true
-            case "d", "D":
-                // Split the focused pane: ⌘D right, ⌘⇧D down.
-                let layout = environment.workspaceManager.activeWorkspace.tileLayout
-                layout.splitFocused(isShifted ? .bottom : .trailing)
-                return true
-            default:
-                if let index = WorkspaceChord.workspaceIndex(characters: characters,
-                                                             command: command, shift: isShifted) {
-                    environment.workspaceManager.switchToWorkspace(at: index)
-                    window?.makeFirstResponder(nil)
-                    return true
-                }
-                return false
             }
+
+            // Split the focused pane: ⌘D right, ⌘⇧D down.
+            if let edge = WorkspaceChord.splitEdge(characters: characters,
+                                                   command: command, shift: isShifted) {
+                environment.workspaceManager.activeWorkspace.tileLayout.splitFocused(edge)
+                return true
+            }
+
+            if let index = WorkspaceChord.workspaceIndex(characters: characters,
+                                                         command: command, shift: isShifted) {
+                environment.workspaceManager.switchToWorkspace(at: index)
+                window?.makeFirstResponder(nil)
+                return true
+            }
+            return false
         }
 
         /// Runs the side effect for a resolved named shortcut action — the

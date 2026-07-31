@@ -1,14 +1,31 @@
 import AppKit
 
-/// The hardcoded workspace-navigation chords — ⌘1-⌘9, ⌘arrows and ⌘⌥arrows —
-/// expressed as pure key/modifier predicates.
+/// Every hardcoded chord `KeyboardShortcutMonitor.handle` acts on — ⌘1-⌘9,
+/// ⌘arrows, ⌘⌥arrows, ⌘D/⌘⇧D and ⌘M — expressed as pure key/modifier predicates.
 ///
-/// These exist so `SetupGate` and the branches in `KeyboardShortcutMonitor.handle`
-/// that actually perform them cannot disagree about what a workspace chord is:
-/// both ask the same function. Only the key/modifier condition lives here; the
-/// overlay-presentation guards (`!isSetupPresented`, `!isLauncherPresented`, …)
-/// stay at the call site, because they are about *when* to perform a chord, not
-/// about which chords exist.
+/// **The invariant: while the setup gate is up, any event `handle` would
+/// otherwise act on is swallowed; everything else passes.** `SetupGate` cannot
+/// uphold that unless this type enumerates the *complete* set, so a chord that
+/// `handle` performs but `matches` omits is a bug, not an omission — it leaks
+/// through the gate and mutates the workspace behind it.
+///
+/// That is not hypothetical. ⌘D (split pane) and ⌘M (focus mode) were missing
+/// from the first version of this type; both fell past the gate into the
+/// branches below and mutated the workspace, and ⌘M called
+/// `workspaceManager.persist()` unconditionally — writing into the *provisional*
+/// home, a temp directory discarded at the vault swap.
+///
+/// So `handle` performs nothing these predicates do not recognise: every
+/// hardcoded branch is driven by the function directly above it, which is what
+/// stops the gate and the dispatch drifting apart. Adding a chord to `handle`
+/// means adding it here first.
+///
+/// Only the key/modifier condition lives here; the overlay-presentation guards
+/// (`!isSetupPresented`, `!isLauncherPresented`, …) stay at the call site,
+/// because they are about *when* to perform a chord, not which chords exist.
+///
+/// Registered `ShortcutAction` bindings (⌘K, ⌘,, …) are the other half of the
+/// blocked set and are resolved separately, via `ShortcutBindings.action(matching:)`.
 enum WorkspaceChord {
     enum CycleDirection { case previous, next }
 
@@ -48,13 +65,31 @@ enum WorkspaceChord {
         return number - 1
     }
 
-    /// Whether this keystroke is one of the above — the set `SetupGate` blocks
-    /// on top of the registered `ShortcutAction` bindings.
+    /// ⌘D splits the focused pane to the trailing edge, ⌘⇧D to the bottom.
+    /// `characters` is expected already lowercased, as `handle` lowercases it
+    /// (`charactersIgnoringModifiers` still applies Shift, so ⌘⇧D arrives "D").
+    static func splitEdge(characters: String?, command: Bool, shift: Bool) -> PaneEdge? {
+        guard command, characters == "d" else { return nil }
+        return shift ? .bottom : .trailing
+    }
+
+    /// ⌘M toggles Focus/Split view mode for the active workspace. Unshifted
+    /// only — ⌘⇧M is not a binding.
+    static func togglesFocusMode(characters: String?, command: Bool, shift: Bool) -> Bool {
+        command && !shift && characters == "m"
+    }
+
+    /// Whether this keystroke is one of the above — the complete set of
+    /// hardcoded chords `handle` acts on, which `SetupGate` blocks on top of the
+    /// registered `ShortcutAction` bindings. Every branch in `handle` is driven
+    /// by one of the predicates OR'd here; nothing it performs is absent.
     static func matches(keyCode: UInt16, characters: String?, command: Bool,
                         option: Bool, shift: Bool) -> Bool {
         cycleDirection(keyCode: keyCode, command: command, option: option) != nil
             || paneDirection(keyCode: keyCode, command: command, option: option) != nil
             || workspaceIndex(characters: characters, command: command, shift: shift) != nil
+            || splitEdge(characters: characters, command: command, shift: shift) != nil
+            || togglesFocusMode(characters: characters, command: command, shift: shift)
     }
 }
 
@@ -75,8 +110,10 @@ enum WorkspaceChord {
 /// decision stays pure and testable: `handle` takes an `NSEvent`, which a unit
 /// test cannot meaningfully synthesise, but this can be called directly.
 ///
-/// ⌘H/⌘M/⌘W now reach the system. That is deliberate: hiding or minimising
-/// during setup is harmless, and the gate re-raises on the next launch.
+/// ⌘H/⌘W now reach the system. That is deliberate: hiding a window during setup
+/// is harmless, and the gate re-raises on the next launch. ⌘M does NOT: this app
+/// binds it to the workspace focus-mode toggle, which mutates and persists the
+/// workspace, so it is a `WorkspaceChord` and stays blocked.
 ///
 /// Two unconditional exemptions keep the gate a gate rather than a trap:
 ///
