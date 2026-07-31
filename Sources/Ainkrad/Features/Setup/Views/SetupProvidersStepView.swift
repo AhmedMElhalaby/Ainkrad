@@ -51,14 +51,14 @@ struct SetupProvidersStepView: View {
                 .padding(20)
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                AinkradButton(title: "Continue", style: .primary) {
-                    coordinator.advance()
-                }
-                .disabled(!isConnected)
+            // Back matters most on THIS step: it is mandatory and the
+            // requirement is a live probe the user may simply not be able to
+            // pass. Without Back, a failing connection is a dead end. It is
+            // therefore not gated on `isConnected` — only Continue is.
+            SetupStepFooter(coordinator: coordinator,
+                            isPrimaryDisabled: !isConnected) {
+                coordinator.advance()
             }
-            .padding(20)
         }
         .onAppear {
             if oauthController == nil {
@@ -198,6 +198,15 @@ struct SetupProvidersStepView: View {
             if let routeError {
                 statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
                           text: routeError, color: tokens.accentTertiary)
+            } else {
+                // Nothing attempted yet: Continue is off and, without this,
+                // nothing on screen says why. This step's requirement is a live
+                // probe rather than a field, so its explanation belongs beside
+                // the routes that satisfy it.
+                SetupRequirementNote(
+                    message: "Connect a provider above to continue — the connection is "
+                           + "checked before Ainkrad accepts it.",
+                    tokens: tokens)
             }
         }
     }

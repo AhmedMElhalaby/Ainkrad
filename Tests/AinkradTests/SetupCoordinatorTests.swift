@@ -48,4 +48,38 @@ struct SetupCoordinatorTests {
         let c = SetupCoordinator(persistence: store, isProvisionalHome: false)
         #expect(c.isComplete)
     }
+
+    @Test func backNeverReachesTheHomeStep() {
+        let store = InMemoryPersistenceStore()
+        let c = SetupCoordinator(persistence: store, isProvisionalHome: false)
+        for _ in 0..<20 { c.advance() }
+        for _ in 0..<20 { c.back() }
+        #expect(c.step != .home, "the vault is already adopted; Back must never offer to re-choose it")
+        #expect(c.step == c.steps.first)
+    }
+
+    /// Back is offered on every step but the first shown — and on the first it
+    /// is absent, not disabled, which is what `canGoBack` drives in the views.
+    @Test func backIsUnavailableOnlyOnTheFirstStep() {
+        let store = InMemoryPersistenceStore()
+        let c = SetupCoordinator(persistence: store, isProvisionalHome: true)
+        #expect(c.step == .welcome)
+        #expect(!c.canGoBack)
+        for _ in 0..<20 {
+            c.advance()
+            #expect(c.canGoBack, "every step after the first must offer Back")
+        }
+        #expect(c.step == .done)
+    }
+
+    /// A provisional (never-adopted) home is the one case where `.home` is in
+    /// `steps` at all — and even there Back may only reach it because nothing
+    /// has been adopted yet. Once adoption happens the coordinator is rebuilt
+    /// with `isProvisionalHome: false` (see `SetupOverlayView.reseat`), and
+    /// that rebuilt list is what `backNeverReachesTheHomeStep` pins.
+    @Test func theAdoptedCoordinatorHasNoHomeStepAtAll() {
+        let store = InMemoryPersistenceStore()
+        let c = SetupCoordinator(persistence: store, isProvisionalHome: false)
+        #expect(!c.steps.contains(.home))
+    }
 }

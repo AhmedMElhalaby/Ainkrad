@@ -52,13 +52,9 @@ struct SetupAppearanceStepView: View {
                 .padding(20)
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                AinkradButton(title: "Continue", style: .primary) {
-                    coordinator.advance()
-                }
-            }
-            .padding(20)
+            // Never blocking: every control here has a real default that is
+            // already applied live, so there is nothing for the user to supply.
+            SetupStepFooter(coordinator: coordinator) { coordinator.advance() }
         }
     }
 

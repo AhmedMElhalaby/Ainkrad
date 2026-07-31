@@ -40,6 +40,16 @@ final class SetupCoordinator {
 
     var canAdvance: Bool { step != .done }
 
+    /// False only on the first step shown. Drives the Back control's PRESENCE,
+    /// not its enablement: a greyed button the user can never use is noise.
+    ///
+    /// Note what this is not gated on — the current step's own validation. Back
+    /// is always available (except on the first step) whether or not the step's
+    /// requirements are met. The Providers step is the reason that matters: it
+    /// is mandatory, and a user who cannot get a connection to verify must be
+    /// able to go back rather than being stuck on it.
+    var canGoBack: Bool { (steps.firstIndex(of: step) ?? 0) > 0 }
+
     func advance() {
         guard let i = steps.firstIndex(of: step), i + 1 < steps.count else { return }
         step = steps[i + 1]

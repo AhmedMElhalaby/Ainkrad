@@ -21,9 +21,15 @@ enum SetupYou {
     }
 }
 
-/// The "You" step: who the user is, in the assistant's own words. Nothing here
-/// is required — Continue is never blocked, and a user may pass through with
-/// every field blank.
+/// The "You" step: who the user is, in the assistant's own words.
+///
+/// Name and role ARE required — this reverses the step's original "everything
+/// is optional" design at the product owner's decision, because an assistant
+/// with no idea who it works for is the thing first-run exists to prevent. The
+/// rules live in `SetupValidation`, and each unmet one is rendered beneath its
+/// own field, not only as a disabled Continue. "What to call you" and
+/// "Timezone" stay optional; timezone in particular is merely prefilled, and a
+/// user who clears it must still be able to continue.
 ///
 /// Each field commits on change (no Save button, no draft state), matching the
 /// rest of the wizard and Settings. A field cleared back to blank leaves the
@@ -74,22 +80,32 @@ struct SetupYouStepView: View {
                 .padding(20)
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                AinkradButton(title: "Continue", style: .primary) {
-                    commit()
-                    coordinator.advance()
-                }
+            SetupStepFooter(coordinator: coordinator,
+                            isPrimaryDisabled: !unmet.isEmpty) {
+                commit()
+                coordinator.advance()
             }
-            .padding(20)
         }
         .onAppear { write(timezone, for: "timezone") }
     }
 
+    /// The rules live in `SetupValidation` so the next change to them is one
+    /// file, not a `.disabled(...)` condition buried in this view.
+    private var unmet: [SetupValidation.Requirement] {
+        SetupValidation.unmet(for: .you, values: [
+            "name": name, "callMe": callMe, "role": role, "timezone": timezone,
+        ])
+    }
+
+    private func message(for key: String) -> String? {
+        unmet.first { $0.field == key }?.message
+    }
+
     private func intro(tokens: DesignTokens) -> some View {
         Text("Anything you fill in here goes into the assistant's memory, so it knows who "
-             + "it's working with. All of it is optional, and all of it is editable later "
-             + "in Memory.")
+             + "it's working with. Your name and role are needed so it knows who it is "
+             + "working for; the rest is optional, and all of it is editable later in "
+             + "Memory.")
             .font(AinkradFont.display(12))
             .foregroundStyle(tokens.foreground.opacity(0.6))
             .fixedSize(horizontal: false, vertical: true)
@@ -106,6 +122,11 @@ struct SetupYouStepView: View {
                 .foregroundStyle(tokens.foreground.opacity(0.5))
             AinkradTextField(text: text, placeholder: placeholder)
                 .onChange(of: text.wrappedValue) { _, new in write(new, for: key) }
+            // Beside the field it is about, not only at the Continue button.
+            if let message = message(for: key) {
+                SetupRequirementNote(message: message, tokens: tokens)
+                    .accessibilityIdentifier("setup.you.\(key).requirement")
+            }
         }
         .padding(14)
         .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))

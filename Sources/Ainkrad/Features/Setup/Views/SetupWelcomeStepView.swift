@@ -9,8 +9,9 @@ import AinkradHostRuntime
 /// on the very next screen make sense — a user who is asked to pick a "Home"
 /// with no preamble is being asked to make a decision they have no basis for.
 ///
-/// It writes nothing and asks nothing. There is no Back button because there is
-/// nowhere behind it, and no skip because the gate is total.
+/// It writes nothing and asks nothing. No Back button appears because there is
+/// nowhere behind it — `SetupStepFooter` omits (rather than disables) Back on
+/// the first step — and no skip, because the gate is total.
 struct SetupWelcomeStepView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -46,14 +47,13 @@ struct SetupWelcomeStepView: View {
                 .padding(20)
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                AinkradButton(title: "Get Started", style: .primary) {
-                    coordinator.advance()
-                }
-                .accessibilityIdentifier("setup.welcome.continue")
+            // No Back appears here: `SetupStepFooter` omits it on the first
+            // step shown, which for a fresh install is this one.
+            SetupStepFooter(coordinator: coordinator,
+                            primaryTitle: "Get Started",
+                            primaryIdentifier: "setup.welcome.continue") {
+                coordinator.advance()
             }
-            .padding(20)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

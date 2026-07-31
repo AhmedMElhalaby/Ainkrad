@@ -83,18 +83,20 @@ struct SetupDoneStepView: View {
                 .padding(20)
             }
 
-            HStack {
-                // Back is safe here for a structural reason, not by luck: after
-                // the Home step adopts a vault the coordinator is rebuilt with
-                // `isProvisionalHome: false`, which drops `.home` from `steps`
-                // entirely. `back()` walks `steps`, so it cannot return the user
-                // to a screen that would re-ask for a Home already adopted.
-                AinkradButton(title: "Back", style: .secondary) { coordinator.back() }
-                Spacer(minLength: 0)
-                AinkradButton(title: "Start using Ainkrad", style: .primary) { finish() }
-                    .accessibilityIdentifier("setup.done.finish")
+            // This step's Back used to be hand-rolled here — it was the only one
+            // in the wizard. It now goes through `SetupStepFooter` like every
+            // other step so there is one Back to find and change, not two.
+            //
+            // Back is safe here for a structural reason, not by luck: after the
+            // Home step adopts a vault the coordinator is rebuilt with
+            // `isProvisionalHome: false`, which drops `.home` from `steps`
+            // entirely. `back()` walks `steps`, so it cannot return the user to
+            // a screen that would re-ask for a Home already adopted.
+            SetupStepFooter(coordinator: coordinator,
+                            primaryTitle: "Start using Ainkrad",
+                            primaryIdentifier: "setup.done.finish") {
+                finish()
             }
-            .padding(20)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

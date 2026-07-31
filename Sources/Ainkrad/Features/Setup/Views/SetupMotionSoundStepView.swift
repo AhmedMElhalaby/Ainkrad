@@ -64,13 +64,9 @@ struct SetupMotionSoundStepView: View {
                 .padding(20)
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                AinkradButton(title: "Continue", style: .primary) {
-                    coordinator.advance()
-                }
-            }
-            .padding(20)
+            // Never blocking, for the same reason as Appearance: every control
+            // has a real default already applied live.
+            SetupStepFooter(coordinator: coordinator) { coordinator.advance() }
         }
     }
 
