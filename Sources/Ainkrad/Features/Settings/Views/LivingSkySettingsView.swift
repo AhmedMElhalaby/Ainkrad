@@ -10,11 +10,9 @@ import AinkradHostRuntime
 struct LivingSkySettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
-    /// The speed presets exposed in the UI (the store accepts the full
-    /// 0.5…1.5 band).
-    private static let speedPresets: [(title: String, value: Double)] = [
-        ("Calm", 0.6), ("Normal", 1.0), ("Lively", 1.5),
-    ]
+    // The speed presets now live on `SkySettingsStore` (`speedPresets`),
+    // because the first-run Motion & Sound step renders the same control and
+    // the two must not drift apart.
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -59,17 +57,12 @@ struct LivingSkySettingsView: View {
                 .font(AinkradFont.display(13, weight: .medium))
                 .foregroundStyle(tokens.foreground.opacity(0.9))
             AinkradSegmentedPicker(
-                items: Self.speedPresets.map(\.value),
+                items: SkySettingsStore.speedPresets.map(\.value),
                 selection: Binding(
-                    get: {
-                        Self.speedPresets.first { abs(store.motionSpeed - $0.value) < 0.01 }?.value
-                            ?? store.motionSpeed
-                    },
+                    get: { SkySettingsStore.nearestPreset(to: store.motionSpeed) },
                     set: { store.setMotionSpeed($0) }
                 ),
-                label: { value in
-                    Self.speedPresets.first { $0.value == value }?.title ?? ""
-                }
+                label: { SkySettingsStore.presetTitle($0) }
             )
         }
         .padding(14)
