@@ -39,11 +39,33 @@ struct SetupProvidersStepView: View {
     /// `coordinator.setDeferred(.providers, true)`, so "walked past" and "still
     /// owed" are one act.
     @State private var isDeferred = false
+    /// Latched the moment ANY attempt in this session produced a failure the
+    /// user cannot fix.
+    ///
+    /// It is never recomputed from the most recent attempt, because that made
+    /// the escape erasable: an OAuth 429 offered "Set this up later", and then a
+    /// mistyped API key returning 401 took it away again. The user earned a way
+    /// out; a subsequent mistake must not confiscate it.
+    @State private var escapeEarned = false
 
     /// View-level convenience only (Continue's enablement, clearing the token
     /// field). Decisions made inside async work read the returned
     /// `SetupProviders.Outcome` directly — see `settleSubscription`.
     private var isConnected: Bool { outcome?.isConnected ?? false }
+
+    /// True when the marker already records this step as deferred — i.e. the gate
+    /// was re-raised on it by a previous session.
+    ///
+    /// This is what makes the escape SURVIVE the relaunch it causes. Without it
+    /// the trap simply moved one launch later: defer on a 429, relaunch after
+    /// the provider recovered, have no key to hand, type a wrong one, get a 401
+    /// — and be blocked with no escape, with `.providers` as `steps[0]` so Back
+    /// is absent and the overlay non-dismissible. A step the user has ALREADY
+    /// been permitted to defer stays deferrable.
+    ///
+    /// Note it does not *satisfy* the step: they are still asked, and asked
+    /// first. It only guarantees the way out is still there.
+    private var alreadyOwed: Bool { coordinator.deferredSteps.contains(.providers) }
 
     /// The rule and its copy live in `SetupValidation`, not here.
     private var unmet: [SetupValidation.Requirement] {
@@ -54,14 +76,23 @@ struct SetupProvidersStepView: View {
 
     /// Whether "Set this up later" is on screen.
     ///
-    /// Read ONLY from `ConnectionFailure.isTransient`, reached either through
+    /// Read ONLY from `ConnectionFailure.allowsDeferral`, reached either through
     /// the probe's `SetupProviders.Outcome` or through the OAuth controller's
     /// `errorFailure` — never by inspecting the message that happens to be
     /// displayed next to it.
+    ///
+    /// Two sources, both latched rather than momentary: something that happened
+    /// in THIS session (`escapeEarned`), or a deferral already on record
+    /// (`alreadyOwed`). A connection removes the offer because it makes it moot.
     private var canDefer: Bool {
         if isDeferred || isConnected { return false }
-        if outcome?.canDefer == true { return true }
-        return routeFailure?.isTransient == true
+        return escapeEarned || alreadyOwed
+    }
+
+    /// Latches the escape from a probe verdict. The single place either route's
+    /// classification turns into the offer.
+    private func noteFailure(_ failure: ConnectionFailure?) {
+        if failure?.allowsDeferral == true { escapeEarned = true }
     }
 
     var body: some View {
@@ -99,6 +130,7 @@ struct SetupProvidersStepView: View {
                     connections: environment.connectionStore,
                     agentConfig: environment.agentConfigStore,
                     oauth: environment.oauthStore)
+                adoptExistingConnection()
             }
         }
     }
@@ -324,6 +356,7 @@ struct SetupProvidersStepView: View {
                 await service.test(kind: kind, baseURL: url, credential: credential)
             })
         outcome = result
+        if case .failed(_, let failure) = result { noteFailure(failure) }
         if result.isConnected {
             token = ""
             clearDeferral()
@@ -354,6 +387,7 @@ struct SetupProvidersStepView: View {
             // "nothing happened" is never indistinguishable from a real error.
             routeError = controller.errorMessage
             routeFailure = controller.errorFailure
+            noteFailure(controller.errorFailure)
             return
         }
         await settleSubscription(connection, controller: controller, duringPaste: false)
@@ -391,6 +425,7 @@ struct SetupProvidersStepView: View {
             // this route reaches the same decision as the API-key route without
             // either of them reading the other's copy.
             routeFailure = controller.errorFailure
+            noteFailure(controller.errorFailure)
             // A failed paste keeps the route retryable — a mistyped code is the
             // exact case the fallback exists for. Any other failure tears the
             // flow down so the user is returned to the sign-in button.
@@ -421,6 +456,7 @@ struct SetupProvidersStepView: View {
         outcome = settled
         routeError = nil
         routeFailure = nil
+        if case .failed(_, let failure) = settled { noteFailure(failure) }
         if settled.isConnected { clearDeferral() }
         flow.settled(connected: settled.isConnected)
     }
@@ -432,5 +468,27 @@ struct SetupProvidersStepView: View {
     private func clearDeferral() {
         isDeferred = false
         coordinator.setDeferred(.providers, false)
+    }
+
+    /// Recognises a connection this user already has.
+    ///
+    /// `isConnected` used to derive solely from this session's probe, so a user
+    /// who deferred and then connected a provider through Settings was still
+    /// gated on the next launch — and while the gate is up Settings is
+    /// unreachable, so there was no way to point at what they already had. The
+    /// active connection was verified when it was created (nothing else can
+    /// become active), so it is honoured rather than re-probed: a re-probe would
+    /// put a live network call in the way of a user whose setup is already
+    /// correct, and a transient failure in it would gate them all over again.
+    ///
+    /// Runs after `cleanUpAbandonedSubscriptions`, so a half-finished attempt
+    /// swept away by that call can never be adopted here.
+    private func adoptExistingConnection() {
+        guard outcome == nil,
+              let id = environment.agentConfigStore.activeConnectionID,
+              let existing = environment.connectionStore.connections.first(where: { $0.id == id })
+        else { return }
+        outcome = .connected(message: "Already connected · \(existing.displayName)")
+        clearDeferral()
     }
 }

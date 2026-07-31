@@ -25,7 +25,7 @@ enum SetupProviders {
         /// blocking them locks them out of the app over a transient upstream
         /// failure. Read from the enum, never from `message`.
         var canDefer: Bool {
-            if case .failed(_, let failure) = self { return failure?.isTransient == true }
+            if case .failed(_, let failure) = self { return failure?.allowsDeferral == true }
             return false
         }
 

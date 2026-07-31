@@ -58,6 +58,18 @@ final class SetupCoordinator {
     /// would greet them again forever.
     func setDeferred(_ step: SetupStep, _ deferred: Bool) {
         if deferred { deferredSteps.insert(step) } else { deferredSteps.remove(step) }
+
+        // Write through IF a completion marker already exists — which is exactly
+        // the re-raised-gate session, where quitting between deferring and
+        // pressing Finish would otherwise lose the record and silently clear the
+        // debt. `completedAt` is carried from the existing marker, never minted:
+        // during a FIRST run there is no marker, nothing is written, and quitting
+        // mid-wizard correctly replays the whole thing rather than being recorded
+        // as a completed setup that owes one step.
+        guard var doc = persistence.load(SetupDocument.self), doc.completedAt != nil else { return }
+        doc.deferredSteps = deferredSteps.map(\.rawValue).sorted()
+        persistence.save(doc)
+        isComplete = doc.setupVersion >= Self.currentSetupVersion && deferredSteps.isEmpty
     }
 
     var canAdvance: Bool { step != .done }

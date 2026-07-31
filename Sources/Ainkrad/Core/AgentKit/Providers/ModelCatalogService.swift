@@ -10,18 +10,32 @@ import Foundation
 /// the distinction is carried out of the probe as a value instead of being
 /// reconstructed later from prose.
 ///
-/// The split that matters to callers is `isTransient`: whose fault is this?
+/// The split that matters to callers is `allowsDeferral`: whose fault is this?
 /// A wrong key or a malformed base URL is the user's to fix, and fixing it is
-/// the point of asking. A 429, a 5xx or an unreachable host is not — blocking
-/// the user on those achieves nothing, because there is nothing for them to do.
+/// the point of asking. A 429, a 5xx, a 404 or an unreachable host is not —
+/// blocking the user on those achieves nothing, because there is nothing for
+/// them to do. The predicate is named for the DECISION it drives rather than for
+/// "temporary", because not every case it admits is temporary: a 404 is a
+/// permanent fact about an endpoint and still must not lock anyone out.
 enum ConnectionFailure: Equatable, Sendable {
     /// The base URL could not even be turned into a request.
     case invalidBaseURL
     /// 401 / 403 — the credential was rejected.
     case unauthorized(status: Int)
-    /// Any other 4xx — a request the provider refused.
+    /// Any other 4xx — a request the provider refused. Says something about the
+    /// REQUEST (a 400 is malformed input), which is the user's to fix.
     case rejected(status: Int)
-    /// 429 — rate limited upstream. Transient by definition.
+    /// 404 — the endpoint has no `/models` route.
+    ///
+    /// Deliberately NOT grouped with `rejected`: a healthy OpenAI-compatible
+    /// server (Ollama, LM Studio, a thin proxy) that simply does not serve model
+    /// discovery answers 404, and 404 says nothing whatsoever about the
+    /// credential. The cost of being wrong here is asymmetric — a wrongly
+    /// blocked user is locked out of the app, a wrongly deferrable one is
+    /// offered a button they need not press — so the benefit of the doubt goes
+    /// to letting them past.
+    case notFound(status: Int)
+    /// 429 — rate limited upstream.
     case rateLimited(status: Int)
     /// 5xx — the provider is having trouble.
     case serverError(status: Int)
@@ -31,9 +45,9 @@ enum ConnectionFailure: Equatable, Sendable {
     /// True when the failure belongs to the provider or the network rather than
     /// to the user. This is the ONLY predicate the setup wizard consults when
     /// deciding whether to offer "Set this up later".
-    var isTransient: Bool {
+    var allowsDeferral: Bool {
         switch self {
-        case .rateLimited, .serverError, .unreachable:
+        case .notFound, .rateLimited, .serverError, .unreachable:
             return true
         case .invalidBaseURL, .unauthorized, .rejected:
             return false
@@ -48,6 +62,7 @@ enum ConnectionFailure: Equatable, Sendable {
     static func forHTTP(status: Int) -> ConnectionFailure {
         switch status {
         case 401, 403:  return .unauthorized(status: status)
+        case 404:       return .notFound(status: status)
         case 429:       return .rateLimited(status: status)
         case 500...599: return .serverError(status: status)
         default:        return .rejected(status: status)

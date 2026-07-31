@@ -161,7 +161,7 @@ struct ModelCatalogServiceTests {
             .test(kind: .claude, baseURL: "https://x/v1", credential: .apiKey("k"))
         #expect(!result.ok)
         #expect(result.failure == .rateLimited(status: 429))
-        #expect(result.failure?.isTransient == true)
+        #expect(result.failure?.allowsDeferral == true)
         // The display copy is the provider's own prose; the verdict ignored it.
         #expect(result.message == "invalid api key")
     }
@@ -173,7 +173,7 @@ struct ModelCatalogServiceTests {
             let result = await ModelCatalogService(http: stub)
                 .test(kind: .claude, baseURL: "https://x/v1", credential: .apiKey("bad"))
             #expect(result.failure == .unauthorized(status: status))
-            #expect(result.failure?.isTransient == false)
+            #expect(result.failure?.allowsDeferral == false)
         }
     }
 
@@ -184,7 +184,7 @@ struct ModelCatalogServiceTests {
             let result = await ModelCatalogService(http: stub)
                 .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
             #expect(result.failure == .serverError(status: status))
-            #expect(result.failure?.isTransient == true)
+            #expect(result.failure?.allowsDeferral == true)
         }
     }
 
@@ -193,7 +193,7 @@ struct ModelCatalogServiceTests {
         let result = await ModelCatalogService(http: ThrowingDataHTTPClient())
             .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
         #expect(result.failure == .unreachable)
-        #expect(result.failure?.isTransient == true)
+        #expect(result.failure?.allowsDeferral == true)
     }
 
     /// A base URL that cannot even become a request is the user's to fix — the
@@ -204,7 +204,7 @@ struct ModelCatalogServiceTests {
         let result = await ModelCatalogService(http: stub)
             .test(kind: .openAICompatible, baseURL: "https://[not-a-host", credential: .apiKey("k"))
         #expect(result.failure == .invalidBaseURL)
-        #expect(result.failure?.isTransient == false)
+        #expect(result.failure?.allowsDeferral == false)
     }
 
     @Test("a successful probe carries no failure at all")
@@ -214,5 +214,22 @@ struct ModelCatalogServiceTests {
             .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
         #expect(result.ok)
         #expect(result.failure == nil)
+    }
+
+    /// A healthy OpenAI-compatible server that simply does not serve model
+    /// discovery (Ollama, LM Studio, a thin proxy) answers 404 — which says
+    /// nothing about the credential and must not lock the user out. A 400 DOES
+    /// say something about the request, so it still blocks.
+    @Test("404 does not block; 400 still does")
+    func notFoundDoesNotBlock() async {
+        let notFound = await ModelCatalogService(http: StubDataHTTPClient(status: 404, body: "", captured: nil))
+            .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
+        #expect(notFound.failure == .notFound(status: 404))
+        #expect(notFound.failure?.allowsDeferral == true)
+
+        let badRequest = await ModelCatalogService(http: StubDataHTTPClient(status: 400, body: "", captured: nil))
+            .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
+        #expect(badRequest.failure == .rejected(status: 400))
+        #expect(badRequest.failure?.allowsDeferral == false)
     }
 }
