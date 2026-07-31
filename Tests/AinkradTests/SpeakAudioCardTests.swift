@@ -46,13 +46,13 @@ struct SpeakAudioCardTests {
     }
 
     @Test func noProducerKeepsFireAndForget() async throws {
-        let tool = SpeakTool(synth: NoopSynth())
+        let tool = SpeakTool(synth: NoopSynth(), mediaStore: tempStore())
         let result = try await tool.execute(.object(["text": .string("hi")]))
         #expect(result.content.contains("Spoke"))
     }
 
     @Test func requiresText() async {
-        let tool = SpeakTool(synth: NoopSynth())
+        let tool = SpeakTool(synth: NoopSynth(), mediaStore: tempStore())
         await #expect(throws: ToolError.self) { _ = try await tool.execute(.object(["text": .string("")])) }
     }
 

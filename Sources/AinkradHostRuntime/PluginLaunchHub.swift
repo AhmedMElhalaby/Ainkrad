@@ -9,6 +9,7 @@ public final class PluginLaunchHub {
     private var pending: [String: String] = [:]
     private var openHandler: ((String) -> Void)?
     private var availabilityProvider: ((String) -> Availability)?
+    private var openStateProvider: ((String) -> Bool)?
 
     /// Whether a target app can be opened right now.
     public enum Availability: Equatable, Sendable {
@@ -34,6 +35,19 @@ public final class PluginLaunchHub {
     public func availability(of appID: String) -> Availability {
         availabilityProvider?(appID) ?? .available
     }
+
+    /// Wired once in bootstrap, alongside the open handler. The counterpart to
+    /// `requestOpen`: it answers whether the target is ALREADY open, so a
+    /// caller that only needs a live shell can skip the launch entirely.
+    /// Installed late (the host state it reads doesn't exist when this hub is
+    /// constructed), which is why it's a provider rather than a stored flag.
+    /// Absent means "assume closed" — the safe answer, since the worst outcome
+    /// is a redundant open request.
+    public func setOpenStateProvider(_ provider: @escaping (String) -> Bool) {
+        openStateProvider = provider
+    }
+
+    public func isOpen(_ appID: String) -> Bool { openStateProvider?(appID) ?? false }
 
     public func enqueue(target appID: String, payload: String?) { pending[appID] = payload }
 

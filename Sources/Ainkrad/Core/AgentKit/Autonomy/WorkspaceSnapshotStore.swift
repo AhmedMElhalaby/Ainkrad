@@ -14,14 +14,6 @@ final class WorkspaceSnapshotStore {
         try? fm.createDirectory(at: root, withIntermediateDirectories: true)
     }
 
-    static func defaultRoot() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
-        return base.appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("Checkpoints", isDirectory: true)
-    }
-
     func snapshotFile(_ path: String, into checkpointID: UUID) -> FileSnapshot {
         let dir = root.appendingPathComponent(checkpointID.uuidString, isDirectory: true)
         guard fm.fileExists(atPath: path) else {

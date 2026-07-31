@@ -13,33 +13,29 @@ struct SoundSettingsView: View {
         let tokens = environment.themeManager.tokens
         let store = environment.generalSettingsStore
 
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "SOUND", tokens: tokens)
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: "SOUND", tokens: tokens)
 
-                row(tokens: tokens,
-                    title: "Sound effects",
-                    subtitle: "Plays a short chime on HUD open/close, install, and other key actions.",
-                    isOn: store.soundEnabled,
-                    action: { store.setSoundEnabled($0) })
+            row(tokens: tokens,
+                title: "Sound effects",
+                subtitle: "Plays a short chime on HUD open/close, install, and other key actions.",
+                isOn: store.soundEnabled,
+                action: { store.setSoundEnabled($0) })
 
-                if store.soundEnabled {
-                    volumeRow(tokens: tokens, store: store)
+            if store.soundEnabled {
+                volumeRow(tokens: tokens, store: store)
 
-                    SettingsSectionHeader(title: "SOUND EFFECTS", tokens: tokens)
+                SettingsSectionHeader(title: "SOUND EFFECTS", tokens: tokens)
 
-                    Text("Enable each cue individually and choose which effect it plays. ▶ previews the selected effect.")
-                        .font(AinkradFont.display(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.5))
+                Text("Enable each cue individually and choose which effect it plays. ▶ previews the selected effect.")
+                    .font(AinkradFont.display(11))
+                    .foregroundStyle(tokens.foreground.opacity(0.5))
 
-                    ForEach(UISound.allCases) { event in
-                        soundEventRow(tokens: tokens, store: store, event: event)
-                    }
+                ForEach(UISound.allCases) { event in
+                    soundEventRow(tokens: tokens, store: store, event: event)
                 }
             }
-            .padding(18)
         }
-        .scrollContentBackground(.hidden)
     }
 
     /// One per-event row: name + when-it-fires, an effect chooser, a preview

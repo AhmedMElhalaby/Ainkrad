@@ -74,6 +74,25 @@ actor MCPClient {
         return Self.flatten(result)
     }
 
+    func listResources() async throws -> [MCPResourceDescriptor] {
+        MCPRPC.decodeResourceList(try await request(method: "resources/list", params: .object([:])))
+    }
+
+    func readResource(uri: String) async throws -> String {
+        let params = JSONValue.object(["uri": .string(uri)])
+        let result = try await request(method: "resources/read", params: params)
+        let text = MCPRPC.flattenResourceContents(result)
+        // Mirrors `callTool`'s isError handling. `resources/read` has no spec'd
+        // failure flag, so the SDK carries one alongside `contents` under the
+        // same `ainkrad/` namespace as the requiresLiveApp annotation. Without
+        // this the caller would hand "no terminal is currently open" to the
+        // model as if it were the buffer.
+        if case .bool(true)? = result["ainkrad/isError"] {
+            throw MCPError.resourceFailure(text)
+        }
+        return text
+    }
+
     func disconnect() async {
         readLoop?.cancel()
         readLoop = nil

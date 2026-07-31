@@ -16,7 +16,13 @@ struct SkillPathsTests {
         #expect(p.proposedDir("pdf").deletingLastPathComponent().lastPathComponent == "_proposed")
     }
 
-    @Test func defaultRootEndsInSkills() {
-        #expect(SkillPaths.defaultRoot().lastPathComponent == "Skills")
+    /// `SkillPaths` must not be able to compute a storage path of its own: the
+    /// root always comes from the resolved `Home` (or a test temp dir). The
+    /// deleted `defaultRoot()` is what let the suite reach the developer's real
+    /// Skills tree, so its absence is the regression guard.
+    @Test func rootIsAlwaysCallerSupplied() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sp-\(UUID().uuidString)", isDirectory: true)
+        #expect(SkillPaths(root: root).root == root)
     }
 }

@@ -184,6 +184,39 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
         }
 
         private func handle(_ event: NSEvent, in environment: AppEnvironment) -> Bool {
+            let command = event.modifierFlags.contains(.command)
+            let isShifted = event.modifierFlags.contains(.shift)
+            let isOption = event.modifierFlags.contains(.option)
+            // Resolved once, here, and reused for both the gate and the
+            // dispatch below — a second lookup could drift from this one.
+            let action = environment.shortcutStore.bindings.action(matching: event)
+
+            // First-run setup is a blocking gate: the workspace renders behind
+            // it but nothing in it may be reached. Returning `true` consumes the
+            // event (see the local monitor above) WITHOUT performing anything.
+            // The overlay owns focus, so only the workspace shortcuts are
+            // consumed — everything else must reach its text fields.
+            // `SetupGate` owns the decision — including the ⌘Q and
+            // quit-confirmation exemptions that keep this a gate rather than a
+            // trap — as a pure, tested function.
+            if SetupGate.swallows(
+                isSetupPresented: environment.isSetupPresented,
+                isConfirmingQuit: environment.quitCoordinator.isConfirming,
+                isRegisteredShortcut: action != nil,
+                isWorkspaceChord: WorkspaceChord.matches(
+                    keyCode: event.keyCode,
+                    characters: event.charactersIgnoringModifiers?.lowercased(),
+                    command: command,
+                    option: isOption,
+                    shift: isShifted
+                ),
+                command: command,
+                characters: event.charactersIgnoringModifiers,
+                keyCode: event.keyCode
+            ) {
+                return true
+            }
+
             // While the Settings recorder is capturing a chord, this monitor
             // must not act on anything — including a chord that happens to
             // match an existing binding — so it can't fire that action's
@@ -198,7 +231,7 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // the user's current bindings, not a hardcoded key check — this
             // also covers the ⌥Tab Workspace Overview toggle, which used to
             // be special-cased here.
-            if let action = environment.shortcutStore.bindings.action(matching: event) {
+            if let action {
                 if action == .pushToTalk {
                     // Forward-dependency seam (Task 13 wires the real
                     // `environment.voiceService.pushToTalk`) — see
@@ -209,52 +242,41 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 return perform(action, in: environment)
             }
 
-            guard event.modifierFlags.contains(.command) else { return false }
-            let isShifted = event.modifierFlags.contains(.shift)
-            let isOption = event.modifierFlags.contains(.option)
+            guard command else { return false }
 
             // ⌘⌥←/→ cycle to the previous/next workspace (wrapping around),
             // the quick companion to the ⌘1-9 direct jumps.
-            if isOption,
+            if !environment.isSetupPresented,
                !environment.isLauncherPresented,
                !environment.isWorkspaceOverviewPresented,
                !environment.isSettingsPresented,
-               !environment.isAppStorePresented {
-                switch event.keyCode {
-                case 123:
-                    environment.workspaceManager.switchToPreviousWorkspace()
-                    window?.makeFirstResponder(nil)
-                    return true
-                case 124:
-                    environment.workspaceManager.switchToNextWorkspace()
-                    window?.makeFirstResponder(nil)
-                    return true
-                default:
-                    break
+               !environment.isAppStorePresented,
+               let cycle = WorkspaceChord.cycleDirection(keyCode: event.keyCode,
+                                                         command: command, option: isOption) {
+                switch cycle {
+                case .previous: environment.workspaceManager.switchToPreviousWorkspace()
+                case .next: environment.workspaceManager.switchToNextWorkspace()
                 }
+                window?.makeFirstResponder(nil)
+                return true
             }
 
             // ⌘arrows move pane focus; ⌘⇧arrows resize the focused pane —
             // only while no overlay owns the keyboard (and never when ⌥ is
             // held, which is the workspace-cycle chord above).
-            if !isOption, !environment.isLauncherPresented, !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented, !environment.isAppStorePresented {
-                let direction: PaneDirection? = switch event.keyCode {
-                case 123: .left
-                case 124: .right
-                case 125: .down
-                case 126: .up
-                default: nil
+            if !environment.isSetupPresented, !environment.isLauncherPresented,
+               !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented,
+               !environment.isAppStorePresented,
+               let direction = WorkspaceChord.paneDirection(keyCode: event.keyCode,
+                                                            command: command, option: isOption) {
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                if isShifted {
+                    layout.resizeFocused(direction)
+                } else {
+                    layout.focusNeighbor(direction)
+                    window?.makeFirstResponder(nil)
                 }
-                if let direction {
-                    let layout = environment.workspaceManager.activeWorkspace.tileLayout
-                    if isShifted {
-                        layout.resizeFocused(direction)
-                    } else {
-                        layout.focusNeighbor(direction)
-                        window?.makeFirstResponder(nil)
-                    }
-                    return true
-                }
+                return true
             }
 
             // `charactersIgnoringModifiers` still applies Shift, so a shifted
@@ -263,9 +285,9 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
             // fire regardless of case.
             guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
 
-            switch characters {
-            case "m" where !isShifted:
-                // Toggle Focus Mode / Split Mode for the active workspace.
+            // Toggle Focus Mode / Split Mode for the active workspace.
+            if WorkspaceChord.togglesFocusMode(characters: characters,
+                                               command: command, shift: isShifted) {
                 let workspace = environment.workspaceManager.activeWorkspace
                 workspace.viewMode = workspace.viewMode == .focus ? WorkspaceViewMode.split : WorkspaceViewMode.focus
                 environment.workspaceManager.persist()
@@ -273,19 +295,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 // ⌘M was the one focus-mode entry point without it.
                 environment.sounds.play(.focusMode)
                 return true
-            case "d", "D":
-                // Split the focused pane: ⌘D right, ⌘⇧D down.
-                let layout = environment.workspaceManager.activeWorkspace.tileLayout
-                layout.splitFocused(isShifted ? .bottom : .trailing)
-                return true
-            default:
-                if !isShifted, let number = Int(characters), (1...9).contains(number) {
-                    environment.workspaceManager.switchToWorkspace(at: number - 1)
-                    window?.makeFirstResponder(nil)
-                    return true
-                }
-                return false
             }
+
+            // Split the focused pane: ⌘D right, ⌘⇧D down.
+            if let edge = WorkspaceChord.splitEdge(characters: characters,
+                                                   command: command, shift: isShifted) {
+                environment.workspaceManager.activeWorkspace.tileLayout.splitFocused(edge)
+                return true
+            }
+
+            if let index = WorkspaceChord.workspaceIndex(characters: characters,
+                                                         command: command, shift: isShifted) {
+                environment.workspaceManager.switchToWorkspace(at: index)
+                window?.makeFirstResponder(nil)
+                return true
+            }
+            return false
         }
 
         /// Runs the side effect for a resolved named shortcut action — the

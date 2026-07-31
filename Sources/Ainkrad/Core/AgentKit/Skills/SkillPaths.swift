@@ -5,9 +5,9 @@ import AinkradHostRuntime
 ///   Skills/<name>/SKILL.md            installed (marketplace) or local
 ///   Skills/_proposed/<name>/SKILL.md  agent-drafted, pending approval
 ///
-/// `root` is injectable so tests can point at a per-test temp directory and
-/// never touch the real App Support tree; `defaultRoot()` resolves the real
-/// location for production use.
+/// `root` is always supplied by the caller — bootstrap derives it from the
+/// resolved `Home` (`shared(.skills)`), tests from a per-test temp directory.
+/// There is deliberately no default: this type cannot compute a storage path.
 struct SkillPaths {
     let root: URL
     init(root: URL) { self.root = root }
@@ -18,16 +18,6 @@ struct SkillPaths {
     func skillFile(_ name: String) -> URL { skillDir(name).appendingPathComponent("SKILL.md") }
     func proposedDir(_ name: String) -> URL { proposedRoot.appendingPathComponent(name, isDirectory: true) }
     func proposedFile(_ name: String) -> URL { proposedDir(name).appendingPathComponent("SKILL.md") }
-
-    /// `~/Library/Application Support/<bundle-id>/Skills` (mirrors
-    /// `FileDocumentStore.defaultDocumentsURL`, but the `Skills` subdir).
-    static func defaultRoot() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ainkrad.app"
-        return base.appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("Skills", isDirectory: true)
-    }
 
     /// Creates `root` and `proposedRoot` on disk if they don't already exist.
     /// Call once before first use (e.g. at skill-discovery startup); safe to

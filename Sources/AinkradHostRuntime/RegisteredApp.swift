@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradAppKitContract
 import protocol AinkradAppKit.AinkradApp
 
 /// Where a registered app comes from.
@@ -24,6 +25,10 @@ public struct RegisteredApp: Identifiable {
     public let makeRootView: @MainActor () -> AnyView
     public let makeSettingsView: @MainActor () -> AnyView
     public let chromeFill: @MainActor () -> Color?
+    /// The app's published settings descriptor, or `nil` if it hasn't adopted
+    /// the catalog contract yet (`AinkradApp.settingsCatalog(host:)` defaults
+    /// to `nil`). Defaulted here too so no existing construction site breaks.
+    public var settingsCatalog: (@MainActor () -> SettingsPage?) = { nil }
     /// How the app's window should be presented (Slice 3): tiled into the
     /// workspace layout (`.pane`, the default) or summoned as a floating
     /// host overlay (`.overlay`) that auto-dismisses when any app opens.
@@ -34,6 +39,12 @@ public struct RegisteredApp: Identifiable {
     /// Defaulted to `nil` so every existing construction site (all the built-in
     /// apps) is unaffected: teardown is opt-in at both ends.
     public var teardown: (@MainActor () -> Void)? = nil
+    /// Builds this app's MCP server, or `nil` when the app does not conform to
+    /// `AinkradAppMCP`. Defaulted so every existing construction site is
+    /// unaffected — capability is opt-in at both ends, exactly like `teardown`.
+    /// The host calls this at most once per app and caches the result, so the
+    /// server can hold the app's live state.
+    public var mcpServerFactory: (@MainActor () -> MCPAppServer)? = nil
 
     public init(id: String, displayName: String, icon: String, summary: String = "",
                 isEnabledByDefault: Bool, source: AppSource,
@@ -76,7 +87,7 @@ extension RegisteredApp {
         host: HostServices,
         chromeFillOverride: (@MainActor () -> Color?)? = nil
     ) -> RegisteredApp {
-        RegisteredApp(
+        var registered = RegisteredApp(
             id: app.id,
             displayName: app.displayName,
             icon: app.icon,
@@ -91,5 +102,12 @@ extension RegisteredApp {
             chromeFill: chromeFillOverride ?? { app.chromeFill(host: host) },
             presentation: .pane
         )
+        registered.settingsCatalog = { app.settingsCatalog(host: host) }
+        // Discovered by CAST, never a protocol requirement — see PluginLoader
+        // for why (an added requirement would break already-compiled bundles).
+        if let mcpCapable = app as? AinkradAppMCP.Type {
+            registered.mcpServerFactory = { mcpCapable.makeMCPServer(host: host) }
+        }
+        return registered
     }
 }

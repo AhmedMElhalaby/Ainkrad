@@ -7,17 +7,8 @@ import Foundation
 struct GeneratedMediaStore {
     let baseDirectory: URL
 
-    /// Default: `~/Library/Application Support/<bundle>/GeneratedMedia`.
-    init(baseDirectory: URL? = nil) {
-        if let baseDirectory {
-            self.baseDirectory = baseDirectory
-        } else {
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? URL(fileURLWithPath: NSTemporaryDirectory())
-            let bundle = Bundle.main.bundleIdentifier ?? "Ainkrad"
-            self.baseDirectory = support.appendingPathComponent(bundle, isDirectory: true)
-                .appendingPathComponent("GeneratedMedia", isDirectory: true)
-        }
+    init(baseDirectory: URL) {
+        self.baseDirectory = baseDirectory
     }
 
     /// Writes `data` to a new uniquely-named file with the given extension and

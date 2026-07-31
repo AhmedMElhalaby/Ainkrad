@@ -23,6 +23,8 @@ enum ExecutionRouterError: Error, Equatable {
 ///   restrictive default — never an error that could be mishandled upstream,
 ///   never escalation.
 /// - `.cloud` requires `policy.allowCloud == true`; otherwise throws.
+/// - A `remote` on `route` forces `.ssh` and can never resolve to any other
+///   backend — in particular a remote run never silently becomes a local one.
 /// - If the resolved backend is unavailable (or unregistered), `route` throws
 ///   `.backendUnavailable` — it never substitutes a different (more
 ///   permissive) backend, and never falls back to host.
@@ -81,23 +83,36 @@ final class ExecutionRouter {
     /// Resolves the backend + profile and verifies the backend is actually
     /// available. Fail-closed: unavailable/unregistered backends throw rather
     /// than falling back to a more permissive backend (host in particular).
-    func route(tier: TrustTier, policy: AgentExecutionPolicy?) async throws
+    ///
+    /// `remote` names a saved SSH connection. When present the run goes to the
+    /// `.ssh` backend **regardless of tier or the profile's own `backend`** —
+    /// the profile is still resolved and returned, because its resource limits
+    /// and timeout still bound the run. This is not an escalation: `.ssh` is
+    /// the one backend that executes nothing on this machine, so overriding
+    /// *into* it can only move a command further away from local authority, and
+    /// `SSHBackend` refuses to run at all unless the id resolves.
+    ///
+    /// Omitting `remote` (the default) leaves every existing caller on exactly
+    /// the path it had before.
+    func route(tier: TrustTier, policy: AgentExecutionPolicy?, remote: String? = nil) async throws
         -> (any ExecutionBackend, SandboxProfile) {
         let profile = resolveProfile(tier: tier, policy: policy)
+        let targetsRemote = !(remote ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let kind: SandboxBackendKind = targetsRemote ? .ssh : profile.backend
 
         // Cloud is opt-in per-Agent, never a tier default. Checked before
         // backend lookup so an unregistered cloud backend never masks a
         // missing opt-in as a generic "unavailable" error.
-        if profile.backend == .cloud && policy?.allowCloud != true {
+        if kind == .cloud && policy?.allowCloud != true {
             throw ExecutionRouterError.cloudNotOptedIn
         }
-        guard let backend = backends[profile.backend] else {
-            throw ExecutionRouterError.backendUnavailable(profile.backend, "No backend registered.")
+        guard let backend = backends[kind] else {
+            throw ExecutionRouterError.backendUnavailable(kind, "No backend registered.")
         }
         guard await backend.isAvailable() else {
             throw ExecutionRouterError.backendUnavailable(
-                profile.backend,
-                "Backend \(profile.backend.rawValue) is unavailable — run blocked (never falls back to host).")
+                kind,
+                "Backend \(kind.rawValue) is unavailable — run blocked (never falls back to host).")
         }
         return (backend, profile)
     }

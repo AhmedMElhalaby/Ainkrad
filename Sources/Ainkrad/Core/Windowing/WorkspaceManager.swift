@@ -109,6 +109,17 @@ final class WorkspaceManager {
         onStateChange?()
     }
 
+    /// True when this app has a tiled pane in ANY workspace, not just the
+    /// active one — a block on an inactive workspace is still a live shell.
+    ///
+    /// Deliberately named `isAppTiled`, not `isAppOpen`: an `.overlay`-
+    /// presentation app is open without ever having a block here (it lives in
+    /// `AppEnvironment.presentedOverlayAppID`, which this type does not and
+    /// should not know about). "Is this app open?" is `AppEnvironment.isAppOpen`.
+    func isAppTiled(_ appID: String) -> Bool {
+        workspaces.contains { $0.tileLayout.blocks.contains { $0.appID == appID } }
+    }
+
     /// Drops any open pane whose app id is not in `validIDs` — used at launch
     /// to clean a restored layout of apps that no longer exist (e.g. Settings,
     /// once it became an overlay instead of a tiled Block).

@@ -112,9 +112,12 @@ struct PluginLoadFailureSurfacingTests {
     func failureTextIsReadable() {
         let text = AppStoreStore.failureText(PluginLoadFailure(
             url: URL(fileURLWithPath: "/Users/x/Library/Application Support/Plugins/GitMage.bundle"),
-            reason: "Bundle.load() failed"))
-        #expect(text == "GitMage — Bundle.load() failed")
+            reason: "was built against a different AinkradAppKit revision than this host embeds — repin the plugin to the host's SDK revision and rebuild it (missing symbol _$s21AinkradAppKitContract15MCPResourceSpecV012requiresLiveB0Sbvs)"))
+        #expect(text.hasPrefix("GitMage — was built against a different AinkradAppKit"))
         #expect(!text.contains("Application Support"))
+        // The banner is one line: the loader's short form, never the multi-line
+        // dyld dump (which goes to the log instead — see PluginLoadDiagnostics).
+        #expect(!text.contains("\n"))
     }
 }
 

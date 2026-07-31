@@ -6,8 +6,9 @@
 #
 # These packs are typically COPYRIGHTED (anime/game audio) and MUST NOT be
 # committed to this repo or bundled into public releases. This script only
-# ever copies files into the user's own Application Support directory
-# (outside the repo, outside git, outside the release .dmg) — never into
+# ever copies files into the user's own Ainkrad Home — the vault folder the
+# app itself resolved (outside the repo, outside git, outside the release
+# .dmg) — never into
 # `Sources/Ainkrad/Resources/Sounds/` or any other tracked path. SoundEngine
 # prefers a same-named override there over the bundled synth wav at
 # runtime, and cleanly falls back to the bundled wav when an override is
@@ -44,7 +45,45 @@
 
 set -euo pipefail
 
-DEST="$HOME/Library/Application Support/com.ainkrad.app/Documents/Sounds"
+# The sound override directory is `<Ainkrad Home>/Sounds`, and the ONLY
+# authority on where the Home is, is the pointer the app writes at
+# ~/Library/Application Support/Ainkrad/home.json. Guessing a location here
+# would silently install into a directory the app never reads — exactly the
+# failure that made this script's old hard-coded path lose people's overrides.
+POINTER="$HOME/Library/Application Support/Ainkrad/home.json"
+
+resolve_dest() {
+  if [[ ! -f "$POINTER" ]]; then
+    cat >&2 <<EOF
+error: no Ainkrad Home is configured yet.
+
+  Expected the pointer file at:
+    $POINTER
+
+  Launch Ainkrad once so it can create (or let you choose) your Ainkrad Home,
+  then run this script again. This script will not guess a location.
+EOF
+    exit 1
+  fi
+
+  # `plutil` ships with macOS and parses JSON — no python/jq assumption.
+  local home_path
+  if ! home_path="$(plutil -extract path raw -o - -- "$POINTER" 2>/dev/null)"; then
+    echo "error: could not read \"path\" from $POINTER (file corrupt?)." >&2
+    echo "       Launch Ainkrad once to rewrite it, then retry." >&2
+    exit 1
+  fi
+  if [[ -z "$home_path" ]]; then
+    echo "error: $POINTER has an empty \"path\"." >&2
+    exit 1
+  fi
+  if [[ ! -d "$home_path" ]]; then
+    echo "error: the configured Ainkrad Home does not exist: $home_path" >&2
+    echo "       Launch Ainkrad and reconnect your Home, then retry." >&2
+    exit 1
+  fi
+  DEST="$home_path/Sounds"
+}
 
 usage() {
   cat <<'EOF'
@@ -53,10 +92,12 @@ Usage:
   install-sao-sounds.sh --clear           Remove overrides (revert to built-in sounds)
   install-sao-sounds.sh --help            Show this help
 
-Copies a Sword-Art-Online-style UI sound pack into Ainkrad's user-data sound
-override directory (~/Library/Application Support/com.ainkrad.app/Documents/Sounds).
+Copies a Sword-Art-Online-style UI sound pack into Ainkrad's sound override
+directory, <Ainkrad Home>/Sounds. The Home is read from the app's pointer file
+at ~/Library/Application Support/Ainkrad/home.json; if that does not exist yet,
+launch Ainkrad once first — this script never guesses a location.
 Nothing is ever copied into this git repo or into a release bundle — overrides
-live only in the user's own Application Support directory, and copyrighted
+live only in the user's own Ainkrad Home, and copyrighted
 sound packs must stay local (respect the pack's license; do not redistribute
 it, and never add it to this repo).
 
@@ -96,6 +137,7 @@ MAPPINGS=(
 )
 
 clear_overrides() {
+  resolve_dest
   local removed=0
   for mapping in "${MAPPINGS[@]}"; do
     local ainkrad_name="${mapping#*:}"
@@ -116,6 +158,8 @@ install_overrides() {
     echo "error: source folder not found: $src" >&2
     exit 1
   fi
+
+  resolve_dest
 
   mkdir -p "$DEST"
 

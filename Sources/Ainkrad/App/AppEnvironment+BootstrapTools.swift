@@ -2,7 +2,7 @@ import Foundation
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// `AppEnvironment.bootstrap(rootURL:defaults:)` split into cohesive helpers
+/// `AppEnvironment.bootstrap(home:defaults:)` split into cohesive helpers
 /// (M7 finalize Wave D, D2) — this file holds the next two sequential
 /// blocks: the sandbox/execution router + the host-facing agent tools, then
 /// the Model Router / Usage / Failover wiring (M7 Slice 5b). Pure
@@ -13,6 +13,7 @@ extension AppEnvironment {
     /// set (read/edit/workspace/terminal/git, memory tools if available,
     /// skill tools, MCP registry, and the Live Canvas render tool).
     static func bootstrapExecutionAndTools(
+        home: Home,
         persistence: PersistenceStore,
         secrets: SecretStore,
         lspServerRegistry: LSPServerRegistry,
@@ -22,6 +23,12 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         memoryService: MemoryService?,
         mcpConfigStore: MCPServerConfigStore,
+        // App-hosted MCP (M9): the app registry is EMPTY at this point — apps
+        // are installed later, by `registry.install(...)` in
+        // `finalizeBootstrap`. Both are held only inside closures that read
+        // them at call time, never eagerly.
+        appRegistry: BuiltInAppRegistry,
+        pluginLaunchHub: PluginLaunchHub,
         skillRegistry: SkillRegistry,
         // Read per tool call so the foreground `run_terminal` can demote itself
         // off `HostBackend` when the session is unattended (Full-auto) — see
@@ -72,19 +79,30 @@ extension AppEnvironment {
                 .host: HostBackend(),
                 .seatbelt: SeatbeltBackend(),
                 .docker: DockerBackend(),
-                .ssh: SSHBackend(connection: nil),   // Leyline connection wired when AinkradSSH lands
+                // Remote targets are resolved PER CALL from `run_terminal`'s
+                // `remote` argument, through Leyline's host-only
+                // `leyline.resolve_connection` action. No ambient "active
+                // remote" exists, and with Leyline absent the resolver fails
+                // and `SSHBackend` refuses to run — never locally.
+                .ssh: SSHBackend(resolveConnection:
+                    LeylineConnectionResolver.make(hub: agentActionHub)),
                 .cloud: ModalCloudBackend(credentials: cloudCredentialsStore),
             ])
 
         var agentTools: [any AgentTool] = [
             ReadFileTool(),
             EditFileTool(editQuality: EditQuality(registry: lspServerRegistry), journal: editJournal),
-            WorkspaceControlTool(workspaces: workspaceManager),
+            // The launch hub carries `openApp`: since MCP tool calls no longer
+            // force an app open, this is the assistant's ONLY way to honour
+            // "open Lore".
+            WorkspaceControlTool(workspaces: workspaceManager, launchHub: pluginLaunchHub),
             { var t = RunTerminalTool(actionHub: agentActionHub, router: executionRouter)
               t.toolStream = toolStreamStore; t.processController = terminalController
               t.permissionMode = permissionMode; return t }(),
-            GitOpTool(actionHub: agentActionHub),
-            GitPrTool(actionHub: agentActionHub),
+            // Git and Pull-Request operations are no longer host tools: Git Mage
+            // publishes them as `mcp/gitmage/*` over its in-process MCP server
+            // (see `AppMCPDiscovery`), so they arrive through `dynamicTools`
+            // below rather than being hard-coded here.
             TodoWriteTool(),
             PresentPlanTool(),
         ]
@@ -110,7 +128,60 @@ extension AppEnvironment {
         // stub factory instead so the registry core never spawns a process or hits
         // the network. Connecting is kicked off after `environment` exists (below),
         // never awaited here, so a down/misconfigured server can't delay launch.
-        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore)
+        //
+        // App-hosted MCP servers (M9): one server per installed app that opts
+        // into `AinkradAppMCP`. Every collaborator is a closure resolved at
+        // CALL time, because none of this data exists yet — the app registry is
+        // still empty here and `pluginLaunchHub`'s open/availability handlers
+        // are installed in `finalizeBootstrap`. The activator memoizes each
+        // server on first use, so a server is built once and holds its app's
+        // live state. The matching `AppMCPDiscovery.refresh` call lives in
+        // `finalizeBootstrap`, right after the apps are actually installed.
+        // Late-bound on purpose: the flag lives on the MCP registry's discovered
+        // descriptors, and that registry is built FROM this activator two
+        // statements below. Boxing the reference is the same trick the closures
+        // above use for `pluginLaunchHub` — resolve at call time, not here.
+        var mcpRegistryForLiveAppFlag: (() -> MCPServerRegistry?)?
+        let appServerActivator = AppServerActivator(
+            serverFor: { [weak appRegistry] appID in
+                appRegistry?.allApps.first { $0.id == appID }?.mcpServerFactory?()
+            },
+            // Both open-state and launch go through the hub: "open" must count
+            // an `.overlay`-presented app, which has no `tileLayout` block —
+            // asking `workspaceManager` alone would report a live overlay app
+            // as closed and every dispatch to it would wait out the launch
+            // timeout. `AppEnvironment.isAppOpen` composes the two halves; the
+            // hub is how that late-created answer reaches this closure.
+            isAppOpen: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.isOpen(appID) ?? false
+            },
+            requestOpen: { [weak pluginLaunchHub] appID in pluginLaunchHub?.requestOpen(appID) },
+            availability: { [weak pluginLaunchHub] appID in
+                pluginLaunchHub?.availability(of: appID) ?? .unknown
+            },
+            // No registry yet (or no discovery done) means no app has claimed it
+            // needs its window, so the call runs in the background — which is
+            // what a tool call should do.
+            requiresLiveApp: { appID, method, name in
+                mcpRegistryForLiveAppFlag?()?
+                    .requiresLiveApp(appID: appID, method: method, name: name) ?? false
+            })
+        // The other half of that memoization: a torn-down app's cached server
+        // must not outlive the instance it was built over. `deregister` is the
+        // one place an app is finished with (it already calls the app's own
+        // `teardown`), so the host-side eviction hangs off the same seam.
+        appRegistry.onAppTornDown = { [weak appServerActivator] appID in
+            appServerActivator?.evict(appID: appID)
+        }
+        let mcpServerRegistry = MCPServerRegistry(configStore: mcpConfigStore,
+                                                  activator: appServerActivator)
+        // Closes the loop opened above. Weak so the activator's closure cannot
+        // keep the registry alive past teardown.
+        mcpRegistryForLiveAppFlag = { [weak mcpServerRegistry] in mcpServerRegistry }
+        // Read-class complement to the tool-call path above: fetches one
+        // resource's full contents on demand (see `MCPReadResourceTool` doc
+        // comment for why this exists alongside `<workspace_context>`).
+        agentTools.append(MCPReadResourceTool(registry: mcpServerRegistry))
 
         // Skill-index context source (Task 5) + agent-facing tools (Task 6/7).
         // Both hold the mutable `skillRegistry` reference and read its live set at
@@ -144,6 +215,10 @@ extension AppEnvironment {
                 huggingface: HuggingFaceImageBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
                 auxHTTP: URLSessionDataHTTPClient()),
             store: canvasStore))
+        // Generated media (image/video/speech output) is irreplaceable —
+        // re-running a prompt yields different output — so it lives in the
+        // vault, not the cache. Shared across the video and speech tools.
+        let generatedMediaStore = GeneratedMediaStore(baseDirectory: home.shared(.media))
         agentTools.append(VideoGenerateTool(
             backend: RoutingVideoBackend(
                 persistence: persistence,
@@ -152,7 +227,7 @@ extension AppEnvironment {
                 luma: LumaVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
                 fal: FalVideoBackend(secrets: secrets, http: URLSessionDataHTTPClient()),
                 auxHTTP: URLSessionDataHTTPClient()),
-            store: canvasStore))
+            store: canvasStore, mediaStore: generatedMediaStore))
         agentTools.append(SpeakTool(
             synth: RoutingSpeechSynthesizer(
                 persistence: persistence, secrets: secrets, onDevice: SystemSpeechSynthesizer(),
@@ -160,7 +235,7 @@ extension AppEnvironment {
             producer: RoutingSpeechAudioProducer(
                 persistence: persistence, secrets: secrets, http: URLSessionDataHTTPClient(),
                 onDevice: OnDeviceSpeechAudioProducer()),
-            store: canvasStore))
+            store: canvasStore, mediaStore: generatedMediaStore))
 
         // M8 code-search tools (read-class). Share the assistant workspace root,
         // resolved live so a folder change is reflected without re-registering —
@@ -184,6 +259,9 @@ extension AppEnvironment {
     /// (builtins + `/stop`).
     static func bootstrapModelRouting(
         persistence: PersistenceStore,
+        // `agents.json` is an Assistant/ document, not a Config/ one — see
+        // `bootstrapCoreStores`. Everything else in this block is Config/.
+        assistantDocuments: PersistenceStore,
         secrets: SecretStore,
         connectionStore: ConnectionStore,
         discoveredModelsStore: DiscoveredModelsStore
@@ -203,7 +281,7 @@ extension AppEnvironment {
         commandRegistry: CommandRegistry
     ) {
         let modelCatalogService = ModelCatalogService(http: URLSessionDataHTTPClient())
-        let agentStore = AgentStore(persistence: persistence)
+        let agentStore = AgentStore(persistence: assistantDocuments)
 
         // Model Router / Usage / Failover wiring (M7 Slice 5b). Every one of these is
         // degrade-don't-crash: `AgentSession` treats them as optional and falls back to

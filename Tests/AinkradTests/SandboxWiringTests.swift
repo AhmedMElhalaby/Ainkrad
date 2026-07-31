@@ -15,7 +15,7 @@ struct SandboxWiringTests {
         let store = SandboxProfileStore(persistence: InMemoryPersistenceStore())
         let router = ExecutionRouter(profiles: store, backends: [
             .host: HostBackend(), .seatbelt: SeatbeltBackend(),
-            .docker: DockerBackend(), .ssh: SSHBackend(connection: nil),
+            .docker: DockerBackend(), .ssh: SSHBackend(resolveConnection: nil),
         ])
         let (backend, _) = try await router.route(tier: .mainInteractive, policy: nil)
         #expect(backend.kind == .host)
@@ -31,13 +31,10 @@ struct SandboxWiringTests {
     }
 
     @Test func bootstrapRegistersAllBackendsAndUsesHostForMain() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ain-sandbox-wiring-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: root) }
-        let suiteName = "com.ainkrad.tests.sandbox-wiring.\(UUID().uuidString)"
-        let isolatedDefaults = UserDefaults(suiteName: suiteName)!
-        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
+        let t = TestHome.make("sandbox-wiring")
+        defer { t.cleanup() }
 
-        let environment = AppEnvironment.bootstrap(rootURL: root, defaults: isolatedDefaults)
+        let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
 
         // Non-main tiers must resolve to a registered, non-host backend
         // rather than throwing "no backend registered" — proves seatbelt

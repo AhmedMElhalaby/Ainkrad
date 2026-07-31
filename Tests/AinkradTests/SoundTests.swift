@@ -45,10 +45,14 @@ struct UISoundTests {
 }
 
 struct GlobalSettingsSoundTests {
-    @Test("fresh defaults: sound enabled, volume 0.7")
+    // Sound ships OFF — a freshly installed app does not start making noise
+    // before the user has been asked. The volume default still matters: it is
+    // what they hear the moment they DO switch it on at the wizard's Motion &
+    // Sound step, so it must not be zero.
+    @Test("fresh defaults: sound disabled, volume 0.7")
     func defaults() {
         let s = GlobalSettings()
-        #expect(s.soundEnabled == true)
+        #expect(s.soundEnabled == false)
         #expect(s.soundVolume == 0.7)
     }
 
@@ -62,12 +66,15 @@ struct GlobalSettingsSoundTests {
         #expect(back.soundVolume == 0.35)
     }
 
+    // Compared against the model rather than literals: the decode fallback and
+    // the property default are two separate expressions of one answer, and a
+    // literal here would let them drift apart silently.
     @Test("a legacy doc without sound keys decodes with defaults")
     func legacyDecodes() throws {
         let legacy = Data(#"{"theme":"neonBlue"}"#.utf8)
         let s = try JSONDecoder().decode(GlobalSettings.self, from: legacy)
-        #expect(s.soundEnabled == true)
-        #expect(s.soundVolume == 0.7)
+        #expect(s.soundEnabled == GlobalSettings().soundEnabled)
+        #expect(s.soundVolume == GlobalSettings().soundVolume)
     }
 }
 
