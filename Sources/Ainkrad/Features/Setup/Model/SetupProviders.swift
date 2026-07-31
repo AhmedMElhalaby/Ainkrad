@@ -11,7 +11,23 @@ import AinkradHostRuntime
 enum SetupProviders {
     enum Outcome: Equatable {
         case connected(message: String)
-        case failed(message: String)
+        /// `failure` is the probe's own classification, carried through
+        /// untouched. It is what decides whether the step offers an escape —
+        /// see `canDefer`. `nil` only for a failure that reached here without
+        /// a probe verdict.
+        case failed(message: String, failure: ConnectionFailure?)
+
+        /// Whether this failure earns a "Set this up later" escape.
+        ///
+        /// The whole point of the classification: a 401 or a malformed base URL
+        /// is the user's to fix and blocking them is the step doing its job; a
+        /// 429, a 5xx or an unreachable endpoint is not theirs to fix, and
+        /// blocking them locks them out of the app over a transient upstream
+        /// failure. Read from the enum, never from `message`.
+        var canDefer: Bool {
+            if case .failed(_, let failure) = self { return failure?.isTransient == true }
+            return false
+        }
 
         /// The single reading of "did this attempt connect?".
         ///
@@ -43,7 +59,7 @@ enum SetupProviders {
                         agentConfig: AgentConfigStore,
                         verify: Verifier) async -> Outcome {
         let result = await verify(preset.kind, baseURL, .apiKey(token))
-        guard result.ok else { return .failed(message: result.message) }
+        guard result.ok else { return .failed(message: result.message, failure: result.failure) }
 
         let connection = connections.addConnection(
             preset: preset,
@@ -74,7 +90,7 @@ enum SetupProviders {
         let result = await verify(connection.kind, connection.baseURL, credential)
         guard result.ok else {
             rollback(connection, connections: connections, agentConfig: agentConfig, oauth: oauth)
-            return .failed(message: result.message)
+            return .failed(message: result.message, failure: result.failure)
         }
         agentConfig.setActiveConnectionID(connection.id)
         return .connected(message: result.message)

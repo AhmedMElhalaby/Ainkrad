@@ -222,6 +222,16 @@ final class AppEnvironment {
     /// the workspace renders behind it but nothing in it can be reached.
     var isSetupPresented = false
 
+    /// Setup steps the user was let past without satisfying, mirrored from the
+    /// `SetupDocument` marker so the workspace can be honest about it without
+    /// re-reading persistence on every redraw.
+    ///
+    /// Written in exactly two places — launch (`AinkradApp.init`) and the
+    /// wizard's closing step (`SetupDoneStepView.finish`) — which are the only
+    /// two moments the marker changes. `.providers` here means the assistant
+    /// cannot work, and drives the persistent banner in `RootView`.
+    var deferredSetupSteps: Set<SetupStep> = []
+
     /// True while the app is running against a provisional Home that the user has
     /// not yet chosen. Nothing authored may be written until this clears.
     var isProvisionalHome = false

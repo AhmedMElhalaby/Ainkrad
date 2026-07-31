@@ -107,6 +107,10 @@ struct SetupDoneStepView: View {
     /// state says it never happened.
     private func finish() {
         coordinator.complete()
+        // Mirror what was just written, so the workspace's banner reflects this
+        // run rather than the state the app launched in. This also CLEARS the
+        // banner when a returning user connected a provider on the way through.
+        environment.deferredSetupSteps = coordinator.deferredSteps
         environment.isSetupPresented = false
         // Order matters: `isSuppressed` reads `isSetupPresented`, so the flag
         // must already be down or this install refuses. The status item was

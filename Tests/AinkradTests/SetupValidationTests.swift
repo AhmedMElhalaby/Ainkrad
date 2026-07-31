@@ -91,4 +91,21 @@ struct SetupValidationTests {
                     "\(step.rawValue) blocks even when every value is supplied")
         }
     }
+
+    // MARK: - Deferral (task 8)
+
+    /// The step stays required by default: nothing but a live probe — or an
+    /// explicit deferral — satisfies it.
+    @Test func theProvidersStepBlocksWithNeitherAConnectionNorADeferral() {
+        #expect(!SetupValidation.canAdvance(from: .providers, values: [:]))
+        #expect(!SetupValidation.canAdvance(
+            from: .providers, values: ["isConnected": "false", "isDeferred": "false"]))
+    }
+
+    /// "Set this up later" is what lets the user past — and it is the ONLY thing
+    /// besides a real connection that does.
+    @Test func adeferralSatisfiesTheProvidersStep() {
+        #expect(SetupValidation.canAdvance(from: .providers, values: ["isDeferred": "true"]))
+        #expect(SetupValidation.canAdvance(from: .providers, values: ["isConnected": "true"]))
+    }
 }

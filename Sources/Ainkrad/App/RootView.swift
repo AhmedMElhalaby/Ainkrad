@@ -40,6 +40,15 @@ struct RootView: View {
                 VStack(spacing: 0) {
                     HUDBar()
 
+                    // Persistent, undismissable: the app genuinely cannot do
+                    // its main job in this state, and the user chose to postpone
+                    // fixing it. Hidden while the gate is up so the wizard it
+                    // summons is not shouted at from behind.
+                    if environment.deferredSetupSteps.contains(.providers),
+                       !environment.isSetupPresented {
+                        SetupDeferredProvidersBanner()
+                    }
+
                     // ALL workspaces stay in the hierarchy — switching
                     // only toggles visibility, so PTY-backed sessions in
                     // background workspaces keep running. They're laid out

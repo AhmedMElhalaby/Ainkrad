@@ -138,4 +138,81 @@ struct ModelCatalogServiceTests {
         #expect(box.request?.value(forHTTPHeaderField: "x-api-key") == "sk-ant")
         #expect(box.request?.value(forHTTPHeaderField: "authorization") == nil)
     }
+
+    // MARK: - Failure classification (task 8)
+
+    struct ThrowingDataHTTPClient: DataHTTPClient {
+        func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            throw URLError(.cannotConnectToHost)
+        }
+    }
+
+    /// The classification comes from `response.statusCode`, so it holds even when
+    /// the provider ALSO returns prose that says something else entirely. This is
+    /// the test that would fail if anyone reintroduced string matching: the body
+    /// here says "invalid api key" on a 429.
+    @Test("a 429 classifies as rate-limited from the STATUS, not the body text")
+    func rateLimitedIsClassifiedFromStatus() async {
+        let stub = StubDataHTTPClient(
+            status: 429,
+            body: "{\"error\":{\"type\":\"rate_limit_error\",\"message\":\"invalid api key\"}}",
+            captured: nil)
+        let result = await ModelCatalogService(http: stub)
+            .test(kind: .claude, baseURL: "https://x/v1", credential: .apiKey("k"))
+        #expect(!result.ok)
+        #expect(result.failure == .rateLimited(status: 429))
+        #expect(result.failure?.isTransient == true)
+        // The display copy is the provider's own prose; the verdict ignored it.
+        #expect(result.message == "invalid api key")
+    }
+
+    @Test("401 and 403 classify as unauthorized and are NOT transient")
+    func unauthorizedIsNotTransient() async {
+        for status in [401, 403] {
+            let stub = StubDataHTTPClient(status: status, body: "{}", captured: nil)
+            let result = await ModelCatalogService(http: stub)
+                .test(kind: .claude, baseURL: "https://x/v1", credential: .apiKey("bad"))
+            #expect(result.failure == .unauthorized(status: status))
+            #expect(result.failure?.isTransient == false)
+        }
+    }
+
+    @Test("5xx classifies as a server error and IS transient")
+    func serverErrorIsTransient() async {
+        for status in [500, 502, 503] {
+            let stub = StubDataHTTPClient(status: status, body: "boom", captured: nil)
+            let result = await ModelCatalogService(http: stub)
+                .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
+            #expect(result.failure == .serverError(status: status))
+            #expect(result.failure?.isTransient == true)
+        }
+    }
+
+    @Test("a transport failure classifies as unreachable and IS transient")
+    func unreachableIsTransient() async {
+        let result = await ModelCatalogService(http: ThrowingDataHTTPClient())
+            .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
+        #expect(result.failure == .unreachable)
+        #expect(result.failure?.isTransient == true)
+    }
+
+    /// A base URL that cannot even become a request is the user's to fix — the
+    /// step blocking on it is the step doing its job.
+    @Test("a malformed base URL classifies as invalidBaseURL and is NOT transient")
+    func invalidBaseURLIsNotTransient() async {
+        let stub = StubDataHTTPClient(status: 200, body: "{}", captured: nil)
+        let result = await ModelCatalogService(http: stub)
+            .test(kind: .openAICompatible, baseURL: "https://[not-a-host", credential: .apiKey("k"))
+        #expect(result.failure == .invalidBaseURL)
+        #expect(result.failure?.isTransient == false)
+    }
+
+    @Test("a successful probe carries no failure at all")
+    func successCarriesNoFailure() async {
+        let stub = StubDataHTTPClient(status: 200, body: "{\"data\":[{\"id\":\"m\"}]}", captured: nil)
+        let result = await ModelCatalogService(http: stub)
+            .test(kind: .openAICompatible, baseURL: "https://x/v1", credential: .apiKey("k"))
+        #expect(result.ok)
+        #expect(result.failure == nil)
+    }
 }

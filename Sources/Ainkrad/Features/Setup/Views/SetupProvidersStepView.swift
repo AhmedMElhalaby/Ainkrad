@@ -31,6 +31,14 @@ struct SetupProvidersStepView: View {
     @State private var flow = SetupSubscriptionFlow()
     @State private var flowRevision = 0     // redraw trigger; the flow is not @Observable
     @State private var routeError: String?
+    /// The OAuth route's classification of `routeError`, kept beside it so the
+    /// escape decision is made from a value and not from the string.
+    @State private var routeFailure: ConnectionFailure?
+    /// Set when the user takes the escape. Satisfies the step's requirement
+    /// without a probe — and only ever alongside
+    /// `coordinator.setDeferred(.providers, true)`, so "walked past" and "still
+    /// owed" are one act.
+    @State private var isDeferred = false
 
     /// View-level convenience only (Continue's enablement, clearing the token
     /// field). Decisions made inside async work read the returned
@@ -40,7 +48,20 @@ struct SetupProvidersStepView: View {
     /// The rule and its copy live in `SetupValidation`, not here.
     private var unmet: [SetupValidation.Requirement] {
         SetupValidation.unmet(for: .providers,
-                              values: ["isConnected": isConnected ? "true" : "false"])
+                              values: ["isConnected": isConnected ? "true" : "false",
+                                       "isDeferred": isDeferred ? "true" : "false"])
+    }
+
+    /// Whether "Set this up later" is on screen.
+    ///
+    /// Read ONLY from `ConnectionFailure.isTransient`, reached either through
+    /// the probe's `SetupProviders.Outcome` or through the OAuth controller's
+    /// `errorFailure` — never by inspecting the message that happens to be
+    /// displayed next to it.
+    private var canDefer: Bool {
+        if isDeferred || isConnected { return false }
+        if outcome?.canDefer == true { return true }
+        return routeFailure?.isTransient == true
     }
 
     var body: some View {
@@ -53,6 +74,7 @@ struct SetupProvidersStepView: View {
                     claudeRoutes(tokens: tokens)
                     apiKeyRoute(tokens: tokens)
                     status(tokens: tokens)
+                    deferAffordance(tokens: tokens)
                 }
                 .padding(20)
             }
@@ -191,13 +213,48 @@ struct SetupProvidersStepView: View {
         return hasURL && (!preset.requiresKey || hasKey)
     }
 
+    /// The escape hatch, shown ONLY for a failure the user cannot fix.
+    ///
+    /// The step stays required by default; this is not a general "skip". It
+    /// appears when — and only when — the classification carried out of the
+    /// probe (or out of the OAuth token exchange) says the failure was
+    /// transient: rate limiting, a provider 5xx, an unreachable endpoint. A 401
+    /// or a malformed base URL is the user's to fix and gets no button, because
+    /// fixing it is the entire point of this step.
+    ///
+    /// Deferring writes nothing: verify-before-save means the failed attempt
+    /// already left no connection, and this path adds none. The user lands in
+    /// the workspace with AI off, a persistent banner, and the step still owed.
+    @ViewBuilder
+    private func deferAffordance(tokens: DesignTokens) -> some View {
+        if isDeferred {
+            statusRow(tokens: tokens, icon: "clock.badge.exclamationmark",
+                      text: "Set up later. Ainkrad's AI features stay off until you connect a "
+                          + "provider — you'll be reminded in the workspace.",
+                      color: tokens.accentTertiary)
+                .accessibilityIdentifier("setup.providers.deferred")
+        } else if canDefer {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("That failure is on the provider's side, not yours.")
+                    .font(AinkradFont.display(11))
+                    .foregroundStyle(tokens.foreground.opacity(0.55))
+                AinkradButton(title: "Set this up later", style: .secondary) {
+                    // One act: walked past AND recorded as still owed.
+                    isDeferred = true
+                    coordinator.setDeferred(.providers, true)
+                }
+                .accessibilityIdentifier("setup.providers.defer")
+            }
+        }
+    }
+
     @ViewBuilder
     private func status(tokens: DesignTokens) -> some View {
         switch outcome {
         case .connected(let message):
             statusRow(tokens: tokens, icon: "checkmark.seal.fill",
                       text: message, color: tokens.accentSecondary)
-        case .failed(let message):
+        case .failed(let message, _):
             statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
                       text: message, color: tokens.accentTertiary)
         case nil:
@@ -253,6 +310,7 @@ struct SetupProvidersStepView: View {
         isBusy = true
         defer { isBusy = false }
         routeError = nil
+        routeFailure = nil
         let service = environment.modelCatalogService
         // Same read-back rule as `settleSubscription`: decide from the returned
         // value, not from the `@State` just assigned. Harmless here (a stale
@@ -266,7 +324,10 @@ struct SetupProvidersStepView: View {
                 await service.test(kind: kind, baseURL: url, credential: credential)
             })
         outcome = result
-        if result.isConnected { token = "" }
+        if result.isConnected {
+            token = ""
+            clearDeferral()
+        }
     }
 
     private func runImport() async {
@@ -292,6 +353,7 @@ struct SetupProvidersStepView: View {
             // Surface (rather than discard) whatever the controller last said, so
             // "nothing happened" is never indistinguishable from a real error.
             routeError = controller.errorMessage
+            routeFailure = controller.errorFailure
             return
         }
         await settleSubscription(connection, controller: controller, duringPaste: false)
@@ -303,6 +365,9 @@ struct SetupProvidersStepView: View {
         // shown. If that ever fails to hold, say so rather than doing nothing.
         guard let connection = flow.pending else {
             routeError = "That sign-in attempt has expired. Start it again with Sign in with Claude."
+            // A stale flow is not a provider failure: nothing about it says the
+            // step should be postponable, so no escape is offered for it.
+            routeFailure = nil
             flow.settled(connected: false)
             flowRevision += 1
             return
@@ -321,6 +386,11 @@ struct SetupProvidersStepView: View {
                                     duringPaste: Bool) async {
         if let message = controller.errorMessage {
             routeError = message
+            // The OAuth subsystem's own verdict, already expressed as a
+            // `ConnectionFailure` by `ClaudeOAuthLoginController.classify`, so
+            // this route reaches the same decision as the API-key route without
+            // either of them reading the other's copy.
+            routeFailure = controller.errorFailure
             // A failed paste keeps the route retryable — a mistyped code is the
             // exact case the fallback exists for. Any other failure tears the
             // flow down so the user is returned to the sign-in button.
@@ -350,7 +420,17 @@ struct SetupProvidersStepView: View {
             })
         outcome = settled
         routeError = nil
+        routeFailure = nil
+        if settled.isConnected { clearDeferral() }
         flow.settled(connected: settled.isConnected)
     }
 
+    /// A working connection cancels any earlier deferral — including one made in
+    /// a previous session, which is exactly the case when the user came back
+    /// here through the workspace banner. Without this the marker would keep
+    /// owing the step and the gate would greet them again forever.
+    private func clearDeferral() {
+        isDeferred = false
+        coordinator.setDeferred(.providers, false)
+    }
 }

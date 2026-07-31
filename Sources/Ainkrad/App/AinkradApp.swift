@@ -77,6 +77,10 @@ struct AinkradHostApp: App {
                                                isProvisionalHome: provisional)
             environment.isSetupPresented = SetupGate.raisedAtLaunch(
                 provisionalHome: provisional, setupIsComplete: coordinator.isComplete)
+            // Carried into the workspace so a deferred step is visible there
+            // rather than silently forgotten. The gate above already re-raises
+            // for it; this is what makes the state honest once it comes down.
+            environment.deferredSetupSteps = coordinator.deferredSteps
         }
         _environment = State(initialValue: environment)
         Self.install(environment, into: appDelegate)

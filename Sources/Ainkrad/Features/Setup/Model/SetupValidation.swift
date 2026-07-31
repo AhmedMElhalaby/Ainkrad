@@ -76,6 +76,14 @@ enum SetupValidation {
 
         case .providers:
             guard values["isConnected"] != "true" else { return [] }
+            // The escape hatch, and the ONLY thing that satisfies this step
+            // without a live probe. It is offered by the view solely for a
+            // transient (`ConnectionFailure.isTransient`) failure — the rule
+            // for *when* it may be set lives with the classification, not here;
+            // this only honours a decision already made. The step stays owed:
+            // `SetupCoordinator.setDeferred` records it in the marker so the
+            // gate re-raises on this step at the next launch.
+            guard values["isDeferred"] != "true" else { return [] }
             return [Requirement(
                 field: "isConnected",
                 message: "Connect a provider above to continue — the connection is checked "

@@ -1,9 +1,72 @@
 // Sources/Ainkrad/Core/AgentKit/Providers/ModelCatalogService.swift
 import Foundation
 
+/// Why a connection probe failed.
+///
+/// Derived from the ACTUAL response — the HTTP status code, or which branch of
+/// the probe produced the failure — and NEVER by matching on
+/// `ConnectionTestResult.message`. Display copy is rewritten routinely; a
+/// classification that silently changes with it is a bug waiting to happen, so
+/// the distinction is carried out of the probe as a value instead of being
+/// reconstructed later from prose.
+///
+/// The split that matters to callers is `isTransient`: whose fault is this?
+/// A wrong key or a malformed base URL is the user's to fix, and fixing it is
+/// the point of asking. A 429, a 5xx or an unreachable host is not — blocking
+/// the user on those achieves nothing, because there is nothing for them to do.
+enum ConnectionFailure: Equatable, Sendable {
+    /// The base URL could not even be turned into a request.
+    case invalidBaseURL
+    /// 401 / 403 — the credential was rejected.
+    case unauthorized(status: Int)
+    /// Any other 4xx — a request the provider refused.
+    case rejected(status: Int)
+    /// 429 — rate limited upstream. Transient by definition.
+    case rateLimited(status: Int)
+    /// 5xx — the provider is having trouble.
+    case serverError(status: Int)
+    /// Transport failure: offline, DNS, timeout, connection refused.
+    case unreachable
+
+    /// True when the failure belongs to the provider or the network rather than
+    /// to the user. This is the ONLY predicate the setup wizard consults when
+    /// deciding whether to offer "Set this up later".
+    var isTransient: Bool {
+        switch self {
+        case .rateLimited, .serverError, .unreachable:
+            return true
+        case .invalidBaseURL, .unauthorized, .rejected:
+            return false
+        }
+    }
+
+    /// The single place an HTTP status becomes a classification.
+    ///
+    /// Shared by the model-catalog probe and by `ClaudeOAuthLoginController`'s
+    /// token-endpoint failures, so the two subsystems cannot drift into
+    /// disagreeing about whether the same status is the user's fault.
+    static func forHTTP(status: Int) -> ConnectionFailure {
+        switch status {
+        case 401, 403:  return .unauthorized(status: status)
+        case 429:       return .rateLimited(status: status)
+        case 500...599: return .serverError(status: status)
+        default:        return .rejected(status: status)
+        }
+    }
+}
+
 struct ConnectionTestResult: Equatable, Sendable {
     let ok: Bool
     let message: String   // user-facing; NEVER contains the API key
+    /// Machine-readable reason, `nil` exactly when `ok`. Callers classify from
+    /// this — never from `message`.
+    let failure: ConnectionFailure?
+
+    init(ok: Bool, message: String, failure: ConnectionFailure? = nil) {
+        self.ok = ok
+        self.message = message
+        self.failure = failure
+    }
 }
 
 /// Fetches a provider's available model ids (live, with a curated fallback),
@@ -46,7 +109,8 @@ final class ModelCatalogService {
 
     func test(kind: ProviderKind, baseURL: String, credential: ProviderCredential) async -> ConnectionTestResult {
         guard let request = Self.listRequest(kind: kind, baseURL: baseURL, credential: credential) else {
-            return ConnectionTestResult(ok: false, message: "Invalid base URL")
+            return ConnectionTestResult(ok: false, message: "Invalid base URL",
+                                        failure: .invalidBaseURL)
         }
         do {
             let (data, response) = try await http.data(for: request)
@@ -56,10 +120,16 @@ final class ModelCatalogService {
             }
             // Body is the server's response — never contains the request key —
             // but be defensive and only surface a parsed message field.
+            //
+            // The classification comes from `response.statusCode`, NOT from the
+            // message built on the next line: that message may be the provider's
+            // own prose, which we neither control nor can parse reliably.
+            let failure = ConnectionFailure.forHTTP(status: response.statusCode)
             let message = Self.errorMessage(data: data) ?? "HTTP \(response.statusCode)"
-            return ConnectionTestResult(ok: false, message: message)
+            return ConnectionTestResult(ok: false, message: message, failure: failure)
         } catch {
-            return ConnectionTestResult(ok: false, message: "Could not reach endpoint")
+            return ConnectionTestResult(ok: false, message: "Could not reach endpoint",
+                                        failure: .unreachable)
         }
     }
 
