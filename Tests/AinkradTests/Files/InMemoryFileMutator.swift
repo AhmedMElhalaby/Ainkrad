@@ -5,7 +5,10 @@ import Foundation
 /// are paths mapped to nothing. Volume identity is assigned by path prefix so
 /// cross-volume moves can be exercised without a second physical disk — which
 /// is the whole reason this fake exists.
-final class InMemoryFileMutator: FileMutating, @unchecked Sendable {
+/// Not `final`: the undo-refusal tests subclass this to force modification
+/// dates and volume availability, which is the only way to exercise "the file
+/// changed" and "the disk was ejected" without a real ejectable disk.
+class InMemoryFileMutator: FileMutating, @unchecked Sendable {
     struct Failure: Error { let reason: String }
 
     private var files: [String: String] = [:]

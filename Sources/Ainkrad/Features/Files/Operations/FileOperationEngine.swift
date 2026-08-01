@@ -41,6 +41,33 @@ final class FileOperationEngine {
         self.undoStack = undoStack
     }
 
+    // MARK: - Seams for the undo extension
+    //
+    // `mutator` and `trash` are private so nothing outside the engine mutates
+    // the filesystem behind its back. The undo path lives in an extension for
+    // file-size reasons, so it reaches them through these narrow accessors
+    // rather than by widening the stored properties.
+
+    func mutatorMove(_ source: URL, _ destination: URL) throws {
+        try mutator.moveItem(at: source, to: destination)
+    }
+
+    func mutatorRemove(_ url: URL) throws {
+        try mutator.removeItem(at: url)
+    }
+
+    func mutatorModificationDate(_ url: URL) -> Date? {
+        mutator.modificationDate(of: url)
+    }
+
+    func mutatorVolumeIdentifier(_ url: URL) -> String? {
+        mutator.volumeIdentifier(for: url)
+    }
+
+    func trashRestore(_ inTrash: URL, _ original: URL) throws {
+        try trash.restore(from: inTrash, to: original)
+    }
+
     // MARK: - Submission
 
     @discardableResult

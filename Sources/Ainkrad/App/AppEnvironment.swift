@@ -54,6 +54,19 @@ final class AppEnvironment {
     /// in `init` from `persistence` rather than threaded through bootstrap's
     /// parameter list — it depends on nothing else.
     let filesSettingsStore: FilesSettingsStore
+    /// Tracks open Files panes so F5/F6 can resolve "the other pane". Must live
+    /// here, not in a pane: host tiling destroys panes, and closing the one you
+    /// copied FROM would otherwise take the coordination with it.
+    let filesPaneCoordinator: PaneCoordinator
+    /// One shared filesystem service for every Files pane. M1 had each pane
+    /// construct its own; `PaneCoordinator` makes panes talk to each other, so
+    /// they need to agree on one.
+    let filesSystemService: LocalFileSystemService
+    /// The undo stack and engine every Files mutation funnels through —
+    /// keyboard, context menu, and (from M4) the assistant alike, which is what
+    /// makes an assistant-initiated batch rename ⌘Z-able like any other.
+    let filesUndoStack: UndoStack
+    let filesOperationEngine: FileOperationEngine
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
     /// Assistant session-share (M8) — writes self-contained HTML share artifacts
@@ -356,6 +369,12 @@ final class AppEnvironment {
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
         self.filesSettingsStore = FilesSettingsStore(persistence: persistence)
+        self.filesPaneCoordinator = PaneCoordinator()
+        self.filesSystemService = LocalFileSystemService()
+        let filesUndoStack = UndoStack(persistence: persistence)
+        self.filesUndoStack = filesUndoStack
+        self.filesOperationEngine = FileOperationEngine(
+            mutator: LocalFileMutator(), trash: SystemTrashService(), undoStack: filesUndoStack)
         self.webSearchSettingsStore = webSearchSettingsStore
         self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore
