@@ -17,6 +17,22 @@ import AinkradHostRuntime
 struct HomeSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
+    /// The adopted vault's root, or `nil` while the Home is still provisional
+    /// (setup incomplete). Settings is unreachable before setup finishes, so
+    /// in practice this is always non-`nil` here — the guard exists so this
+    /// pane never mislabels a throwaway temp directory as the user's real
+    /// Home if it is ever reached in that state.
+    ///
+    /// Resolved once in `.onAppear` rather than as a computed property:
+    /// `AinkradHome.resolve()` hits disk (`HomePointer.read` +
+    /// `FileManager.fileExists`), and this view observes `AppEnvironment`
+    /// (`@Observable`), so any unrelated environment mutation re-runs `body`.
+    /// Relocating the Home is a pre-bootstrap-only operation — the wizard
+    /// does it, this pane deliberately has no move control — so the vault
+    /// root cannot change while Settings is open, making a one-time resolve
+    /// safe.
+    @State private var vaultRoot: URL?
+
     var body: some View {
         AinkradSettingsPanel(
             title: "Ainkrad Home",
@@ -35,18 +51,12 @@ struct HomeSettingsView: View {
                 }
                 .disabled(vaultRoot == nil)
             }
+            .onAppear {
+                guard !environment.isProvisionalHome else { return }
+                guard case .ready(let home) = AinkradHome.resolve() else { return }
+                vaultRoot = home.vaultRoot
+            }
         }
-    }
-
-    /// The adopted vault's root, or `nil` while the Home is still provisional
-    /// (setup incomplete). Settings is unreachable before setup finishes, so
-    /// in practice this is always non-`nil` here — the guard exists so this
-    /// pane never mislabels a throwaway temp directory as the user's real
-    /// Home if it is ever reached in that state.
-    private var vaultRoot: URL? {
-        guard !environment.isProvisionalHome else { return nil }
-        guard case .ready(let home) = AinkradHome.resolve() else { return nil }
-        return home.vaultRoot
     }
 
     /// Tilde form, as the setup step shows it — an absolute path under
