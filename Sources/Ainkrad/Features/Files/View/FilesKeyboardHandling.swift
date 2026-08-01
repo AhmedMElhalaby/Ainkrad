@@ -153,17 +153,13 @@ struct FilesKeyboardHandling: ViewModifier {
                 onFocusFilter()
                 return .handled
             }
-            // BOTH cases listed: holding shift makes the delivered character
-            // uppercase, so binding only "f" meant ⌘⇧F never fired at all.
-            .onKeyPress(keys: ["f", "F"], phases: .down) { press in
-                guard press.modifiers.contains(.command) else { return .ignored }
-                // ⌘⇧F scopes to this folder (the in-pane field); plain ⌘F is
-                // the global palette.
-                if press.modifiers.contains(.shift) || press.key.character == "F" {
-                    onFocusFilter()
-                } else {
-                    onOpenFinder(.globalSearch)
-                }
+            // Plain ⌘F only. ⌘⇧F is handled by `FilesKeyMonitor`, because
+            // `onKeyPress` proved unreliable for that chord — it depends on
+            // this container holding focus, which it often does not.
+            .onKeyPress(keys: ["f"], phases: .down) { press in
+                guard press.modifiers.contains(.command),
+                      !press.modifiers.contains(.shift) else { return .ignored }
+                onOpenFinder(.globalSearch)
                 return .handled
             }
             .onKeyPress(keys: ["p"], phases: .down) { press in

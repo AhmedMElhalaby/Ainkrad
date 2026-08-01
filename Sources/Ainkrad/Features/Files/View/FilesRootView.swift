@@ -122,6 +122,17 @@ struct FilesRootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .background(
+            // ⌘⇧F rides an AppKit local monitor, not `.onKeyPress` — see
+            // `FilesKeyMonitor` for why. Zero-size and invisible; it lives as
+            // long as the pane does.
+            FilesKeyMonitor(onFocusScopedSearch: {
+                let searchStore = ensureSearch()
+                searchStore.scopedRoot = store.activeTab.currentDirectory
+                searchStore.requestFocus()
+            })
+            .frame(width: 0, height: 0)
+        )
         .overlay(alignment: .bottomTrailing) {
             OperationsPanel(engine: engine).padding(AinkradSpacing.md)
         }
