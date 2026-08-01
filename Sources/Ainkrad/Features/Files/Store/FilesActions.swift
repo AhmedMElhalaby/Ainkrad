@@ -33,8 +33,8 @@ final class FilesActions {
     private let paneToken: UUID
 
     private(set) var prompt: FilesPrompt?
-    /// Last operation's user-facing summary, surfaced as a toast.
-    private(set) var lastMessage: String?
+    /// Last operation's user-facing result, surfaced as a toast.
+    private(set) var lastToast: FilesToastMessage?
 
     init(engine: FileOperationEngine, coordinator: PaneCoordinator,
          resolver: ConflictResolver, clipboard: FilesClipboard,
@@ -60,7 +60,7 @@ final class FilesActions {
     }
 
     func present(_ prompt: FilesPrompt?) { self.prompt = prompt }
-    func clearMessage() { lastMessage = nil }
+    func clearMessage() { lastToast = nil }
 
     // MARK: - Clipboard
     //
@@ -72,21 +72,27 @@ final class FilesActions {
         let sources = operands
         guard !sources.isEmpty else { return }
         clipboard.copy(sources)
-        lastMessage = "Copied \(sources.count) item\(sources.count == 1 ? "" : "s")"
+        lastToast = FilesToastMessage(
+            kind: .copied,
+            text: "Copied \(sources.count) item\(sources.count == 1 ? "" : "s")",
+            detail: "⌘V to paste")
     }
 
     func cutSelection() {
         let sources = operands
         guard !sources.isEmpty else { return }
         clipboard.cut(sources)
-        lastMessage = "Cut \(sources.count) item\(sources.count == 1 ? "" : "s")"
+        lastToast = FilesToastMessage(
+            kind: .cut,
+            text: "Cut \(sources.count) item\(sources.count == 1 ? "" : "s")",
+            detail: "⌘V to move them here")
     }
 
     /// Pastes into the CURRENT directory — so a single pane can copy from one
     /// folder to another, which the two-pane-only design could not do.
     func paste() async {
         guard let pending = clipboard.pendingOperation() else {
-            lastMessage = "Nothing to paste"
+            lastToast = FilesToastMessage(kind: .warning, text: "Nothing to paste", detail: nil)
             return
         }
         let destination = tab.currentDirectory
@@ -176,12 +182,41 @@ final class FilesActions {
     /// A one-line summary. Partial failure is reported honestly — "47 copied,
     /// 3 failed" — rather than a bare success that hides the three.
     private func report(_ result: OperationResult, verb: String) {
-        var parts: [String] = []
-        if result.succeeded > 0 { parts.append("\(verb.lowercased()) \(result.succeeded)") }
-        if result.skipped > 0 { parts.append("\(result.skipped) skipped") }
-        if !result.failures.isEmpty { parts.append("\(result.failures.count) failed") }
-        if result.wasCancelled { parts.append("cancelled") }
-        lastMessage = parts.isEmpty ? nil : parts.joined(separator: ", ").capitalizedFirst
+        guard result.succeeded > 0 || !result.failures.isEmpty || result.skipped > 0 else {
+            lastToast = nil
+            return
+        }
+
+        var detailParts: [String] = []
+        if result.skipped > 0 { detailParts.append("\(result.skipped) skipped") }
+        if result.wasCancelled { detailParts.append("cancelled") }
+
+        if !result.failures.isEmpty {
+            detailParts.append("\(result.failures.count) failed")
+            lastToast = FilesToastMessage(
+                kind: .failure,
+                text: "\(verb) \(result.succeeded) item\(result.succeeded == 1 ? "" : "s")",
+                detail: detailParts.joined(separator: " · "))
+            return
+        }
+
+        // Success says it is reversible — the single most useful thing a
+        // confirmation can tell you after a destructive-looking action.
+        detailParts.append("⌘Z to undo")
+        lastToast = FilesToastMessage(
+            kind: kind(for: verb),
+            text: "\(verb) \(result.succeeded) item\(result.succeeded == 1 ? "" : "s")",
+            detail: detailParts.joined(separator: " · "))
+    }
+
+    private func kind(for verb: String) -> FilesToastKind {
+        switch verb {
+        case "Copied": return .copied
+        case "Moved": return .moved
+        case "Moved to Trash": return .deleted
+        case "Created": return .created
+        default: return .moved
+        }
     }
 }
 

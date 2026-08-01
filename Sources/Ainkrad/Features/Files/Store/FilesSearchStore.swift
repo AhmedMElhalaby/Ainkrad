@@ -1,11 +1,12 @@
 import Foundation
 import Observation
 
-/// Which finder affordance is open, if any.
+/// Which overlay palette is open, if any.
 enum FilesFinderMode: Equatable {
-    /// ⌘F / the always-present field — recursive search below the current
-    /// directory, running as you type.
-    case search
+    /// ⌘F — GLOBAL search, rooted at the home folder rather than wherever the
+    /// pane happens to be. "Find that file" is usually a question about the
+    /// whole machine, not about the folder you are standing in.
+    case globalSearch
     /// ⌘P — fuzzy jump across the tree, ranked.
     case jump
 }
@@ -26,9 +27,19 @@ enum FilesFinderMode: Equatable {
 final class FilesSearchStore {
     private let fileSystem: any FileSystemServing
 
-    /// The always-visible in-folder filter. Separate from `queryText` so
-    /// opening the palette does not clear what you had filtered.
-    var filterText = ""
+    /// The always-visible in-pane field. Scoped: it searches BELOW the current
+    /// folder, recursively, live. Separate from `queryText` so opening the
+    /// global palette does not disturb it.
+    var scopedText = "" {
+        didSet { if scopedText != oldValue { scheduleScopedSearch() } }
+    }
+    /// Results of the in-pane scoped search, shown in the list itself.
+    private(set) var scopedResults: [SearchHit] = []
+    private(set) var isScopedSearching = false
+    /// The directory the scoped search runs under — updated on navigation.
+    var scopedRoot: URL? {
+        didSet { if scopedRoot != oldValue, !scopedText.isEmpty { scheduleScopedSearch() } }
+    }
 
     private(set) var mode: FilesFinderMode?
     var queryText = "" {
@@ -40,6 +51,8 @@ final class FilesSearchStore {
 
     private var searchTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
+    private var scopedTask: Task<Void, Never>?
+    private var scopedDebounce: Task<Void, Never>?
     private var searchRoot: URL?
 
     /// Long enough to coalesce fast typing, short enough to feel live.
@@ -50,7 +63,9 @@ final class FilesSearchStore {
     }
 
     var isActive: Bool { mode != nil }
-    var isFiltering: Bool { !filterText.isEmpty }
+    /// True while the in-pane field has something in it — the list then shows
+    /// scoped results instead of the directory.
+    var isScoped: Bool { !scopedText.isEmpty }
 
     func open(_ mode: FilesFinderMode, root: URL) {
         self.mode = mode
@@ -69,7 +84,13 @@ final class FilesSearchStore {
         isSearching = false
     }
 
-    func clearFilter() { filterText = "" }
+    func clearScoped() {
+        scopedText = ""
+        scopedResults = []
+        isScopedSearching = false
+        scopedDebounce?.cancel()
+        scopedTask?.cancel()
+    }
 
     private func cancelWork() {
         debounceTask?.cancel()
@@ -78,19 +99,48 @@ final class FilesSearchStore {
         searchTask = nil
     }
 
-    // MARK: - In-folder filter (pure, instant)
+    // MARK: - In-pane scoped search (⌘⇧F)
 
-    /// Filters entries already in memory. Safe on every keystroke — no disk
-    /// access, no task, no debounce.
-    func filtered(_ entries: [FileEntry]) -> [FileEntry] {
-        guard !filterText.isEmpty else { return entries }
-        return fuzzyRank(entries, pattern: filterText) { $0.name }.map(\.item)
+    /// Live recursive search below the pane's current folder.
+    ///
+    /// This subsumes plain in-folder filtering: a search rooted here includes
+    /// this directory, so there is no need for a separate filter-only mode and
+    /// one fewer thing for the user to distinguish.
+    private func scheduleScopedSearch() {
+        scopedDebounce?.cancel()
+        scopedTask?.cancel()
+        guard !scopedText.isEmpty, let root = scopedRoot else {
+            scopedResults = []
+            isScopedSearching = false
+            return
+        }
+
+        scopedDebounce = Task { [weak self] in
+            try? await Task.sleep(for: Self.debounce)
+            guard !Task.isCancelled else { return }
+            self?.runScopedSearch(root: root)
+        }
+    }
+
+    private func runScopedSearch(root: URL) {
+        scopedResults = []
+        isScopedSearching = true
+        let stream = Self.stream(root: root, query: SearchQuery(text: scopedText),
+                                 fileSystem: fileSystem)
+        scopedTask = Task { [weak self] in
+            for await batch in stream {
+                guard !Task.isCancelled else { return }
+                self?.scopedResults.append(contentsOf: batch)
+            }
+            guard !Task.isCancelled else { return }
+            self?.isScopedSearching = false
+        }
     }
 
     // MARK: - Recursive search (debounced, streaming)
 
     private func scheduleSearch() {
-        guard mode == .search, let root = searchRoot else { return }
+        guard mode == .globalSearch, let root = searchRoot else { return }
         cancelWork()
         guard !queryText.isEmpty else {
             results = []

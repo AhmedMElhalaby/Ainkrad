@@ -147,8 +147,7 @@ struct FilesKeyboardHandling: ViewModifier {
             // Finder affordances. `/` filters here, ⌘F searches below here,
             // ⌘P jumps across the tree — three different questions, so three
             // different entry points rather than one overloaded box.
-            // `/` focuses the always-visible filter field rather than
-            // summoning a palette — the field is already there.
+            // `/` is a second way into the same scoped field.
             .onKeyPress(keys: ["/"], phases: .down) { _ in
                 guard navigationEnabled else { return .ignored }
                 onFocusFilter()
@@ -156,7 +155,13 @@ struct FilesKeyboardHandling: ViewModifier {
             }
             .onKeyPress(keys: ["f"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
-                onOpenFinder(.search)
+                // ⌘⇧F scopes to this folder (the in-pane field); plain ⌘F is
+                // the global palette.
+                if press.modifiers.contains(.shift) {
+                    onFocusFilter()
+                } else {
+                    onOpenFinder(.globalSearch)
+                }
                 return .handled
             }
             .onKeyPress(keys: ["p"], phases: .down) { press in

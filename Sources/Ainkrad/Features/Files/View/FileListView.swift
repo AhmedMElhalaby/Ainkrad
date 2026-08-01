@@ -8,15 +8,21 @@ struct FileListView: View {
     let iconSize: CGFloat
     let rowPadding: CGFloat
     let showMetadata: Bool
-    /// Applies the `/` filter, when one is open. A closure so the list stays
-    /// unaware of the search store.
-    let filter: ([FileEntry]) -> [FileEntry]
+    /// Scoped search results, when the in-pane field has something in it.
+    /// `nil` means show the directory normally. A value — even empty — means
+    /// the list is showing SEARCH results, so an empty array must read as "no
+    /// matches" rather than "empty folder".
+    let searchHits: [SearchHit]?
+    let isSearching: Bool
     /// Grid instead of list, for image-heavy folders.
     let useGrid: Bool
     /// Resolves a row's git state. A closure rather than the provider itself so
     /// the list stays testable and unaware of how status is fetched.
     let gitStatus: (URL) -> GitFileStatus?
     let isCut: (URL) -> Bool
+    /// Opening a search hit navigates to it — the list cannot do that itself
+    /// because a hit may live several directories down.
+    let onOpenHit: (SearchHit) -> Void
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradTypography) private var typo
@@ -41,7 +47,15 @@ struct FileListView: View {
         if let error = tab.loadError {
             AinkradErrorState(message: error, retryTitle: "Retry") { tab.reload() }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if filter(tab.visibleEntries).isEmpty {
+        } else if let searchHits {
+            if searchHits.isEmpty && !isSearching {
+                AinkradEmptyState(icon: "magnifyingglass", title: "No Matches",
+                                  message: "Nothing under this folder matches.")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                searchResults(searchHits)
+            }
+        } else if tab.visibleEntries.isEmpty {
             AinkradEmptyState(icon: "folder", title: "Empty",
                               message: "This folder has nothing to show.")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -52,7 +66,7 @@ struct FileListView: View {
                         gridBody
                     } else {
                     LazyVStack(spacing: 1) {
-                        ForEach(filter(tab.visibleEntries)) { entry in
+                        ForEach(tab.visibleEntries) { entry in
                             FileRowView(
                                 entry: entry,
                                 isCursor: tab.cursorEntry == entry,
@@ -88,13 +102,48 @@ struct FileListView: View {
         }
     }
 
+    /// Scoped-search results: same rows, plus WHERE each hit lives, which is
+    /// the column that makes a recursive search readable.
+    private func searchResults(_ hits: [SearchHit]) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 1) {
+                ForEach(hits) { hit in
+                    HStack(spacing: 0) {
+                        FileRowView(
+                            entry: hit.entry,
+                            isCursor: false,
+                            isSelected: tab.selection.contains(hit.entry.url),
+                            now: now,
+                            iconSize: iconSize,
+                            rowPadding: rowPadding,
+                            showMetadata: false,
+                            gitStatus: gitStatus(hit.entry.url),
+                            isIgnored: false,
+                            isCut: isCut(hit.entry.url),
+                            onTap: { tab.selection = [hit.entry.url] },
+                            onDoubleTap: { onOpenHit(hit) })
+                        Text(hit.relativeDirectory)
+                            .font(AinkradFontResolver.font(.caption, typography: typo))
+                            .foregroundStyle(theme.foreground.opacity(0.4))
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .frame(width: 180, alignment: .trailing)
+                            .padding(.trailing, AinkradSpacing.sm)
+                    }
+                }
+            }
+            .padding(.horizontal, FilesColumnMetrics.rowStackInset)
+            .padding(.vertical, AinkradSpacing.xs)
+        }
+    }
+
     /// Icon grid. Cell size follows the icon-size setting, so the one density
     /// control governs both presentations rather than each having its own.
     private var gridBody: some View {
         let cell = max(72, CGFloat(iconSize) * 5)
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: cell), spacing: AinkradSpacing.sm)],
                          spacing: AinkradSpacing.sm) {
-            ForEach(filter(tab.visibleEntries)) { entry in
+            ForEach(tab.visibleEntries) { entry in
                 FileGridCell(
                     entry: entry,
                     isCursor: tab.cursorEntry == entry,

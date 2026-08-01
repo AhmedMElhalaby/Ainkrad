@@ -19,7 +19,7 @@ struct FilesRootView: View {
     @State private var resolver = ConflictResolver()
     @State private var isEditingPath = false
     @State private var watcher: DirectoryWatcher?
-    @State private var toast: String?
+    @State private var toast: FilesToastMessage?
     @State private var search: FilesSearchStore?
     @FocusState private var filterFocused: Bool
 
@@ -66,10 +66,12 @@ struct FilesRootView: View {
                     iconSize: CGFloat(settings.iconSize),
                     rowPadding: settings.rowVerticalPadding,
                     showMetadata: settings.showMetadataColumns,
-                    filter: { search?.filtered($0) ?? $0 },
+                    searchHits: (search?.isScoped ?? false) ? (search?.scopedResults ?? []) : nil,
+                    isSearching: search?.isScopedSearching ?? false,
                     useGrid: settings.useGrid,
                     gitStatus: { git.status(for: $0) },
-                    isCut: { environment.filesClipboard.isCut($0) }
+                    isCut: { environment.filesClipboard.isCut($0) },
+                    onOpenHit: { hit in accept(hit, store: store) }
                 )
                 FilesStatusBar(
                     tab: store.activeTab,
@@ -84,11 +86,23 @@ struct FilesRootView: View {
         .animation(.easeOut(duration: 0.18), value: settings.showPreview)
         .filesKeyboardHandling(
             store: store, actions: actions, undoStack: environment.filesUndoStack,
-            onUndo: { if let refusal = engine.undo() { toast = refusal.message } },
+            onUndo: {
+                if let refusal = engine.undo() {
+                    toast = FilesToastMessage(kind: .warning, text: "Can't undo that",
+                                              detail: refusal.message)
+                } else {
+                    toast = FilesToastMessage(kind: .undone, text: "Undone",
+                                              detail: "⌘⇧Z to redo")
+                }
+            },
             onRedo: { _ = engine.redo() },
             onTogglePreview: { settings.showPreview.toggle() },
             onOpenFinder: { mode in openFinder(mode, store: store) },
-            onFocusFilter: { ensureSearch(); filterFocused = true },
+            onFocusFilter: {
+                let store = ensureSearch()
+                store.scopedRoot = self.store?.activeTab.currentDirectory
+                filterFocused = true
+            },
             isFinderOpen: search?.isActive ?? false,
             vimKeys: settings.vimKeys,
             isEditingPath: $isEditingPath)
@@ -108,9 +122,14 @@ struct FilesRootView: View {
         }
         .overlay(alignment: .bottom) {
             if let toast {
-                AinkradBanner(message: toast) { self.toast = nil }
-                    .padding(AinkradSpacing.md)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                FilesToast(message: toast) { self.toast = nil }
+                    .padding(.bottom, AinkradSpacing.lg)
+                    .task(id: toast.id) {
+                        // Auto-dismiss; a confirmation that lingers becomes
+                        // clutter you learn to ignore.
+                        try? await Task.sleep(for: .seconds(3))
+                        if self.toast?.id == toast.id { self.toast = nil }
+                    }
             }
         }
         // One watcher, always pointed at whatever the active tab is showing.
@@ -129,8 +148,12 @@ struct FilesRootView: View {
         .onTapGesture {
             if let paneToken { environment.filesPaneCoordinator.noteFocus(paneToken) }
         }
-        .onChange(of: actions.lastMessage) { _, message in
+        .onChange(of: actions.lastToast) { _, message in
             if let message { toast = message; actions.clearMessage() }
+        }
+        // The scoped search follows the pane as it navigates.
+        .onChange(of: store.activeTab.currentDirectory, initial: true) { _, directory in
+            search?.scopedRoot = directory
         }
         .sheet(item: Binding(get: { actions.prompt },
                              set: { if $0 == nil { actions.present(nil) } })) { prompt in
@@ -160,7 +183,13 @@ struct FilesRootView: View {
     }
 
     private func openFinder(_ mode: FilesFinderMode, store: FilesPaneStore) {
-        ensureSearch().open(mode, root: store.activeTab.currentDirectory)
+        // ⌘F is GLOBAL: rooted at home, not at whatever folder the pane is
+        // showing. ⌘P jumps within the current tree, where "nearby" is the
+        // point.
+        let root = mode == .globalSearch
+            ? fileSystem.homeDirectory
+            : store.activeTab.currentDirectory
+        ensureSearch().open(mode, root: root)
     }
 
     private func accept(_ hit: SearchHit, store: FilesPaneStore) {
