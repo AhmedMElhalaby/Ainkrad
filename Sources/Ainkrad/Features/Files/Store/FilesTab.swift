@@ -12,80 +12,65 @@ final class FilesTab: Identifiable {
     private let fileSystem: any FileSystemServing
     private var history: NavigationHistory
 
-    /// The raw listing, unfiltered and unsorted. `visibleEntries` derives the
-    /// display order — keeping both means toggling hidden files or re-sorting
-    /// never costs a directory read.
+    /// The raw listing, unfiltered and unsorted.
     private(set) var entries: [FileEntry] = []
     /// Human-readable reason the last load failed, or `nil`.
     private(set) var loadError: String?
 
+    /// The display-ordered listing — STORED, not computed.
+    ///
+    /// This was originally a computed property, which was a real performance
+    /// bug: it ran a full filter + sort on every access, and it is read from a
+    /// dozen places including twice inside `cursorEntry` and once per render
+    /// pass of three views. A single arrow keypress cost several O(n log n)
+    /// sorts over the whole directory, which is exactly what made keyboard
+    /// navigation feel glitchy in a large folder. Now it is recomputed only
+    /// when one of its four inputs actually changes.
+    private(set) var visibleEntries: [FileEntry] = []
+
     var selection: Set<URL> = []
-    var sortKey: FileSortKey = .name
-    var sortAscending = true
-    var showHidden = false
+
+    var sortKey: FileSortKey = .name {
+        didSet { if oldValue != sortKey { recomputeVisible() } }
+    }
+    var sortAscending = true {
+        didSet { if oldValue != sortAscending { recomputeVisible() } }
+    }
+    var showHidden = false {
+        didSet { if oldValue != showHidden { recomputeVisible() } }
+    }
 
     var currentDirectory: URL { history.current }
     var title: String { currentDirectory.lastPathComponent }
     var canGoBack: Bool { history.canGoBack }
     var canGoForward: Bool { history.canGoForward }
 
-    var visibleEntries: [FileEntry] {
-        sortedEntries(filteredEntries(entries, showHidden: showHidden),
-                      by: sortKey, ascending: sortAscending)
-    }
-
     /// The keyboard cursor's row in `visibleEntries`. Distinct from
     /// `selection`: you move the cursor to look, and select to act — the
     /// orthodox-manager separation that makes Space-to-select meaningful.
+    ///
+    /// Arrow keys move ONLY this. They deliberately no longer rewrite
+    /// `selection` on every press: mutating a `Set<URL>` per keystroke
+    /// invalidated every row's `selection.contains` check and re-rendered the
+    /// whole list, which is the other half of the glitchiness.
     private(set) var cursorIndex = 0
 
     var cursorEntry: FileEntry? {
         visibleEntries.indices.contains(cursorIndex) ? visibleEntries[cursorIndex] : nil
     }
 
-    func moveCursor(by delta: Int) {
-        let count = visibleEntries.count
-        guard count > 0 else { cursorIndex = 0; return }
-        cursorIndex = min(max(0, cursorIndex + delta), count - 1)
-    }
-
-    func moveCursorToStart() { cursorIndex = 0 }
-
-    func moveCursorToEnd() {
-        cursorIndex = max(0, visibleEntries.count - 1)
-    }
-
-    /// `extending` is the ⇧-arrow case: add to the selection rather than
-    /// replacing it.
-    func selectCursor(extending: Bool) {
-        guard let entry = cursorEntry else { return }
-        if extending {
-            selection.insert(entry.url)
-        } else {
-            selection = [entry.url]
-        }
-    }
-
-    func selectAll() {
-        selection = Set(visibleEntries.map(\.url))
-    }
-
-    func invertSelection() {
-        let all = Set(visibleEntries.map(\.url))
-        selection = all.subtracting(selection)
-    }
-
-    /// Enter: descend into a directory. Files do nothing in M1 — opening
-    /// them arrives with the preview pane in M3.
-    func activateCursor() {
-        guard let entry = cursorEntry, entry.isDirectory else { return }
-        descend(into: entry)
-    }
-
     init(directory: URL, fileSystem: any FileSystemServing) {
         self.fileSystem = fileSystem
         self.history = NavigationHistory(root: directory)
         reload()
+    }
+
+    private func recomputeVisible() {
+        visibleEntries = sortedEntries(filteredEntries(entries, showHidden: showHidden),
+                                       by: sortKey, ascending: sortAscending)
+        // A stale cursor pointing past the end of a smaller listing would make
+        // arrow keys appear dead until the user scrolled back into range.
+        cursorIndex = min(cursorIndex, max(0, visibleEntries.count - 1))
     }
 
     /// Re-reads the current directory. Called on creation, on navigation, and
@@ -100,9 +85,7 @@ final class FilesTab: Identifiable {
             entries = []
             loadError = error.localizedDescription
         }
-        // A stale cursor pointing past the end of a smaller listing would make
-        // arrow keys appear dead until the user scrolled back into range.
-        cursorIndex = min(cursorIndex, max(0, visibleEntries.count - 1))
+        recomputeVisible()
     }
 
     /// Navigates to `url` even if it turns out to be unreadable — the failure
@@ -110,8 +93,7 @@ final class FilesTab: Identifiable {
     /// silently doing nothing and looking broken.
     func navigate(to url: URL) {
         history.visit(url)
-        selection.removeAll()
-        cursorIndex = 0
+        resetCursorAndSelection()
         reload()
     }
 
@@ -129,16 +111,82 @@ final class FilesTab: Identifiable {
     func goBack() {
         guard history.canGoBack else { return }
         history.goBack()
-        selection.removeAll()
-        cursorIndex = 0
+        resetCursorAndSelection()
         reload()
     }
 
     func goForward() {
         guard history.canGoForward else { return }
         history.goForward()
+        resetCursorAndSelection()
+        reload()
+    }
+
+    private func resetCursorAndSelection() {
         selection.removeAll()
         cursorIndex = 0
-        reload()
+    }
+
+    // MARK: - Cursor
+
+    func moveCursor(by delta: Int) {
+        let count = visibleEntries.count
+        guard count > 0 else { cursorIndex = 0; return }
+        cursorIndex = min(max(0, cursorIndex + delta), count - 1)
+    }
+
+    func moveCursorToStart() { cursorIndex = 0 }
+
+    func moveCursorToEnd() {
+        cursorIndex = max(0, visibleEntries.count - 1)
+    }
+
+    /// Clicking a row puts the cursor there too, so the keyboard picks up from
+    /// where the mouse left off instead of jumping back to a stale position.
+    func placeCursor(at entry: FileEntry) {
+        guard let index = visibleEntries.firstIndex(of: entry) else { return }
+        cursorIndex = index
+        selection = [entry.url]
+    }
+
+    // MARK: - Selection
+
+    /// `extending` is the ⇧-arrow case: add to the selection rather than
+    /// replacing it.
+    func selectCursor(extending: Bool) {
+        guard let entry = cursorEntry else { return }
+        if extending {
+            selection.insert(entry.url)
+        } else {
+            selection = [entry.url]
+        }
+    }
+
+    /// Space: toggle the cursor row's membership, so a second press
+    /// deselects. Toggling is what makes Space usable for building a
+    /// multi-selection by hand.
+    func toggleCursorSelection() {
+        guard let entry = cursorEntry else { return }
+        if selection.contains(entry.url) {
+            selection.remove(entry.url)
+        } else {
+            selection.insert(entry.url)
+        }
+    }
+
+    func selectAll() {
+        selection = Set(visibleEntries.map(\.url))
+    }
+
+    func invertSelection() {
+        let all = Set(visibleEntries.map(\.url))
+        selection = all.subtracting(selection)
+    }
+
+    /// Enter: descend into a directory. Files do nothing in M1 — opening
+    /// them arrives with the preview pane in M3.
+    func activateCursor() {
+        guard let entry = cursorEntry, entry.isDirectory else { return }
+        descend(into: entry)
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Attaches the M1 key map to the pane. A `ViewModifier` rather than scattered
 /// `.onKeyPress` calls so the whole map is readable in one place — and so M2
@@ -6,6 +7,7 @@ import SwiftUI
 struct FilesKeyboardHandling: ViewModifier {
     let store: FilesPaneStore
     @Binding var isEditingPath: Bool
+    @FocusState private var keyboardFocus: Bool
 
     private var tab: FilesTab { store.activeTab }
 
@@ -16,20 +18,44 @@ struct FilesKeyboardHandling: ViewModifier {
     /// wants those.
     private var navigationEnabled: Bool { !isEditingPath }
 
+    /// Shared by every arrow/page binding: guard, move, report handled.
+    /// ⇧ extends the selection as it goes, which is the only case where
+    /// cursor movement should touch `selection` at all.
+    private func moveCursor(_ delta: Int) -> KeyPress.Result {
+        guard navigationEnabled else { return .ignored }
+        tab.moveCursor(by: delta)
+        if NSEvent.modifierFlags.contains(.shift) {
+            tab.selectCursor(extending: true)
+        }
+        return .handled
+    }
+
     func body(content: Content) -> some View {
         content
+            // Focused on appear, so the key map is live the moment the pane
+            // opens. Without this the user had to click the list first, which
+            // reads as "the keyboard doesn't work".
             .focusable()
+            .focusEffectDisabled()
+            .defaultFocus($keyboardFocus, true)
+            .focused($keyboardFocus)
             // Navigation — suppressed while the path editor is focused.
-            .onKeyPress(.upArrow) {
+            // Arrows move the CURSOR only. They used to rewrite `selection`
+            // on every press, which invalidated every row's membership check
+            // and re-rendered the whole list per keystroke. ⇧-arrow still
+            // extends the selection, which is the case that wants it.
+            .onKeyPress(.upArrow) { moveCursor(-1) }
+            .onKeyPress(.downArrow) { moveCursor(1) }
+            .onKeyPress(.pageUp) { moveCursor(-20) }
+            .onKeyPress(.pageDown) { moveCursor(20) }
+            .onKeyPress(.home) {
                 guard navigationEnabled else { return .ignored }
-                tab.moveCursor(by: -1)
-                tab.selectCursor(extending: false)
+                tab.moveCursorToStart()
                 return .handled
             }
-            .onKeyPress(.downArrow) {
+            .onKeyPress(.end) {
                 guard navigationEnabled else { return .ignored }
-                tab.moveCursor(by: 1)
-                tab.selectCursor(extending: false)
+                tab.moveCursorToEnd()
                 return .handled
             }
             .onKeyPress(.return) {
@@ -44,7 +70,7 @@ struct FilesKeyboardHandling: ViewModifier {
             }
             .onKeyPress(.space) {
                 guard navigationEnabled else { return .ignored }
-                tab.selectCursor(extending: true)
+                tab.toggleCursorSelection()
                 return .handled
             }
             // Selection

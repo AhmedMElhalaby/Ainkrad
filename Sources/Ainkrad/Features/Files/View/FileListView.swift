@@ -32,18 +32,16 @@ struct FileListView: View {
                               message: "This folder has nothing to show.")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            // `ScrollViewReader` so keyboard navigation can drag the viewport
-            // along: without it, arrowing past the fold moves an invisible
-            // cursor and the list looks frozen.
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: 1) {
                         ForEach(tab.visibleEntries) { entry in
                             FileRowView(
                                 entry: entry,
+                                isCursor: tab.cursorEntry == entry,
                                 isSelected: tab.selection.contains(entry.url),
                                 now: now,
-                                onTap: { tab.selection = [entry.url] },
+                                onTap: { tab.placeCursor(at: entry) },
                                 onDoubleTap: { tab.descend(into: entry) }
                             )
                             .id(entry.url)
@@ -54,7 +52,12 @@ struct FileListView: View {
                 }
                 .onChange(of: tab.cursorIndex) { _, _ in
                     guard let entry = tab.cursorEntry else { return }
-                    proxy.scrollTo(entry.url, anchor: .center)
+                    // `anchor: nil` scrolls the MINIMUM distance needed to
+                    // bring the row into view. The first cut passed
+                    // `.center`, which re-centred the entire list on every
+                    // single arrow press — the list lurched under you instead
+                    // of scrolling at the edges, which read as "glitchy".
+                    proxy.scrollTo(entry.url, anchor: nil)
                 }
             }
         }
@@ -63,16 +66,16 @@ struct FileListView: View {
     /// Click-to-sort column titles. No divider under the header — the design
     /// language forbids separator lines; separation reads via spacing.
     private var header: some View {
-        HStack(spacing: FilesColumnMetrics.columnGap) {
+        HStack(spacing: AinkradSpacing.sm) {
             headerButton("Name", key: .name)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: AinkradSpacing.md)
             headerButton("Size", key: .size)
                 .frame(width: FilesColumnMetrics.sizeWidth, alignment: .trailing)
             headerButton("Modified", key: .modified)
                 .frame(width: FilesColumnMetrics.modifiedWidth, alignment: .trailing)
         }
         .padding(.horizontal, FilesColumnMetrics.headerInset)
-        .padding(.vertical, AinkradSpacing.sm)
+        .padding(.bottom, AinkradSpacing.xs)
     }
 
     private func headerButton(_ title: String, key: FileSortKey) -> some View {
@@ -86,16 +89,16 @@ struct FileListView: View {
                 tab.sortAscending = true
             }
         } label: {
-            HStack(spacing: AinkradSpacing.xs) {
+            HStack(spacing: 3) {
                 Text(title.uppercased())
-                    .font(.caption2)
-                    .tracking(0.8)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .tracking(0.9)
                 if tab.sortKey == key {
                     Image(systemName: tab.sortAscending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8))
+                        .font(.system(size: 7, weight: .bold))
                 }
             }
-            .foregroundStyle(theme.foreground.opacity(tab.sortKey == key ? 0.9 : 0.5))
+            .foregroundStyle(theme.foreground.opacity(tab.sortKey == key ? 0.75 : 0.4))
         }
         .buttonStyle(.plain)
     }

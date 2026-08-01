@@ -89,6 +89,59 @@ struct FilesTabCursorTests {
         #expect(tab.cursorIndex == 0)
     }
 
+    @Test("space toggles the cursor row in and out of the selection")
+    func toggleSelection() {
+        let tab = makeTab()
+        tab.toggleCursorSelection()
+        #expect(tab.selection.count == 1)
+        tab.toggleCursorSelection()
+        #expect(tab.selection.isEmpty)
+    }
+
+    @Test("clicking a row moves the cursor there")
+    func placeCursor() {
+        let tab = makeTab()
+        let target = tab.visibleEntries[2]
+        tab.placeCursor(at: target)
+        #expect(tab.cursorIndex == 2)
+        #expect(tab.selection == [target.url])
+    }
+
+    // `visibleEntries` is a CACHE, so every input that feeds it must
+    // invalidate it. A stale cache here would show the wrong files.
+    @Test("changing the sort key refreshes the cached listing")
+    func sortKeyInvalidatesCache() {
+        let tab = makeTab()
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", "a.txt", "b.txt"])
+        tab.sortAscending = false
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", "b.txt", "a.txt"])
+        tab.sortKey = .size
+        #expect(tab.visibleEntries.first?.name == "Documents")
+    }
+
+    @Test("toggling hidden files refreshes the cached listing")
+    func showHiddenInvalidatesCache() {
+        let fs = InMemoryFileSystem(home: home)
+        fs.add(directory: "/Users/test", children: ["a.txt", ".secret"])
+        let tab = FilesTab(directory: home, fileSystem: fs)
+        #expect(tab.visibleEntries.count == 1)
+        tab.showHidden = true
+        #expect(tab.visibleEntries.count == 2)
+        tab.showHidden = false
+        #expect(tab.visibleEntries.count == 1)
+    }
+
+    @Test("reloading refreshes the cached listing")
+    func reloadInvalidatesCache() {
+        let fs = InMemoryFileSystem(home: home)
+        fs.add(directory: "/Users/test", children: ["a.txt"])
+        let tab = FilesTab(directory: home, fileSystem: fs)
+        #expect(tab.visibleEntries.count == 1)
+        fs.add(directory: "/Users/test", children: ["a.txt", "b.txt"])
+        tab.reload()
+        #expect(tab.visibleEntries.count == 2)
+    }
+
     @Test("the cursor stays in range when the listing shrinks")
     func cursorSurvivesShrink() {
         let tab = makeTab()
