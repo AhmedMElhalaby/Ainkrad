@@ -6,6 +6,8 @@ import AinkradAppKitUI
 /// that component is an HP-bar segmented gauge, a different thing entirely.
 struct FilesStatusBar: View {
     let tab: FilesTab
+    /// Enclosing repo, when there is one.
+    let repoStatus: GitRepoStatus?
 
     var body: some View {
         HStack(spacing: AinkradSpacing.md) {
@@ -13,6 +15,9 @@ struct FilesStatusBar: View {
             Spacer()
             if tab.showHidden {
                 AinkradCaption("Hidden shown")
+            }
+            if let repoStatus {
+                AinkradCaption("\(repoStatus.root.lastPathComponent) · \(repoStatus.branch ?? "—")")
             }
         }
         .padding(.horizontal, FilesColumnMetrics.headerInset)

@@ -24,6 +24,7 @@ struct FilesRootView: View {
     private var settings: FilesSettingsStore { environment.filesSettingsStore }
     private var fileSystem: LocalFileSystemService { environment.filesSystemService }
     private var engine: FileOperationEngine { environment.filesOperationEngine }
+    private var git: GitStatusProvider { environment.filesGitStatusProvider }
 
     var body: some View {
         Group {
@@ -56,15 +57,25 @@ struct FilesRootView: View {
                     tab: store.activeTab,
                     iconSize: CGFloat(settings.iconSize),
                     rowPadding: settings.rowVerticalPadding,
-                    showMetadata: settings.showMetadataColumns
+                    showMetadata: settings.showMetadataColumns,
+                    gitStatus: { git.status(for: $0) }
                 )
-                FilesStatusBar(tab: store.activeTab)
+                FilesStatusBar(
+                    tab: store.activeTab,
+                    repoStatus: git.status(forDirectory: store.activeTab.currentDirectory))
+            }
+            if settings.showPreview {
+                PreviewPane(entry: store.activeTab.cursorEntry,
+                            itemCount: store.activeTab.visibleEntries.count)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .animation(.easeOut(duration: 0.18), value: settings.showPreview)
         .filesKeyboardHandling(
             store: store, actions: actions, undoStack: environment.filesUndoStack,
             onUndo: { if let refusal = engine.undo() { toast = refusal.message } },
             onRedo: { _ = engine.redo() },
+            onTogglePreview: { settings.showPreview.toggle() },
             isEditingPath: $isEditingPath)
         .overlay(alignment: .bottomTrailing) {
             OperationsPanel(engine: engine).padding(AinkradSpacing.md)
@@ -81,7 +92,11 @@ struct FilesRootView: View {
             watcher?.stop()
             watcher = DirectoryWatcher(url: directory) { [weak store] in
                 store?.activeTab.reload()
+                // The watcher's 200ms coalescing is what keeps a `git checkout`
+                // from spawning hundreds of status refreshes.
+                Task { await refreshGit(directory: directory, store: store) }
             }
+            Task { await refreshGit(directory: directory, store: store) }
         }
         // The coordinator needs to know which pane was last touched, so F5 in
         // a three-pane workspace targets the one the user actually means.
@@ -117,6 +132,20 @@ struct FilesRootView: View {
         self.actions = FilesActions(
             engine: engine, coordinator: environment.filesPaneCoordinator,
             resolver: resolver, store: store, paneToken: token)
+    }
+
+    /// Fetches status if cold, then republishes the ignore set so the list can
+    /// filter on it.
+    private func refreshGit(directory: URL, store: FilesPaneStore?) async {
+        await git.refreshIfNeeded(directory: directory)
+        guard let store, let status = git.status(forDirectory: directory) else {
+            store?.activeTab.ignoredURLs = []
+            return
+        }
+        let ignored = status.entries
+            .filter { $0.value == .ignored }
+            .map { status.root.appendingPathComponent($0.key) }
+        store.activeTab.ignoredURLs = Set(ignored)
     }
 
     private func deactivate() {

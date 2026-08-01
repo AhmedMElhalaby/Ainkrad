@@ -67,6 +67,10 @@ final class AppEnvironment {
     /// makes an assistant-initiated batch rename ⌘Z-able like any other.
     let filesUndoStack: UndoStack
     let filesOperationEngine: FileOperationEngine
+    /// Per-repo git status for the Files browser. Shelling out to `git`, cached
+    /// per repository — see `GitStatusProvider` for why the cache is the design
+    /// rather than an optimisation.
+    let filesGitStatusProvider: GitStatusProvider
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
     /// Assistant session-share (M8) — writes self-contained HTML share artifacts
@@ -375,6 +379,7 @@ final class AppEnvironment {
         self.filesUndoStack = filesUndoStack
         self.filesOperationEngine = FileOperationEngine(
             mutator: LocalFileMutator(), trash: SystemTrashService(), undoStack: filesUndoStack)
+        self.filesGitStatusProvider = GitStatusProvider(fileSystem: LocalFileSystemService())
         self.webSearchSettingsStore = webSearchSettingsStore
         self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore

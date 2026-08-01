@@ -111,6 +111,17 @@ enum FilesSettingsCatalog {
                     isModified: { store.iconSize != 13 },
                     reset: { store.iconSize = 13 }),
                 SettingsField(
+                    path: group.appending("preview"),
+                    label: "Preview pane",
+                    help: "Show a preview strip beside the list. ⌘Y toggles it.",
+                    keywords: ["preview", "quick look", "sidebar", "inspector"],
+                    kind: .toggle(Binding(
+                        get: { store.showPreview },
+                        set: { store.showPreview = $0 })),
+                    defaultDescription: "Off",
+                    isModified: { store.showPreview != false },
+                    reset: { store.showPreview = false }),
+                SettingsField(
                     path: group.appending("metadata-columns"),
                     label: "Show size and date",
                     help: "Turn off for a name-only list.",
