@@ -73,6 +73,9 @@ final class AppEnvironment {
     let filesGitStatusProvider: GitStatusProvider
     /// ⌘C/⌘X/⌘V, backed by `NSPasteboard` so it interoperates with the Finder.
     let filesClipboard: FilesClipboard
+    /// Sidebar favourites. App-wide rather than per-pane: a folder pinned in
+    /// one pane must appear in every pane.
+    let filesPinnedRoots: FilesPinnedRoots
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
     /// Assistant session-share (M8) — writes self-contained HTML share artifacts
@@ -383,6 +386,7 @@ final class AppEnvironment {
             mutator: LocalFileMutator(), trash: SystemTrashService(), undoStack: filesUndoStack)
         self.filesGitStatusProvider = GitStatusProvider(fileSystem: LocalFileSystemService())
         self.filesClipboard = FilesClipboard()
+        self.filesPinnedRoots = FilesPinnedRoots(persistence: persistence)
         self.webSearchSettingsStore = webSearchSettingsStore
         self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore

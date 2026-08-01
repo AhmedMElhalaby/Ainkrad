@@ -25,6 +25,17 @@ final class GitStatusProvider {
         self.fileSystem = fileSystem
     }
 
+    /// Every repo root seen so far this session, for the sidebar's
+    /// Repositories group.
+    ///
+    /// Deliberately "repos you have visited", not "repos on this machine":
+    /// finding the latter means walking the entire home folder looking for
+    /// `.git`, which is minutes of I/O to populate a sidebar. This costs
+    /// nothing and converges on the repos the user actually works in.
+    var knownRepositoryRoots: [URL] {
+        cache.keys.sorted().map { URL(fileURLWithPath: $0) }
+    }
+
     /// Cached status for the repo enclosing `directory`, or `nil` when it
     /// isn't in a repo or nothing has been fetched yet. Never spawns.
     func status(forDirectory directory: URL) -> GitRepoStatus? {

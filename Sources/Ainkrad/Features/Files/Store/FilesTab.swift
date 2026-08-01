@@ -40,10 +40,15 @@ final class FilesTab: Identifiable {
         didSet { if oldValue != showHidden { recomputeVisible() } }
     }
 
+    /// Separate from `showHidden`, because the two questions are different:
+    /// "show me dotfiles" is about the filesystem, "show me build output git
+    /// is ignoring" is about the project. In a repo with a large `node_modules`
+    /// they are emphatically not the same toggle.
+    var showIgnored = false {
+        didSet { if oldValue != showIgnored { recomputeVisible() } }
+    }
+
     /// Paths git reports as ignored, relative-resolved to absolute URLs.
-    /// Hidden alongside dotfiles under the same ⌘. affordance — a second
-    /// toggle for "show ignored" would be a distinction without a difference
-    /// for the people who want either.
     var ignoredURLs: Set<URL> = [] {
         didSet { if oldValue != ignoredURLs { recomputeVisible() } }
     }
@@ -74,9 +79,11 @@ final class FilesTab: Identifiable {
     }
 
     private func recomputeVisible() {
-        let visible = showHidden
-            ? entries
-            : entries.filter { !$0.isHidden && !ignoredURLs.contains($0.url) }
+        let visible = entries.filter { entry in
+            if entry.isHidden && !showHidden { return false }
+            if ignoredURLs.contains(entry.url) && !showIgnored { return false }
+            return true
+        }
         visibleEntries = sortedEntries(visible, by: sortKey, ascending: sortAscending)
         // A stale cursor pointing past the end of a smaller listing would make
         // arrow keys appear dead until the user scrolled back into range.

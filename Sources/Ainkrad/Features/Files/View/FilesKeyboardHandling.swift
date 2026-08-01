@@ -26,6 +26,8 @@ struct FilesKeyboardHandling: ViewModifier {
     let onTogglePreview: () -> Void
     let onOpenFinder: (FilesFinderMode) -> Void
     let onFocusFilter: () -> Void
+    /// ⌘D — pin or unpin the current directory in the sidebar.
+    let onTogglePin: () -> Void
     /// True while a finder palette owns the keyboard.
     let isFinderOpen: Bool
     /// Opt-in modal navigation. Off by default — see `FilesSettingsStore`.
@@ -33,6 +35,13 @@ struct FilesKeyboardHandling: ViewModifier {
     /// Shared with the pane; see `FilesFocusTarget`.
     var focus: FocusState<FilesFocusTarget?>.Binding
     @Binding var isEditingPath: Bool
+
+    /// Type-to-select state. Lives here rather than in the store because it is
+    /// keyboard ephemera — it must not survive a navigation, and nothing else
+    /// in the app has any business reading it.
+    @State private var typeAhead = TypeAheadBuffer()
+    /// When the last bare `g` arrived, for the `gg` double-tap.
+    @State private var lastGPress = Date.distantPast
 
     private var tab: FilesTab { store.activeTab }
 
@@ -140,11 +149,36 @@ struct FilesKeyboardHandling: ViewModifier {
                 tab.invertSelection()
                 return .handled
             }
-            // View toggles
-            .onKeyPress(keys: ["."], phases: .down) { press in
+            // View toggles. ⌘. is dotfiles; ⌘⇧. is git-ignored files — two
+            // different questions, so two toggles. ⇧. arrives as ">", which is
+            // why the shifted variant is bound by character rather than by
+            // checking the modifier on ".".
+            .onKeyPress(keys: [".", ">"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
-                tab.showHidden.toggle()
+                if press.modifiers.contains(.shift) || press.key.character == ">" {
+                    tab.showIgnored.toggle()
+                } else {
+                    tab.showHidden.toggle()
+                }
                 store.persist()
+                return .handled
+            }
+            // ⌘D pins the current folder. The design specified favourites but
+            // not how to add one; this is the chord, and the sidebar's context
+            // menu is how you take one away.
+            .onKeyPress(keys: ["d"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                onTogglePin()
+                return .handled
+            }
+            // ⌘1–9 jump straight to a tab. ⌘9 is the LAST tab, not the ninth —
+            // matching every browser, and the only version that stays useful
+            // when there are three tabs open.
+            .onKeyPress(keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+                        phases: .down) { press in
+                guard press.modifiers.contains(.command),
+                      let digit = press.key.character.wholeNumberValue else { return .ignored }
+                store.selectTab(at: digit == 9 ? store.tabs.count - 1 : digit - 1)
                 return .handled
             }
             // Opt-in vim layer. Bound ONLY when enabled, so type-to-select
@@ -157,10 +191,44 @@ struct FilesKeyboardHandling: ViewModifier {
                 case "k": tab.moveCursor(by: -1)
                 case "h": tab.ascend()
                 case "l": tab.activateCursor()
-                case "g": tab.moveCursorToStart()
+                case "g":
+                    // `gg`, as vim spells it: a lone `g` is a prefix waiting
+                    // for its second half, not a jump.
+                    let now = Date()
+                    if now.timeIntervalSince(lastGPress) < 0.6 {
+                        tab.moveCursorToStart()
+                        lastGPress = .distantPast
+                    } else {
+                        lastGPress = now
+                    }
                 case "G": tab.moveCursorToEnd()
                 default: return .ignored
                 }
+                return .handled
+            }
+            // Type-to-select. Bound to alphanumerics only, so it can never
+            // swallow arrows, Return or a chord — and it yields to the vim
+            // layer, which is the conflict that made vim keys opt-in.
+            .onKeyPress(characters: .alphanumerics, phases: .down) { press in
+                guard navigationEnabled,
+                      press.modifiers.isEmpty,
+                      let character = press.characters.first else { return .ignored }
+                if vimKeys && "hjklgG".contains(character) { return .ignored }
+
+                let names = tab.visibleEntries.map(\.name)
+                let query: String
+                let start: Int
+                switch typeAhead.append(character) {
+                case .search(let text): query = text; start = 0
+                case .nextMatch(let text): query = text; start = tab.cursorIndex + 1
+                }
+
+                // A miss is still HANDLED: falling through would hand the key
+                // to whatever else claims it, so a typo would suddenly trigger
+                // an unrelated command.
+                guard let index = typeAheadIndex(in: names, matching: query,
+                                                 from: start) else { return .handled }
+                tab.moveCursor(by: index - tab.cursorIndex)
                 return .handled
             }
             // Finder affordances. `/` filters here, ⌘F searches below here,
@@ -262,6 +330,7 @@ extension View {
                                onTogglePreview: @escaping () -> Void,
                                onOpenFinder: @escaping (FilesFinderMode) -> Void,
                                onFocusFilter: @escaping () -> Void,
+                               onTogglePin: @escaping () -> Void,
                                isFinderOpen: Bool,
                                vimKeys: Bool,
                                focus: FocusState<FilesFocusTarget?>.Binding,
@@ -271,6 +340,7 @@ extension View {
                                        onTogglePreview: onTogglePreview,
                                        onOpenFinder: onOpenFinder,
                                        onFocusFilter: onFocusFilter,
+                                       onTogglePin: onTogglePin,
                                        isFinderOpen: isFinderOpen,
                                        vimKeys: vimKeys,
                                        focus: focus,

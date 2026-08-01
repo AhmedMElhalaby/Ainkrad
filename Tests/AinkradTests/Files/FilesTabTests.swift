@@ -103,4 +103,29 @@ struct FilesTabTests {
         tab.descend(into: tab.visibleEntries.first { $0.name == "Documents" }!)
         #expect(tab.title == "Documents")
     }
+
+    // ⌘. and ⌘⇧. are different questions: "show me dotfiles" is about the
+    // filesystem, "show me what git is ignoring" is about the project. They
+    // were one toggle until 2026-08-01, which meant you could not see
+    // node_modules without also seeing every dotfile.
+    @Test("dotfiles and git-ignored files toggle independently")
+    func hiddenAndIgnoredAreSeparate() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        tab.ignoredURLs = [home.appendingPathComponent("notes.txt")]
+        #expect(tab.visibleEntries.map(\.name) == ["Documents"])
+
+        // Ignored only: notes.txt returns, the dotfile stays hidden.
+        tab.showIgnored = true
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", "notes.txt"])
+
+        // Hidden only: the dotfile returns, the ignored file goes away again.
+        tab.showIgnored = false
+        tab.showHidden = true
+        // Directories sort first, so the dotfile lands after "Documents".
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", ".hidden"])
+
+        tab.showIgnored = true
+        #expect(tab.visibleEntries.count == 3)
+    }
+
 }

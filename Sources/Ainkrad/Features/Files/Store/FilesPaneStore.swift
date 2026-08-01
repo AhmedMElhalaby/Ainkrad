@@ -51,6 +51,7 @@ final class FilesPaneStore {
             tabPaths: tabs.map(\.currentDirectory.path),
             activeTabIndex: activeTabIndex,
             showHidden: activeTab.showHidden,
+            showIgnored: activeTab.showIgnored,
             sortKey: activeTab.sortKey.rawValue,
             sortAscending: activeTab.sortAscending
         ))
@@ -73,6 +74,7 @@ final class FilesPaneStore {
             let target = fileSystem.isDirectory(url) ? url : home
             let tab = FilesTab(directory: target, fileSystem: fileSystem)
             tab.showHidden = document.showHidden
+            tab.showIgnored = document.showIgnored ?? false
             tab.sortKey = sortKey
             tab.sortAscending = document.sortAscending
             return tab

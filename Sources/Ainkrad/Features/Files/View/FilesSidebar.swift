@@ -6,25 +6,44 @@ import AinkradAppKitUI
 /// holding its own state — otherwise navigating by any other means would
 /// leave the sidebar highlighting the wrong row.
 struct FilesSidebar: View {
-    let roots: [SidebarRoot]
+    let sections: [SidebarSection]
     let currentDirectory: URL
     let iconSize: CGFloat
     let rowPadding: CGFloat
     let onSelect: (SidebarRoot) -> Void
+    /// Unpin a favourite. Only offered on removable sections.
+    let onRemove: (SidebarRoot) -> Void
 
     @Environment(\.ainkradTheme) private var theme
+    @Environment(\.ainkradTypography) private var typo
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(roots) { root in
-                    SidebarRootRow(
-                        root: root,
-                        isSelected: root.url == currentDirectory,
-                        iconSize: iconSize,
-                        rowPadding: rowPadding,
-                        onTap: { onSelect(root) }
-                    )
+                ForEach(sections) { section in
+                    if let title = section.title {
+                        Text(title.uppercased())
+                            .font(AinkradFontResolver.font(.caption, weight: .medium,
+                                                           typography: typo))
+                            .foregroundStyle(theme.foreground.opacity(0.4))
+                            .padding(.horizontal, AinkradSpacing.sm)
+                            .padding(.top, AinkradSpacing.md)
+                            .padding(.bottom, 2)
+                    }
+                    ForEach(section.roots) { root in
+                        SidebarRootRow(
+                            root: root,
+                            isSelected: root.url == currentDirectory,
+                            iconSize: iconSize,
+                            rowPadding: rowPadding,
+                            onTap: { onSelect(root) }
+                        )
+                        .contextMenu {
+                            if section.isRemovable {
+                                Button("Remove from Favourites") { onRemove(root) }
+                            }
+                        }
+                    }
                 }
             }
             .padding(.horizontal, AinkradSpacing.sm)

@@ -46,11 +46,15 @@ struct FilesRootView: View {
     private func paneBody(store: FilesPaneStore, actions: FilesActions) -> some View {
         HStack(spacing: 0) {
             FilesSidebar(
-                roots: standardRoots(home: fileSystem.homeDirectory),
+                sections: sidebarSections(
+                    home: fileSystem.homeDirectory,
+                    pinned: environment.filesPinnedRoots.roots,
+                    repositories: git.knownRepositoryRoots),
                 currentDirectory: store.activeTab.currentDirectory,
                 iconSize: CGFloat(settings.iconSize),
                 rowPadding: settings.rowVerticalPadding,
-                onSelect: { store.activeTab.navigate(to: $0.url) }
+                onSelect: { store.activeTab.navigate(to: $0.url) },
+                onRemove: { environment.filesPinnedRoots.unpin($0.url) }
             )
             VStack(spacing: 0) {
                 FilesTabStrip(store: store)
@@ -109,6 +113,18 @@ struct FilesRootView: View {
                 let searchStore = ensureSearch()
                 searchStore.scopedRoot = self.store?.activeTab.currentDirectory
                 focus = .search
+            },
+            onTogglePin: {
+                let directory = store.activeTab.currentDirectory
+                let pins = environment.filesPinnedRoots
+                let wasPinned = pins.isPinned(directory)
+                pins.toggle(directory)
+                // Say which way it went: a star appearing in a sidebar the eye
+                // isn't on reads as nothing happening.
+                toast = FilesToastMessage(
+                    kind: wasPinned ? .undone : .created,
+                    text: wasPinned ? "Removed from Favourites" : "Added to Favourites",
+                    detail: directory.lastPathComponent)
             },
             isFinderOpen: search?.isActive ?? false,
             vimKeys: settings.vimKeys,
