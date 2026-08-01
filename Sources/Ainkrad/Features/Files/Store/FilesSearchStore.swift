@@ -36,15 +36,6 @@ final class FilesSearchStore {
     /// Results of the in-pane scoped search, shown in the list itself.
     private(set) var scopedResults: [SearchHit] = []
     private(set) var isScopedSearching = false
-    /// Bumped to ask the in-pane field to take focus.
-    ///
-    /// A counter rather than a `Bool`, and owned by the STORE rather than
-    /// passed as a cross-view `@FocusState` binding: the keyboard container
-    /// has its own `.focusable()` + `.defaultFocus`, and two views writing one
-    /// focus binding fight over it — which is why ⌘⇧F appeared to do nothing.
-    /// The field owns its own focus state and simply reacts to this changing.
-    private(set) var focusRequests = 0
-
     /// The directory the scoped search runs under — updated on navigation.
     var scopedRoot: URL? {
         didSet { if scopedRoot != oldValue, !scopedText.isEmpty { scheduleScopedSearch() } }
@@ -92,8 +83,6 @@ final class FilesSearchStore {
         results = []
         isSearching = false
     }
-
-    func requestFocus() { focusRequests += 1 }
 
     func clearScoped() {
         scopedText = ""

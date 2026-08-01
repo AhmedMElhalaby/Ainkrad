@@ -15,8 +15,8 @@ import AinkradAppKitUI
 struct FilesFilterField: View {
     @Bindable var search: FilesSearchStore
 
-    /// Owned here, not passed in. See `FilesSearchStore.focusRequests`.
-    @FocusState private var focused: Bool
+    /// The pane's ONE focus state — not a private one. See `FilesFocusTarget`.
+    var focus: FocusState<FilesFocusTarget?>.Binding
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradTypography) private var typo
@@ -31,11 +31,11 @@ struct FilesFilterField: View {
             TextField("Search here  ⌥F", text: $search.scopedText)
                 .textFieldStyle(.plain)
                 .font(AinkradFontResolver.font(.caption, typography: typo))
-                .focused($focused)
+                .focused(focus, equals: .search)
                 .frame(width: 150)
                 .onExitCommand {
                     search.clearScoped()
-                    focused = false
+                    focus.wrappedValue = .list
                 }
 
             if search.isScoped {
@@ -57,16 +57,13 @@ struct FilesFilterField: View {
                 .fill(theme.foreground.opacity(search.isScoped ? 0.10 : 0.06))
         )
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: search.isScoped)
-        .onChange(of: search.focusRequests) { _, _ in focused = true }
-        // `onChange` does not fire for the value a view is BORN with, so a
-        // request that arrives in the same render pass that creates this field
-        // would otherwise be dropped.
-        .onAppear { if search.focusRequests > 0 { focused = true } }
-        // A visible focus ring: without it, ⌘⇧F looks like it did nothing even
+        .onTapGesture { focus.wrappedValue = .search }
+        // A visible focus ring: without it, ⌥F looks like it did nothing even
         // when the caret is sitting in the field.
         .overlay(
             ChamferShape(cut: 4)
-                .strokeBorder(theme.accentSecondary.opacity(focused ? 0.7 : 0), lineWidth: 1)
+                .strokeBorder(theme.accentSecondary.opacity(
+                    focus.wrappedValue == .search ? 0.7 : 0), lineWidth: 1)
         )
     }
 }

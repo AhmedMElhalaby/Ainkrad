@@ -21,6 +21,8 @@ struct FilesRootView: View {
     @State private var watcher: DirectoryWatcher?
     @State private var toast: FilesToastMessage?
     @State private var search: FilesSearchStore?
+    /// The pane's ONE focus state, shared by the list and the search field.
+    @FocusState private var focus: FilesFocusTarget?
 
     private var settings: FilesSettingsStore { environment.filesSettingsStore }
     private var fileSystem: LocalFileSystemService { environment.filesSystemService }
@@ -56,7 +58,7 @@ struct FilesRootView: View {
                     FilesBreadcrumbBar(tab: store.activeTab, fileSystem: fileSystem,
                                        isEditing: $isEditingPath)
                     if let search {
-                        FilesFilterField(search: search)
+                        FilesFilterField(search: search, focus: $focus)
                             .padding(.trailing, FilesColumnMetrics.headerInset)
                     }
                 }
@@ -106,10 +108,11 @@ struct FilesRootView: View {
             onFocusFilter: {
                 let searchStore = ensureSearch()
                 searchStore.scopedRoot = self.store?.activeTab.currentDirectory
-                searchStore.requestFocus()
+                focus = .search
             },
             isFinderOpen: search?.isActive ?? false,
             vimKeys: settings.vimKeys,
+            focus: $focus,
             isEditingPath: $isEditingPath)
         .overlay(alignment: .top) {
             if let search, search.isActive {
@@ -129,7 +132,9 @@ struct FilesRootView: View {
             FilesKeyMonitor(onFocusScopedSearch: {
                 let searchStore = ensureSearch()
                 searchStore.scopedRoot = store.activeTab.currentDirectory
-                searchStore.requestFocus()
+                // Set the shared focus target directly — no request counter,
+                // no second focus state to lose a race with.
+                focus = .search
             })
             .frame(width: 0, height: 0)
         )

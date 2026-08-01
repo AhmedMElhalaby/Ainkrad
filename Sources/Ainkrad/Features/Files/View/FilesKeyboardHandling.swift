@@ -1,6 +1,19 @@
 import SwiftUI
 import AppKit
 
+/// The single thing that can hold keyboard focus in a Files pane.
+///
+/// ONE `@FocusState` for the whole pane, deliberately. The list container and
+/// the search field previously owned separate focus states, and because the
+/// container WRAPS the field, its `.focused(...)` kept re-asserting itself and
+/// pulled focus straight back off the field — which is why ⌥F (and ⌘⇧F before
+/// it) appeared to do nothing. With one shared value they cannot compete:
+/// focus is wherever this says it is.
+enum FilesFocusTarget: Hashable {
+    case list
+    case search
+}
+
 /// Attaches the M1 key map to the pane. A `ViewModifier` rather than scattered
 /// `.onKeyPress` calls so the whole map is readable in one place — and so M2
 /// can extend it without touching the views.
@@ -17,8 +30,9 @@ struct FilesKeyboardHandling: ViewModifier {
     let isFinderOpen: Bool
     /// Opt-in modal navigation. Off by default — see `FilesSettingsStore`.
     let vimKeys: Bool
+    /// Shared with the pane; see `FilesFocusTarget`.
+    var focus: FocusState<FilesFocusTarget?>.Binding
     @Binding var isEditingPath: Bool
-    @FocusState private var keyboardFocus: Bool
 
     private var tab: FilesTab { store.activeTab }
 
@@ -29,7 +43,12 @@ struct FilesKeyboardHandling: ViewModifier {
     /// wants those.
     /// The path editor AND the finder palettes both take the keyboard: while
     /// either is up, unmodified keys belong to their text field.
-    private var navigationEnabled: Bool { !isEditingPath && !isFinderOpen }
+    /// Navigation keys belong to the list only while the list actually has
+    /// focus — never while the user is typing in the search field or the path
+    /// editor.
+    private var navigationEnabled: Bool {
+        !isEditingPath && !isFinderOpen && focus.wrappedValue == .list
+    }
 
     /// Function keys are private-use unicode scalars, not `KeyEquivalent`
     /// members — `.f5` does not exist. These are the AppKit `NSF*FunctionKey`
@@ -54,12 +73,12 @@ struct FilesKeyboardHandling: ViewModifier {
     func body(content: Content) -> some View {
         content
             // Focused on appear, so the key map is live the moment the pane
-            // opens. Without this the user had to click the list first, which
-            // reads as "the keyboard doesn't work".
+            // opens. NOTE: no `.defaultFocus` — it re-asserted itself over the
+            // search field every render.
             .focusable()
             .focusEffectDisabled()
-            .defaultFocus($keyboardFocus, true)
-            .focused($keyboardFocus)
+            .focused(focus, equals: .list)
+            .onAppear { if focus.wrappedValue == nil { focus.wrappedValue = .list } }
             // Navigation — suppressed while the path editor is focused.
             // Arrows move the CURSOR only. They used to rewrite `selection`
             // on every press, which invalidated every row's membership check
@@ -245,6 +264,7 @@ extension View {
                                onFocusFilter: @escaping () -> Void,
                                isFinderOpen: Bool,
                                vimKeys: Bool,
+                               focus: FocusState<FilesFocusTarget?>.Binding,
                                isEditingPath: Binding<Bool>) -> some View {
         modifier(FilesKeyboardHandling(store: store, actions: actions, undoStack: undoStack,
                                        onUndo: onUndo, onRedo: onRedo,
@@ -253,6 +273,7 @@ extension View {
                                        onFocusFilter: onFocusFilter,
                                        isFinderOpen: isFinderOpen,
                                        vimKeys: vimKeys,
+                                       focus: focus,
                                        isEditingPath: isEditingPath))
     }
 }
