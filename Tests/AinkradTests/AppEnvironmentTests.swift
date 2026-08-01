@@ -208,10 +208,10 @@ final class AppEnvironmentTests {
         defer { t.cleanup() }
         let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        // Terminal is an App Store plugin, not built-in; Assistant and Canvas
-        // are the compiled-in built-ins the host registers itself (M5 Phase B,
-        // M7 Slice 7).
-        #expect(environment.registry.allApps.map(\.id) == ["assistant", "canvas"])
+        // Terminal is an App Store plugin, not built-in; Assistant, Canvas and
+        // Files are the compiled-in built-ins the host registers itself
+        // (M5 Phase B, M7 Slice 7, Files M1).
+        #expect(environment.registry.allApps.map(\.id) == ["assistant", "canvas", "files"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)
