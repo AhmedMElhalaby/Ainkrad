@@ -20,6 +20,7 @@ struct FilesRootView: View {
     @State private var isEditingPath = false
     @State private var watcher: DirectoryWatcher?
     @State private var toast: String?
+    @State private var search: FilesSearchStore?
 
     private var settings: FilesSettingsStore { environment.filesSettingsStore }
     private var fileSystem: LocalFileSystemService { environment.filesSystemService }
@@ -58,6 +59,7 @@ struct FilesRootView: View {
                     iconSize: CGFloat(settings.iconSize),
                     rowPadding: settings.rowVerticalPadding,
                     showMetadata: settings.showMetadataColumns,
+                    filter: { search?.filtered($0) ?? $0 },
                     gitStatus: { git.status(for: $0) }
                 )
                 FilesStatusBar(
@@ -76,7 +78,21 @@ struct FilesRootView: View {
             onUndo: { if let refusal = engine.undo() { toast = refusal.message } },
             onRedo: { _ = engine.redo() },
             onTogglePreview: { settings.showPreview.toggle() },
+            onOpenFinder: { mode in openFinder(mode, store: store) },
+            isFinderOpen: search?.isActive ?? false,
             isEditingPath: $isEditingPath)
+        .overlay(alignment: .top) {
+            if let search, search.isActive {
+                FilesFinderBar(
+                    search: search,
+                    iconSize: CGFloat(settings.iconSize),
+                    onSubmit: { hit in accept(hit, store: store) },
+                    onRunSearch: { search.runSearch(root: store.activeTab.currentDirectory) },
+                    onClose: { search.close() })
+                    .padding(.top, AinkradSpacing.lg)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             OperationsPanel(engine: engine).padding(AinkradSpacing.md)
         }
@@ -121,6 +137,28 @@ struct FilesRootView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: toast)
+    }
+
+    /// `/` and ⌘P work off data already in memory; ⌘F walks the disk, so it
+    /// only starts when the user commits with Return.
+    private func openFinder(_ mode: FilesFinderMode, store: FilesPaneStore) {
+        let search = self.search ?? FilesSearchStore(fileSystem: fileSystem)
+        self.search = search
+        search.open(mode)
+        if mode == .jump {
+            search.loadJumpCandidates(root: store.activeTab.currentDirectory)
+        }
+    }
+
+    private func accept(_ hit: SearchHit, store: FilesPaneStore) {
+        let tab = store.activeTab
+        if hit.entry.isDirectory {
+            tab.navigate(to: hit.entry.url)
+        } else {
+            tab.navigate(to: hit.entry.url.deletingLastPathComponent())
+            tab.select(matching: hit.entry.url)
+        }
+        search?.close()
     }
 
     private func activate() {

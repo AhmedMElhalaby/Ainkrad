@@ -8,6 +8,9 @@ struct FileListView: View {
     let iconSize: CGFloat
     let rowPadding: CGFloat
     let showMetadata: Bool
+    /// Applies the `/` filter, when one is open. A closure so the list stays
+    /// unaware of the search store.
+    let filter: ([FileEntry]) -> [FileEntry]
     /// Resolves a row's git state. A closure rather than the provider itself so
     /// the list stays testable and unaware of how status is fetched.
     let gitStatus: (URL) -> GitFileStatus?
@@ -35,7 +38,7 @@ struct FileListView: View {
         if let error = tab.loadError {
             AinkradErrorState(message: error, retryTitle: "Retry") { tab.reload() }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if tab.visibleEntries.isEmpty {
+        } else if filter(tab.visibleEntries).isEmpty {
             AinkradEmptyState(icon: "folder", title: "Empty",
                               message: "This folder has nothing to show.")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -43,7 +46,7 @@ struct FileListView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 1) {
-                        ForEach(tab.visibleEntries) { entry in
+                        ForEach(filter(tab.visibleEntries)) { entry in
                             FileRowView(
                                 entry: entry,
                                 isCursor: tab.cursorEntry == entry,

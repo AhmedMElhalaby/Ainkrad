@@ -11,6 +11,9 @@ struct FilesKeyboardHandling: ViewModifier {
     let onUndo: () -> Void
     let onRedo: () -> Void
     let onTogglePreview: () -> Void
+    let onOpenFinder: (FilesFinderMode) -> Void
+    /// True while a finder palette owns the keyboard.
+    let isFinderOpen: Bool
     @Binding var isEditingPath: Bool
     @FocusState private var keyboardFocus: Bool
 
@@ -21,7 +24,9 @@ struct FilesKeyboardHandling: ViewModifier {
     /// through a path you are typing must move the caret, not the file cursor.
     /// Command-modified bindings stay live throughout, since the field never
     /// wants those.
-    private var navigationEnabled: Bool { !isEditingPath }
+    /// The path editor AND the finder palettes both take the keyboard: while
+    /// either is up, unmodified keys belong to their text field.
+    private var navigationEnabled: Bool { !isEditingPath && !isFinderOpen }
 
     /// Function keys are private-use unicode scalars, not `KeyEquivalent`
     /// members — `.f5` does not exist. These are the AppKit `NSF*FunctionKey`
@@ -104,6 +109,24 @@ struct FilesKeyboardHandling: ViewModifier {
                 store.persist()
                 return .handled
             }
+            // Finder affordances. `/` filters here, ⌘F searches below here,
+            // ⌘P jumps across the tree — three different questions, so three
+            // different entry points rather than one overloaded box.
+            .onKeyPress(keys: ["/"], phases: .down) { _ in
+                guard navigationEnabled else { return .ignored }
+                onOpenFinder(.filter)
+                return .handled
+            }
+            .onKeyPress(keys: ["f"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                onOpenFinder(.search)
+                return .handled
+            }
+            .onKeyPress(keys: ["p"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                onOpenFinder(.jump)
+                return .handled
+            }
             // Preview strip — ⌘Y, matching Quick Look's muscle memory.
             .onKeyPress(keys: ["y"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
@@ -172,10 +195,14 @@ extension View {
                                onUndo: @escaping () -> Void,
                                onRedo: @escaping () -> Void,
                                onTogglePreview: @escaping () -> Void,
+                               onOpenFinder: @escaping (FilesFinderMode) -> Void,
+                               isFinderOpen: Bool,
                                isEditingPath: Binding<Bool>) -> some View {
         modifier(FilesKeyboardHandling(store: store, actions: actions, undoStack: undoStack,
                                        onUndo: onUndo, onRedo: onRedo,
                                        onTogglePreview: onTogglePreview,
+                                       onOpenFinder: onOpenFinder,
+                                       isFinderOpen: isFinderOpen,
                                        isEditingPath: isEditingPath))
     }
 }
