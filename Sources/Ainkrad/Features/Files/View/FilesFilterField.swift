@@ -13,7 +13,9 @@ import AinkradAppKitUI
 /// and hiding it behind a keystroke means most people never find it.
 struct FilesFilterField: View {
     @Bindable var search: FilesSearchStore
-    var isFocused: FocusState<Bool>.Binding
+
+    /// Owned here, not passed in. See `FilesSearchStore.focusRequests`.
+    @FocusState private var focused: Bool
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradTypography) private var typo
@@ -28,11 +30,11 @@ struct FilesFilterField: View {
             TextField("Search here", text: $search.scopedText)
                 .textFieldStyle(.plain)
                 .font(AinkradFontResolver.font(.caption, typography: typo))
-                .focused(isFocused)
+                .focused($focused)
                 .frame(width: 150)
                 .onExitCommand {
                     search.clearScoped()
-                    isFocused.wrappedValue = false
+                    focused = false
                 }
 
             if search.isScoped {
@@ -54,5 +56,16 @@ struct FilesFilterField: View {
                 .fill(theme.foreground.opacity(search.isScoped ? 0.10 : 0.06))
         )
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: search.isScoped)
+        .onChange(of: search.focusRequests) { _, _ in focused = true }
+        // `onChange` does not fire for the value a view is BORN with, so a
+        // request that arrives in the same render pass that creates this field
+        // would otherwise be dropped.
+        .onAppear { if search.focusRequests > 0 { focused = true } }
+        // A visible focus ring: without it, ⌘⇧F looks like it did nothing even
+        // when the caret is sitting in the field.
+        .overlay(
+            ChamferShape(cut: 4)
+                .strokeBorder(theme.accentSecondary.opacity(focused ? 0.7 : 0), lineWidth: 1)
+        )
     }
 }

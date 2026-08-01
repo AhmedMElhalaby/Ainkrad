@@ -21,7 +21,6 @@ struct FilesRootView: View {
     @State private var watcher: DirectoryWatcher?
     @State private var toast: FilesToastMessage?
     @State private var search: FilesSearchStore?
-    @FocusState private var filterFocused: Bool
 
     private var settings: FilesSettingsStore { environment.filesSettingsStore }
     private var fileSystem: LocalFileSystemService { environment.filesSystemService }
@@ -57,7 +56,7 @@ struct FilesRootView: View {
                     FilesBreadcrumbBar(tab: store.activeTab, fileSystem: fileSystem,
                                        isEditing: $isEditingPath)
                     if let search {
-                        FilesFilterField(search: search, isFocused: $filterFocused)
+                        FilesFilterField(search: search)
                             .padding(.trailing, FilesColumnMetrics.headerInset)
                     }
                 }
@@ -105,9 +104,9 @@ struct FilesRootView: View {
             onTogglePreview: { settings.showPreview.toggle() },
             onOpenFinder: { mode in openFinder(mode, store: store) },
             onFocusFilter: {
-                let store = ensureSearch()
-                store.scopedRoot = self.store?.activeTab.currentDirectory
-                filterFocused = true
+                let searchStore = ensureSearch()
+                searchStore.scopedRoot = self.store?.activeTab.currentDirectory
+                searchStore.requestFocus()
             },
             isFinderOpen: search?.isActive ?? false,
             vimKeys: settings.vimKeys,
