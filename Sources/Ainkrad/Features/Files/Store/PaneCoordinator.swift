@@ -27,6 +27,40 @@ final class PaneCoordinator {
 
     var paneCount: Int { panes.count }
 
+    /// The pane the user last touched, for tools that act on "the" browser.
+    /// Falls back to the first registered pane so a tool still works before
+    /// anything has been focused.
+    var frontmostPane: FilesPaneStore? {
+        for token in focusOrder.reversed() {
+            if let pane = panes.first(where: { $0.token == token }) { return pane.store }
+        }
+        return panes.first?.store
+    }
+
+    /// Directories currently open across all panes — the scope
+    /// `FilesToolScope` measures an assistant's inferred paths against.
+    var openDirectories: [URL] {
+        panes.map { $0.store.activeTab.currentDirectory }
+    }
+
+    /// One-line summary published to `agentContextHub`, so the assistant knows
+    /// what the user is looking at without being asked.
+    var contextSummary: String? {
+        guard let pane = frontmostPane else { return nil }
+        let tab = pane.activeTab
+        var lines = ["Directory: \(tab.currentDirectory.path)",
+                     "Items: \(tab.visibleEntries.count)"]
+        if !tab.selection.isEmpty {
+            let names = tab.visibleEntries
+                .filter { tab.selection.contains($0.url) }
+                .map(\.name)
+            lines.append("Selected (\(names.count)): \(names.prefix(20).joined(separator: ", "))")
+        } else if let cursor = tab.cursorEntry {
+            lines.append("Cursor: \(cursor.name)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     func register(_ store: FilesPaneStore) -> UUID {
         let token = UUID()
         panes.append(Pane(token: token, store: store))

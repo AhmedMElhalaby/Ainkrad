@@ -108,6 +108,35 @@ extension AppEnvironment {
                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
+        // Files' MCP server and agent context are built HERE, not in
+        // `FilesApp`, for the same reason its settings are: the SDK entry
+        // points are static and see only `HostServices`, while the server must
+        // drive the live stores on `AppEnvironment`. Files is host-embedded, so
+        // the host is entitled to wire it directly.
+        var filesRegistration = RegisteredApp.builtIn(
+            FilesApp.self,
+            summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
+            host: filesHost,
+            chromeFillOverride: {
+                FilesApp.surfaceFill(
+                    opacity: appAppearanceStore.surfaceOpacity("files"),
+                    base: themeManager.tokens.background
+                )
+            })
+        filesRegistration.mcpServerFactory = { [weak environment] in
+            guard let environment else { return MCPAppServer(appID: FilesApp.id) }
+            return FilesMCPServer.make(environment: environment)
+        }
+
+        // Publish what the user is looking at, so the assistant has the
+        // browser's state without having to ask for it.
+        _ = filesHost.context.register { [weak environment] in
+            guard let environment,
+                  let summary = environment.filesPaneCoordinator.contextSummary else { return nil }
+            return AgentContextSnapshot(
+                kind: "files", title: "Files", text: summary)
+        }
+
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
             builtIn: [
@@ -131,22 +160,7 @@ extension AppEnvironment {
                     CanvasApp.self,
                     summary: "The Live Canvas — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
                     host: canvasHost),
-                RegisteredApp.builtIn(
-                    FilesApp.self,
-                    summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
-                    host: filesHost,
-                    // Same contract as the Assistant: reading `surfaceOpacity`
-                    // inside this closure — invoked synchronously from
-                    // `TileLayoutView.hasTranslucentPane` and
-                    // `BlockView.headerBackground` during their view bodies —
-                    // registers an @Observable dependency, so dragging the
-                    // slider live re-evaluates the backdrop AND the title bar.
-                    chromeFillOverride: {
-                        FilesApp.surfaceFill(
-                            opacity: appAppearanceStore.surfaceOpacity("files"),
-                            base: themeManager.tokens.background
-                        )
-                    })
+                filesRegistration
             ],
             loaded: loaded.apps,
             failures: loaded.failures
