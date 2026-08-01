@@ -138,22 +138,24 @@ struct SetupYouStepView: View {
     /// wide text field. That is the accepted trade.
     private func fieldGrid(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            field(tokens: tokens, title: "Name",
-                  subtitle: "Your full name.",
-                  placeholder: "Ada Lovelace",
-                  text: $name, key: "name")
-            field(tokens: tokens, title: "What to call you",
-                  subtitle: "How the assistant addresses you.",
-                  placeholder: "Ada",
-                  text: $callMe, key: "callMe")
-            field(tokens: tokens, title: "Role",
-                  subtitle: "What you do — it shapes the assistant's defaults.",
-                  placeholder: "Engineer",
-                  text: $role, key: "role")
-            field(tokens: tokens, title: "Timezone",
-                  subtitle: "Used for scheduling and time-aware answers.",
-                  placeholder: TimeZone.current.identifier,
-                  text: $timezone, key: "timezone")
+            ForEach(UserProfileField.all) { profileField in
+                field(tokens: tokens, title: profileField.title,
+                      subtitle: profileField.hint,
+                      placeholder: profileField.placeholder,
+                      text: binding(for: profileField.key), key: profileField.key)
+            }
+        }
+    }
+
+    /// Maps a `UserProfileField.key` to this step's own `@State` binding — the
+    /// bindings themselves are unchanged, only how `fieldGrid` reaches them.
+    private func binding(for key: String) -> Binding<String> {
+        switch key {
+        case "name": return $name
+        case "callMe": return $callMe
+        case "role": return $role
+        case "timezone": return $timezone
+        default: return .constant("")
         }
     }
 

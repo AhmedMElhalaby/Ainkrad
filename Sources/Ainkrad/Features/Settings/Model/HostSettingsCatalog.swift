@@ -16,6 +16,7 @@ enum HostSettingsCatalog {
     static func build(environment: AppEnvironment) -> SettingsCatalog {
         SettingsCatalog(pages: [
             general(environment),
+            you(environment),
             appearance(environment),
             soundAndVoice(environment),
             keyboard(environment)
@@ -68,13 +69,33 @@ enum HostSettingsCatalog {
             ])
     }
 
+    // MARK: - You
+
+    /// The wizard's You step, made editable after first run.
+    private static func you(_ environment: AppEnvironment) -> SettingsPage {
+        let page = SettingsPath(["workspace", "you"])
+        return SettingsPage(
+            path: page, title: "You", icon: "person",
+            group: .workspace, order: 1,
+            groups: [
+                SettingsGroup(path: page.appending("profile"), title: "Profile", fields: [
+                    SettingsField(
+                        path: page.appending("profile").appending("fields"),
+                        label: "About you",
+                        help: "Your name, role and timezone, as the assistant knows them.",
+                        keywords: ["name", "profile", "role", "timezone", "about me", "user"],
+                        kind: .custom(AnyView(UserProfileSettingsView())))
+                ])
+            ])
+    }
+
     // MARK: - Appearance (theme + Living Sky + App Icon merged)
 
     private static func appearance(_ environment: AppEnvironment) -> SettingsPage {
         let page = SettingsPath(["workspace", "appearance"])
         return SettingsPage(
             path: page, title: "Appearance", icon: "paintbrush",
-            group: .workspace, order: 1,
+            group: .workspace, order: 2,
             groups: [
                 SettingsGroup(path: page.appending("theme"), title: "Theme", fields: [
                     SettingsField(
@@ -116,7 +137,7 @@ enum HostSettingsCatalog {
         let tokens = environment.themeManager.tokens
         return SettingsPage(
             path: page, title: "Sound & Voice", icon: "speaker.wave.2",
-            group: .workspace, order: 2,
+            group: .workspace, order: 3,
             groups: [
                 // Sound stays a `.custom` pane DELIBERATELY. It was decomposed
                 // in Task 7 and reverted after review: each of the 13 `UISound`
@@ -287,7 +308,7 @@ enum HostSettingsCatalog {
         let page = SettingsPath(["workspace", "keyboard"])
         return SettingsPage(
             path: page, title: "Keyboard", icon: "keyboard",
-            group: .workspace, order: 3,
+            group: .workspace, order: 4,
             groups: [
                 SettingsGroup(path: page.appending("shortcuts"), title: "Shortcuts", fields: [
                     SettingsField(

@@ -55,12 +55,17 @@ struct SettingsKitCompositionTests {
         //   23  Sound reverted at the review gate — one field per control made
         //       each of 13 sound events three near-duplicate rows. Voice stayed
         //       decomposed (−1 pane), Sound came back (+1 pane), net 23.
+        //   24  Task 10 added the You page — one `.custom` field
+        //       (`UserProfileSettingsView`) hosting the four profile facts as a
+        //       single unit, deliberately, for the same reason Sound stayed a
+        //       pane: one row per fact would just be four near-identical text
+        //       fields with no shared framing.
         //
-        // So this is a HOLD, not a loosening: the number is back where it
-        // started because the Sound pane returned, and it may not grow past it.
-        // It drops again when the SDK gains a composite row kind and Sound can
-        // be converted properly — see the note in `HostSettingsCatalog`.
-        let ceiling = 23
+        // So this is a HOLD except for that one deliberate addition: it may not
+        // grow past 24 without a similar reason. It drops again when the SDK
+        // gains a composite row kind and Sound can be converted properly — see
+        // the note in `HostSettingsCatalog`.
+        let ceiling = 24
         let catalog = HostSettingsCatalog.build(environment: .preview())
         let customCount = catalog.allFields.filter {
             if case .custom = $0.kind { return true }
