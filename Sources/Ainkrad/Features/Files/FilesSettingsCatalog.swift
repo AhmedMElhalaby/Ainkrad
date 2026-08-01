@@ -113,7 +113,7 @@ enum FilesSettingsCatalog {
                 SettingsField(
                     path: group.appending("preview"),
                     label: "Preview pane",
-                    help: "Show a preview strip beside the list. ⌘Y toggles it.",
+                    help: "Show a preview strip beside the list. ⌘Y toggles it. (⌥F focuses the in-pane search; ⌘F searches everywhere.)",
                     keywords: ["preview", "quick look", "sidebar", "inspector"],
                     kind: .toggle(Binding(
                         get: { store.showPreview },

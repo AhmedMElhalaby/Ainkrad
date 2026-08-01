@@ -4,10 +4,11 @@ import AinkradAppKitUI
 
 /// The always-present scoped search field, sitting in the breadcrumb row.
 ///
-/// Searches recursively BELOW the pane's current folder, live. ⌘⇧F focuses it;
+/// Searches recursively BELOW the pane's current folder, live. ⌥F focuses it;
 /// ⌘F is the separate global palette, because "find that file" is usually a
 /// question about the whole machine while this one is explicitly "find it under
-/// here".
+/// here". (⌥F rather than ⌘⇧F: that chord is claimed above the app and never
+/// arrives — see `FilesKeyMonitor`.)
 ///
 /// Permanently visible rather than summoned: scoped search is the common case,
 /// and hiding it behind a keystroke means most people never find it.
@@ -27,7 +28,7 @@ struct FilesFilterField: View {
                 .font(.system(size: 10))
                 .foregroundStyle(theme.foreground.opacity(search.isScoped ? 0.8 : 0.4))
 
-            TextField("Search here", text: $search.scopedText)
+            TextField("Search here  ⌥F", text: $search.scopedText)
                 .textFieldStyle(.plain)
                 .font(AinkradFontResolver.font(.caption, typography: typo))
                 .focused($focused)

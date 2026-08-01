@@ -87,19 +87,29 @@ extension FileOperationEngine {
     }
 
     /// The check that makes undo trustworthy: refuse when the world moved on.
+    ///
+    /// Only files that STILL EXIST can have been externally modified. A
+    /// restore-from-trash inverse names paths that are absent by definition —
+    /// that is what being in the Trash means — so treating "missing" as a
+    /// problem refused exactly the undo the Trash exists to make possible.
+    ///
+    /// Availability is judged on the enclosing DIRECTORY, not the item: asking
+    /// a vanished path for its volume tells you nothing, while asking its
+    /// parent tells you whether the disk is still mounted.
     private func refusal(for entry: InverseOperation) -> UndoRefusal? {
         for url in entry.affectedURLs {
-            guard let modified = mutatorModificationDate(url) else {
-                // Missing is fine for a `.delete` inverse (nothing to remove),
-                // so absence alone is not a refusal — only an unreachable
-                // VOLUME is.
-                if mutatorVolumeIdentifier(url) == nil { return .unavailable(url) }
+            if let modified = mutatorModificationDate(url) {
+                // A tolerance, not equality: filesystem timestamps have coarse
+                // resolution and the write completes microseconds after we
+                // record.
+                if modified.timeIntervalSince(entry.recordedAt) > 1.0 {
+                    return .externallyModified(url)
+                }
                 continue
             }
-            // A tolerance, not equality: filesystem timestamps have coarse
-            // resolution and the write completes microseconds after we record.
-            if modified.timeIntervalSince(entry.recordedAt) > 1.0 {
-                return .externallyModified(url)
+            // Absent. Only a genuinely unreachable volume is a refusal.
+            if mutatorVolumeIdentifier(url.deletingLastPathComponent()) == nil {
+                return .unavailable(url)
             }
         }
         return nil

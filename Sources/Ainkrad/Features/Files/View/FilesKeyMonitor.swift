@@ -4,17 +4,19 @@ import SwiftUI
 /// Local `keyDown` monitor for Files' chorded shortcuts.
 ///
 /// Follows `ComposerTabCycleMonitor`'s established pattern rather than
-/// SwiftUI's `.onKeyPress`. Two rounds of trying to make ⌘⇧F work through
-/// `onKeyPress` failed: the modifier chord either never matched, or the
-/// container's focus was elsewhere so the handler never ran at all. A local
-/// monitor sees the event regardless of which subview holds focus, which is
-/// exactly why the Assistant reaches for one too.
+/// SwiftUI's `.onKeyPress`, which only fires while its container holds focus —
+/// unreliable in a pane where the caret may be in the list, the breadcrumb or
+/// a field. A local monitor sees the event whoever has focus.
 ///
-/// Matching is by `keyCode`, not by character: with Shift held the character
-/// becomes "F", and matching on the character is what made the SwiftUI
-/// version's key set unreliable in the first place.
+/// **⌥F, not ⌘⇧F.** The original chord never reached the app even through this
+/// monitor, which means it is claimed above us — a local monitor runs before
+/// the app's own responder chain but AFTER system-level bindings, so anything
+/// macOS or another app has taken is simply invisible here. ⌥F is unclaimed.
+///
+/// Matching is by `keyCode`, never by character: ⌥F produces "ƒ", so character
+/// matching would silently fail exactly the way the SwiftUI version did.
 struct FilesKeyMonitor: NSViewRepresentable {
-    /// ⌘⇧F — focus the in-pane scoped search field.
+    /// ⌥F — focus the in-pane scoped search field.
     let onFocusScopedSearch: () -> Void
 
     func makeNSView(context: Context) -> MonitoringView {
@@ -45,10 +47,10 @@ struct FilesKeyMonitor: NSViewRepresentable {
                 monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                     guard let self else { return event }
                     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                    // Exactly command+shift — command alone is the GLOBAL
-                    // search palette and must keep passing through.
+                    // Exactly option — ⌘F (global palette) and ⌘⇧F must both
+                    // keep passing through untouched.
                     guard event.keyCode == Self.fKeyCode,
-                          flags == [.command, .shift] else { return event }
+                          flags == .option else { return event }
                     self.onFocusScopedSearch?()
                     return nil   // swallow, so it doesn't also beep
                 }

@@ -153,9 +153,9 @@ struct FilesKeyboardHandling: ViewModifier {
                 onFocusFilter()
                 return .handled
             }
-            // Plain ⌘F only. ⌘⇧F is handled by `FilesKeyMonitor`, because
-            // `onKeyPress` proved unreliable for that chord — it depends on
-            // this container holding focus, which it often does not.
+            // Plain ⌘F only. The in-pane field's ⌥F is handled by
+            // `FilesKeyMonitor`, because `onKeyPress` depends on this
+            // container holding focus, which it often does not.
             .onKeyPress(keys: ["f"], phases: .down) { press in
                 guard press.modifiers.contains(.command),
                       !press.modifiers.contains(.shift) else { return .ignored }

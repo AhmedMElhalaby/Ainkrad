@@ -130,9 +130,12 @@ struct UndoApplyTests {
         _ = await engine.submit(FileOperation(
             kind: .copy, sources: [url("/a/one.txt")], destinationDirectory: url("/b")))
 
-        // Simulate an ejected disk: the path resolves to no volume and has no
-        // modification date.
+        // Simulate an ejected disk properly: the whole DIRECTORY goes away,
+        // not just the one file. Marking only the file unavailable modelled
+        // "file deleted", which is a different thing and must NOT refuse —
+        // see `UndoRefusalEdgeCaseTests`.
         mutator.unavailablePaths.insert("/b/one.txt")
+        mutator.unavailablePaths.insert("/b")
 
         let refusal = engine.undo()
         #expect(refusal == .unavailable(url("/b/one.txt")))
@@ -263,5 +266,36 @@ struct RedoTests {
     func redoEmpty() async {
         let (engine, _) = makeEngine(InMemoryFileMutator())
         _ = await engine.redo()
+    }
+}
+
+@MainActor
+@Suite("Undo refusal edge cases", .serialized)
+struct UndoRefusalEdgeCaseTests {
+    // A trashed file is ABSENT from its original path by definition. Treating
+    // absence as "volume unavailable" refused exactly the undo the Trash
+    // exists to make possible.
+    @Test("undoing a real delete is not refused just because the file is gone")
+    func realTrashUndoNotRefused() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("undo-edge-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let target = root.appendingPathComponent("doomed.txt")
+        try "payload".write(to: target, atomically: true, encoding: .utf8)
+
+        let stack = UndoStack(persistence: InMemoryPersistenceStore())
+        let engine = FileOperationEngine(mutator: LocalFileMutator(),
+                                         trash: SystemTrashService(), undoStack: stack)
+
+        _ = await engine.submit(FileOperation(
+            kind: .trash, sources: [target], destinationDirectory: nil))
+        #expect(!FileManager.default.fileExists(atPath: target.path))
+
+        let refusal = engine.undo()
+        #expect(refusal == nil, "a trashed file's absence must not block its own undo")
+        #expect(FileManager.default.fileExists(atPath: target.path))
+        #expect(try String(contentsOf: target, encoding: .utf8) == "payload")
     }
 }
