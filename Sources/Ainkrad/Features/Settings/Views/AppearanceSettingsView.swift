@@ -18,105 +18,96 @@ struct AppearanceSettingsView: View {
         let tokens = environment.themeManager.tokens
 
         VStack(alignment: .leading, spacing: 14) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens)
-
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(Theme.allCases, id: \.self) { theme in
-                    themeCard(theme, tokens: tokens)
+            AinkradSettingsPanel(
+                title: "Theme",
+                hint: "The whole workspace re-tints — window, islands, and the sky behind it."
+            ) {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(Theme.allCases, id: \.self) { theme in
+                        themeCard(theme, tokens: tokens)
+                    }
                 }
             }
 
-            typographySection(tokens: tokens)
-                .padding(.top, 8)
-
-            motionSection(tokens: tokens)
-                .padding(.top, 8)
-
-            overlaysSection(tokens: tokens)
-                .padding(.top, 8)
-        }
-    }
-
-    // MARK: - Typography (AIN-143: font size/family + custom accent color)
-
-    private func typographySection(tokens: DesignTokens) -> some View {
-        let manager = environment.themeManager
-
-        return VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "TYPOGRAPHY", tokens: tokens)
-
-            labeled("FONT SIZE", tokens: tokens) {
-                segmented(UIFontScale.allCases, selected: manager.uiFontScale, tokens: tokens,
-                          title: fontScaleTitle, action: { manager.setFontScale($0) })
+            AinkradSettingsPanel(
+                title: "Accent",
+                hint: "Used for anything live: selection, focus, the things that are "
+                    + "currently doing something."
+            ) {
+                accentColorRow(tokens: tokens, manager: environment.themeManager)
             }
-            labeled("FONT FAMILY", tokens: tokens) {
-                segmented(UIFontFamily.allCases, selected: manager.uiFontFamily, tokens: tokens,
-                          title: fontFamilyTitle, action: { manager.setFontFamily($0) })
-            }
-            labeled("ACCENT COLOR", tokens: tokens) {
-                accentColorRow(tokens: tokens, manager: manager)
-            }
-        }
-    }
 
-    // MARK: - Motion (Ainkrad-controlled, independent of the macOS system flag)
-
-    private func motionSection(tokens: DesignTokens) -> some View {
-        let store = environment.generalSettingsStore
-        return VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "MOTION", tokens: tokens)
-
-            labeled("REDUCE MOTION", tokens: tokens) {
-                segmented([true, false], selected: store.uiReduceMotion, tokens: tokens,
-                          title: { $0 ? "On" : "Off" }, action: { store.setUiReduceMotion($0) })
+            AinkradSettingsPanel(
+                title: "Typeface and size",
+                hint: "Every word in the app, including the ones you are reading now."
+            ) {
+                VStack(alignment: .leading, spacing: 9) {
+                    AinkradCaptionedRow("Size") {
+                        segmented(UIFontScale.allCases,
+                                  selected: environment.themeManager.uiFontScale,
+                                  tokens: tokens,
+                                  title: fontScaleTitle,
+                                  action: { environment.themeManager.setFontScale($0) })
+                    }
+                    AinkradCaptionedRow("Typeface") {
+                        segmented(UIFontFamily.allCases,
+                                  selected: environment.themeManager.uiFontFamily,
+                                  tokens: tokens,
+                                  title: fontFamilyTitle,
+                                  action: { environment.themeManager.setFontFamily($0) })
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Font family and size")
             }
-            Text("Turns off transitions, parallax, blinking cursors, and other animation across Ainkrad. Independent of the macOS system Reduce Motion setting.")
-                .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
+
+            AinkradSettingsPanel(
+                title: "Motion",
+                hint: "Turns off transitions, parallax, blinking cursors, and other animation "
+                    + "across Ainkrad. Independent of the macOS system Reduce Motion setting."
+            ) {
+                AinkradCaptionedRow("Reduce motion") {
+                    segmented([true, false],
+                              selected: environment.generalSettingsStore.uiReduceMotion,
+                              tokens: tokens,
+                              title: { $0 ? "On" : "Off" },
+                              action: { environment.generalSettingsStore.setUiReduceMotion($0) })
+                }
+            }
+
+            AinkradSettingsPanel(
+                title: "Overlays",
+                hint: "Lower opacity — and blur — let the workspace show through the Launcher, "
+                    + "Settings, App Store, and other overlays."
+            ) {
+                overlayControls(tokens: tokens)
+            }
         }
     }
 
     // MARK: - Overlays (background opacity + blur)
 
-    private func overlaysSection(tokens: DesignTokens) -> some View {
+    private func overlayControls(tokens: DesignTokens) -> some View {
         let store = environment.generalSettingsStore
-        return VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "OVERLAYS", tokens: tokens)
-
-            labeled("BACKGROUND OPACITY", tokens: tokens) {
+        return VStack(alignment: .leading, spacing: 9) {
+            AinkradCaptionedRow("Opacity") {
                 HStack(spacing: 12) {
                     AinkradSlider(
                         value: Binding(
                             get: { store.overlayBackgroundOpacity },
-                            set: { store.setOverlayBackgroundOpacity($0) }
-                        ),
-                        in: 0.3...1.0
-                    )
+                            set: { store.setOverlayBackgroundOpacity($0) }),
+                        in: 0.3...1.0)
                     Text("\(Int(store.overlayBackgroundOpacity * 100))%")
                         .font(AinkradFont.display(11))
                         .foregroundStyle(tokens.foreground.opacity(0.55))
                         .frame(width: 42, alignment: .trailing)
                 }
             }
-            labeled("BACKGROUND BLUR", tokens: tokens) {
+            AinkradCaptionedRow("Blur") {
                 segmented([true, false], selected: store.overlayBlurEnabled, tokens: tokens,
-                          title: { $0 ? "On" : "Off" }, action: { store.setOverlayBlurEnabled($0) })
+                          title: { $0 ? "On" : "Off" },
+                          action: { store.setOverlayBlurEnabled($0) })
             }
-            Text("Lower opacity (and blur) let the workspace show through the Launcher, Settings, App Store, and other overlays.")
-                .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            content()
         }
     }
 
@@ -163,7 +154,7 @@ struct AppearanceSettingsView: View {
                         set: { manager.setAccentColorHex($0.hexString) }
                     )
                 )
-                .frame(width: 26, height: 26)
+                .frame(width: 30, height: 30)
             }
 
             Button {
@@ -181,22 +172,33 @@ struct AppearanceSettingsView: View {
         }
     }
 
-    private func accentSwatch(_ color: Color, tokens: DesignTokens, manager: ThemeManager) -> some View {
-        let isSelected = manager.accentColorHex != nil && manager.accentColorHex == color.hexString
+    private func accentSwatch(_ color: Color, tokens: DesignTokens,
+                              manager: ThemeManager) -> some View {
+        let hex = color.hexString ?? ""
+        let isSelected = AccentSelection.isSelected(
+            swatchHex: hex,
+            overrideHex: manager.accentColorHex,
+            themeAccentHex: manager.currentTheme.tokens.accentPrimary.hexString ?? "")
+
         return Button {
-            manager.setAccentColorHex(color.hexString)
+            manager.setAccentColorHex(hex)
         } label: {
-            Circle()
+            ChamferShape(cut: 7)
                 .fill(color)
-                .frame(width: 22, height: 22)
+                .frame(width: 30, height: 30)
                 .overlay(
-                    Circle().strokeBorder(
-                        isSelected ? tokens.foreground.opacity(0.9) : .white.opacity(0.18),
-                        lineWidth: isSelected ? 2 : 1
-                    )
-                )
+                    ChamferShape(cut: 7).strokeBorder(
+                        isSelected ? tokens.foreground.opacity(0.95) : .white.opacity(0.16),
+                        lineWidth: isSelected ? 2 : 1))
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.4), radius: 2)
+                        .opacity(isSelected ? 1 : 0))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func themeCard(_ theme: Theme, tokens: DesignTokens) -> some View {
