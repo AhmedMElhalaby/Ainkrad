@@ -45,7 +45,7 @@ struct WebToolsSettingsView: View {
         AinkradSettingsPanel(title: "Web tools",
                              hint: "The search provider the assistant queries.") {
             VStack(alignment: .leading, spacing: 12) {
-                AinkradCaptionedRow("Search provider") {
+                AssistantSettingsLabeled("Search provider", tokens: tokens) {
                     ProviderStatusList(
                         options: providerOptions,
                         selection: Binding(

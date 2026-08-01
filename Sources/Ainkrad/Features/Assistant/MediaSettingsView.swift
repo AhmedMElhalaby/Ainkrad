@@ -93,7 +93,7 @@ struct MediaSettingsView: View {
         AinkradSettingsPanel(title: "Media",
                              hint: "Image generation and handling.") {
             VStack(alignment: .leading, spacing: 12) {
-                AinkradCaptionedRow("Image provider") {
+                AssistantSettingsLabeled("Image provider", tokens: tokens) {
                     ProviderStatusList(
                         options: providerOptions,
                         selection: Binding(

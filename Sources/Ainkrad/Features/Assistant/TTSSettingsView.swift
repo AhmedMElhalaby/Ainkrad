@@ -63,9 +63,9 @@ struct TTSSettingsView: View {
 
     var body: some View {
         AinkradSettingsPanel(title: "Text to speech",
-                             hint: "Choose a voice provider for the assistant's spoken replies.") {
+                             hint: "How the assistant reads its replies aloud.") {
             VStack(alignment: .leading, spacing: 12) {
-                AinkradCaptionedRow("Voice provider") {
+                AssistantSettingsLabeled("Voice provider", tokens: tokens) {
                     ProviderStatusList(
                         options: providerOptions,
                         selection: Binding(

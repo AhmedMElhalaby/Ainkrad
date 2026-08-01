@@ -76,7 +76,7 @@ struct VideoSettingsView: View {
         AinkradSettingsPanel(title: "Video",
                              hint: "Video generation and handling.") {
             VStack(alignment: .leading, spacing: 12) {
-                AinkradCaptionedRow("Video provider") {
+                AssistantSettingsLabeled("Video provider", tokens: tokens) {
                     ProviderStatusList(
                         options: providerOptions,
                         selection: Binding(
