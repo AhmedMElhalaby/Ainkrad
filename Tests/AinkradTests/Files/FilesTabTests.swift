@@ -1,0 +1,106 @@
+import Testing
+import Foundation
+@testable import Ainkrad
+
+@MainActor
+@Suite("FilesTab")
+struct FilesTabTests {
+    private let home = URL(fileURLWithPath: "/Users/test")
+
+    private func makeFS() -> InMemoryFileSystem {
+        let fs = InMemoryFileSystem(home: home)
+        fs.add(directory: "/Users/test", children: ["Documents/", "notes.txt", ".hidden"])
+        fs.add(directory: "/Users/test/Documents", children: ["report.pdf"])
+        return fs
+    }
+
+    @Test("loads its directory on creation")
+    func loadsOnInit() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        #expect(tab.currentDirectory == home)
+        #expect(tab.entries.count == 3)
+        #expect(tab.loadError == nil)
+    }
+
+    @Test("hides dotfiles by default")
+    func hidesHidden() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", "notes.txt"])
+        tab.showHidden = true
+        #expect(tab.visibleEntries.count == 3)
+    }
+
+    @Test("descending into a directory navigates and reloads")
+    func descend() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        let documents = tab.visibleEntries.first { $0.name == "Documents" }!
+        tab.descend(into: documents)
+        #expect(tab.currentDirectory == home.appendingPathComponent("Documents"))
+        #expect(tab.visibleEntries.map(\.name) == ["report.pdf"])
+    }
+
+    @Test("descending into a file does nothing")
+    func descendIntoFileIsNoop() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        let file = tab.visibleEntries.first { $0.name == "notes.txt" }!
+        tab.descend(into: file)
+        #expect(tab.currentDirectory == home)
+    }
+
+    @Test("ascending goes to the parent")
+    func ascend() {
+        let tab = FilesTab(directory: home.appendingPathComponent("Documents"), fileSystem: makeFS())
+        tab.ascend()
+        #expect(tab.currentDirectory == home)
+    }
+
+    @Test("back and forward retrace navigation")
+    func backForward() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        tab.descend(into: tab.visibleEntries.first { $0.name == "Documents" }!)
+        tab.goBack()
+        #expect(tab.currentDirectory == home)
+        tab.goForward()
+        #expect(tab.currentDirectory == home.appendingPathComponent("Documents"))
+    }
+
+    @Test("navigation clears the selection")
+    func navigationClearsSelection() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        tab.selection = [home.appendingPathComponent("notes.txt")]
+        tab.descend(into: tab.visibleEntries.first { $0.name == "Documents" }!)
+        #expect(tab.selection.isEmpty)
+    }
+
+    @Test("an unreadable directory surfaces an error and empties the list")
+    func loadError() {
+        let tab = FilesTab(directory: URL(fileURLWithPath: "/nope"), fileSystem: makeFS())
+        #expect(tab.loadError != nil)
+        #expect(tab.entries.isEmpty)
+    }
+
+    @Test("a failed navigation still moves, so the error is visible in place")
+    func failedNavigationIsVisible() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        tab.navigate(to: URL(fileURLWithPath: "/nope"))
+        #expect(tab.currentDirectory == URL(fileURLWithPath: "/nope"))
+        #expect(tab.loadError != nil)
+    }
+
+    @Test("sort key and direction reorder the visible entries")
+    func sorting() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        tab.sortAscending = false
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", "notes.txt"])
+        tab.showHidden = true
+        #expect(tab.visibleEntries.map(\.name) == ["Documents", "notes.txt", ".hidden"])
+    }
+
+    @Test("title is the directory's last component")
+    func title() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        #expect(tab.title == "test")
+        tab.descend(into: tab.visibleEntries.first { $0.name == "Documents" }!)
+        #expect(tab.title == "Documents")
+    }
+}

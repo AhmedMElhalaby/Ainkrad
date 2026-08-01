@@ -100,6 +100,14 @@ extension AppEnvironment {
                                           hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
+        // Files (M1) — a host-embedded built-in like Assistant and Canvas. It
+        // inherits the host's unsandboxed filesystem access; its own views read
+        // `AppEnvironment` directly.
+        let filesHost = HostServicesImpl(appID: "files", dataRootURL: pluginDataRoot,
+                                         secretStore: secrets, themeManager: themeManager,
+                                         hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                         declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
+
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
             builtIn: [
@@ -122,7 +130,23 @@ extension AppEnvironment {
                 RegisteredApp.builtIn(
                     CanvasApp.self,
                     summary: "The Live Canvas — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
-                    host: canvasHost)
+                    host: canvasHost),
+                RegisteredApp.builtIn(
+                    FilesApp.self,
+                    summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
+                    host: filesHost,
+                    // Same contract as the Assistant: reading `surfaceOpacity`
+                    // inside this closure — invoked synchronously from
+                    // `TileLayoutView.hasTranslucentPane` and
+                    // `BlockView.headerBackground` during their view bodies —
+                    // registers an @Observable dependency, so dragging the
+                    // slider live re-evaluates the backdrop AND the title bar.
+                    chromeFillOverride: {
+                        FilesApp.surfaceFill(
+                            opacity: appAppearanceStore.surfaceOpacity("files"),
+                            base: themeManager.tokens.background
+                        )
+                    })
             ],
             loaded: loaded.apps,
             failures: loaded.failures
