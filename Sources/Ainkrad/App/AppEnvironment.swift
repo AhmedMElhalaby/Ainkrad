@@ -71,6 +71,8 @@ final class AppEnvironment {
     /// per repository — see `GitStatusProvider` for why the cache is the design
     /// rather than an optimisation.
     let filesGitStatusProvider: GitStatusProvider
+    /// ⌘C/⌘X/⌘V, backed by `NSPasteboard` so it interoperates with the Finder.
+    let filesClipboard: FilesClipboard
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
     /// Assistant session-share (M8) — writes self-contained HTML share artifacts
@@ -380,6 +382,7 @@ final class AppEnvironment {
         self.filesOperationEngine = FileOperationEngine(
             mutator: LocalFileMutator(), trash: SystemTrashService(), undoStack: filesUndoStack)
         self.filesGitStatusProvider = GitStatusProvider(fileSystem: LocalFileSystemService())
+        self.filesClipboard = FilesClipboard()
         self.webSearchSettingsStore = webSearchSettingsStore
         self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore

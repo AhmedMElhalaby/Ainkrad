@@ -149,8 +149,9 @@ struct SearchMatchAllTests {
                                 query: SearchQuery(text: ""), fileSystem: fs)
         #expect(empty.isEmpty)
 
-        let all = collectTree(root: URL(fileURLWithPath: "/root"), limit: 100,
-                              maxDepth: 5, fileSystem: fs)
+        var matchAll = SearchQuery(text: "")
+        matchAll.matchAll = true
+        let all = searchFiles(root: URL(fileURLWithPath: "/root"), query: matchAll, fileSystem: fs)
         #expect(all.count == 4)
     }
 
@@ -160,8 +161,50 @@ struct SearchMatchAllTests {
         fs.add(directory: "/root", children: ["keep.txt", "node_modules/"])
         fs.add(directory: "/root/node_modules", children: ["junk.js"])
 
-        let all = collectTree(root: URL(fileURLWithPath: "/root"), limit: 100,
-                              maxDepth: 5, fileSystem: fs)
+        var matchAll = SearchQuery(text: "")
+        matchAll.matchAll = true
+        let all = searchFiles(root: URL(fileURLWithPath: "/root"), query: matchAll, fileSystem: fs)
         #expect(all.map(\.entry.name).sorted() == ["keep.txt", "node_modules"])
+    }
+}
+
+@Suite("Search streaming")
+struct SearchStreamingTests {
+    // Results must arrive as the walk proceeds, not only at the end: a
+    // recursive search over a large tree takes seconds, and showing nothing
+    // until it finishes is what made search feel broken.
+    @Test("reports batches while walking, not only at the end")
+    func reportsBatches() {
+        let fs = InMemoryFileSystem(home: URL(fileURLWithPath: "/root"))
+        fs.add(directory: "/root", children: ["match-a.txt", "one/"])
+        fs.add(directory: "/root/one", children: ["match-b.txt", "two/"])
+        fs.add(directory: "/root/one/two", children: ["match-c.txt"])
+
+        final class Batches: @unchecked Sendable { var all: [[SearchHit]] = [] }
+        let batches = Batches()
+
+        let hits = searchFiles(root: URL(fileURLWithPath: "/root"),
+                               query: SearchQuery(text: "match"), fileSystem: fs,
+                               onBatch: { batches.all.append($0) })
+
+        #expect(hits.count == 3)
+        // Three directories each contributed, so results were delivered
+        // progressively rather than in one final lump.
+        #expect(batches.all.count >= 2)
+        #expect(batches.all.flatMap { $0 }.count == hits.count)
+    }
+
+    @Test("a search with no matches reports no batches")
+    func noBatchesWhenNoMatches() {
+        let fs = InMemoryFileSystem(home: URL(fileURLWithPath: "/root"))
+        fs.add(directory: "/root", children: ["a.txt"])
+
+        final class Counter: @unchecked Sendable { var count = 0 }
+        let counter = Counter()
+
+        _ = searchFiles(root: URL(fileURLWithPath: "/root"),
+                        query: SearchQuery(text: "zzz"), fileSystem: fs,
+                        onBatch: { _ in counter.count += 1 })
+        #expect(counter.count == 0)
     }
 }

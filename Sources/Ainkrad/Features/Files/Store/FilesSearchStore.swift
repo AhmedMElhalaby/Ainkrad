@@ -3,129 +3,173 @@ import Observation
 
 /// Which finder affordance is open, if any.
 enum FilesFinderMode: Equatable {
-    /// `/` — filters the CURRENT directory as you type. Instant, no walk.
-    case filter
-    /// ⌘F — recursive search from the current directory. Walks, so it runs off
-    /// the main actor and is cancellable.
+    /// ⌘F / the always-present field — recursive search below the current
+    /// directory, running as you type.
     case search
     /// ⌘P — fuzzy jump across the tree, ranked.
     case jump
 }
 
-/// Drives the filter / search / jump affordances.
+/// Drives the always-present filter field and the recursive search / jump.
 ///
-/// Filter and jump are pure functions over data already in memory, so they
-/// update per keystroke. Search walks the disk, so it is debounced, cancellable
-/// and explicitly not run on every character.
+/// Everything runs AS YOU TYPE. The first cut required Return to start a
+/// search and then blocked until the whole tree had been walked, which is the
+/// slow, unresponsive behaviour that made it feel broken. Now:
+///
+/// - the in-folder filter is pure and instant, per keystroke;
+/// - the recursive search is debounced, cancellable, and streams results in as
+///   they are found rather than after the walk completes;
+/// - the jump palette shows its first results immediately instead of waiting
+///   for a full 5,000-entry traversal.
 @MainActor
 @Observable
 final class FilesSearchStore {
     private let fileSystem: any FileSystemServing
 
+    /// The always-visible in-folder filter. Separate from `queryText` so
+    /// opening the palette does not clear what you had filtered.
+    var filterText = ""
+
     private(set) var mode: FilesFinderMode?
-    var queryText = ""
+    var queryText = "" {
+        didSet { if queryText != oldValue { scheduleSearch() } }
+    }
     private(set) var results: [SearchHit] = []
     private(set) var isSearching = false
     private(set) var didTruncate = false
 
     private var searchTask: Task<Void, Never>?
+    private var debounceTask: Task<Void, Never>?
+    private var searchRoot: URL?
+
+    /// Long enough to coalesce fast typing, short enough to feel live.
+    private static let debounce = Duration.milliseconds(140)
 
     init(fileSystem: any FileSystemServing) {
         self.fileSystem = fileSystem
     }
 
     var isActive: Bool { mode != nil }
+    var isFiltering: Bool { !filterText.isEmpty }
 
-    func open(_ mode: FilesFinderMode) {
+    func open(_ mode: FilesFinderMode, root: URL) {
         self.mode = mode
+        self.searchRoot = root
         queryText = ""
         results = []
         didTruncate = false
+        if mode == .jump { startJump(root: root) }
     }
 
     func close() {
-        searchTask?.cancel()
-        searchTask = nil
+        cancelWork()
         mode = nil
         queryText = ""
         results = []
         isSearching = false
     }
 
-    /// Filters the entries already loaded — no disk access, safe per keystroke.
-    func filtered(_ entries: [FileEntry]) -> [FileEntry] {
-        guard mode == .filter, !queryText.isEmpty else { return entries }
-        return fuzzyRank(entries, pattern: queryText) { $0.name }.map(\.item)
+    func clearFilter() { filterText = "" }
+
+    private func cancelWork() {
+        debounceTask?.cancel()
+        searchTask?.cancel()
+        debounceTask = nil
+        searchTask = nil
     }
 
-    /// Recursive search. Cancels any in-flight walk first, so typing doesn't
-    /// stack up overlapping traversals of the same tree.
-    func runSearch(root: URL) {
-        searchTask?.cancel()
-        let query = SearchQuery(text: queryText)
-        guard !query.text.isEmpty else {
+    // MARK: - In-folder filter (pure, instant)
+
+    /// Filters entries already in memory. Safe on every keystroke — no disk
+    /// access, no task, no debounce.
+    func filtered(_ entries: [FileEntry]) -> [FileEntry] {
+        guard !filterText.isEmpty else { return entries }
+        return fuzzyRank(entries, pattern: filterText) { $0.name }.map(\.item)
+    }
+
+    // MARK: - Recursive search (debounced, streaming)
+
+    private func scheduleSearch() {
+        guard mode == .search, let root = searchRoot else { return }
+        cancelWork()
+        guard !queryText.isEmpty else {
             results = []
+            isSearching = false
             return
         }
 
-        isSearching = true
-        let fileSystem = self.fileSystem
-        searchTask = Task { [weak self] in
-            // Off the main actor: a deep tree walk would otherwise freeze the
-            // pane it is searching.
-            let hits = await Task.detached(priority: .userInitiated) { () -> [SearchHit] in
-                searchFiles(root: root, query: query, fileSystem: fileSystem,
-                            isCancelled: { Task.isCancelled })
-            }.value
-
+        debounceTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.debounce)
             guard !Task.isCancelled else { return }
-            self?.results = hits
-            self?.didTruncate = hits.count >= query.limit
+            self?.runSearch(root: root)
+        }
+    }
+
+    private func runSearch(root: URL) {
+        let query = SearchQuery(text: queryText)
+        results = []
+        didTruncate = false
+        isSearching = true
+
+        let stream = Self.stream(root: root, query: query, fileSystem: fileSystem)
+        searchTask = Task { [weak self] in
+            for await batch in stream {
+                guard !Task.isCancelled else { return }
+                self?.results.append(contentsOf: batch)
+            }
+            guard !Task.isCancelled else { return }
+            self?.isSearching = false
+            self?.didTruncate = (self?.results.count ?? 0) >= query.limit
+        }
+    }
+
+    // MARK: - Jump palette
+
+    private func startJump(root: URL) {
+        cancelWork()
+        results = []
+        isSearching = true
+        var query = SearchQuery(text: "")
+        query.matchAll = true
+        // A tighter cap than the old 5,000: the palette ranks in memory and
+        // shows 60, so gathering thousands more only delayed the first paint.
+        query.limit = 1_500
+        query.maxDepth = 8
+
+        let stream = Self.stream(root: root, query: query, fileSystem: fileSystem)
+        searchTask = Task { [weak self] in
+            // Candidates stream in, so the palette is usable from the first
+            // directory rather than after the whole walk.
+            for await batch in stream {
+                guard !Task.isCancelled else { return }
+                self?.results.append(contentsOf: batch)
+            }
             self?.isSearching = false
         }
     }
 
-    /// Fuzzy jump candidates, gathered once when the palette opens and then
-    /// ranked in memory per keystroke.
-    func loadJumpCandidates(root: URL) {
-        searchTask?.cancel()
-        isSearching = true
-        let fileSystem = self.fileSystem
-        searchTask = Task { [weak self] in
-            var query = SearchQuery(text: "")
-            query.limit = 5_000
-            let all = await Task.detached(priority: .userInitiated) { () -> [SearchHit] in
-                // An empty query matches nothing in `searchFiles`, so gather by
-                // walking with a match-everything pattern instead.
-                collectTree(root: root, limit: query.limit, maxDepth: query.maxDepth,
-                            fileSystem: fileSystem, isCancelled: { Task.isCancelled })
-            }.value
-            guard !Task.isCancelled else { return }
-            self?.results = all
-            self?.isSearching = false
+    /// Builds the batch stream OFF the main actor.
+    ///
+    /// `nonisolated` deliberately: `AsyncStream`'s builder is a `sending`
+    /// closure, and constructing it inside main-actor-isolated code makes the
+    /// compiler (correctly) call it a data race.
+    private nonisolated static func stream(root: URL, query: SearchQuery,
+                                           fileSystem: any FileSystemServing)
+        -> AsyncStream<[SearchHit]> {
+        AsyncStream { continuation in
+            Task.detached(priority: .userInitiated) {
+                _ = searchFiles(root: root, query: query, fileSystem: fileSystem,
+                                isCancelled: { Task.isCancelled },
+                                onBatch: { continuation.yield($0) })
+                continuation.finish()
+            }
         }
     }
 
-    /// Ranked view of `results` for the jump palette.
+    /// Ranked view for the palette.
     var rankedResults: [SearchHit] {
-        guard mode == .jump, !queryText.isEmpty else { return results }
-        return fuzzyRank(results, pattern: queryText) { $0.entry.name }.map(\.item).prefix(60).map { $0 }
+        guard mode == .jump, !queryText.isEmpty else { return Array(results.prefix(60)) }
+        return fuzzyRank(results, pattern: queryText) { $0.entry.name }
+            .prefix(60).map(\.item)
     }
-}
-
-/// Walks the tree collecting every entry, for the jump palette's candidate set.
-/// Shares `searchFiles`' pruning rules so it doesn't wander into
-/// `node_modules` either.
-func collectTree(root: URL, limit: Int, maxDepth: Int,
-                 fileSystem: any FileSystemServing,
-                 isCancelled: () -> Bool = { false }) -> [SearchHit] {
-    var query = SearchQuery(text: "")
-    query.limit = limit
-    query.maxDepth = maxDepth
-    // Explicit match-all: an empty `text` deliberately finds NOTHING for a
-    // search, so the palette has to ask for everything rather than rely on
-    // empty meaning "all".
-    query.matchAll = true
-    return searchFiles(root: root, query: query, fileSystem: fileSystem,
-                       isCancelled: isCancelled)
 }

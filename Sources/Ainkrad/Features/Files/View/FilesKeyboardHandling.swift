@@ -12,6 +12,7 @@ struct FilesKeyboardHandling: ViewModifier {
     let onRedo: () -> Void
     let onTogglePreview: () -> Void
     let onOpenFinder: (FilesFinderMode) -> Void
+    let onFocusFilter: () -> Void
     /// True while a finder palette owns the keyboard.
     let isFinderOpen: Bool
     /// Opt-in modal navigation. Off by default — see `FilesSettingsStore`.
@@ -93,6 +94,22 @@ struct FilesKeyboardHandling: ViewModifier {
                 tab.toggleCursorSelection()
                 return .handled
             }
+            // Clipboard — the ordinary idiom, and the primary one.
+            .onKeyPress(keys: ["c"], phases: .down) { press in
+                guard navigationEnabled, press.modifiers.contains(.command) else { return .ignored }
+                actions.copySelection()
+                return .handled
+            }
+            .onKeyPress(keys: ["x"], phases: .down) { press in
+                guard navigationEnabled, press.modifiers.contains(.command) else { return .ignored }
+                actions.cutSelection()
+                return .handled
+            }
+            .onKeyPress(keys: ["v"], phases: .down) { press in
+                guard navigationEnabled, press.modifiers.contains(.command) else { return .ignored }
+                Task { await actions.paste() }
+                return .handled
+            }
             // Selection
             .onKeyPress(keys: ["a"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
@@ -130,9 +147,11 @@ struct FilesKeyboardHandling: ViewModifier {
             // Finder affordances. `/` filters here, ⌘F searches below here,
             // ⌘P jumps across the tree — three different questions, so three
             // different entry points rather than one overloaded box.
+            // `/` focuses the always-visible filter field rather than
+            // summoning a palette — the field is already there.
             .onKeyPress(keys: ["/"], phases: .down) { _ in
                 guard navigationEnabled else { return .ignored }
-                onOpenFinder(.filter)
+                onFocusFilter()
                 return .handled
             }
             .onKeyPress(keys: ["f"], phases: .down) { press in
@@ -214,6 +233,7 @@ extension View {
                                onRedo: @escaping () -> Void,
                                onTogglePreview: @escaping () -> Void,
                                onOpenFinder: @escaping (FilesFinderMode) -> Void,
+                               onFocusFilter: @escaping () -> Void,
                                isFinderOpen: Bool,
                                vimKeys: Bool,
                                isEditingPath: Binding<Bool>) -> some View {
@@ -221,6 +241,7 @@ extension View {
                                        onUndo: onUndo, onRedo: onRedo,
                                        onTogglePreview: onTogglePreview,
                                        onOpenFinder: onOpenFinder,
+                                       onFocusFilter: onFocusFilter,
                                        isFinderOpen: isFinderOpen,
                                        vimKeys: vimKeys,
                                        isEditingPath: isEditingPath))

@@ -28,6 +28,7 @@ final class FilesActions {
     private let engine: FileOperationEngine
     private let coordinator: PaneCoordinator
     private let resolver: ConflictResolver
+    private let clipboard: FilesClipboard
     private let store: FilesPaneStore
     private let paneToken: UUID
 
@@ -36,10 +37,12 @@ final class FilesActions {
     private(set) var lastMessage: String?
 
     init(engine: FileOperationEngine, coordinator: PaneCoordinator,
-         resolver: ConflictResolver, store: FilesPaneStore, paneToken: UUID) {
+         resolver: ConflictResolver, clipboard: FilesClipboard,
+         store: FilesPaneStore, paneToken: UUID) {
         self.engine = engine
         self.coordinator = coordinator
         self.resolver = resolver
+        self.clipboard = clipboard
         self.store = store
         self.paneToken = paneToken
     }
@@ -58,6 +61,51 @@ final class FilesActions {
 
     func present(_ prompt: FilesPrompt?) { self.prompt = prompt }
     func clearMessage() { lastMessage = nil }
+
+    // MARK: - Clipboard
+    //
+    // The ordinary idiom, and the primary one. Cross-pane F5/F6 below remains
+    // for orthodox-manager muscle memory, but it is no longer the only way to
+    // move a file.
+
+    func copySelection() {
+        let sources = operands
+        guard !sources.isEmpty else { return }
+        clipboard.copy(sources)
+        lastMessage = "Copied \(sources.count) item\(sources.count == 1 ? "" : "s")"
+    }
+
+    func cutSelection() {
+        let sources = operands
+        guard !sources.isEmpty else { return }
+        clipboard.cut(sources)
+        lastMessage = "Cut \(sources.count) item\(sources.count == 1 ? "" : "s")"
+    }
+
+    /// Pastes into the CURRENT directory — so a single pane can copy from one
+    /// folder to another, which the two-pane-only design could not do.
+    func paste() async {
+        guard let pending = clipboard.pendingOperation() else {
+            lastMessage = "Nothing to paste"
+            return
+        }
+        let destination = tab.currentDirectory
+
+        // Pasting into the folder the files already live in would be a no-op
+        // for a move and a same-name conflict for a copy; keep-both makes the
+        // copy case do the obviously-right thing.
+        resolver.reset()
+        let operation = FileOperation(
+            kind: pending.isMove ? .move : .copy,
+            sources: pending.urls,
+            destinationDirectory: destination,
+            policy: .ask)
+        let result = await engine.submit(operation, conflictResolver: resolver.resolve)
+
+        if pending.isMove, result.failures.isEmpty { clipboard.clearAfterMove() }
+        report(result, verb: pending.isMove ? "Moved" : "Copied")
+        tab.reload()
+    }
 
     // MARK: - Cross-pane transfer
 

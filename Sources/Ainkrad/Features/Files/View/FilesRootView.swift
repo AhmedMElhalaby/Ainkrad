@@ -21,6 +21,7 @@ struct FilesRootView: View {
     @State private var watcher: DirectoryWatcher?
     @State private var toast: String?
     @State private var search: FilesSearchStore?
+    @FocusState private var filterFocused: Bool
 
     private var settings: FilesSettingsStore { environment.filesSettingsStore }
     private var fileSystem: LocalFileSystemService { environment.filesSystemService }
@@ -52,8 +53,14 @@ struct FilesRootView: View {
             )
             VStack(spacing: 0) {
                 FilesTabStrip(store: store)
-                FilesBreadcrumbBar(tab: store.activeTab, fileSystem: fileSystem,
-                                   isEditing: $isEditingPath)
+                HStack(spacing: AinkradSpacing.sm) {
+                    FilesBreadcrumbBar(tab: store.activeTab, fileSystem: fileSystem,
+                                       isEditing: $isEditingPath)
+                    if let search {
+                        FilesFilterField(search: search, isFocused: $filterFocused)
+                            .padding(.trailing, FilesColumnMetrics.headerInset)
+                    }
+                }
                 FileListView(
                     tab: store.activeTab,
                     iconSize: CGFloat(settings.iconSize),
@@ -61,7 +68,8 @@ struct FilesRootView: View {
                     showMetadata: settings.showMetadataColumns,
                     filter: { search?.filtered($0) ?? $0 },
                     useGrid: settings.useGrid,
-                    gitStatus: { git.status(for: $0) }
+                    gitStatus: { git.status(for: $0) },
+                    isCut: { environment.filesClipboard.isCut($0) }
                 )
                 FilesStatusBar(
                     tab: store.activeTab,
@@ -80,6 +88,7 @@ struct FilesRootView: View {
             onRedo: { _ = engine.redo() },
             onTogglePreview: { settings.showPreview.toggle() },
             onOpenFinder: { mode in openFinder(mode, store: store) },
+            onFocusFilter: { ensureSearch(); filterFocused = true },
             isFinderOpen: search?.isActive ?? false,
             vimKeys: settings.vimKeys,
             isEditingPath: $isEditingPath)
@@ -89,7 +98,6 @@ struct FilesRootView: View {
                     search: search,
                     iconSize: CGFloat(settings.iconSize),
                     onSubmit: { hit in accept(hit, store: store) },
-                    onRunSearch: { search.runSearch(root: store.activeTab.currentDirectory) },
                     onClose: { search.close() })
                     .padding(.top, AinkradSpacing.lg)
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -143,13 +151,16 @@ struct FilesRootView: View {
 
     /// `/` and ⌘P work off data already in memory; ⌘F walks the disk, so it
     /// only starts when the user commits with Return.
+    @discardableResult
+    private func ensureSearch() -> FilesSearchStore {
+        if let search { return search }
+        let created = FilesSearchStore(fileSystem: fileSystem)
+        search = created
+        return created
+    }
+
     private func openFinder(_ mode: FilesFinderMode, store: FilesPaneStore) {
-        let search = self.search ?? FilesSearchStore(fileSystem: fileSystem)
-        self.search = search
-        search.open(mode)
-        if mode == .jump {
-            search.loadJumpCandidates(root: store.activeTab.currentDirectory)
-        }
+        ensureSearch().open(mode, root: store.activeTab.currentDirectory)
     }
 
     private func accept(_ hit: SearchHit, store: FilesPaneStore) {
@@ -171,7 +182,9 @@ struct FilesRootView: View {
         self.paneToken = token
         self.actions = FilesActions(
             engine: engine, coordinator: environment.filesPaneCoordinator,
-            resolver: resolver, store: store, paneToken: token)
+            resolver: resolver, clipboard: environment.filesClipboard,
+            store: store, paneToken: token)
+        ensureSearch()
     }
 
     /// Fetches status if cold, then republishes the ignore set so the list can

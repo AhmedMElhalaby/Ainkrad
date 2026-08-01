@@ -16,6 +16,7 @@ struct FileListView: View {
     /// Resolves a row's git state. A closure rather than the provider itself so
     /// the list stays testable and unaware of how status is fetched.
     let gitStatus: (URL) -> GitFileStatus?
+    let isCut: (URL) -> Bool
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradTypography) private var typo
@@ -62,6 +63,7 @@ struct FileListView: View {
                                 showMetadata: showMetadata,
                                 gitStatus: gitStatus(entry.url),
                                 isIgnored: tab.ignoredURLs.contains(entry.url),
+                                isCut: isCut(entry.url),
                                 onTap: { tab.placeCursor(at: entry) },
                                 onDoubleTap: { tab.descend(into: entry) }
                             )

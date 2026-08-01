@@ -60,12 +60,19 @@ func matchesSearch(name: String, query: SearchQuery) -> Bool {
 /// most likely to be wanted, and they arrive first. A depth-first walk would
 /// spend its budget deep inside the first subtree it happened to enter.
 func searchFiles(root: URL, query: SearchQuery, fileSystem: any FileSystemServing,
-                 isCancelled: () -> Bool = { false }) -> [SearchHit] {
+                 isCancelled: () -> Bool = { false },
+                 onBatch: (([SearchHit]) -> Void)? = nil) -> [SearchHit] {
     guard query.matchAll || !query.text.isEmpty else { return [] }
 
     var hits: [SearchHit] = []
     var queue: [(url: URL, depth: Int)] = [(root, 0)]
     let rootPath = root.standardizedFileURL.path
+
+    // Results are reported as each directory completes rather than only at the
+    // end. A recursive walk over a large tree takes seconds, and showing
+    // nothing until it finishes is what made search feel broken and slow —
+    // the first useful hits are usually found in the first few milliseconds.
+    var pending: [SearchHit] = []
 
     while !queue.isEmpty {
         if isCancelled() || hits.count >= query.limit { break }
@@ -79,9 +86,11 @@ func searchFiles(root: URL, query: SearchQuery, fileSystem: any FileSystemServin
             if !query.includeHidden && entry.isHidden { continue }
 
             if matchesSearch(name: entry.name, query: query) {
-                hits.append(SearchHit(
+                let hit = SearchHit(
                     entry: entry,
-                    relativeDirectory: relativePath(of: directory, from: rootPath)))
+                    relativeDirectory: relativePath(of: directory, from: rootPath))
+                hits.append(hit)
+                pending.append(hit)
             }
 
             if entry.isDirectory, depth + 1 <= query.maxDepth,
@@ -92,7 +101,13 @@ func searchFiles(root: URL, query: SearchQuery, fileSystem: any FileSystemServin
                 queue.append((entry.url, depth + 1))
             }
         }
+
+        if let onBatch, !pending.isEmpty {
+            onBatch(pending)
+            pending = []
+        }
     }
+    if let onBatch, !pending.isEmpty { onBatch(pending) }
     return hits
 }
 

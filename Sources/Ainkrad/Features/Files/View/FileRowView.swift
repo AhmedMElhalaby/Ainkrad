@@ -24,6 +24,8 @@ struct FileRowView: View {
     /// Git state for this row, or `nil` outside a repo / when clean.
     let gitStatus: GitFileStatus?
     let isIgnored: Bool
+    /// Marked by ⌘X and not yet pasted — dimmed so the pending move is visible.
+    let isCut: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
 
@@ -78,7 +80,7 @@ struct FileRowView: View {
         }
         // Hidden AND ignored entries render dimmed when shown, so ⌘. reads as
         // "reveal", not "add more identical rows".
-        .opacity(entry.isHidden || isIgnored ? 0.55 : 1)
+        .opacity(isCut ? 0.4 : (entry.isHidden || isIgnored ? 0.55 : 1))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         // Single tap fires IMMEDIATELY; the double-tap runs alongside it as a
