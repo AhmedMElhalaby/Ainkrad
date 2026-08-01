@@ -14,6 +14,8 @@ struct FilesKeyboardHandling: ViewModifier {
     let onOpenFinder: (FilesFinderMode) -> Void
     /// True while a finder palette owns the keyboard.
     let isFinderOpen: Bool
+    /// Opt-in modal navigation. Off by default — see `FilesSettingsStore`.
+    let vimKeys: Bool
     @Binding var isEditingPath: Bool
     @FocusState private var keyboardFocus: Bool
 
@@ -109,6 +111,22 @@ struct FilesKeyboardHandling: ViewModifier {
                 store.persist()
                 return .handled
             }
+            // Opt-in vim layer. Bound ONLY when enabled, so type-to-select
+            // keeps working for everyone else.
+            .onKeyPress(keys: ["h", "j", "k", "l", "g", "G"], phases: .down) { press in
+                guard vimKeys, navigationEnabled, press.modifiers.isEmpty
+                        || press.modifiers == [.shift] else { return .ignored }
+                switch press.key.character {
+                case "j": tab.moveCursor(by: 1)
+                case "k": tab.moveCursor(by: -1)
+                case "h": tab.ascend()
+                case "l": tab.activateCursor()
+                case "g": tab.moveCursorToStart()
+                case "G": tab.moveCursorToEnd()
+                default: return .ignored
+                }
+                return .handled
+            }
             // Finder affordances. `/` filters here, ⌘F searches below here,
             // ⌘P jumps across the tree — three different questions, so three
             // different entry points rather than one overloaded box.
@@ -197,12 +215,14 @@ extension View {
                                onTogglePreview: @escaping () -> Void,
                                onOpenFinder: @escaping (FilesFinderMode) -> Void,
                                isFinderOpen: Bool,
+                               vimKeys: Bool,
                                isEditingPath: Binding<Bool>) -> some View {
         modifier(FilesKeyboardHandling(store: store, actions: actions, undoStack: undoStack,
                                        onUndo: onUndo, onRedo: onRedo,
                                        onTogglePreview: onTogglePreview,
                                        onOpenFinder: onOpenFinder,
                                        isFinderOpen: isFinderOpen,
+                                       vimKeys: vimKeys,
                                        isEditingPath: isEditingPath))
     }
 }

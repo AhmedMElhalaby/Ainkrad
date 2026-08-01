@@ -11,6 +11,8 @@ struct FileListView: View {
     /// Applies the `/` filter, when one is open. A closure so the list stays
     /// unaware of the search store.
     let filter: ([FileEntry]) -> [FileEntry]
+    /// Grid instead of list, for image-heavy folders.
+    let useGrid: Bool
     /// Resolves a row's git state. A closure rather than the provider itself so
     /// the list stays testable and unaware of how status is fetched.
     let gitStatus: (URL) -> GitFileStatus?
@@ -45,6 +47,9 @@ struct FileListView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
+                    if useGrid {
+                        gridBody
+                    } else {
                     LazyVStack(spacing: 1) {
                         ForEach(filter(tab.visibleEntries)) { entry in
                             FileRowView(
@@ -65,6 +70,7 @@ struct FileListView: View {
                     }
                     .padding(.horizontal, FilesColumnMetrics.rowStackInset)
                     .padding(.vertical, AinkradSpacing.xs)
+                    }
                 }
                 .onChange(of: tab.cursorIndex) { _, _ in
                     guard let entry = tab.cursorEntry else { return }
@@ -78,6 +84,26 @@ struct FileListView: View {
                 }
             }
         }
+    }
+
+    /// Icon grid. Cell size follows the icon-size setting, so the one density
+    /// control governs both presentations rather than each having its own.
+    private var gridBody: some View {
+        let cell = max(72, CGFloat(iconSize) * 5)
+        return LazyVGrid(columns: [GridItem(.adaptive(minimum: cell), spacing: AinkradSpacing.sm)],
+                         spacing: AinkradSpacing.sm) {
+            ForEach(filter(tab.visibleEntries)) { entry in
+                FileGridCell(
+                    entry: entry,
+                    isCursor: tab.cursorEntry == entry,
+                    isSelected: tab.selection.contains(entry.url),
+                    iconSize: iconSize * 2.2,
+                    onTap: { tab.placeCursor(at: entry) },
+                    onDoubleTap: { tab.descend(into: entry) })
+                    .id(entry.url)
+            }
+        }
+        .padding(AinkradSpacing.md)
     }
 
     /// Click-to-sort column titles. No divider under the header — the design
@@ -95,6 +121,9 @@ struct FileListView: View {
         }
         .padding(.horizontal, FilesColumnMetrics.headerInset)
         .padding(.bottom, AinkradSpacing.xs)
+        // The sortable header is meaningless over a grid.
+        .opacity(useGrid ? 0 : 1)
+        .frame(height: useGrid ? 0 : nil)
     }
 
     private func headerButton(_ title: String, key: FileSortKey) -> some View {

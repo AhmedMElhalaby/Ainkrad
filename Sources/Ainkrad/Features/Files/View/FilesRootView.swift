@@ -60,6 +60,7 @@ struct FilesRootView: View {
                     rowPadding: settings.rowVerticalPadding,
                     showMetadata: settings.showMetadataColumns,
                     filter: { search?.filtered($0) ?? $0 },
+                    useGrid: settings.useGrid,
                     gitStatus: { git.status(for: $0) }
                 )
                 FilesStatusBar(
@@ -80,6 +81,7 @@ struct FilesRootView: View {
             onTogglePreview: { settings.showPreview.toggle() },
             onOpenFinder: { mode in openFinder(mode, store: store) },
             isFinderOpen: search?.isActive ?? false,
+            vimKeys: settings.vimKeys,
             isEditingPath: $isEditingPath)
         .overlay(alignment: .top) {
             if let search, search.isActive {

@@ -10,11 +10,16 @@ struct FilesSettingsDocument: PersistableDocument {
     var iconSize: Double = 13
     var showMetadataColumns: Bool = true
     var showPreview: Bool = false
+    var useGrid: Bool = false
+    var vimKeys: Bool = false
 
-    init(iconSize: Double = 13, showMetadataColumns: Bool = true, showPreview: Bool = false) {
+    init(iconSize: Double = 13, showMetadataColumns: Bool = true, showPreview: Bool = false,
+         useGrid: Bool = false, vimKeys: Bool = false) {
         self.iconSize = iconSize
         self.showMetadataColumns = showMetadataColumns
         self.showPreview = showPreview
+        self.useGrid = useGrid
+        self.vimKeys = vimKeys
     }
 }
 
@@ -53,6 +58,21 @@ final class FilesSettingsStore {
         didSet { persist() }
     }
 
+    /// Grid instead of list — for image-heavy folders.
+    var useGrid: Bool = false {
+        didSet { persist() }
+    }
+
+    /// The opt-in modal `hjkl` layer, DEFAULT OFF.
+    ///
+    /// vim keys and type-to-select are in direct conflict: with `hjkl` bound,
+    /// typing "h" to jump to "Home" moves the cursor left instead. Silently
+    /// breaking type-to-select makes the app feel broken rather than powerful,
+    /// so this is a choice the user makes, never a default.
+    var vimKeys: Bool = false {
+        didSet { persist() }
+    }
+
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
@@ -63,12 +83,14 @@ final class FilesSettingsStore {
         self.iconSize = min(max(10, document.iconSize), 22)
         self.showMetadataColumns = document.showMetadataColumns
         self.showPreview = document.showPreview
+        self.useGrid = document.useGrid
+        self.vimKeys = document.vimKeys
     }
 
     private func persist() {
         persistence.save(FilesSettingsDocument(
             iconSize: iconSize, showMetadataColumns: showMetadataColumns,
-            showPreview: showPreview))
+            showPreview: showPreview, useGrid: useGrid, vimKeys: vimKeys))
     }
 
     /// Row vertical padding derived from icon size, so density scales as one

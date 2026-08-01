@@ -122,6 +122,28 @@ enum FilesSettingsCatalog {
                     isModified: { store.showPreview != false },
                     reset: { store.showPreview = false }),
                 SettingsField(
+                    path: group.appending("grid"),
+                    label: "Grid view",
+                    help: "Show files as an icon grid instead of a list. Cell size follows the icon size.",
+                    keywords: ["grid", "icons", "thumbnails", "gallery", "view mode"],
+                    kind: .toggle(Binding(
+                        get: { store.useGrid },
+                        set: { store.useGrid = $0 })),
+                    defaultDescription: "Off",
+                    isModified: { store.useGrid != false },
+                    reset: { store.useGrid = false }),
+                SettingsField(
+                    path: group.appending("vim-keys"),
+                    label: "Vim navigation (hjkl)",
+                    help: "Bind h/j/k/l and g/G for navigation. Off by default because it conflicts with type-to-select.",
+                    keywords: ["vim", "hjkl", "modal", "keyboard", "navigation"],
+                    kind: .toggle(Binding(
+                        get: { store.vimKeys },
+                        set: { store.vimKeys = $0 })),
+                    defaultDescription: "Off",
+                    isModified: { store.vimKeys != false },
+                    reset: { store.vimKeys = false }),
+                SettingsField(
                     path: group.appending("metadata-columns"),
                     label: "Show size and date",
                     help: "Turn off for a name-only list.",
