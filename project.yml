@@ -57,7 +57,9 @@ packages:
     # AinkradDisclosureGroup, SearchField focus binding, CommandMenu detail/
     # value/keys, SettingsRow/GroupView/PageView composition and page tabs
     # (merge of feat/settings-kit-composition).
-    revision: e4882adb97af2892b55870b55c397e9ec9453def
+    # Settings panes: AinkradSettingsPanel + AinkradCaptionedRow, the wizard's
+    # group idiom shared with Settings (merge of feat/settings-panel-component).
+    revision: 69c7f5f435d2de98bd2906236f356b131df7b999
 
 targets:
   AinkradHostRuntime:
@@ -99,7 +101,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
-        MARKETING_VERSION: "0.13.0"
+        MARKETING_VERSION: "0.14.0"
         CURRENT_PROJECT_VERSION: "14"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES

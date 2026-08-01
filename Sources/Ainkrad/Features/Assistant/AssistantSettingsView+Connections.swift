@@ -31,19 +31,20 @@ extension AssistantSettingsView {
             let tokens = environment.themeManager.tokens
             let store = environment.connectionStore
 
-            VStack(alignment: .leading, spacing: 12) {
-                SettingsSectionHeader(title: "CONNECTIONS", tokens: tokens, icon: "bolt.horizontal")
-
-                ForEach(store.connections) { connection in
-                    connectionRow(connection, tokens: tokens)
-                    if connection.kind == .claude {
-                        SubscriptionAuthSection(
-                            connection: connection, connectionStore: store,
-                            oauthStore: environment.oauthStore, tokens: tokens)
+            AinkradSettingsPanel(title: "Connections",
+                                 hint: "Providers, base URLs, and API keys the assistant can reach.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(store.connections) { connection in
+                        connectionRow(connection, tokens: tokens)
+                        if connection.kind == .claude {
+                            SubscriptionAuthSection(
+                                connection: connection, connectionStore: store,
+                                oauthStore: environment.oauthStore, tokens: tokens)
+                        }
                     }
-                }
 
-                addConnectionRow(tokens: tokens)
+                    addConnectionRow(tokens: tokens)
+                }
             }
         }
 

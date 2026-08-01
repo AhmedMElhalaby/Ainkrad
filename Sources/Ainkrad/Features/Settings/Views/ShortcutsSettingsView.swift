@@ -16,36 +16,39 @@ struct ShortcutsSettingsView: View {
         let store = environment.shortcutStore
 
         return VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "KEYBOARD", tokens: tokens)
+            AinkradSettingsPanel(title: "Keyboard",
+                                 hint: "Global and workspace key bindings.") {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Click Record, then press a new key combination. Press Esc to cancel.")
+                        .font(AinkradFont.display(11))
+                        .foregroundStyle(tokens.foreground.opacity(0.5))
 
-            Text("Click Record, then press a new key combination. Press Esc to cancel.")
-                .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(0.5))
+                    if let conflictMessage = recorder.conflictMessage {
+                        Text(conflictMessage)
+                            .font(AinkradFont.display(11, weight: .medium))
+                            .foregroundStyle(.red.opacity(0.85))
+                    }
 
-            if let conflictMessage = recorder.conflictMessage {
-                Text(conflictMessage)
-                    .font(AinkradFont.display(11, weight: .medium))
-                    .foregroundStyle(.red.opacity(0.85))
-            }
+                    VStack(spacing: 8) {
+                        ForEach(ShortcutAction.allCases, id: \.self) { action in
+                            actionRow(action, store: store, tokens: tokens)
+                        }
+                    }
 
-            VStack(spacing: 8) {
-                ForEach(ShortcutAction.allCases, id: \.self) { action in
-                    actionRow(action, store: store, tokens: tokens)
+                    Button {
+                        recorder.stop()
+                        store.resetToDefaults()
+                    } label: {
+                        Text("Reset All to Defaults")
+                            .font(AinkradFont.display(12, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(tokens.accentSecondary)
+                    .padding(.top, 4)
                 }
             }
 
             systemSection(tokens: tokens)
-
-            Button {
-                recorder.stop()
-                store.resetToDefaults()
-            } label: {
-                Text("Reset All to Defaults")
-                    .font(AinkradFont.display(12, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(tokens.accentSecondary)
-            .padding(.top, 4)
         }
         .onDisappear { recorder.stop() }
     }
@@ -112,22 +115,23 @@ struct ShortcutsSettingsView: View {
     ]
 
     private func systemSection(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SettingsSectionHeader(title: "SYSTEM (FIXED)", tokens: tokens)
-            ForEach(Self.systemShortcuts, id: \.0) { name, chord in
-                HStack {
-                    Text(name)
-                        .font(AinkradFont.display(12))
-                        .foregroundStyle(tokens.foreground.opacity(0.6))
-                    Spacer()
-                    Text(chord)
-                        .font(AinkradFont.mono(11))
-                        .foregroundStyle(tokens.foreground.opacity(0.45))
+        AinkradSettingsPanel(title: "System (fixed)",
+                             hint: "Fixed shortcuts for pane and workspace navigation — not customizable yet.") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Self.systemShortcuts, id: \.0) { name, chord in
+                    HStack {
+                        Text(name)
+                            .font(AinkradFont.display(12))
+                            .foregroundStyle(tokens.foreground.opacity(0.6))
+                        Spacer()
+                        Text(chord)
+                            .font(AinkradFont.mono(11))
+                            .foregroundStyle(tokens.foreground.opacity(0.45))
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 4)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 4)
             }
         }
-        .padding(.top, 8)
     }
 }
 

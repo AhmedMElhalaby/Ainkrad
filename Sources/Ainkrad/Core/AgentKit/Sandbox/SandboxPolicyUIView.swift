@@ -104,23 +104,24 @@ struct SandboxPolicyUIView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "SANDBOXING", tokens: tokens, icon: "shippingbox")
+        AinkradSettingsPanel(title: "Sandboxing",
+                             hint: "Filesystem and network boundaries for tool execution.") {
+            VStack(alignment: .leading, spacing: 12) {
+                profileList(tokens: tokens)
 
-            profileList(tokens: tokens)
-
-            if let selected = store.profile(id: selectedID) {
-                if BuiltInSandboxProfiles.reservedIDs.contains(selected.id) {
-                    readOnlySummary(selected, tokens: tokens)
-                } else if let draft, draft.id == selected.id {
-                    editor(tokens: tokens)
+                if let selected = store.profile(id: selectedID) {
+                    if BuiltInSandboxProfiles.reservedIDs.contains(selected.id) {
+                        readOnlySummary(selected, tokens: tokens)
+                    } else if let draft, draft.id == selected.id {
+                        editor(tokens: tokens)
+                    }
                 }
-            }
 
-            newProfileRow()
-            trustTierDefaults(tokens: tokens)
-            cloudSection(tokens: tokens)
-            explainerSection(tokens: tokens)
+                newProfileRow()
+                trustTierDefaults(tokens: tokens)
+                cloudSection(tokens: tokens)
+                explainerSection(tokens: tokens)
+            }
         }
         .onAppear {
             syncDraft()
@@ -347,7 +348,7 @@ struct SandboxPolicyUIView: View {
     /// research lands (see `ModalCloudBackend`).
     private func cloudSection(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("CLOUD").font(AinkradFont.display(12, weight: .semibold)).foregroundStyle(tokens.foreground.opacity(0.6))
+            Text("Cloud").font(AinkradFont.display(12, weight: .semibold)).foregroundStyle(tokens.foreground.opacity(0.6))
             Text("Cloud execution is opt-in per Agent — enable it on an Agent's profile.")
                 .font(AinkradFont.display(11))
                 .foregroundStyle(tokens.foreground.opacity(0.55))
