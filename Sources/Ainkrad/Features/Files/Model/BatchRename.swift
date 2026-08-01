@@ -18,6 +18,36 @@ struct BatchRenamePlanItem: Identifiable, Equatable, Sendable {
     }
 }
 
+/// The one-line verdict on a plan, for the sheet's footer.
+///
+/// Counted rather than inferred at the call site, because "how many will
+/// actually change" is the number the Apply button depends on and getting it
+/// subtly wrong is how a batch rename surprises you.
+struct BatchRenameSummary: Equatable, Sendable {
+    var willRename = 0
+    var blocked = 0
+    var unchanged = 0
+
+    /// Blocked rows do NOT disable the button — they are skipped, and the
+    /// footer says how many. Refusing the whole batch over one collision
+    /// would mean re-deriving a pattern that is right for the other 200.
+    var canApply: Bool { willRename > 0 }
+}
+
+extension Array where Element == BatchRenamePlanItem {
+    var renameSummary: BatchRenameSummary {
+        var summary = BatchRenameSummary()
+        for item in self {
+            switch item.problem {
+            case nil: summary.willRename += 1
+            case .unchanged: summary.unchanged += 1
+            default: summary.blocked += 1
+            }
+        }
+        return summary
+    }
+}
+
 enum BatchRenameMode: String, CaseIterable, Sendable {
     case findReplace
     case addPrefix

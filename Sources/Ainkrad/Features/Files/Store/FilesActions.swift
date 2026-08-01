@@ -52,12 +52,14 @@ final class FilesActions {
     /// The selection, or the cursor row when nothing is explicitly selected —
     /// so F5 with a cursor but no selection does the obvious thing instead of
     /// nothing.
-    private var operands: [URL] {
+    private var selectedEntries: [FileEntry] {
         if !tab.selection.isEmpty {
-            return tab.visibleEntries.filter { tab.selection.contains($0.url) }.map(\.url)
+            return tab.visibleEntries.filter { tab.selection.contains($0.url) }
         }
-        return tab.cursorEntry.map { [$0.url] } ?? []
+        return tab.cursorEntry.map { [$0] } ?? []
     }
+
+    private var operands: [URL] { selectedEntries.map(\.url) }
 
     func present(_ prompt: FilesPrompt?) { self.prompt = prompt }
     func clearMessage() { lastToast = nil }
@@ -165,6 +167,57 @@ final class FilesActions {
             destinationDirectory: tab.currentDirectory))
         prompt = nil
         report(result, verb: "Created")
+        tab.reload()
+    }
+
+    // MARK: - Batch rename
+
+    /// The rows the batch-rename sheet is acting on, or nil while it is closed.
+    private(set) var batchRenameTargets: [FileEntry]?
+    /// Every name already in the folder — the other half of the collision
+    /// check. Snapshotted when the sheet opens rather than read live, so the
+    /// preview the user approved is the plan that gets applied.
+    private(set) var batchRenameSiblings: Set<String> = []
+
+    func beginBatchRename() {
+        let targets = selectedEntries
+        guard !targets.isEmpty else {
+            lastToast = FilesToastMessage(kind: .warning, text: "Nothing selected",
+                                          detail: "Select the files to rename first")
+            return
+        }
+        batchRenameSiblings = Set(tab.entries.map(\.name))
+        batchRenameTargets = targets
+    }
+
+    func cancelBatchRename() { batchRenameTargets = nil }
+
+    /// Applies ONLY the clean rows. Rows the preview showed as blocked stay
+    /// blocked — renaming them anyway after showing a warning is exactly the
+    /// data loss the preview exists to prevent.
+    ///
+    /// One `FileOperation` per row rather than one for the batch, because
+    /// `.rename` carries a single new name. That also means the undo stack
+    /// records each row separately: undoing a 200-file rename is 200 ⌘Z, which
+    /// is a known rough edge, not an oversight.
+    func commitBatchRename(_ plan: [BatchRenamePlanItem]) async {
+        batchRenameTargets = nil
+        let applicable = plan.filter { $0.problem == nil }
+        guard !applicable.isEmpty else { return }
+
+        var succeeded = 0
+        var failures: [OperationFailure] = []
+        for item in applicable {
+            let result = await engine.submit(FileOperation(
+                kind: .rename(newName: item.newName), sources: [item.entry.url],
+                destinationDirectory: nil))
+            succeeded += result.succeeded
+            failures.append(contentsOf: result.failures)
+        }
+
+        report(OperationResult(succeeded: succeeded, skipped: plan.count - applicable.count,
+                               failures: failures, wasCancelled: false),
+               verb: "Renamed")
         tab.reload()
     }
 

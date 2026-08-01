@@ -129,13 +129,18 @@ struct FilesRootView: View {
             // ⌘⇧F rides an AppKit local monitor, not `.onKeyPress` — see
             // `FilesKeyMonitor` for why. Zero-size and invisible; it lives as
             // long as the pane does.
-            FilesKeyMonitor(onFocusScopedSearch: {
-                let searchStore = ensureSearch()
-                searchStore.scopedRoot = store.activeTab.currentDirectory
-                // Set the shared focus target directly — no request counter,
-                // no second focus state to lose a race with.
-                focus = .search
-            })
+            FilesKeyMonitor(
+                onFocusScopedSearch: {
+                    let searchStore = ensureSearch()
+                    searchStore.scopedRoot = store.activeTab.currentDirectory
+                    // Set the shared focus target directly — no request counter,
+                    // no second focus state to lose a race with.
+                    focus = .search
+                },
+                // ⌥R rides the same monitor for the same reason ⌥F does: the
+                // chord must work whether the caret is in the list, the
+                // breadcrumb or the search field.
+                onBatchRename: { actions.beginBatchRename() })
             .frame(width: 0, height: 0)
         )
         .overlay(alignment: .bottomTrailing) {
@@ -183,6 +188,16 @@ struct FilesRootView: View {
                 onCancel: { actions.present(nil) },
                 onRename: { entry, name in Task { await actions.commitRename(entry, to: name) } },
                 onNewFolder: { name in Task { await actions.commitNewFolder(named: name) } })
+        }
+        .sheet(isPresented: Binding(get: { actions.batchRenameTargets != nil },
+                                    set: { if !$0 { actions.cancelBatchRename() } })) {
+            if let targets = actions.batchRenameTargets {
+                BatchRenameSheet(
+                    entries: targets,
+                    siblings: actions.batchRenameSiblings,
+                    onCancel: { actions.cancelBatchRename() },
+                    onApply: { plan in Task { await actions.commitBatchRename(plan) } })
+            }
         }
         .sheet(isPresented: Binding(get: { resolver.pending != nil },
                                     set: { if !$0 { resolver.cancel() } })) {

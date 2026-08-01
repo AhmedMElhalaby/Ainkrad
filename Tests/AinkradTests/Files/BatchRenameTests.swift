@@ -140,3 +140,52 @@ struct BatchRenameTests {
         #expect(result.filter(\.isChanged).count == 1)
     }
 }
+
+@Suite("Batch rename summary")
+struct BatchRenameSummaryTests {
+    private func entry(_ name: String) -> FileEntry {
+        FileEntry(url: URL(fileURLWithPath: "/x/\(name)"), name: name, isDirectory: false,
+                  isSymlink: false, isHidden: false, size: 0, modified: Date())
+    }
+
+    private func plan(_ names: [String], find: String, replace: String,
+                      existing: Set<String> = []) -> [BatchRenamePlanItem] {
+        batchRenamePlan(entries: names.map(entry), mode: .findReplace, find: find,
+                        replace: replace, existingNames: existing)
+    }
+
+    @Test("counts renamable, blocked and unchanged rows separately")
+    func counts() {
+        // "a.txt" renames cleanly, "b.txt" collides with a file on disk,
+        // "other.md" does not match at all.
+        let summary = plan(["a.txt", "b.txt", "other.md"], find: "a.txt", replace: "z.txt")
+            .renameSummary
+        #expect(summary.willRename == 1)
+        #expect(summary.unchanged == 2)
+        #expect(summary.blocked == 0)
+    }
+
+    @Test("a collision counts as blocked, not as a rename")
+    func collisionBlocks() {
+        let summary = plan(["a.txt"], find: "a", replace: "taken", existing: ["taken.txt"])
+            .renameSummary
+        #expect(summary.blocked == 1)
+        #expect(summary.willRename == 0)
+    }
+
+    // The button must stay live when SOME rows are clean: one bad row should
+    // not force the user to re-derive a pattern that is right for the rest.
+    @Test("blocked rows do not disable apply while clean rows remain")
+    func partiallyBlockedStillApplies() {
+        let summary = plan(["a.txt", "b.txt"], find: ".txt", replace: ".md",
+                           existing: ["a.md"]).renameSummary
+        #expect(summary.willRename == 1)
+        #expect(summary.blocked == 1)
+        #expect(summary.canApply)
+    }
+
+    @Test("a plan that changes nothing cannot be applied")
+    func nothingToDo() {
+        #expect(!plan(["a.txt"], find: "zzz", replace: "x").renameSummary.canApply)
+    }
+}

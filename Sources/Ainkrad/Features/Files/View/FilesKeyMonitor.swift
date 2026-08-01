@@ -18,15 +18,19 @@ import SwiftUI
 struct FilesKeyMonitor: NSViewRepresentable {
     /// ⌥F — focus the in-pane scoped search field.
     let onFocusScopedSearch: () -> Void
+    /// ⌥R — open the batch-rename sheet for the selection.
+    let onBatchRename: () -> Void
 
     func makeNSView(context: Context) -> MonitoringView {
         let view = MonitoringView()
         view.onFocusScopedSearch = onFocusScopedSearch
+        view.onBatchRename = onBatchRename
         return view
     }
 
     func updateNSView(_ nsView: MonitoringView, context: Context) {
         nsView.onFocusScopedSearch = onFocusScopedSearch
+        nsView.onBatchRename = onBatchRename
     }
 
     static func dismantleNSView(_ nsView: MonitoringView, coordinator: ()) {
@@ -36,8 +40,11 @@ struct FilesKeyMonitor: NSViewRepresentable {
     final class MonitoringView: NSView {
         /// `kVK_ANSI_F`. Layout-independent, unlike the produced character.
         private static let fKeyCode: UInt16 = 3
+        /// `kVK_ANSI_R`.
+        private static let rKeyCode: UInt16 = 15
 
         var onFocusScopedSearch: (() -> Void)?
+        var onBatchRename: (() -> Void)?
         private var monitor: Any?
 
         override func viewDidMoveToWindow() {
@@ -49,9 +56,12 @@ struct FilesKeyMonitor: NSViewRepresentable {
                     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
                     // Exactly option — ⌘F (global palette) and ⌘⇧F must both
                     // keep passing through untouched.
-                    guard event.keyCode == Self.fKeyCode,
-                          flags == .option else { return event }
-                    self.onFocusScopedSearch?()
+                    guard flags == .option else { return event }
+                    switch event.keyCode {
+                    case Self.fKeyCode: self.onFocusScopedSearch?()
+                    case Self.rKeyCode: self.onBatchRename?()
+                    default: return event
+                    }
                     return nil   // swallow, so it doesn't also beep
                 }
             } else {
