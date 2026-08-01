@@ -8,8 +8,19 @@ struct NavigationHistory: Equatable, Sendable {
     private(set) var index: Int
 
     init(root: URL) {
-        self.entries = [root]
+        self.entries = [Self.canonical(root)]
         self.index = 0
+    }
+
+    /// Directory URLs reach us from three sources that disagree on trailing
+    /// slashes: `appendingPathComponent` yields none,
+    /// `deletingLastPathComponent` yields one, and a user-typed path may have
+    /// either. `URL` equality is textual, so `/Users/test/` != `/Users/test`
+    /// and Back, sidebar highlighting and breadcrumb matching would all
+    /// silently misbehave. Round-tripping through `path` strips the slash and
+    /// resolves `.`/`..`, so every URL held here is comparable.
+    static func canonical(_ url: URL) -> URL {
+        URL(fileURLWithPath: url.standardizedFileURL.path)
     }
 
     var current: URL { entries[index] }
@@ -20,10 +31,11 @@ struct NavigationHistory: Equatable, Sendable {
     /// no-op rather than a duplicate entry — otherwise a refresh would push
     /// junk onto the stack and Back would appear broken.
     mutating func visit(_ url: URL) {
-        guard url != current else { return }
+        let target = Self.canonical(url)
+        guard target != current else { return }
         // Anything ahead of the cursor is a branch we just abandoned.
         entries.removeSubrange((index + 1)...)
-        entries.append(url)
+        entries.append(target)
         index = entries.count - 1
     }
 

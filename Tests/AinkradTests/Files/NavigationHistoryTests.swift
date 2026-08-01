@@ -55,6 +55,18 @@ struct NavigationHistoryTests {
         #expect(!history.canGoBack)
     }
 
+    @Test("canonicalises trailing slashes so URL equality works")
+    func canonicalisesTrailingSlash() {
+        // `deletingLastPathComponent()` produces a trailing slash; without
+        // canonicalisation "/a/" != "/a" and ascend-to-parent silently fails.
+        var history = NavigationHistory(root: URL(fileURLWithPath: "/a/b"))
+        history.visit(URL(fileURLWithPath: "/a/b").deletingLastPathComponent())
+        #expect(history.current == URL(fileURLWithPath: "/a"))
+        // Re-visiting the same directory via the slashed form is still a no-op.
+        history.visit(URL(fileURLWithPath: "/a/"))
+        #expect(history.entries.count == 2)
+    }
+
     @Test("back and forward at the ends do nothing")
     func clampsAtEnds() {
         var history = NavigationHistory(root: a)
