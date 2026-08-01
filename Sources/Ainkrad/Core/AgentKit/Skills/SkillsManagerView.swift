@@ -137,18 +137,26 @@ struct SkillsManagerView: View {
         let tokens = environment.themeManager.tokens
 
         VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "ACTIVE SKILLS", tokens: tokens)
-            activeSkillsSection(tokens: tokens)
+            AinkradSettingsPanel(title: "Active skills",
+                                 hint: "Installed skills and pending proposals.") {
+                activeSkillsSection(tokens: tokens)
+            }
 
-            SettingsSectionHeader(title: "PROPOSED", tokens: tokens)
-            proposedSection(tokens: tokens)
+            AinkradSettingsPanel(title: "Proposed",
+                                 hint: "Drafts the assistant proposes via propose_skill, for review before they go active.") {
+                proposedSection(tokens: tokens)
+            }
 
-            SettingsSectionHeader(title: "COMMANDS", tokens: tokens)
-            commandsSection(tokens: tokens)
+            AinkradSettingsPanel(title: "Commands",
+                                 hint: "Bind a skill to a /name slash command.") {
+                commandsSection(tokens: tokens)
+            }
 
             if !viewModel.registry.loadErrors.isEmpty {
-                SettingsSectionHeader(title: "LOAD ERRORS", tokens: tokens)
-                loadErrorsSection(tokens: tokens)
+                AinkradSettingsPanel(title: "Load errors",
+                                     hint: "Skills that failed to load from a malformed SKILL.md file.") {
+                    loadErrorsSection(tokens: tokens)
+                }
             }
         }
         .onAppear(perform: syncDefaultCommandSkill)

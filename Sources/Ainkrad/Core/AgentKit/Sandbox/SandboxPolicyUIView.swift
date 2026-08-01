@@ -104,23 +104,24 @@ struct SandboxPolicyUIView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
 
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "SANDBOXING", tokens: tokens, icon: "shippingbox")
+        AinkradSettingsPanel(title: "Sandboxing",
+                             hint: "Filesystem and network boundaries for tool execution.") {
+            VStack(alignment: .leading, spacing: 12) {
+                profileList(tokens: tokens)
 
-            profileList(tokens: tokens)
-
-            if let selected = store.profile(id: selectedID) {
-                if BuiltInSandboxProfiles.reservedIDs.contains(selected.id) {
-                    readOnlySummary(selected, tokens: tokens)
-                } else if let draft, draft.id == selected.id {
-                    editor(tokens: tokens)
+                if let selected = store.profile(id: selectedID) {
+                    if BuiltInSandboxProfiles.reservedIDs.contains(selected.id) {
+                        readOnlySummary(selected, tokens: tokens)
+                    } else if let draft, draft.id == selected.id {
+                        editor(tokens: tokens)
+                    }
                 }
-            }
 
-            newProfileRow()
-            trustTierDefaults(tokens: tokens)
-            cloudSection(tokens: tokens)
-            explainerSection(tokens: tokens)
+                newProfileRow()
+                trustTierDefaults(tokens: tokens)
+                cloudSection(tokens: tokens)
+                explainerSection(tokens: tokens)
+            }
         }
         .onAppear {
             syncDraft()

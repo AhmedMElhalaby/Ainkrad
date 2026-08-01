@@ -35,11 +35,15 @@ struct ScheduleUIView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                SettingsSectionHeader(title: "NEW SCHEDULE", tokens: tokens)
-                editor(tokens: tokens)
+                AinkradSettingsPanel(title: "New schedule",
+                                     hint: "Have the agent run on a timer, a file change, a git change, or an incoming webhook.") {
+                    editor(tokens: tokens)
+                }
 
-                SettingsSectionHeader(title: "SCHEDULES (\(store.schedules.count))", tokens: tokens)
-                list(tokens: tokens)
+                AinkradSettingsPanel(title: "Schedules (\(store.schedules.count))",
+                                     hint: "Existing schedules, with enable/disable and last-run status.") {
+                    list(tokens: tokens)
+                }
             }
             .padding(18)
         }
