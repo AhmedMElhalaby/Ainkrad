@@ -3,9 +3,10 @@ import AinkradAppKit
 import AinkradHostRuntime
 
 /// The Assistant Settings "MEDIA" section: the image-generation provider picker
-/// and its API key. Mirrors `WebToolsSettingsView`'s idiom (`AinkradSettingsPanel`
-/// + a `labeled` row wrapper); zero native controls — every control here is an
-/// AinkradAppKit Cardinal HUD component. The key itself is never persisted in
+/// and its API key. Built from `AinkradSettingsPanel`, `AinkradCaptionedRow` for
+/// single-field rows, and `AssistantSettingsLabeled` for the provider list;
+/// zero native controls — every control here is an AinkradAppKit Cardinal HUD
+/// component. The key itself is never persisted in
 /// `settings.document` — it's written straight to the Keychain via
 /// `secrets.setSecret(_:for:)` keyed by `OpenAIImageBackend.secretID`.
 @MainActor
@@ -134,7 +135,7 @@ struct MediaSettingsView: View {
                     }
                     hint("Keys are Keychain-only. Leave MODEL blank for the provider default; set it to any supported model — that's also how you reach more models/providers.")
                 } else if provider == "localsd" {
-                    AinkradCaptionedRow("Local server URL") {
+                    AinkradCaptionedRow("Server URL") {
                         AinkradTextField(text: $localSDURL, placeholder: "http://127.0.0.1:7860")
                             .onSubmit { settings.setLocalSDURL(localSDURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
                     }

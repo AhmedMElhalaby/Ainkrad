@@ -348,7 +348,7 @@ struct SandboxPolicyUIView: View {
     /// research lands (see `ModalCloudBackend`).
     private func cloudSection(tokens: DesignTokens) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("CLOUD").font(AinkradFont.display(12, weight: .semibold)).foregroundStyle(tokens.foreground.opacity(0.6))
+            Text("Cloud").font(AinkradFont.display(12, weight: .semibold)).foregroundStyle(tokens.foreground.opacity(0.6))
             Text("Cloud execution is opt-in per Agent — enable it on an Agent's profile.")
                 .font(AinkradFont.display(11))
                 .foregroundStyle(tokens.foreground.opacity(0.55))

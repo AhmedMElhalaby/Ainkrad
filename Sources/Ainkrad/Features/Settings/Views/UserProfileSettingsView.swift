@@ -70,9 +70,18 @@ struct UserProfileSettingsView: View {
 
     /// Trimmed on the way in, exactly as the wizard does — a trailing space in
     /// a name reaches the agent's prompt otherwise.
+    ///
+    /// Unlike the wizard's `SetupYou.apply` (which skips blanks — a field left
+    /// blank there just hasn't been answered yet), an emptied field HERE
+    /// clears the stored fact: this is an editor, and a user must be able to
+    /// delete a wrong value rather than have it linger in `profile.json` and
+    /// keep projecting into `USER.md` forever.
     private func write(_ value: String, for key: String) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else {
+            environment.userProfileStore.remove(key)
+            return
+        }
         environment.userProfileStore.set(trimmed, for: key)
     }
 }

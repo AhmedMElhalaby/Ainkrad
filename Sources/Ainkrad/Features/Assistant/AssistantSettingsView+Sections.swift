@@ -19,8 +19,14 @@ struct AssistantSettingsLabeled<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
+            // Typography matched to `AinkradCaptionedRow`'s caption column
+            // (same size/weight/opacity, no kerning): the two idioms now
+            // coexist in the same panels (e.g. TTS), and the kerning here was
+            // tuned for all-caps text this view no longer renders — left in
+            // place it read as a second, competing caption style next to
+            // `AinkradCaptionedRow`'s leading-column captions.
             Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
+                .font(AinkradFont.display(11, weight: .medium))
                 .foregroundStyle(tokens.foreground.opacity(0.45))
             content()
         }

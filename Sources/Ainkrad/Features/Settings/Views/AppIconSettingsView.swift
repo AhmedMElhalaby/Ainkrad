@@ -2,6 +2,18 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
+/// Shared captions for the app-icon control, used by both the Settings pane
+/// (this file) and the wizard's Appearance step (`SetupAppearanceStepView`).
+/// The two used to hardcode their own copy and drifted — "Color"/"Colour" and
+/// "Appearance"/"Light or dark" for the same two axes. "Color" is the
+/// dominant spelling elsewhere in the app's user-facing strings, so it wins
+/// here; same idiom as `UserProfileField.all` and `AccentSelection` being the
+/// one place two sites agree on shared copy/logic.
+enum AppIconCaptions {
+    static let color = "Color"
+    static let appearance = "Appearance"
+}
+
 /// Settings → App Icon: manual picker for the running app's Dock icon.
 /// COLOR (Auto/Blue/Purple; Auto follows the theme) and APPEARANCE
 /// (System/Light/Dark; Light/Dark pin one variant), with a live preview.
@@ -20,14 +32,14 @@ struct AppIconSettingsView: View {
 
                 preview(store: store, tokens: tokens)
 
-                AinkradCaptionedRow("Color") {
+                AinkradCaptionedRow(AppIconCaptions.color) {
                     AinkradSegmentedPicker(
                         items: AppIconChoice.allCases,
                         selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
                         label: colorTitle
                     )
                 }
-                AinkradCaptionedRow("Appearance") {
+                AinkradCaptionedRow(AppIconCaptions.appearance) {
                     AinkradSegmentedPicker(
                         items: AppIconAppearance.allCases,
                         selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),

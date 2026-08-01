@@ -303,14 +303,14 @@ struct SetupAppearanceStepView: View {
     private func appIconControls(tokens: DesignTokens) -> some View {
         let store = environment.appIconStore
         return VStack(alignment: .leading, spacing: 9) {
-            AinkradCaptionedRow("Colour") {
+            AinkradCaptionedRow(AppIconCaptions.color) {
                 AinkradSegmentedPicker(
                     items: AppIconChoice.allCases,
                     selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
                     label: iconColorTitle
                 )
             }
-            AinkradCaptionedRow("Light or dark") {
+            AinkradCaptionedRow(AppIconCaptions.appearance) {
                 AinkradSegmentedPicker(
                     items: AppIconAppearance.allCases,
                     selection: Binding(get: { store.appearance },

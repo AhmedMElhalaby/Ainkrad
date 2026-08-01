@@ -88,7 +88,7 @@ struct VideoSettingsView: View {
 
                 let provider = settings.document.provider
                 if provider == "local" {
-                    AinkradCaptionedRow("Local server URL") {
+                    AinkradCaptionedRow("Server URL") {
                         AinkradTextField(text: $localURL, placeholder: "http://127.0.0.1:8000/generate")
                             .onSubmit { settings.setLocalURL(localURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
                     }

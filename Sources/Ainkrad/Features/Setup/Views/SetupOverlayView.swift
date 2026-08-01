@@ -5,6 +5,14 @@ import AinkradHostRuntime
 /// The first-run gate. Deliberately non-dismissible: no scrim tap, no Escape,
 /// no onDismiss closure — that trio is what makes every other overlay closable.
 /// ⌘Q still quits; it is not routed through KeyboardShortcutMonitor.
+///
+/// EXCEPTION: when `environment.isSetupReplay` is true (the wizard was raised
+/// from Settings' "Re-run setup", not as the first-run gate), a Cancel
+/// affordance appears — see `closeReplayButton`. A replaying user's vault is
+/// already fully set up; there is nothing left to protect by trapping them.
+/// Genuine first-run (`SetupGate.raisedAtLaunch`) is untouched: `isSetupReplay`
+/// is false on that path, so the button never renders and the overlay stays
+/// exactly as non-dismissible as before.
 struct SetupOverlayView: View {
     @Environment(AppEnvironment.self) private var environment
     /// Read live from `GeneralSettingsStore.uiReduceMotion` (injected in
@@ -43,6 +51,20 @@ struct SetupOverlayView: View {
                     .transition(.opacity)
                     .zIndex(10)
             }
+
+            // Replay-only exit. See the type doc for why first-run never gets
+            // this: `environment.isSetupReplay` is false on that path.
+            if environment.isSetupReplay {
+                VStack {
+                    HStack {
+                        Spacer()
+                        closeReplayButton(tokens: tokens)
+                    }
+                    Spacer()
+                }
+                .padding(20)
+                .zIndex(20)
+            }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: modals.modal?.id)
         .onAppear {
@@ -56,6 +78,40 @@ struct SetupOverlayView: View {
         // Deliberately no .onKeyPress(.escape) — this overlay must not be
         // dismissible by keyboard either. ⌘Q is exempted upstream in
         // `SetupGate.swallows`, not handled here.
+    }
+
+    /// Only rendered during a replay (see the type doc). Ends the replay
+    /// without touching anything the wizard may have already written: a
+    /// replaying user's facts and settings are saved field-by-field, same as
+    /// the Settings panes they mirror, so there is nothing to roll back.
+    private func closeReplayButton(tokens: DesignTokens) -> some View {
+        Button(action: closeReplay) {
+            HStack(spacing: 6) {
+                Image(systemName: "xmark")
+                Text("Close")
+            }
+            .font(AinkradFont.display(12, weight: .medium))
+            .foregroundStyle(tokens.foreground.opacity(0.85))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.7)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("setup.replay.close")
+        .accessibilityLabel("Close re-run setup")
+    }
+
+    /// Both flags must clear together: leaving `isSetupReplay` set would make
+    /// a later, genuinely-owed first-run wizard skip steps as if it were still
+    /// a replay; leaving it unset while `isSetupPresented` came back some
+    /// other way would make a real first-run look cancellable. Mirrors
+    /// `SetupDoneStepView.finish()`'s ordering and menu-bar restore, minus
+    /// `coordinator.complete()` — a cancelled replay has not finished setup,
+    /// it has merely stopped looking at it again.
+    private func closeReplay() {
+        environment.isSetupPresented = false
+        environment.isSetupReplay = false
+        environment.menuBarController?.install()
     }
 
     /// Full-bleed: rail, heading, step, nav — no panel chrome, no fixed size.
