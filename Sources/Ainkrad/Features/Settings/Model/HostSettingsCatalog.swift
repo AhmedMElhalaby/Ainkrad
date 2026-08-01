@@ -72,7 +72,18 @@ enum HostSettingsCatalog {
                         label: "Ainkrad Home",
                         help: "The folder holding all of your workspaces and notes.",
                         keywords: ["vault", "folder", "location", "path", "home", "storage"],
-                        kind: .custom(AnyView(HomeSettingsView())))
+                        kind: .custom(AnyView(HomeSettingsView()))),
+                    SettingsField(
+                        path: page.appending("home").appending("rerunSetup"),
+                        label: "Re-run setup",
+                        help: "Walk through the first-run wizard again. Your Home folder is "
+                            + "not re-asked, and nothing is reset until you change it.",
+                        keywords: ["wizard", "setup", "first run", "onboarding", "welcome"],
+                        kind: .action(title: "Re-run setup") {
+                            environment.isSettingsPresented = false
+                            environment.isSetupReplay = true
+                            environment.isSetupPresented = true
+                        })
                 ])
             ])
     }

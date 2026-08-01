@@ -90,7 +90,18 @@ struct SetupYouStepView: View {
                 coordinator.advance()
             }
         }
-        .onAppear { write(values["timezone"] ?? "", for: "timezone") }
+        .onAppear {
+            // Seeds already-stored facts into the fields — the normal case now
+            // that this step can be replayed from Settings on a vault that
+            // already has a profile. Without this a replay shows blank fields
+            // as if nothing had ever been entered, even though nothing was
+            // lost (`SetupYou.apply` skips blanks on commit). Matches the
+            // idiom in `UserProfileSettingsView.onAppear`.
+            for (key, value) in environment.userProfileStore.all() where !value.isEmpty {
+                values[key] = value
+            }
+            write(values["timezone"] ?? "", for: "timezone")
+        }
     }
 
     /// The rules live in `SetupValidation` so the next change to them is one

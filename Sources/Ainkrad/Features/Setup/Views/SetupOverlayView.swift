@@ -49,7 +49,8 @@ struct SetupOverlayView: View {
             if coordinator == nil {
                 coordinator = SetupCoordinator(
                     persistence: environment.persistence,
-                    isProvisionalHome: environment.isProvisionalHome)
+                    isProvisionalHome: environment.isProvisionalHome,
+                    isReplay: environment.isSetupReplay)
             }
         }
         // Deliberately no .onKeyPress(.escape) — this overlay must not be

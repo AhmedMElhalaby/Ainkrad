@@ -221,6 +221,9 @@ final class AppEnvironment {
     /// Blocking first-run gate. Unlike every other overlay this is not dismissible:
     /// the workspace renders behind it but nothing in it can be reached.
     var isSetupPresented = false
+    /// True when the wizard was opened from Settings rather than raised as a
+    /// gate. Read once by `SetupOverlayView` when it builds its coordinator.
+    var isSetupReplay = false
 
     /// Setup steps the user was let past without satisfying, mirrored from the
     /// `SetupDocument` marker so the workspace can be honest about it without
