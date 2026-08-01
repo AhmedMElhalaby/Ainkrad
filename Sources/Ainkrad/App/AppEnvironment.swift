@@ -50,6 +50,10 @@ final class AppEnvironment {
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
     let appAppearanceStore: AppAppearanceStore
+    /// Files' own display settings (icon size, metadata columns). Constructed
+    /// in `init` from `persistence` rather than threaded through bootstrap's
+    /// parameter list — it depends on nothing else.
+    let filesSettingsStore: FilesSettingsStore
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
     /// Assistant session-share (M8) — writes self-contained HTML share artifacts
@@ -351,6 +355,7 @@ final class AppEnvironment {
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
+        self.filesSettingsStore = FilesSettingsStore(persistence: persistence)
         self.webSearchSettingsStore = webSearchSettingsStore
         self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore

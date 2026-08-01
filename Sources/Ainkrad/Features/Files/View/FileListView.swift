@@ -5,8 +5,13 @@ import AinkradAppKitUI
 /// The sortable header + scrolling rows for one tab.
 struct FileListView: View {
     @Bindable var tab: FilesTab
+    let iconSize: CGFloat
+    let rowPadding: CGFloat
+    let showMetadata: Bool
 
     @Environment(\.ainkradTheme) private var theme
+    @Environment(\.ainkradTypography) private var typo
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     /// Captured once, NOT a computed property: a computed `Date()` would be
     /// evaluated per row, so a 5,000-entry directory would allocate 5,000
@@ -41,6 +46,9 @@ struct FileListView: View {
                                 isCursor: tab.cursorEntry == entry,
                                 isSelected: tab.selection.contains(entry.url),
                                 now: now,
+                                iconSize: iconSize,
+                                rowPadding: rowPadding,
+                                showMetadata: showMetadata,
                                 onTap: { tab.placeCursor(at: entry) },
                                 onDoubleTap: { tab.descend(into: entry) }
                             )
@@ -53,11 +61,12 @@ struct FileListView: View {
                 .onChange(of: tab.cursorIndex) { _, _ in
                     guard let entry = tab.cursorEntry else { return }
                     // `anchor: nil` scrolls the MINIMUM distance needed to
-                    // bring the row into view. The first cut passed
-                    // `.center`, which re-centred the entire list on every
-                    // single arrow press — the list lurched under you instead
-                    // of scrolling at the edges, which read as "glitchy".
-                    proxy.scrollTo(entry.url, anchor: nil)
+                    // bring the row into view. Passing `.center` re-centred
+                    // the whole list on every arrow press — the list lurched
+                    // under you instead of scrolling at the edges.
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
+                        proxy.scrollTo(entry.url, anchor: nil)
+                    }
                 }
             }
         }
@@ -69,10 +78,12 @@ struct FileListView: View {
         HStack(spacing: AinkradSpacing.sm) {
             headerButton("Name", key: .name)
             Spacer(minLength: AinkradSpacing.md)
-            headerButton("Size", key: .size)
-                .frame(width: FilesColumnMetrics.sizeWidth, alignment: .trailing)
-            headerButton("Modified", key: .modified)
-                .frame(width: FilesColumnMetrics.modifiedWidth, alignment: .trailing)
+            if showMetadata {
+                headerButton("Size", key: .size)
+                    .frame(width: FilesColumnMetrics.sizeWidth, alignment: .trailing)
+                headerButton("Modified", key: .modified)
+                    .frame(width: FilesColumnMetrics.modifiedWidth, alignment: .trailing)
+            }
         }
         .padding(.horizontal, FilesColumnMetrics.headerInset)
         .padding(.bottom, AinkradSpacing.xs)
@@ -82,21 +93,27 @@ struct FileListView: View {
         Button {
             // Mirrors `nextSort(current:column:)` from the kit: a new column
             // starts ascending, the active column toggles direction.
-            if tab.sortKey == key {
-                tab.sortAscending.toggle()
-            } else {
-                tab.sortKey = key
-                tab.sortAscending = true
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                if tab.sortKey == key {
+                    tab.sortAscending.toggle()
+                } else {
+                    tab.sortKey = key
+                    tab.sortAscending = true
+                }
             }
         } label: {
             HStack(spacing: 3) {
                 Text(title.uppercased())
-                    .font(.system(size: 9.5, weight: .medium))
+                    .font(AinkradFontResolver.font(.caption, weight: .medium, typography: typo))
                     .tracking(0.9)
-                if tab.sortKey == key {
-                    Image(systemName: tab.sortAscending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
-                }
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 7, weight: .bold))
+                    // Kept in the layout at zero opacity when inactive, so
+                    // sorting a column doesn't shift the header text sideways.
+                    .opacity(tab.sortKey == key ? 1 : 0)
+                    .rotationEffect(.degrees(tab.sortAscending ? 0 : 180))
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18),
+                               value: tab.sortAscending)
             }
             .foregroundStyle(theme.foreground.opacity(tab.sortKey == key ? 0.75 : 0.4))
         }

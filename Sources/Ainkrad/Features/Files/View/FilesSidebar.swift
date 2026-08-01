@@ -8,6 +8,8 @@ import AinkradAppKitUI
 struct FilesSidebar: View {
     let roots: [SidebarRoot]
     let currentDirectory: URL
+    let iconSize: CGFloat
+    let rowPadding: CGFloat
     let onSelect: (SidebarRoot) -> Void
 
     @Environment(\.ainkradTheme) private var theme
@@ -19,6 +21,8 @@ struct FilesSidebar: View {
                     SidebarRootRow(
                         root: root,
                         isSelected: root.url == currentDirectory,
+                        iconSize: iconSize,
+                        rowPadding: rowPadding,
                         onTap: { onSelect(root) }
                     )
                 }
@@ -36,24 +40,27 @@ struct FilesSidebar: View {
 private struct SidebarRootRow: View {
     let root: SidebarRoot
     let isSelected: Bool
+    let iconSize: CGFloat
+    let rowPadding: CGFloat
     let onTap: () -> Void
 
     @Environment(\.ainkradTheme) private var theme
+    @Environment(\.ainkradTypography) private var typo
     @Environment(\.ainkradReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
         HStack(spacing: AinkradSpacing.sm) {
-            AinkradIconGlyph(systemName: root.icon, size: 12)
-                .frame(width: 18)
+            AinkradIconGlyph(systemName: root.icon, size: iconSize - 1)
+                .frame(width: iconSize + 5)
             Text(root.name)
-                .font(.system(size: 12.5))
+                .font(AinkradFontResolver.font(.body, typography: typo))
                 .foregroundStyle(theme.foreground.opacity(isSelected ? 1 : 0.8))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, AinkradSpacing.sm)
-        .padding(.vertical, 5)
+        .padding(.vertical, rowPadding)
         .background(ChamferShape(cut: 4).fill(fill))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }

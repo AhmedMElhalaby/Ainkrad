@@ -134,7 +134,19 @@ extension AppEnvironment {
                 RegisteredApp.builtIn(
                     FilesApp.self,
                     summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
-                    host: filesHost)
+                    host: filesHost,
+                    // Same contract as the Assistant: reading `surfaceOpacity`
+                    // inside this closure — invoked synchronously from
+                    // `TileLayoutView.hasTranslucentPane` and
+                    // `BlockView.headerBackground` during their view bodies —
+                    // registers an @Observable dependency, so dragging the
+                    // slider live re-evaluates the backdrop AND the title bar.
+                    chromeFillOverride: {
+                        FilesApp.surfaceFill(
+                            opacity: appAppearanceStore.surfaceOpacity("files"),
+                            base: themeManager.tokens.background
+                        )
+                    })
             ],
             loaded: loaded.apps,
             failures: loaded.failures
