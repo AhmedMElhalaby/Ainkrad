@@ -153,11 +153,13 @@ struct FilesKeyboardHandling: ViewModifier {
                 onFocusFilter()
                 return .handled
             }
-            .onKeyPress(keys: ["f"], phases: .down) { press in
+            // BOTH cases listed: holding shift makes the delivered character
+            // uppercase, so binding only "f" meant ⌘⇧F never fired at all.
+            .onKeyPress(keys: ["f", "F"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
                 // ⌘⇧F scopes to this folder (the in-pane field); plain ⌘F is
                 // the global palette.
-                if press.modifiers.contains(.shift) {
+                if press.modifiers.contains(.shift) || press.key.character == "F" {
                     onFocusFilter()
                 } else {
                     onOpenFinder(.globalSearch)
@@ -212,9 +214,15 @@ struct FilesKeyboardHandling: ViewModifier {
                 return .handled
             }
             // Undo / redo
-            .onKeyPress(keys: ["z"], phases: .down) { press in
+            // Same uppercase problem as ⌘⇧F: ⌘⇧Z arrives as "Z", so binding
+            // only "z" meant redo was unreachable from the keyboard.
+            .onKeyPress(keys: ["z", "Z"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
-                if press.modifiers.contains(.shift) { onRedo() } else { onUndo() }
+                if press.modifiers.contains(.shift) || press.key.character == "Z" {
+                    onRedo()
+                } else {
+                    onUndo()
+                }
                 return .handled
             }
             // History

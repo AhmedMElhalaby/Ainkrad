@@ -37,17 +37,6 @@ struct FileRowView: View {
 
     var body: some View {
         HStack(spacing: AinkradSpacing.sm) {
-            // Fixed-width gutter, present whether or not there is a status —
-            // otherwise every row shifts sideways when a file changes.
-            Group {
-                if let gitStatus {
-                    Image(systemName: gitStatus.glyph)
-                        .font(.system(size: iconSize * 0.5))
-                        .foregroundStyle(color(for: gitStatus))
-                }
-            }
-            .frame(width: 10)
-
             AinkradIconGlyph(systemName: iconName(for: entry), size: iconSize)
                 .opacity(entry.isSymlink ? 0.6 : 1)
                 .frame(width: iconSize + 5)
@@ -57,6 +46,16 @@ struct FileRowView: View {
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
                 .truncationMode(.middle)
+
+            // Git state sits AFTER the name: it annotates the file, and a
+            // leading gutter pushed every icon rightwards and read as a
+            // bullet-point list rather than a status.
+            if let gitStatus {
+                Image(systemName: gitStatus.glyph)
+                    .font(.system(size: iconSize * 0.5))
+                    .foregroundStyle(color(for: gitStatus))
+                    .help(gitStatusLabel(gitStatus))
+            }
 
             Spacer(minLength: AinkradSpacing.md)
 
@@ -93,6 +92,19 @@ struct FileRowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isCursor)
+    }
+
+    private func gitStatusLabel(_ status: GitFileStatus) -> String {
+        switch status {
+        case .staged: return "Staged"
+        case .modified: return "Modified"
+        case .added: return "Added"
+        case .deleted: return "Deleted"
+        case .renamed: return "Renamed"
+        case .untracked: return "Untracked"
+        case .ignored: return "Ignored"
+        case .conflicted: return "Conflicted"
+        }
     }
 
     /// Status colours come from the kit's semantic palette, never hardcoded.

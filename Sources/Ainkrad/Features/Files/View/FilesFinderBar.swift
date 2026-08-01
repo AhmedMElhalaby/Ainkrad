@@ -125,7 +125,7 @@ struct FilesFinderBar: View {
 
     private var footer: some View {
         HStack(spacing: AinkradSpacing.md) {
-            Text(search.mode == .jump ? "Jump" : "Search")
+            Text(search.mode == .jump ? "Jump" : "Global search")
                 .foregroundStyle(tokens.accentSecondary)
             if search.didTruncate {
                 // Silent truncation would read as "that's everything".
@@ -144,8 +144,13 @@ struct FilesFinderBar: View {
     }
 
     private var placeholder: String {
-        // No "press Return" — it searches as you type now.
-        search.mode == .jump ? "Jump to a file…" : "Search below this folder…"
+        // No "press Return" — it searches as you type. And ⌘F is GLOBAL now,
+        // so the copy must not still claim it is scoped to a folder.
+        switch search.mode {
+        case .jump: return "Jump to a file…"
+        case .globalSearch: return "Search everywhere…"
+        case nil: return "Search…"
+        }
     }
 
     private func moveHighlight(_ delta: Int) -> KeyPress.Result {

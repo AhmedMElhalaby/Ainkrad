@@ -95,7 +95,13 @@ struct FilesRootView: View {
                                               detail: "⌘⇧Z to redo")
                 }
             },
-            onRedo: { _ = engine.redo() },
+            onRedo: {
+                Task {
+                    _ = await engine.redo()
+                    store.activeTab.reload()
+                    toast = FilesToastMessage(kind: .undone, text: "Redone", detail: "⌘Z to undo")
+                }
+            },
             onTogglePreview: { settings.showPreview.toggle() },
             onOpenFinder: { mode in openFinder(mode, store: store) },
             onFocusFilter: {

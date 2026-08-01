@@ -227,7 +227,8 @@ final class FileOperationEngine {
         // the work it did do.
         recordInverse(isMove: isMove, sawCrossVolume: sawCrossVolume,
                       created: created, moved: moved,
-                      overwritten: overwritten, trashedSources: trashedSources)
+                      overwritten: overwritten, trashedSources: trashedSources,
+                      sources: operation.sources)
 
         return OperationResult(succeeded: created.count + moved.count, skipped: skipped,
                                failures: failures, wasCancelled: progress.isCancelled)
@@ -235,18 +236,18 @@ final class FileOperationEngine {
 
     private func recordInverse(isMove: Bool, sawCrossVolume: Bool, created: [URL],
                                moved: [MovedItem], overwritten: [TrashedItem],
-                               trashedSources: [TrashedItem]) {
+                               trashedSources: [TrashedItem], sources: [URL]) {
         guard !created.isEmpty || !moved.isEmpty else { return }
 
         if !overwritten.isEmpty {
             undoStack.push(.forOverwrite(created: created + moved.map(\.to),
-                                         overwritten: overwritten))
+                                         overwritten: overwritten, sources: sources))
         } else if isMove && sawCrossVolume {
             undoStack.push(.forCrossVolumeMove(created: created, trashedSources: trashedSources))
         } else if isMove {
             undoStack.push(.forMove(items: moved))
         } else {
-            undoStack.push(.forCopy(created: created))
+            undoStack.push(.forCopy(created: created, sources: sources))
         }
     }
 

@@ -38,15 +38,51 @@ extension FileOperationEngine {
 
         _ = undoStack.popForUndo()
         apply(entry.action)
-        undoStack.pushRedo(redoCounterpart(of: entry))
+        // Push the entry UNCHANGED: redo now re-runs the recorded forward
+        // operation, so the inverse's shape is irrelevant. The old
+        // `redoCounterpart` rebuilt the entry and silently dropped its `redo`
+        // spec, which is why move and rename could not be redone at all.
+        undoStack.pushRedo(entry)
         return nil
     }
 
-    @discardableResult
-    func redo() -> UndoRefusal? {
+    /// Re-runs the ORIGINAL operation.
+    ///
+    /// The first cut re-applied the inverse, which for a copy meant deleting
+    /// files that were already gone — a redo that structurally could not redo.
+    /// Re-submitting the recorded forward operation also means the redone work
+    /// lands on the undo stack again, so ⌘Z after ⌘⇧Z behaves.
+    func redo() async -> UndoRefusal? {
         guard let entry = undoStack.redoEntries.last else { return nil }
+        guard let spec = entry.redo else {
+            // Nothing to replay (an entry from before redo specs existed);
+            // drop it rather than leave a button that does nothing.
+            _ = undoStack.popForRedo()
+            return nil
+        }
         _ = undoStack.popForRedo()
-        apply(entry.action)
+
+        let operation: FileOperation
+        switch spec.kind {
+        case .copy:
+            operation = FileOperation(kind: .copy, sources: spec.sources,
+                                      destinationDirectory: spec.destinationDirectory,
+                                      policy: spec.policy)
+        case .move:
+            operation = FileOperation(kind: .move, sources: spec.sources,
+                                      destinationDirectory: spec.destinationDirectory,
+                                      policy: spec.policy)
+        case .rename:
+            operation = FileOperation(kind: .rename(newName: spec.name ?? ""),
+                                      sources: spec.sources, destinationDirectory: nil)
+        case .createFolder:
+            operation = FileOperation(kind: .createFolder(name: spec.name ?? ""),
+                                      sources: [], destinationDirectory: spec.destinationDirectory)
+        case .trash:
+            operation = FileOperation(kind: .trash, sources: spec.sources,
+                                      destinationDirectory: nil)
+        }
+        _ = await submit(operation)
         return nil
     }
 
@@ -81,22 +117,6 @@ extension FileOperationEngine {
             // Order matters: remove what was written BEFORE restoring what was
             // displaced, or the restore collides with the file still there.
             for nested in actions { apply(nested) }
-        }
-    }
-
-    /// Undoing a copy means deleting the copies; redoing it would mean copying
-    /// again, which we cannot reconstruct from the inverse alone. So redo
-    /// replays the INVERSE OF THE INVERSE where that is well-defined, and is
-    /// otherwise a no-op recorded for label purposes only.
-    private func redoCounterpart(of entry: InverseOperation) -> InverseOperation {
-        switch entry.action {
-        case .moveBack(let items):
-            return InverseOperation(
-                id: entry.id, label: entry.label,
-                action: .moveBack(items.map { MovedItem(from: $0.to, to: $0.from) }),
-                recordedAt: Date(), affectedURLs: items.map(\.from))
-        default:
-            return entry
         }
     }
 }

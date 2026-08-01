@@ -159,3 +159,109 @@ private final class ModifiableMutator: InMemoryFileMutator, @unchecked Sendable 
         return super.volumeIdentifier(for: url)
     }
 }
+
+@MainActor
+@Suite("Redo")
+struct RedoTests {
+    private func url(_ path: String) -> URL { URL(fileURLWithPath: path) }
+
+    private func makeEngine(_ mutator: InMemoryFileMutator, trash: InMemoryTrash = InMemoryTrash())
+        -> (FileOperationEngine, UndoStack) {
+        let stack = UndoStack(persistence: InMemoryPersistenceStore())
+        return (FileOperationEngine(mutator: mutator, trash: trash, undoStack: stack), stack)
+    }
+
+    // The original implementation re-applied the INVERSE on redo, so redoing a
+    // copy tried to delete files that were already gone — a redo that
+    // structurally could not redo.
+    @Test("redoing a copy recreates the copy")
+    func redoCopy() async {
+        let mutator = InMemoryFileMutator()
+        mutator.addFile("/a/one.txt", contents: "data")
+        mutator.addDirectory("/b")
+        let (engine, stack) = makeEngine(mutator)
+
+        _ = await engine.submit(FileOperation(
+            kind: .copy, sources: [url("/a/one.txt")], destinationDirectory: url("/b")))
+        #expect(mutator.fileExists(url("/b/one.txt")))
+
+        engine.undo()
+        #expect(!mutator.fileExists(url("/b/one.txt")))
+        #expect(stack.canRedo)
+
+        _ = await engine.redo()
+        #expect(mutator.fileExists(url("/b/one.txt")), "redo must put the copy back")
+    }
+
+    @Test("redoing a move moves the file again")
+    func redoMove() async {
+        let mutator = InMemoryFileMutator()
+        mutator.addFile("/a/one.txt", contents: "data")
+        mutator.addDirectory("/b")
+        let (engine, _) = makeEngine(mutator)
+
+        _ = await engine.submit(FileOperation(
+            kind: .move, sources: [url("/a/one.txt")], destinationDirectory: url("/b")))
+        engine.undo()
+        #expect(mutator.fileExists(url("/a/one.txt")))
+
+        _ = await engine.redo()
+        #expect(mutator.fileExists(url("/b/one.txt")))
+        #expect(!mutator.fileExists(url("/a/one.txt")))
+    }
+
+    @Test("redoing a new folder recreates it")
+    func redoCreateFolder() async {
+        let mutator = InMemoryFileMutator()
+        mutator.addDirectory("/a")
+        let (engine, _) = makeEngine(mutator)
+
+        _ = await engine.submit(FileOperation(
+            kind: .createFolder(name: "fresh"), sources: [], destinationDirectory: url("/a")))
+        engine.undo()
+        #expect(!mutator.isDirectory(url("/a/fresh")))
+
+        _ = await engine.redo()
+        #expect(mutator.isDirectory(url("/a/fresh")))
+    }
+
+    @Test("redoing a rename applies it again")
+    func redoRename() async {
+        let mutator = InMemoryFileMutator()
+        mutator.addFile("/a/old.txt", contents: "x")
+        let (engine, _) = makeEngine(mutator)
+
+        _ = await engine.submit(FileOperation(
+            kind: .rename(newName: "new.txt"), sources: [url("/a/old.txt")],
+            destinationDirectory: nil))
+        engine.undo()
+        #expect(mutator.fileExists(url("/a/old.txt")))
+
+        _ = await engine.redo()
+        #expect(mutator.fileExists(url("/a/new.txt")))
+    }
+
+    // Redone work must itself be undoable, or ⌘Z after ⌘⇧Z does nothing.
+    @Test("redone work lands back on the undo stack")
+    func redoIsUndoable() async {
+        let mutator = InMemoryFileMutator()
+        mutator.addFile("/a/one.txt")
+        mutator.addDirectory("/b")
+        let (engine, stack) = makeEngine(mutator)
+
+        _ = await engine.submit(FileOperation(
+            kind: .copy, sources: [url("/a/one.txt")], destinationDirectory: url("/b")))
+        engine.undo()
+        _ = await engine.redo()
+
+        #expect(stack.canUndo)
+        engine.undo()
+        #expect(!mutator.fileExists(url("/b/one.txt")))
+    }
+
+    @Test("redo with an empty stack is a harmless no-op")
+    func redoEmpty() async {
+        let (engine, _) = makeEngine(InMemoryFileMutator())
+        _ = await engine.redo()
+    }
+}
