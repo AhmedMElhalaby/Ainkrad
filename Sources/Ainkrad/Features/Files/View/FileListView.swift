@@ -44,7 +44,7 @@ struct FileListView: View {
                         )
                     }
                 }
-                .padding(.horizontal, AinkradSpacing.sm)
+                .padding(.horizontal, FilesColumnMetrics.rowStackInset)
                 .padding(.vertical, AinkradSpacing.xs)
             }
         }
@@ -53,13 +53,15 @@ struct FileListView: View {
     /// Click-to-sort column titles. No divider under the header — the design
     /// language forbids separator lines; separation reads via spacing.
     private var header: some View {
-        HStack(spacing: AinkradSpacing.lg) {
+        HStack(spacing: FilesColumnMetrics.columnGap) {
             headerButton("Name", key: .name)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            headerButton("Size", key: .size).frame(width: 80, alignment: .trailing)
-            headerButton("Modified", key: .modified).frame(width: 140, alignment: .trailing)
+            headerButton("Size", key: .size)
+                .frame(width: FilesColumnMetrics.sizeWidth, alignment: .trailing)
+            headerButton("Modified", key: .modified)
+                .frame(width: FilesColumnMetrics.modifiedWidth, alignment: .trailing)
         }
-        .padding(.horizontal, AinkradSpacing.md)
+        .padding(.horizontal, FilesColumnMetrics.headerInset)
         .padding(.vertical, AinkradSpacing.sm)
     }
 

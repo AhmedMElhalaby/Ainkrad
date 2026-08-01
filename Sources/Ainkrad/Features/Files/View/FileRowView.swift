@@ -25,11 +25,11 @@ struct FileRowView: View {
             },
             title: entry.name,
             trailing: {
-                HStack(spacing: AinkradSpacing.lg) {
+                HStack(spacing: FilesColumnMetrics.columnGap) {
                     Text(formattedSize(entry.size, isDirectory: entry.isDirectory))
-                        .frame(width: 80, alignment: .trailing)
+                        .frame(width: FilesColumnMetrics.sizeWidth, alignment: .trailing)
                     Text(formattedDate(entry.modified, now: now))
-                        .frame(width: 140, alignment: .trailing)
+                        .frame(width: FilesColumnMetrics.modifiedWidth, alignment: .trailing)
                 }
                 .font(.caption)
                 .foregroundStyle(theme.foreground.opacity(0.55))

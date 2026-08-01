@@ -22,6 +22,30 @@ func formattedDate(_ date: Date, now: Date) -> String {
     return formatter.string(from: date)
 }
 
+/// Cumulative path segments for the breadcrumb — each carrying the URL to
+/// navigate to when clicked. Pure.
+func breadcrumbComponents(for url: URL) -> [(name: String, url: URL)] {
+    var result: [(name: String, url: URL)] = [("/", URL(fileURLWithPath: "/"))]
+    var accumulated = URL(fileURLWithPath: "/")
+    for component in url.pathComponents.dropFirst() {
+        accumulated = accumulated.appendingPathComponent(component)
+        result.append((component, accumulated))
+    }
+    return result
+}
+
+/// The footer's one-line summary of the current folder or selection.
+func selectionSummary(entries: [FileEntry], selection: Set<URL>) -> String {
+    guard !entries.isEmpty else { return "Empty" }
+    if selection.isEmpty {
+        return entries.count == 1 ? "1 item" : "\(entries.count) items"
+    }
+    let selected = entries.filter { selection.contains($0.url) }
+    let bytes = selected.reduce(Int64(0)) { $0 + $1.size }
+    let size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    return "\(selected.count) of \(entries.count) selected — \(size)"
+}
+
 /// SF Symbol for an entry, by extension. Deliberately a small hand-picked map
 /// rather than `NSWorkspace.icon(forFile:)`: the HUD design language wants
 /// monochrome symbols tinted from the theme, not macOS's colored file icons.
