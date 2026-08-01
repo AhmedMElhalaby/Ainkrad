@@ -34,6 +34,54 @@ final class FilesTab: Identifiable {
                       by: sortKey, ascending: sortAscending)
     }
 
+    /// The keyboard cursor's row in `visibleEntries`. Distinct from
+    /// `selection`: you move the cursor to look, and select to act — the
+    /// orthodox-manager separation that makes Space-to-select meaningful.
+    private(set) var cursorIndex = 0
+
+    var cursorEntry: FileEntry? {
+        visibleEntries.indices.contains(cursorIndex) ? visibleEntries[cursorIndex] : nil
+    }
+
+    func moveCursor(by delta: Int) {
+        let count = visibleEntries.count
+        guard count > 0 else { cursorIndex = 0; return }
+        cursorIndex = min(max(0, cursorIndex + delta), count - 1)
+    }
+
+    func moveCursorToStart() { cursorIndex = 0 }
+
+    func moveCursorToEnd() {
+        cursorIndex = max(0, visibleEntries.count - 1)
+    }
+
+    /// `extending` is the ⇧-arrow case: add to the selection rather than
+    /// replacing it.
+    func selectCursor(extending: Bool) {
+        guard let entry = cursorEntry else { return }
+        if extending {
+            selection.insert(entry.url)
+        } else {
+            selection = [entry.url]
+        }
+    }
+
+    func selectAll() {
+        selection = Set(visibleEntries.map(\.url))
+    }
+
+    func invertSelection() {
+        let all = Set(visibleEntries.map(\.url))
+        selection = all.subtracting(selection)
+    }
+
+    /// Enter: descend into a directory. Files do nothing in M1 — opening
+    /// them arrives with the preview pane in M3.
+    func activateCursor() {
+        guard let entry = cursorEntry, entry.isDirectory else { return }
+        descend(into: entry)
+    }
+
     init(directory: URL, fileSystem: any FileSystemServing) {
         self.fileSystem = fileSystem
         self.history = NavigationHistory(root: directory)
@@ -52,6 +100,9 @@ final class FilesTab: Identifiable {
             entries = []
             loadError = error.localizedDescription
         }
+        // A stale cursor pointing past the end of a smaller listing would make
+        // arrow keys appear dead until the user scrolled back into range.
+        cursorIndex = min(cursorIndex, max(0, visibleEntries.count - 1))
     }
 
     /// Navigates to `url` even if it turns out to be unreadable — the failure
@@ -60,6 +111,7 @@ final class FilesTab: Identifiable {
     func navigate(to url: URL) {
         history.visit(url)
         selection.removeAll()
+        cursorIndex = 0
         reload()
     }
 
@@ -78,6 +130,7 @@ final class FilesTab: Identifiable {
         guard history.canGoBack else { return }
         history.goBack()
         selection.removeAll()
+        cursorIndex = 0
         reload()
     }
 
@@ -85,6 +138,7 @@ final class FilesTab: Identifiable {
         guard history.canGoForward else { return }
         history.goForward()
         selection.removeAll()
+        cursorIndex = 0
         reload()
     }
 }

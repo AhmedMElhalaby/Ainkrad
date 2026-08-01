@@ -32,20 +32,30 @@ struct FileListView: View {
                               message: "This folder has nothing to show.")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    ForEach(tab.visibleEntries) { entry in
-                        FileRowView(
-                            entry: entry,
-                            isSelected: tab.selection.contains(entry.url),
-                            now: now,
-                            onTap: { tab.selection = [entry.url] },
-                            onDoubleTap: { tab.descend(into: entry) }
-                        )
+            // `ScrollViewReader` so keyboard navigation can drag the viewport
+            // along: without it, arrowing past the fold moves an invisible
+            // cursor and the list looks frozen.
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(tab.visibleEntries) { entry in
+                            FileRowView(
+                                entry: entry,
+                                isSelected: tab.selection.contains(entry.url),
+                                now: now,
+                                onTap: { tab.selection = [entry.url] },
+                                onDoubleTap: { tab.descend(into: entry) }
+                            )
+                            .id(entry.url)
+                        }
                     }
+                    .padding(.horizontal, FilesColumnMetrics.rowStackInset)
+                    .padding(.vertical, AinkradSpacing.xs)
                 }
-                .padding(.horizontal, FilesColumnMetrics.rowStackInset)
-                .padding(.vertical, AinkradSpacing.xs)
+                .onChange(of: tab.cursorIndex) { _, _ in
+                    guard let entry = tab.cursorEntry else { return }
+                    proxy.scrollTo(entry.url, anchor: .center)
+                }
             }
         }
     }
