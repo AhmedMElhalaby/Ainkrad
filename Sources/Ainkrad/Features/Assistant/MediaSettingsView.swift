@@ -90,57 +90,58 @@ struct MediaSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "MEDIA", tokens: tokens, icon: "photo")
+        AinkradSettingsPanel(title: "Media",
+                             hint: "Image generation and handling.") {
+            VStack(alignment: .leading, spacing: 12) {
+                AinkradCaptionedRow("Image provider") {
+                    ProviderStatusList(
+                        options: providerOptions,
+                        selection: Binding(
+                            get: { settings.document.provider },
+                            set: { settings.setProvider($0) }),
+                        tokens: tokens,
+                        onSelect: { _ in reloadForProvider() })
+                }
 
-            labeled("IMAGE PROVIDER", tokens: tokens) {
-                ProviderStatusList(
-                    options: providerOptions,
-                    selection: Binding(
-                        get: { settings.document.provider },
-                        set: { settings.setProvider($0) }),
-                    tokens: tokens,
-                    onSelect: { _ in reloadForProvider() })
-            }
-
-            // Provider-specific configuration.
-            let provider = settings.document.provider
-            if provider == "custom" {
-                labeled("BASE URL", tokens: tokens) {
-                    AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1")
-                        .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                }
-                ProviderPresetChips(presets: Self.imagePresets, tokens: tokens) { preset in
-                    customBaseURL = preset.baseURL
-                    settings.setCustomBaseURL(preset.baseURL)
-                }
-            }
-            if let secretID = secretID(for: provider) {
-                labeled("API KEY", tokens: tokens) {
-                    NeonSecureField(text: $apiKey, placeholder: "API key", tokens: tokens)
-                        .onSubmit { secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: secretID) }
-                }
-                if let hintText = modelHint(for: provider) {
-                    labeled("MODEL", tokens: tokens) {
-                        AinkradTextField(text: $model, placeholder: hintText)
-                            .onSubmit { settings.setModel(model.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                // Provider-specific configuration.
+                let provider = settings.document.provider
+                if provider == "custom" {
+                    AinkradCaptionedRow("Base URL") {
+                        AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1")
+                            .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    }
+                    ProviderPresetChips(presets: Self.imagePresets, tokens: tokens) { preset in
+                        customBaseURL = preset.baseURL
+                        settings.setCustomBaseURL(preset.baseURL)
                     }
                 }
-                if provider == "openai" || provider == "custom" {
-                    labeled("SIZE", tokens: tokens) {
-                        AinkradTextField(text: $imageSize, placeholder: "1024x1024")
-                            .onSubmit { settings.setImageSize(imageSize.isEmpty ? "1024x1024" : imageSize) }
+                if let secretID = secretID(for: provider) {
+                    AinkradCaptionedRow("API key") {
+                        NeonSecureField(text: $apiKey, placeholder: "API key", tokens: tokens)
+                            .onSubmit { secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: secretID) }
                     }
+                    if let hintText = modelHint(for: provider) {
+                        AinkradCaptionedRow("Model") {
+                            AinkradTextField(text: $model, placeholder: hintText)
+                                .onSubmit { settings.setModel(model.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+                    }
+                    if provider == "openai" || provider == "custom" {
+                        AinkradCaptionedRow("Size") {
+                            AinkradTextField(text: $imageSize, placeholder: "1024x1024")
+                                .onSubmit { settings.setImageSize(imageSize.isEmpty ? "1024x1024" : imageSize) }
+                        }
+                    }
+                    hint("Keys are Keychain-only. Leave MODEL blank for the provider default; set it to any supported model — that's also how you reach more models/providers.")
+                } else if provider == "localsd" {
+                    AinkradCaptionedRow("Local server URL") {
+                        AinkradTextField(text: $localSDURL, placeholder: "http://127.0.0.1:7860")
+                            .onSubmit { settings.setLocalSDURL(localSDURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    }
+                    hint("Point at a local Automatic1111 / ComfyUI Stable Diffusion server. No key or card required.")
+                } else {
+                    hint("No key required. Pollinations generates images with zero setup — keyless and card-free.")
                 }
-                hint("Keys are Keychain-only. Leave MODEL blank for the provider default; set it to any supported model — that's also how you reach more models/providers.")
-            } else if provider == "localsd" {
-                labeled("LOCAL SERVER URL", tokens: tokens) {
-                    AinkradTextField(text: $localSDURL, placeholder: "http://127.0.0.1:7860")
-                        .onSubmit { settings.setLocalSDURL(localSDURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                }
-                hint("Point at a local Automatic1111 / ComfyUI Stable Diffusion server. No key or card required.")
-            } else {
-                hint("No key required. Pollinations generates images with zero setup — keyless and card-free.")
             }
         }
         .onAppear { reloadForProvider() }
@@ -160,17 +161,5 @@ struct MediaSettingsView: View {
             .font(AinkradFont.display(10, weight: .regular))
             .foregroundStyle(tokens.foreground.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    // MARK: - Shared row label (mirrors `WebToolsSettingsView.labeled`)
-
-    private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            content()
-        }
     }
 }
