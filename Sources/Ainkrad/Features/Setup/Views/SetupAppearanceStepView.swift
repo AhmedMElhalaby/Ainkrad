@@ -77,15 +77,13 @@ struct SetupAppearanceStepView: View {
                     group(index: 1,
                           title: "Theme",
                           hint: "The whole workspace re-tints — window, islands, and the sky "
-                              + "behind this screen.",
-                          tokens: tokens) {
+                              + "behind this screen.") {
                         themeGrid(tokens: tokens)
                     }
                     group(index: 2,
                           title: "Accent",
                           hint: "Used for anything live: selection, focus, the things that are "
-                              + "currently doing something.",
-                          tokens: tokens) {
+                              + "currently doing something.") {
                         accentColorRow(tokens: tokens, manager: environment.themeManager)
                     }
                     // "Type" first, which reads as a verb before it reads as a
@@ -94,14 +92,12 @@ struct SetupAppearanceStepView: View {
                     // for the two controls under it instead.
                     group(index: 3,
                           title: "Typeface and size",
-                          hint: "Every word in the app, including the ones you are reading now.",
-                          tokens: tokens) {
+                          hint: "Every word in the app, including the ones you are reading now.") {
                         typographyControls(tokens: tokens)
                     }
                     group(index: 4,
                           title: "App icon",
-                          hint: "Look at the Dock — it changes as you pick.",
-                          tokens: tokens) {
+                          hint: "Look at the Dock — it changes as you pick.") {
                         appIconControls(tokens: tokens)
                     }
                 }
@@ -242,11 +238,11 @@ struct SetupAppearanceStepView: View {
     private func accentSwatch(_ theme: Theme, tokens: DesignTokens,
                               manager: ThemeManager) -> some View {
         let color = theme.tokens.accentPrimary
-        let hex = color.hexString
-        let isExplicit = manager.accentColorHex == hex
-        let isInherited = manager.accentColorHex == nil
-            && manager.currentTheme.tokens.accentPrimary.hexString == hex
-        let isSelected = isExplicit || isInherited
+        let hex = color.hexString ?? ""
+        let isSelected = AccentSelection.isSelected(
+            swatchHex: hex,
+            overrideHex: manager.accentColorHex,
+            themeAccentHex: manager.currentTheme.tokens.accentPrimary.hexString ?? "")
 
         return Button {
             manager.setAccentColorHex(hex)
@@ -281,7 +277,7 @@ struct SetupAppearanceStepView: View {
     private func typographyControls(tokens: DesignTokens) -> some View {
         let manager = environment.themeManager
         return VStack(alignment: .leading, spacing: 9) {
-            captioned("Typeface", tokens: tokens) {
+            AinkradCaptionedRow("Typeface") {
                 AinkradSegmentedPicker(
                     items: UIFontFamily.allCases,
                     selection: Binding(get: { manager.uiFontFamily },
@@ -289,7 +285,7 @@ struct SetupAppearanceStepView: View {
                     label: fontFamilyTitle
                 )
             }
-            captioned("Size", tokens: tokens) {
+            AinkradCaptionedRow("Size") {
                 AinkradSegmentedPicker(
                     items: UIFontScale.allCases,
                     selection: Binding(get: { manager.uiFontScale },
@@ -307,14 +303,14 @@ struct SetupAppearanceStepView: View {
     private func appIconControls(tokens: DesignTokens) -> some View {
         let store = environment.appIconStore
         return VStack(alignment: .leading, spacing: 9) {
-            captioned("Colour", tokens: tokens) {
+            AinkradCaptionedRow("Colour") {
                 AinkradSegmentedPicker(
                     items: AppIconChoice.allCases,
                     selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
                     label: iconColorTitle
                 )
             }
-            captioned("Light or dark", tokens: tokens) {
+            AinkradCaptionedRow("Light or dark") {
                 AinkradSegmentedPicker(
                     items: AppIconAppearance.allCases,
                     selection: Binding(get: { store.appearance },
@@ -327,34 +323,6 @@ struct SetupAppearanceStepView: View {
         .accessibilityLabel("App icon color and appearance")
     }
 
-    /// A control with a caption in a fixed leading column.
-    ///
-    /// Both of the paired sections on this screen — typeface/size and icon
-    /// colour/appearance — are TWO AXES, and rendering them as two identical
-    /// rows of pills made them read as one flat list of six options. "Auto,
-    /// Blue, Purple, System, Light, Dark" is unparseable without knowing where
-    /// one control ends and the next begins.
-    ///
-    /// An earlier comment argued the contents said what they were. That is true
-    /// of "Small / Medium / Large" and false of everything else here, and it is
-    /// never true of the RELATIONSHIP between the two rows.
-    ///
-    /// The caption column is a fixed width so the two controls align down the
-    /// screen, which is what makes them read as a form rather than as loose
-    /// buttons.
-    private func captioned<Content: View>(_ caption: String, tokens: DesignTokens,
-                                          @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(caption)
-                .font(AinkradFont.display(11, weight: .medium))
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-                .frame(width: 86, alignment: .leading)
-                .accessibilityHidden(true)
-            content()
-            Spacer(minLength: 0)
-        }
-    }
-
     // MARK: - Group + staging
 
     /// One choice: a spoken title, a sentence saying what the user will see
@@ -362,42 +330,9 @@ struct SetupAppearanceStepView: View {
     /// above it — the groups are separated by space alone, per the design
     /// language's no-separator rule.
     private func group<Content: View>(index: Int, title: String, hint: String,
-                                      tokens: DesignTokens,
                                       @ViewBuilder _ content: () -> Content) -> some View {
         staged(index: index) {
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(AinkradFont.display(15, weight: .medium))
-                        .foregroundStyle(tokens.foreground.opacity(0.95))
-                    Text(hint)
-                        .font(AinkradFont.display(12))
-                        .foregroundStyle(tokens.foreground.opacity(0.55))
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        // Capped where the CONTROLS below are not: the column
-                        // fills the group so the theme cards can use the room,
-                        // but a one-line hint stretched to 1000pt is unreadable.
-                        .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
-                               alignment: .leading)
-                }
-
-                content()
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // A recessed surface per section, exactly as the Home step draws its
-            // folder listing. Without one, four sections of bare text and loose
-            // controls float on the scrim with nothing but vertical space
-            // separating them, and the screen reads as a settings dump rather
-            // than as a composed step.
-            //
-            // Still no separator LINES — the surface is what does the dividing,
-            // which is the design language's rule rather than an exception to it.
-            .background(
-                ChamferShape(cut: AinkradRadius.md)
-                    .fill(tokens.surfaceElevated.opacity(0.32))
-            )
+            AinkradSettingsPanel(title: title, hint: hint, content: content)
         }
     }
 
