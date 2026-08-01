@@ -171,18 +171,16 @@ struct SetupProvidersStepView: View {
     @ViewBuilder
     private func connectedList(tokens: DesignTokens) -> some View {
         if !savedConnections.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                SettingsSectionHeader(title: "CONNECTED", tokens: tokens)
+            AinkradSettingsPanel(
+                title: "Connected",
+                hint: "Providers you've already linked — remove one below to disconnect it."
+            ) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(savedConnections) { connection in
                         connectedRow(connection, tokens: tokens)
                     }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ChamferShape(cut: AinkradRadius.md)
-                .fill(tokens.accentSecondary.opacity(0.08)))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Connected providers")
         }
@@ -233,55 +231,47 @@ struct SetupProvidersStepView: View {
     /// with the alternatives still on screen beside it.
     @ViewBuilder
     private func claudeRoutes(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                SettingsSectionHeader(title: "CLAUDE SUBSCRIPTION", tokens: tokens)
-                Text("Use a Claude Pro or Max plan you already pay for, instead of an API "
-                     + "key billed per token.")
-                    .font(AinkradFont.display(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: SetupStageLayout.readingWidth(inGroupOf: groupWidth),
-                           alignment: .leading)
-            }
+        AinkradSettingsPanel(
+            title: "Claude subscription",
+            hint: "Use a Claude Pro or Max plan you already pay for, instead of an API "
+                + "key billed per token."
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                if oauthController?.canImportFromClaudeCode == true {
+                    // Listed FIRST and marked as the quick one: it needs no browser
+                    // and no typing, and it is the route that still works when the
+                    // sign-in endpoint is refusing.
+                    claudeRoute(tokens: tokens,
+                                icon: "arrow.down.doc.fill",
+                                title: "Use your existing Claude Code login",
+                                detail: "Found on this Mac. Nothing to type — reuses the login "
+                                      + "Claude Code already has.",
+                                isRecommended: true) {
+                        Task { await runImport() }
+                    }
+                }
 
-            if oauthController?.canImportFromClaudeCode == true {
-                // Listed FIRST and marked as the quick one: it needs no browser
-                // and no typing, and it is the route that still works when the
-                // sign-in endpoint is refusing.
                 claudeRoute(tokens: tokens,
-                            icon: "arrow.down.doc.fill",
-                            title: "Use your existing Claude Code login",
-                            detail: "Found on this Mac. Nothing to type — reuses the login "
-                                  + "Claude Code already has.",
-                            isRecommended: true) {
-                    Task { await runImport() }
+                            icon: "person.badge.key.fill",
+                            title: "Sign in with Claude",
+                            detail: "Opens your browser to approve Ainkrad, then comes back here.",
+                            isRecommended: false) {
+                    Task { await runSignIn() }
+                }
+
+                if flow.awaitingPaste {
+                    pasteFallback(tokens: tokens)
+                }
+
+                // The failure belongs HERE, beside the routes it is about — not in a
+                // shared status row under the API-key section.
+                if let routeError {
+                    statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
+                              text: routeError, color: tokens.accentTertiary)
+                        .accessibilityIdentifier("setup.providers.routeError")
                 }
             }
-
-            claudeRoute(tokens: tokens,
-                        icon: "person.badge.key.fill",
-                        title: "Sign in with Claude",
-                        detail: "Opens your browser to approve Ainkrad, then comes back here.",
-                        isRecommended: false) {
-                Task { await runSignIn() }
-            }
-
-            if flow.awaitingPaste {
-                pasteFallback(tokens: tokens)
-            }
-
-            // The failure belongs HERE, beside the routes it is about — not in a
-            // shared status row under the API-key section.
-            if let routeError {
-                statusRow(tokens: tokens, icon: "exclamationmark.triangle.fill",
-                          text: routeError, color: tokens.accentTertiary)
-                    .accessibilityIdentifier("setup.providers.routeError")
-            }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.32)))
     }
 
     /// One Claude route: what it is, what it will do, and whether it is the easy
@@ -376,9 +366,10 @@ struct SetupProvidersStepView: View {
     }
 
     private func apiKeyRoute(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SettingsSectionHeader(title: "API KEY", tokens: tokens)
-
+        AinkradSettingsPanel(
+            title: "API key",
+            hint: "Paste a key for any supported provider — it's tested before it's saved."
+        ) {
             AinkradSegmentedPicker(
                 items: ProviderPreset.all.map(\.id),
                 selection: Binding(
@@ -438,8 +429,6 @@ struct SetupProvidersStepView: View {
                 .disabled(isBusy || !canConnect)
             }
         }
-        .padding(14)
-        .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.5)))
     }
 
     /// A keyless preset (ollama) needs only a base URL; everything else needs a key.

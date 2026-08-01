@@ -3,7 +3,7 @@ import AinkradAppKit
 import AinkradHostRuntime
 
 /// The Assistant Settings "WEB" section: the `web_search` provider picker and
-/// its API key. Mirrors `VoiceSettingsView`'s idiom (`SettingsSectionHeader` +
+/// its API key. Mirrors `VoiceSettingsView`'s idiom (`AinkradSettingsPanel` +
 /// a `labeled` row wrapper); zero native controls — every control here is an
 /// AinkradAppKit Cardinal HUD component. The key itself is never persisted in
 /// `settings.document` — it's written straight to the Keychain via

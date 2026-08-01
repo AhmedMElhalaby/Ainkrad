@@ -67,8 +67,10 @@ struct SetupYouStepView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     intro(tokens: tokens)
-                    VStack(alignment: .leading, spacing: 10) {
-                        SettingsSectionHeader(title: "ABOUT YOU", tokens: tokens)
+                    AinkradSettingsPanel(
+                        title: "About you",
+                        hint: "Saved as you type — all of it stays editable later in Memory."
+                    ) {
                         fieldGrid(tokens: tokens)
                     }
                 }
