@@ -65,6 +65,14 @@ enum HostSettingsCatalog {
                         defaultDescription: LauncherViewMode.allCases[0].label,
                         isModified: { store.launcherViewMode != LauncherViewMode.allCases[0] },
                         reset: { store.setLauncherViewMode(LauncherViewMode.allCases[0]) })
+                ]),
+                SettingsGroup(path: page.appending("home"), title: "Home", fields: [
+                    SettingsField(
+                        path: page.appending("home").appending("location"),
+                        label: "Ainkrad Home",
+                        help: "The folder holding all of your workspaces and notes.",
+                        keywords: ["vault", "folder", "location", "path", "home", "storage"],
+                        kind: .custom(AnyView(HomeSettingsView())))
                 ])
             ])
     }
