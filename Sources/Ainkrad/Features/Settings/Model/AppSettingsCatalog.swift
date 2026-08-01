@@ -15,6 +15,10 @@ import AinkradHostRuntime
 /// tab.
 @MainActor
 enum AppSettingsCatalog {
+    /// App ids that declare their own appearance controls and must NOT also
+    /// receive the host's auto-appended blur group.
+    private static var ownsItsAppearance: Set<String> { [AssistantApp.id, FilesApp.id] }
+
     static func pages(environment: AppEnvironment) -> [SettingsPage] {
         environment.registry.enabledApps.enumerated().map { index, app in
             let isBuiltIn = app.source == .builtIn
@@ -61,7 +65,13 @@ enum AppSettingsCatalog {
                 ]
             }
 
-            if app.id != AssistantApp.id {
+            // Apps that own their appearance are exempt from the host's
+            // auto-appended blur group: the Assistant has an in-app Appearance
+            // tab, and Files declares blur beside its own transparency slider
+            // (they are one decision — blur does nothing while opaque), so
+            // appending it again would strand a duplicate control in a
+            // trailing group.
+            if !Self.ownsItsAppearance.contains(app.id) {
                 groups.append(appearanceGroup(appID: app.id, root: root, environment: environment))
             }
 

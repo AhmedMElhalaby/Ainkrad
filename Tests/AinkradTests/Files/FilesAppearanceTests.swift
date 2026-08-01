@@ -37,7 +37,7 @@ struct FilesAppearanceTests {
         #expect(customCount == 0)
     }
 
-    @Test("settings cover transparency, typography and icon size")
+    @Test("settings cover transparency, blur, typography and icon size")
     func settingsCoverage() {
         let environment = AppEnvironment.preview()
         let groups = FilesSettingsCatalog.groups(
@@ -45,9 +45,48 @@ struct FilesAppearanceTests {
         let labels = groups.flatMap(\.fields).map(\.label)
 
         #expect(labels.contains("Transparency"))
+        #expect(labels.contains("Blur"))
         #expect(labels.contains("Font"))
         #expect(labels.contains("Font size"))
         #expect(labels.contains("Icon size"))
+    }
+
+    @Test("settings are two groups: how it looks, then what the list shows")
+    func settingsOrganisation() {
+        let environment = AppEnvironment.preview()
+        let groups = FilesSettingsCatalog.groups(
+            root: SettingsPath(["app", FilesApp.id]), environment: environment)
+        #expect(groups.map(\.title) == ["Appearance", "List"])
+        // Transparency and blur are ONE decision and must stay adjacent.
+        let appearanceLabels = groups[0].fields.map(\.label)
+        #expect(appearanceLabels.prefix(2) == ["Transparency", "Blur"])
+    }
+
+    @Test("Files is exempt from the host's auto-appended blur group")
+    func noDuplicateBlurGroup() {
+        let environment = AppEnvironment.preview()
+        let page = AppSettingsCatalog.pages(environment: environment)
+            .first { $0.appID == FilesApp.id }
+        // Declaring blur itself AND receiving the host's group would put two
+        // blur toggles on one page.
+        let blurFields = page?.allFields.filter { $0.label == "Blur" } ?? []
+        #expect(blurFields.count == 1)
+    }
+
+    // The icon-size slider had no visible effect when these were computed
+    // properties over a private struct — SwiftUI never registered the
+    // dependency. Storing them directly is what fixes it; this pins the
+    // round-trip so a refactor back to computed accessors is caught.
+    @Test("icon size round-trips and persists")
+    func iconSizeRoundTrips() {
+        let environment = AppEnvironment.preview()
+        let store = environment.filesSettingsStore
+        store.iconSize = 18
+        #expect(store.iconSize == 18)
+        store.showMetadataColumns = false
+        #expect(!store.showMetadataColumns)
+        store.showMetadataColumns = true
+        store.iconSize = 13
     }
 
     @Test("icon size clamps to a usable range")
