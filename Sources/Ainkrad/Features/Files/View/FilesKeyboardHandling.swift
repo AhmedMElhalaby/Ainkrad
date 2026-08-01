@@ -10,6 +10,7 @@ struct FilesKeyboardHandling: ViewModifier {
     let undoStack: UndoStack
     let onUndo: () -> Void
     let onRedo: () -> Void
+    let onTogglePreview: () -> Void
     @Binding var isEditingPath: Bool
     @FocusState private var keyboardFocus: Bool
 
@@ -103,6 +104,12 @@ struct FilesKeyboardHandling: ViewModifier {
                 store.persist()
                 return .handled
             }
+            // Preview strip — ⌘Y, matching Quick Look's muscle memory.
+            .onKeyPress(keys: ["y"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                onTogglePreview()
+                return .handled
+            }
             // Path bar
             .onKeyPress(keys: ["l"], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
@@ -164,9 +171,11 @@ extension View {
                                undoStack: UndoStack,
                                onUndo: @escaping () -> Void,
                                onRedo: @escaping () -> Void,
+                               onTogglePreview: @escaping () -> Void,
                                isEditingPath: Binding<Bool>) -> some View {
         modifier(FilesKeyboardHandling(store: store, actions: actions, undoStack: undoStack,
                                        onUndo: onUndo, onRedo: onRedo,
+                                       onTogglePreview: onTogglePreview,
                                        isEditingPath: isEditingPath))
     }
 }

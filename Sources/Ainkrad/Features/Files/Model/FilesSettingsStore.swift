@@ -9,10 +9,12 @@ struct FilesSettingsDocument: PersistableDocument {
 
     var iconSize: Double = 13
     var showMetadataColumns: Bool = true
+    var showPreview: Bool = false
 
-    init(iconSize: Double = 13, showMetadataColumns: Bool = true) {
+    init(iconSize: Double = 13, showMetadataColumns: Bool = true, showPreview: Bool = false) {
         self.iconSize = iconSize
         self.showMetadataColumns = showMetadataColumns
+        self.showPreview = showPreview
     }
 }
 
@@ -45,6 +47,12 @@ final class FilesSettingsStore {
         didSet { persist() }
     }
 
+    /// Preview strip visibility, toggled by ⌘Y. Persisted so the pane comes
+    /// back the way you left it.
+    var showPreview: Bool = false {
+        didSet { persist() }
+    }
+
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
@@ -54,11 +62,13 @@ final class FilesSettingsStore {
         // of values we just read — these are the loaded values, not changes.
         self.iconSize = min(max(10, document.iconSize), 22)
         self.showMetadataColumns = document.showMetadataColumns
+        self.showPreview = document.showPreview
     }
 
     private func persist() {
         persistence.save(FilesSettingsDocument(
-            iconSize: iconSize, showMetadataColumns: showMetadataColumns))
+            iconSize: iconSize, showMetadataColumns: showMetadataColumns,
+            showPreview: showPreview))
     }
 
     /// Row vertical padding derived from icon size, so density scales as one

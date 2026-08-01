@@ -21,16 +21,31 @@ struct FileRowView: View {
     let iconSize: CGFloat
     let rowPadding: CGFloat
     let showMetadata: Bool
+    /// Git state for this row, or `nil` outside a repo / when clean.
+    let gitStatus: GitFileStatus?
+    let isIgnored: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradTypography) private var typo
     @Environment(\.ainkradReduceMotion) private var reduceMotion
+    @Environment(\.ainkradStatusColors) private var statusColors
     @State private var hovering = false
 
     var body: some View {
         HStack(spacing: AinkradSpacing.sm) {
+            // Fixed-width gutter, present whether or not there is a status —
+            // otherwise every row shifts sideways when a file changes.
+            Group {
+                if let gitStatus {
+                    Image(systemName: gitStatus.glyph)
+                        .font(.system(size: iconSize * 0.5))
+                        .foregroundStyle(color(for: gitStatus))
+                }
+            }
+            .frame(width: 10)
+
             AinkradIconGlyph(systemName: iconName(for: entry), size: iconSize)
                 .opacity(entry.isSymlink ? 0.6 : 1)
                 .frame(width: iconSize + 5)
@@ -61,9 +76,9 @@ struct FileRowView: View {
                 .fill(theme.accentSecondary)
                 .frame(width: isCursor ? 2 : 0)
         }
-        // Hidden entries render dimmed when shown, so ⌘. reads as "reveal",
-        // not "add more identical rows".
-        .opacity(entry.isHidden ? 0.55 : 1)
+        // Hidden AND ignored entries render dimmed when shown, so ⌘. reads as
+        // "reveal", not "add more identical rows".
+        .opacity(entry.isHidden || isIgnored ? 0.55 : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         // Single tap fires IMMEDIATELY; the double-tap runs alongside it as a
@@ -76,6 +91,17 @@ struct FileRowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isSelected)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isCursor)
+    }
+
+    /// Status colours come from the kit's semantic palette, never hardcoded.
+    private func color(for status: GitFileStatus) -> Color {
+        switch status {
+        case .conflicted, .deleted: return statusColors.danger
+        case .modified, .staged, .renamed: return statusColors.warning
+        case .added: return statusColors.success
+        case .untracked: return theme.foreground.opacity(0.45)
+        case .ignored: return theme.foreground.opacity(0.3)
+        }
     }
 
     private var rowFill: Color {

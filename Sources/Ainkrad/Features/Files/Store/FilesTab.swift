@@ -40,6 +40,14 @@ final class FilesTab: Identifiable {
         didSet { if oldValue != showHidden { recomputeVisible() } }
     }
 
+    /// Paths git reports as ignored, relative-resolved to absolute URLs.
+    /// Hidden alongside dotfiles under the same ⌘. affordance — a second
+    /// toggle for "show ignored" would be a distinction without a difference
+    /// for the people who want either.
+    var ignoredURLs: Set<URL> = [] {
+        didSet { if oldValue != ignoredURLs { recomputeVisible() } }
+    }
+
     var currentDirectory: URL { history.current }
     var title: String { currentDirectory.lastPathComponent }
     var canGoBack: Bool { history.canGoBack }
@@ -66,8 +74,10 @@ final class FilesTab: Identifiable {
     }
 
     private func recomputeVisible() {
-        visibleEntries = sortedEntries(filteredEntries(entries, showHidden: showHidden),
-                                       by: sortKey, ascending: sortAscending)
+        let visible = showHidden
+            ? entries
+            : entries.filter { !$0.isHidden && !ignoredURLs.contains($0.url) }
+        visibleEntries = sortedEntries(visible, by: sortKey, ascending: sortAscending)
         // A stale cursor pointing past the end of a smaller listing would make
         // arrow keys appear dead until the user scrolled back into range.
         cursorIndex = min(cursorIndex, max(0, visibleEntries.count - 1))
