@@ -3,9 +3,10 @@ import AinkradAppKit
 import AinkradHostRuntime
 
 /// The Assistant Settings "WEB" section: the `web_search` provider picker and
-/// its API key. Mirrors `VoiceSettingsView`'s idiom (`SettingsSectionHeader` +
-/// a `labeled` row wrapper); zero native controls — every control here is an
-/// AinkradAppKit Cardinal HUD component. The key itself is never persisted in
+/// its API key. Built from `AinkradSettingsPanel`, `AinkradCaptionedRow` for
+/// single-field rows, and `AssistantSettingsLabeled` for the provider list;
+/// zero native controls — every control here is an AinkradAppKit Cardinal HUD
+/// component. The key itself is never persisted in
 /// `settings.document` — it's written straight to the Keychain via
 /// `secrets.setSecret(_:for:)` keyed by `BraveSearchBackend.secretID`, the same
 /// split `VoiceSettingsView` uses for provider opt-in credentials.
@@ -42,35 +43,36 @@ struct WebToolsSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "WEB", tokens: tokens, icon: "globe")
-
-            labeled("SEARCH PROVIDER", tokens: tokens) {
-                ProviderStatusList(
-                    options: providerOptions,
-                    selection: Binding(
-                        get: { settings.document.provider },
-                        set: { settings.setProvider($0) }),
-                    tokens: tokens)
-            }
-
-            // Provider-specific configuration.
-            switch settings.document.provider {
-            case "brave":
-                labeled("SEARCH API KEY", tokens: tokens) {
-                    NeonSecureField(text: $apiKey, placeholder: "Search API key", tokens: tokens)
-                        .onSubmit {
-                            secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: BraveSearchBackend.secretID)
-                        }
+        AinkradSettingsPanel(title: "Web tools",
+                             hint: "The search provider the assistant queries.") {
+            VStack(alignment: .leading, spacing: 12) {
+                AssistantSettingsLabeled("Search provider", tokens: tokens) {
+                    ProviderStatusList(
+                        options: providerOptions,
+                        selection: Binding(
+                            get: { settings.document.provider },
+                            set: { settings.setProvider($0) }),
+                        tokens: tokens)
                 }
-            case "searxng":
-                labeled("SEARXNG INSTANCE URL", tokens: tokens) {
-                    AinkradTextField(text: $searxngURL, placeholder: "https://searx.example.org")
-                        .onSubmit { settings.setSearxngURL(searxngURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+
+                // Provider-specific configuration.
+                switch settings.document.provider {
+                case "brave":
+                    AinkradCaptionedRow("API key") {
+                        NeonSecureField(text: $apiKey, placeholder: "Search API key", tokens: tokens)
+                            .onSubmit {
+                                secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: BraveSearchBackend.secretID)
+                            }
+                    }
+                case "searxng":
+                    AinkradCaptionedRow("Instance URL") {
+                        AinkradTextField(text: $searxngURL, placeholder: "https://searx.example.org")
+                            .onSubmit { settings.setSearxngURL(searxngURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    }
+                    hint("No key or card required. Point at a public instance or self-host one (JSON API must be enabled).")
+                default:
+                    hint("No key required. Results are scraped from DuckDuckGo's HTML — keyless and card-free, but may occasionally return nothing if their page markup changes.")
                 }
-                hint("No key or card required. Point at a public instance or self-host one (JSON API must be enabled).")
-            default:
-                hint("No key required. Results are scraped from DuckDuckGo's HTML — keyless and card-free, but may occasionally return nothing if their page markup changes.")
             }
         }
         .onAppear {
@@ -84,17 +86,5 @@ struct WebToolsSettingsView: View {
             .font(AinkradFont.display(10, weight: .regular))
             .foregroundStyle(tokens.foreground.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    // MARK: - Shared row label (mirrors `VoiceSettingsView.labeled`)
-
-    private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            content()
-        }
     }
 }

@@ -14,25 +14,29 @@ struct SoundSettingsView: View {
         let store = environment.generalSettingsStore
 
         return VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "SOUND", tokens: tokens)
+            AinkradSettingsPanel(title: "Sound",
+                                 hint: "Workspace interaction sounds.") {
+                VStack(alignment: .leading, spacing: 16) {
+                    row(tokens: tokens,
+                        title: "Sound effects",
+                        subtitle: "Plays a short chime on HUD open/close, install, and other key actions.",
+                        isOn: store.soundEnabled,
+                        action: { store.setSoundEnabled($0) })
 
-            row(tokens: tokens,
-                title: "Sound effects",
-                subtitle: "Plays a short chime on HUD open/close, install, and other key actions.",
-                isOn: store.soundEnabled,
-                action: { store.setSoundEnabled($0) })
+                    if store.soundEnabled {
+                        volumeRow(tokens: tokens, store: store)
+                    }
+                }
+            }
 
             if store.soundEnabled {
-                volumeRow(tokens: tokens, store: store)
-
-                SettingsSectionHeader(title: "SOUND EFFECTS", tokens: tokens)
-
-                Text("Enable each cue individually and choose which effect it plays. ▶ previews the selected effect.")
-                    .font(AinkradFont.display(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.5))
-
-                ForEach(UISound.allCases) { event in
-                    soundEventRow(tokens: tokens, store: store, event: event)
+                AinkradSettingsPanel(title: "Sound effects",
+                                     hint: "Enable each cue individually and choose which effect it plays. ▶ previews the selected effect.") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(UISound.allCases) { event in
+                            soundEventRow(tokens: tokens, store: store, event: event)
+                        }
+                    }
                 }
             }
         }

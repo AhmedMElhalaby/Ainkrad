@@ -62,58 +62,59 @@ struct TTSSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "TEXT TO SPEECH", tokens: tokens, icon: "waveform")
+        AinkradSettingsPanel(title: "Text to speech",
+                             hint: "How the assistant reads its replies aloud.") {
+            VStack(alignment: .leading, spacing: 12) {
+                AssistantSettingsLabeled("Voice provider", tokens: tokens) {
+                    ProviderStatusList(
+                        options: providerOptions,
+                        selection: Binding(
+                            get: { settings.document.provider },
+                            set: { settings.setProvider($0) }),
+                        tokens: tokens,
+                        onSelect: { _ in reload() })
+                }
 
-            labeled("VOICE PROVIDER", tokens: tokens) {
-                ProviderStatusList(
-                    options: providerOptions,
-                    selection: Binding(
-                        get: { settings.document.provider },
-                        set: { settings.setProvider($0) }),
-                    tokens: tokens,
-                    onSelect: { _ in reload() })
-            }
-
-            let provider = settings.document.provider
-            if let secretID = secretID(for: provider) {
-                if provider == "custom" {
-                    labeled("BASE URL", tokens: tokens) {
-                        AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1")
-                            .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                let provider = settings.document.provider
+                if let secretID = secretID(for: provider) {
+                    if provider == "custom" {
+                        AinkradCaptionedRow("Base URL") {
+                            AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1")
+                                .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+                        ProviderPresetChips(presets: Self.ttsPresets, tokens: tokens) { preset in
+                            customBaseURL = preset.baseURL
+                            settings.setCustomBaseURL(preset.baseURL)
+                        }
                     }
-                    ProviderPresetChips(presets: Self.ttsPresets, tokens: tokens) { preset in
-                        customBaseURL = preset.baseURL
-                        settings.setCustomBaseURL(preset.baseURL)
+                    AinkradCaptionedRow("API key") {
+                        NeonSecureField(text: $apiKey, placeholder: "API key", tokens: tokens)
+                            .onSubmit { secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: secretID) }
                     }
+                    if provider == "openai" {
+                        AinkradCaptionedRow("Voice") {
+                            AinkradTextField(text: $voice, placeholder: "alloy")
+                                .onSubmit { settings.setOpenAIVoice(voice.isEmpty ? "alloy" : voice) }
+                        }
+                    } else if provider == "elevenlabs" {
+                        AinkradCaptionedRow("Voice ID") {
+                            AinkradTextField(text: $voice, placeholder: "21m00Tcm4TlvDq8ikWAM (Rachel)")
+                                .onSubmit { settings.setElevenLabsVoiceID(voice.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+                    } else if provider == "custom" {
+                        AinkradCaptionedRow("Model") {
+                            AinkradTextField(text: $customModel, placeholder: "tts-1")
+                                .onSubmit { settings.setCustomModel(customModel.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+                        AinkradCaptionedRow("Voice") {
+                            AinkradTextField(text: $voice, placeholder: "alloy")
+                                .onSubmit { settings.setCustomVoice(voice.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+                    }
+                    hint("Cloud voices sound more natural but require a key. On-device speech is free and offline.")
+                } else {
+                    hint("On-device speech synthesis — no key required, works offline.")
                 }
-                labeled("API KEY", tokens: tokens) {
-                    NeonSecureField(text: $apiKey, placeholder: "API key", tokens: tokens)
-                        .onSubmit { secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: secretID) }
-                }
-                if provider == "openai" {
-                    labeled("VOICE", tokens: tokens) {
-                        AinkradTextField(text: $voice, placeholder: "alloy")
-                            .onSubmit { settings.setOpenAIVoice(voice.isEmpty ? "alloy" : voice) }
-                    }
-                } else if provider == "elevenlabs" {
-                    labeled("VOICE ID", tokens: tokens) {
-                        AinkradTextField(text: $voice, placeholder: "21m00Tcm4TlvDq8ikWAM (Rachel)")
-                            .onSubmit { settings.setElevenLabsVoiceID(voice.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                    }
-                } else if provider == "custom" {
-                    labeled("MODEL", tokens: tokens) {
-                        AinkradTextField(text: $customModel, placeholder: "tts-1")
-                            .onSubmit { settings.setCustomModel(customModel.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                    }
-                    labeled("VOICE", tokens: tokens) {
-                        AinkradTextField(text: $voice, placeholder: "alloy")
-                            .onSubmit { settings.setCustomVoice(voice.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                    }
-                }
-                hint("Cloud voices sound more natural but require a key. On-device speech is free and offline.")
-            } else {
-                hint("On-device speech synthesis — no key required, works offline.")
             }
         }
         .onAppear { reload() }
@@ -134,15 +135,5 @@ struct TTSSettingsView: View {
             .font(AinkradFont.display(10, weight: .regular))
             .foregroundStyle(tokens.foreground.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            content()
-        }
     }
 }

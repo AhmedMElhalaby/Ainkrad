@@ -73,44 +73,45 @@ struct VideoSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "VIDEO", tokens: tokens, icon: "film")
+        AinkradSettingsPanel(title: "Video",
+                             hint: "Video generation and handling.") {
+            VStack(alignment: .leading, spacing: 12) {
+                AssistantSettingsLabeled("Video provider", tokens: tokens) {
+                    ProviderStatusList(
+                        options: providerOptions,
+                        selection: Binding(
+                            get: { settings.document.provider },
+                            set: { settings.setProvider($0) }),
+                        tokens: tokens,
+                        onSelect: { _ in reloadKey() })
+                }
 
-            labeled("VIDEO PROVIDER", tokens: tokens) {
-                ProviderStatusList(
-                    options: providerOptions,
-                    selection: Binding(
-                        get: { settings.document.provider },
-                        set: { settings.setProvider($0) }),
-                    tokens: tokens,
-                    onSelect: { _ in reloadKey() })
-            }
-
-            let provider = settings.document.provider
-            if provider == "local" {
-                labeled("LOCAL SERVER URL", tokens: tokens) {
-                    AinkradTextField(text: $localURL, placeholder: "http://127.0.0.1:8000/generate")
-                        .onSubmit { settings.setLocalURL(localURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                }
-                hint("Keyless: POST {\"prompt\"} → JSON with a video link (video_url / url / output). Point at a local ComfyUI wrapper or similar. No key or card.")
-            } else if let secretID = secretID(for: provider) {
-                if provider == "custom" {
-                    labeled("BASE URL", tokens: tokens) {
-                        AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1/predictions")
-                            .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                let provider = settings.document.provider
+                if provider == "local" {
+                    AinkradCaptionedRow("Server URL") {
+                        AinkradTextField(text: $localURL, placeholder: "http://127.0.0.1:8000/generate")
+                            .onSubmit { settings.setLocalURL(localURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
                     }
-                }
-                labeled("API KEY", tokens: tokens) {
-                    NeonSecureField(text: $apiKey, placeholder: "API key", tokens: tokens)
-                        .onSubmit { secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: secretID) }
-                }
-                if let hintText = modelHint(for: provider) {
-                    labeled("MODEL", tokens: tokens) {
-                        AinkradTextField(text: $model, placeholder: hintText)
-                            .onSubmit { settings.setModel(model.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    hint("Keyless: POST {\"prompt\"} → JSON with a video link (video_url / url / output). Point at a local ComfyUI wrapper or similar. No key or card.")
+                } else if let secretID = secretID(for: provider) {
+                    if provider == "custom" {
+                        AinkradCaptionedRow("Base URL") {
+                            AinkradTextField(text: $customBaseURL, placeholder: "https://api.provider.com/v1/predictions")
+                                .onSubmit { settings.setCustomBaseURL(customBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
                     }
+                    AinkradCaptionedRow("API key") {
+                        NeonSecureField(text: $apiKey, placeholder: "API key", tokens: tokens)
+                            .onSubmit { secrets.setSecret(apiKey.isEmpty ? nil : apiKey, for: secretID) }
+                    }
+                    if let hintText = modelHint(for: provider) {
+                        AinkradCaptionedRow("Model") {
+                            AinkradTextField(text: $model, placeholder: hintText)
+                                .onSubmit { settings.setModel(model.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+                    }
+                    hint("Keys are Keychain-only. Set MODEL to any supported model id — that's how you reach more models (Pika, Kling, LTX, SVD, …). No keyless cloud video exists; use Local for a keyless self-hosted path.")
                 }
-                hint("Keys are Keychain-only. Set MODEL to any supported model id — that's how you reach more models (Pika, Kling, LTX, SVD, …). No keyless cloud video exists; use Local for a keyless self-hosted path.")
             }
         }
         .onAppear { reloadKey() }
@@ -128,15 +129,5 @@ struct VideoSettingsView: View {
             .font(AinkradFont.display(10, weight: .regular))
             .foregroundStyle(tokens.foreground.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            content()
-        }
     }
 }

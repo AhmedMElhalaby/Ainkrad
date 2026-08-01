@@ -46,23 +46,25 @@ struct LSPConfigView: View {
     // MARK: - Servers
 
     private func serversSection(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                SettingsSectionHeader(title: "LANGUAGE SERVERS", tokens: tokens)
-                Spacer(minLength: 8)
-                AinkradButton(title: "Detect on PATH", style: .secondary, icon: "sparkle.magnifyingglass",
-                              action: detectOnPath)
-            }
+        AinkradSettingsPanel(title: "Language servers",
+                             hint: "LSP servers backing code intelligence.") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Spacer(minLength: 0)
+                    AinkradButton(title: "Detect on PATH", style: .secondary, icon: "sparkle.magnifyingglass",
+                                  action: detectOnPath)
+                }
 
-            if registry.servers().isEmpty {
-                AinkradEmptyState(
-                    icon: "chevron.left.forwardslash.chevron.right",
-                    title: "No language servers configured",
-                    message: "Detect servers already on your PATH, or add one below by its command and file globs."
-                )
-            } else {
-                ForEach(registry.servers()) { config in
-                    serverCard(config, tokens: tokens)
+                if registry.servers().isEmpty {
+                    AinkradEmptyState(
+                        icon: "chevron.left.forwardslash.chevron.right",
+                        title: "No language servers configured",
+                        message: "Detect servers already on your PATH, or add one below by its command and file globs."
+                    )
+                } else {
+                    ForEach(registry.servers()) { config in
+                        serverCard(config, tokens: tokens)
+                    }
                 }
             }
         }
@@ -181,9 +183,8 @@ struct LSPConfigView: View {
     // MARK: - Add server
 
     private func addServerSection(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "ADD SERVER", tokens: tokens)
-
+        AinkradSettingsPanel(title: "Add server",
+                             hint: "Add a language server by its command and file globs.") {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     AinkradTextField(text: $newID, placeholder: "Language id (e.g. swift, python)")

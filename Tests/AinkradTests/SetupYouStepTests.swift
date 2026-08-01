@@ -10,8 +10,9 @@ struct SetupYouStepTests {
         defer { t.cleanup() }
         let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
 
-        SetupYou.apply(name: "Ahmed", callMe: "Ahmed", role: "Engineer",
-                       timezone: "Africa/Cairo", store: env.userProfileStore)
+        SetupYou.apply(values: ["name": "Ahmed", "callMe": "Ahmed", "role": "Engineer",
+                                "timezone": "Africa/Cairo"],
+                       store: env.userProfileStore)
 
         #expect(env.userProfileStore.all()["name"] == "Ahmed")
         #expect(env.userProfileStore.all()["role"] == "Engineer")
@@ -30,10 +31,31 @@ struct SetupYouStepTests {
         defer { t.cleanup() }
         let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
 
-        SetupYou.apply(name: "Ahmed", callMe: "", role: "  ", timezone: "",
+        SetupYou.apply(values: ["name": "Ahmed", "callMe": "", "role": "  ", "timezone": ""],
                        store: env.userProfileStore)
 
         #expect(env.userProfileStore.all()["callMe"] == nil)
         #expect(env.userProfileStore.all()["role"] == nil)
+    }
+
+    /// Guards the fix for the review finding on `SetupYou.apply` and
+    /// `SetupYouStepView.binding(for:)`: both are now driven directly off
+    /// `UserProfileField.all` rather than a hardcoded key list, so a field
+    /// renamed or added there is written through with no matching case to
+    /// forget. This feeds `apply` a value for every key `UserProfileField.all`
+    /// declares — exactly what the view's `values` dictionary does — and
+    /// checks every one lands in the store.
+    @Test func everyUserProfileFieldKeyIsWrittenThroughApply() {
+        let t = TestHome.make("you3")
+        defer { t.cleanup() }
+        let env = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
+
+        let values = Dictionary(uniqueKeysWithValues:
+            UserProfileField.all.map { ($0.key, "value-for-\($0.key)") })
+        SetupYou.apply(values: values, store: env.userProfileStore)
+
+        for field in UserProfileField.all {
+            #expect(env.userProfileStore.all()[field.key] == "value-for-\(field.key)")
+        }
     }
 }

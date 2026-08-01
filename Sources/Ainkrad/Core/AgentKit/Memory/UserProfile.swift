@@ -40,6 +40,19 @@ final class UserProfileStore {
         project()
     }
 
+    /// Clears a fact entirely, rather than storing an empty string for it.
+    /// `project()` writes one `- key: value` line per key in `facts` — if an
+    /// emptied field were `set` instead of `remove`d, USER.md would keep a
+    /// dangling `- role: ` line that still reads as an (empty) fact. This is a
+    /// Settings-pane-only operation: the wizard's `SetupYou.apply` continues
+    /// to skip blanks rather than clear, because a field cleared mid-wizard
+    /// means "not answered yet", not "delete what was there".
+    func remove(_ key: String) {
+        doc.facts.removeValue(forKey: key)
+        persistence.save(doc)
+        project()
+    }
+
     private func project() {
         let body = doc.facts.keys.sorted()
             .map { "- \($0): \(doc.facts[$0]!)" }
