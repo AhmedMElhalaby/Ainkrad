@@ -184,6 +184,24 @@ final class FilesTab: Identifiable {
         }
     }
 
+    /// Selects the visible entry matching `url`, comparing SYMLINK-RESOLVED
+    /// paths.
+    ///
+    /// Listing URLs come from `FileManager.contentsOfDirectory`, which returns
+    /// resolved paths — `/private/var/…` where the caller wrote `/var/…`. A URL
+    /// built anywhere else therefore never compares equal to a row, so
+    /// selection set from outside the listing (the assistant's `files_reveal`,
+    /// notably) silently selected nothing.
+    @discardableResult
+    func select(matching url: URL) -> Bool {
+        let wanted = url.resolvingSymlinksInPath().path
+        guard let match = visibleEntries.first(where: {
+            $0.url.resolvingSymlinksInPath().path == wanted
+        }) else { return false }
+        placeCursor(at: match)
+        return true
+    }
+
     func selectAll() {
         selection = Set(visibleEntries.map(\.url))
     }
