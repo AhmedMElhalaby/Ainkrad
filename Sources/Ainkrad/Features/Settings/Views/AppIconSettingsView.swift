@@ -11,28 +11,29 @@ struct AppIconSettingsView: View {
     var body: some View {
         let tokens = environment.themeManager.tokens
         let store = environment.appIconStore
-        return VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "APP ICON", tokens: tokens)
+        return AinkradSettingsPanel(title: "App icon",
+                                    hint: "The icon Ainkrad shows in the Dock.") {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Choose the Dock icon. Auto follows your theme; System follows the Dock's light/dark.")
+                    .font(AinkradFont.display(11))
+                    .foregroundStyle(tokens.foreground.opacity(0.5))
 
-            Text("Choose the Dock icon. Auto follows your theme; System follows the Dock's light/dark.")
-                .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(0.5))
+                preview(store: store, tokens: tokens)
 
-            preview(store: store, tokens: tokens)
-
-            labeled("COLOR", tokens: tokens) {
-                AinkradSegmentedPicker(
-                    items: AppIconChoice.allCases,
-                    selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
-                    label: colorTitle
-                )
-            }
-            labeled("APPEARANCE", tokens: tokens) {
-                AinkradSegmentedPicker(
-                    items: AppIconAppearance.allCases,
-                    selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),
-                    label: appearanceTitle
-                )
+                AinkradCaptionedRow("Color") {
+                    AinkradSegmentedPicker(
+                        items: AppIconChoice.allCases,
+                        selection: Binding(get: { store.choice }, set: { store.selectColor($0) }),
+                        label: colorTitle
+                    )
+                }
+                AinkradCaptionedRow("Appearance") {
+                    AinkradSegmentedPicker(
+                        items: AppIconAppearance.allCases,
+                        selection: Binding(get: { store.appearance }, set: { store.selectAppearance($0) }),
+                        label: appearanceTitle
+                    )
+                }
             }
         }
     }
@@ -56,16 +57,6 @@ struct AppIconSettingsView: View {
             .frame(width: 96, height: 96)
             .clipShape(ChamferShape(cut: 22))
             Spacer()
-        }
-    }
-
-    private func labeled<Content: View>(_ title: String, tokens: DesignTokens,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-            content()
         }
     }
 
