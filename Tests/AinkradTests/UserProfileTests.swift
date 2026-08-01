@@ -19,4 +19,18 @@ struct UserProfileTests {
         #expect(store.all()["employer"] == "automotiveai")
         #expect(mem.read(.user).contains("employer: automotiveai"))
     }
+
+    /// Settings-pane clearing (Fix 2): an emptied field must remove the fact
+    /// entirely, not leave a dangling `- role: ` line in USER.md.
+    @Test func removeClearsFactAndUserMdLine() {
+        let (store, mem, root) = make(); defer { try? FileManager.default.removeItem(at: root) }
+        store.set("Engineer", for: "role")
+        #expect(store.all()["role"] == "Engineer")
+        #expect(mem.read(.user).contains("- role: Engineer"))
+
+        store.remove("role")
+
+        #expect(store.all()["role"] == nil)
+        #expect(!mem.read(.user).contains("role"))
+    }
 }

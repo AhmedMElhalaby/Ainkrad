@@ -19,8 +19,14 @@ struct AssistantSettingsLabeled<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
+            // Typography matched to `AinkradCaptionedRow`'s caption column
+            // (same size/weight/opacity, no kerning): the two idioms now
+            // coexist in the same panels (e.g. TTS), and the kerning here was
+            // tuned for all-caps text this view no longer renders — left in
+            // place it read as a second, competing caption style next to
+            // `AinkradCaptionedRow`'s leading-column captions.
             Text(title)
-                .font(AinkradFont.display(10, weight: .medium)).kerning(0.6)
+                .font(AinkradFont.display(11, weight: .medium))
                 .foregroundStyle(tokens.foreground.opacity(0.45))
             content()
         }
@@ -43,57 +49,58 @@ extension AssistantSettingsView {
             let store = environment.connectionStore
             let active = modelPicker.activeConnection(environment)
 
-            return VStack(alignment: .leading, spacing: 12) {
-                SettingsSectionHeader(title: "MODEL", tokens: tokens, icon: "brain")
-
-                if store.connections.isEmpty {
-                    AinkradEmptyState(
-                        icon: "bolt.horizontal",
-                        title: "No connections",
-                        message: "Add a connection to choose a model."
-                    )
-                    .frame(maxWidth: .infinity, alignment: .center)
-                } else {
-                    AssistantSettingsLabeled("CONNECTION", tokens: tokens) {
-                        // Keyed on connection `id` (UUID) — `Connection` isn't Hashable
-                        // and lives out of task scope. Setter preserves the exact
-                        // `selectConnection` write-back (switch + curated-model reset
-                        // + refresh). This branch is only reached when connections is
-                        // non-empty, so a connection always resolves.
-                        AinkradSelect(
-                            items: store.connections.map(\.id),
-                            selection: Binding(
-                                get: { active?.id ?? store.connections.first?.id ?? UUID() },
-                                set: { id in
-                                    if let connection = store.connections.first(where: { $0.id == id }) {
-                                        modelPicker.selectConnection(connection, environment)
-                                    }
-                                }
-                            ),
-                            label: { id in store.connections.first(where: { $0.id == id })?.displayName ?? "Select…" }
+            return AinkradSettingsPanel(title: "Model",
+                                       hint: "Which model answers, and how much reasoning effort it spends.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    if store.connections.isEmpty {
+                        AinkradEmptyState(
+                            icon: "bolt.horizontal",
+                            title: "No connections",
+                            message: "Add a connection to choose a model."
                         )
-                    }
-                    AssistantSettingsLabeled("MODEL", tokens: tokens) {
-                        HStack(spacing: 8) {
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    } else {
+                        AinkradCaptionedRow("Connection") {
+                            // Keyed on connection `id` (UUID) — `Connection` isn't Hashable
+                            // and lives out of task scope. Setter preserves the exact
+                            // `selectConnection` write-back (switch + curated-model reset
+                            // + refresh). This branch is only reached when connections is
+                            // non-empty, so a connection always resolves.
                             AinkradSelect(
-                                items: modelPicker.modelOptions(for: active, environment),
-                                selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
-                                label: { $0 }
+                                items: store.connections.map(\.id),
+                                selection: Binding(
+                                    get: { active?.id ?? store.connections.first?.id ?? UUID() },
+                                    set: { id in
+                                        if let connection = store.connections.first(where: { $0.id == id }) {
+                                            modelPicker.selectConnection(connection, environment)
+                                        }
+                                    }
+                                ),
+                                label: { id in store.connections.first(where: { $0.id == id })?.displayName ?? "Select…" }
                             )
-                            Button { if let c = active { modelPicker.refreshModels(for: c, environment, force: true) } } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(tokens.foreground.opacity(modelPicker.isRefreshing ? 0.3 : 0.6))
-                            }
-                            .buttonStyle(.plain).disabled(modelPicker.isRefreshing)
                         }
-                    }
-                    if active?.kind == .claude {
-                        AssistantSettingsLabeled("EFFORT", tokens: tokens) {
-                            AinkradSegmentedPicker(
-                                items: ["low", "medium", "high", "xhigh"],
-                                selection: Binding(get: { configStore.current.effort }, set: { configStore.setEffort($0) }),
-                                label: { $0.capitalized })
+                        AinkradCaptionedRow("Model") {
+                            HStack(spacing: 8) {
+                                AinkradSelect(
+                                    items: modelPicker.modelOptions(for: active, environment),
+                                    selection: Binding(get: { configStore.current.model }, set: { configStore.setModel($0) }),
+                                    label: { $0 }
+                                )
+                                Button { if let c = active { modelPicker.refreshModels(for: c, environment, force: true) } } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(tokens.foreground.opacity(modelPicker.isRefreshing ? 0.3 : 0.6))
+                                }
+                                .buttonStyle(.plain).disabled(modelPicker.isRefreshing)
+                            }
+                        }
+                        if active?.kind == .claude {
+                            AinkradCaptionedRow("Effort") {
+                                AinkradSegmentedPicker(
+                                    items: ["low", "medium", "high", "xhigh"],
+                                    selection: Binding(get: { configStore.current.effort }, set: { configStore.setEffort($0) }),
+                                    label: { $0.capitalized })
+                            }
                         }
                     }
                 }
@@ -115,52 +122,53 @@ extension AssistantSettingsView {
             let permissionStore = environment.agentPermissionStore
             let allowed = permissionStore.allowlist.sorted()
 
-            return VStack(alignment: .leading, spacing: 12) {
-                SettingsSectionHeader(title: "PERMISSIONS", tokens: tokens, icon: "lock.shield")
+            return AinkradSettingsPanel(title: "Permissions",
+                                       hint: "What the assistant may do without asking.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    AinkradCaptionedRow("Default mode") {
+                        AinkradSelect(
+                            items: AgentPermissionMode.allCases,
+                            selection: Binding(get: { permissionStore.mode }, set: { permissionStore.setMode($0) }),
+                            label: { modeTitle($0) }
+                        )
+                    }
 
-                AssistantSettingsLabeled("DEFAULT MODE", tokens: tokens) {
-                    AinkradSelect(
-                        items: AgentPermissionMode.allCases,
-                        selection: Binding(get: { permissionStore.mode }, set: { permissionStore.setMode($0) }),
-                        label: { modeTitle($0) }
-                    )
-                }
+                    permissionToggleRow(
+                        title: "Ask before reading files",
+                        subtitle: "When on, the assistant asks before reading any file (except in Full-auto).",
+                        isOn: Binding(get: { permissionStore.gateReads }, set: { permissionStore.setGateReads($0) }),
+                        tokens: tokens)
 
-                permissionToggleRow(
-                    title: "Ask before reading files",
-                    subtitle: "When on, the assistant asks before reading any file (except in Full-auto).",
-                    isOn: Binding(get: { permissionStore.gateReads }, set: { permissionStore.setGateReads($0) }),
-                    tokens: tokens)
-
-                AssistantSettingsLabeled("ALWAYS-ALLOWED TOOLS", tokens: tokens) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if allowed.isEmpty {
-                            Text("No tools are always-allowed yet. Use \u{201C}Allow always\u{201D} on an approval to add one.")
-                                .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            ForEach(allowed, id: \.self) { name in
-                                HStack(spacing: 10) {
-                                    Text(ToolPresentation.humanize(name))
-                                        .font(AinkradFont.display(12, weight: .medium))
-                                        .foregroundStyle(tokens.foreground.opacity(0.85))
-                                    Spacer(minLength: 8)
-                                    Button { permissionStore.removeFromAllowlist(name) } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(tokens.accentTertiary.opacity(0.8))
+                    AssistantSettingsLabeled("Always-allowed tools", tokens: tokens) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if allowed.isEmpty {
+                                Text("No tools are always-allowed yet. Use \u{201C}Allow always\u{201D} on an approval to add one.")
+                                    .font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.45))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                ForEach(allowed, id: \.self) { name in
+                                    HStack(spacing: 10) {
+                                        Text(ToolPresentation.humanize(name))
+                                            .font(AinkradFont.display(12, weight: .medium))
+                                            .foregroundStyle(tokens.foreground.opacity(0.85))
+                                        Spacer(minLength: 8)
+                                        Button { permissionStore.removeFromAllowlist(name) } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(tokens.accentTertiary.opacity(0.8))
+                                        }
+                                        .buttonStyle(.plain).help("Remove")
                                     }
-                                    .buttonStyle(.plain).help("Remove")
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
                                 }
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(ChamferShape(cut: AinkradRadius.sm).fill(tokens.surfaceElevated.opacity(0.45)))
+                                Button { permissionStore.clearAllowlist() } label: {
+                                    Text("Clear all")
+                                        .font(AinkradFont.display(11, weight: .medium))
+                                        .foregroundStyle(tokens.accentTertiary)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            Button { permissionStore.clearAllowlist() } label: {
-                                Text("Clear all")
-                                    .font(AinkradFont.display(11, weight: .medium))
-                                    .foregroundStyle(tokens.accentTertiary)
-                            }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -202,19 +210,16 @@ extension AssistantSettingsView {
             let tokens = environment.themeManager.tokens
             let settingsStore = environment.agentContextSettingsStore
 
-            return VStack(alignment: .leading, spacing: 12) {
-                SettingsSectionHeader(title: "CONTEXT PRIVACY", tokens: tokens, icon: "eye.slash")
-
-                Text("Choose what workspace context Assistant may read into its prompts.")
-                    .font(AinkradFont.display(11))
-                    .foregroundStyle(tokens.foreground.opacity(0.45))
-
-                privacyRow(tokens: tokens, kind: "terminal", title: "Terminal buffers",
-                           subtitle: "Recent output from open Terminal Blocks.", store: settingsStore)
-                privacyRow(tokens: tokens, kind: "git", title: "Git status",
-                           subtitle: "Branch, staged/unstaged changes, and recent commits.", store: settingsStore)
-                privacyRow(tokens: tokens, kind: "repo-instructions", title: "Repo instruction files",
-                           subtitle: "CLAUDE.md / AGENTS.md found in the working repo.", store: settingsStore)
+            return AinkradSettingsPanel(title: "Context privacy",
+                                       hint: "What the assistant is allowed to read from your workspace.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    privacyRow(tokens: tokens, kind: "terminal", title: "Terminal buffers",
+                               subtitle: "Recent output from open Terminal Blocks.", store: settingsStore)
+                    privacyRow(tokens: tokens, kind: "git", title: "Git status",
+                               subtitle: "Branch, staged/unstaged changes, and recent commits.", store: settingsStore)
+                    privacyRow(tokens: tokens, kind: "repo-instructions", title: "Repo instruction files",
+                               subtitle: "CLAUDE.md / AGENTS.md found in the working repo.", store: settingsStore)
+                }
             }
         }
 
@@ -249,9 +254,11 @@ extension AssistantSettingsView {
         let manager = environment.themeManager
         let appID = AssistantApp.id
 
-        return VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "APPEARANCE", tokens: tokens, icon: "paintbrush")
-
+        return AinkradSettingsPanel(
+            title: "Appearance",
+            hint: "Applies to the assistant's messages only. Leave matching Appearance to inherit the app-wide setting."
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
             // Surface opacity
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -305,7 +312,7 @@ extension AssistantSettingsView {
             .background(ChamferShape(cut: AinkradRadius.md).fill(tokens.surfaceElevated.opacity(0.45)))
 
             // Assistant text: font family + size (assistant-only override; nil = inherit global)
-            AssistantSettingsLabeled("TEXT FONT", tokens: tokens) {
+            AinkradCaptionedRow("Text font") {
                 AinkradSegmentedPicker(
                     items: UIFontFamily.allCases,
                     selection: Binding(
@@ -314,7 +321,7 @@ extension AssistantSettingsView {
                     ),
                     label: { fontFamilyTitle($0) })
             }
-            AssistantSettingsLabeled("TEXT SIZE", tokens: tokens) {
+            AinkradCaptionedRow("Text size") {
                 AinkradSegmentedPicker(
                     items: UIFontScale.allCases,
                     selection: Binding(
@@ -323,10 +330,7 @@ extension AssistantSettingsView {
                     ),
                     label: { fontScaleTitle($0) })
             }
-            Text("Applies to the assistant's messages only. Leave matching Appearance to inherit the app-wide setting.")
-                .font(AinkradFont.display(11))
-                .foregroundStyle(tokens.foreground.opacity(0.45))
-                .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

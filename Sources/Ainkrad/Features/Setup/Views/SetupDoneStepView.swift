@@ -127,6 +127,10 @@ struct SetupDoneStepView: View {
         // banner when a returning user connected a provider on the way through.
         environment.deferredSetupSteps = coordinator.deferredSteps
         environment.isSetupPresented = false
+        // Cleared here rather than left set: a later legitimate gate raise — a
+        // genuinely owed step after an app update — must not inherit replay
+        // and walk the whole wizard instead of the one step it owes.
+        environment.isSetupReplay = false
         // Order matters: `isSuppressed` reads `isSetupPresented`, so the flag
         // must already be down or this install refuses. The status item was
         // suppressed for the whole wizard (it is the one surface the gate's

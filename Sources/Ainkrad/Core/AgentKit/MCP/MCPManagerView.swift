@@ -73,10 +73,12 @@ struct MCPManagerView: View {
         let apps = Self.appConfigs(from: configStore.all())
         return Group {
             if !apps.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    SettingsSectionHeader(title: "AINKRAD APPS", tokens: tokens)
-                    ForEach(apps) { config in
-                        appCard(config, tokens: tokens)
+                AinkradSettingsPanel(title: "Ainkrad apps",
+                                     hint: "Ainkrad apps hosting their own MCP server in-process.") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(apps) { config in
+                            appCard(config, tokens: tokens)
+                        }
                     }
                 }
             }
@@ -119,9 +121,8 @@ struct MCPManagerView: View {
     // MARK: - Servers
 
     private func serversSection(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "MCP SERVERS", tokens: tokens)
-
+        AinkradSettingsPanel(title: "MCP servers",
+                             hint: "Model Context Protocol servers the assistant can call.") {
             let externals = Self.externalConfigs(from: configStore.all())
             if externals.isEmpty {
                 AinkradEmptyState(
@@ -130,8 +131,10 @@ struct MCPManagerView: View {
                     message: "Add a stdio command or an HTTPS endpoint below to connect external tools."
                 )
             } else {
-                ForEach(externals) { config in
-                    serverCard(config, tokens: tokens)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(externals) { config in
+                        serverCard(config, tokens: tokens)
+                    }
                 }
             }
         }
@@ -365,9 +368,8 @@ struct MCPManagerView: View {
     // MARK: - Add server
 
     private func addServerSection(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsSectionHeader(title: "ADD SERVER", tokens: tokens)
-
+        AinkradSettingsPanel(title: "Add server",
+                             hint: "Connect an external MCP server over stdio or HTTPS.") {
             VStack(alignment: .leading, spacing: 10) {
                 AinkradSegmentedPicker(
                     items: [MCPTransportKind.stdio, .httpSSE],

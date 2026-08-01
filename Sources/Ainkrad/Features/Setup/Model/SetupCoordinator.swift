@@ -15,13 +15,24 @@ final class SetupCoordinator {
     /// a relaunch resumes owing exactly what the last run recorded.
     private(set) var deferredSteps: Set<SetupStep>
 
-    init(persistence: PersistenceStore, isProvisionalHome: Bool) {
+    init(persistence: PersistenceStore,
+         isProvisionalHome: Bool,
+         /// Deliberately re-walking a finished setup from Settings, rather than
+         /// being gated into it. Not the same as an incomplete marker: nothing
+         /// is OWED here, the user simply asked to go through it again.
+         isReplay: Bool = false) {
         let doc = persistence.load(SetupDocument.self) ?? SetupDocument()
         let completedVersion = doc.completedAt == nil ? -1 : doc.setupVersion
         let deferred = Set(doc.deferredSteps.compactMap(SetupStep.init(rawValue:)))
 
         let resolvedSteps: [SetupStep]
-        if isProvisionalHome || completedVersion < 0 {
+        if isReplay {
+            // Every step except `.home`. A vault whose setup is finished
+            // stands, and re-offering to move it is not a question a replay
+            // gets to ask — the same rule the re-raised gate follows below,
+            // and the reason Settings shows Home read-only.
+            resolvedSteps = SetupStep.allCases.filter { $0 != .home }
+        } else if isProvisionalHome || completedVersion < 0 {
             // The full wizard, always — in TWO cases, and the second is the
             // subtle one:
             //

@@ -232,7 +232,9 @@ struct SettingsOverlayView: View {
     }
 
     /// A group header in the HUD language: a short accent tick beside an
-    /// uppercase, letter-spaced label — echoing `SettingsSectionHeader`.
+    /// uppercase, letter-spaced label. This is shell chrome (the sidebar's own
+    /// group labels), not a settings pane, so it stays a bespoke row rather
+    /// than the kit's `AinkradSectionHeader` or `AinkradSettingsPanel`.
     private func groupLabel(_ text: String, tokens: DesignTokens) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1)

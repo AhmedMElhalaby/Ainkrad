@@ -71,14 +71,19 @@ struct MemoryUIView: View {
         let tokens = environment.themeManager.tokens
 
         VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: "MEMORY FILES", tokens: tokens)
-
-            ForEach(MemoryFile.allCases, id: \.self) { file in
-                fileEditor(file, tokens: tokens)
+            AinkradSettingsPanel(title: "Memory files",
+                                 hint: "What the assistant remembers between sessions.") {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(MemoryFile.allCases, id: \.self) { file in
+                        fileEditor(file, tokens: tokens)
+                    }
+                }
             }
 
-            SettingsSectionHeader(title: "WHAT THE ASSISTANT HAS LEARNED", tokens: tokens)
-            logTimeline(tokens: tokens)
+            AinkradSettingsPanel(title: "What the assistant has learned",
+                                 hint: "A timeline of every memory write the assistant has made on its own, with per-entry undo.") {
+                logTimeline(tokens: tokens)
+            }
         }
     }
 

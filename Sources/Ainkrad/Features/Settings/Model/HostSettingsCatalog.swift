@@ -16,6 +16,7 @@ enum HostSettingsCatalog {
     static func build(environment: AppEnvironment) -> SettingsCatalog {
         SettingsCatalog(pages: [
             general(environment),
+            you(environment),
             appearance(environment),
             soundAndVoice(environment),
             keyboard(environment)
@@ -64,6 +65,45 @@ enum HostSettingsCatalog {
                         defaultDescription: LauncherViewMode.allCases[0].label,
                         isModified: { store.launcherViewMode != LauncherViewMode.allCases[0] },
                         reset: { store.setLauncherViewMode(LauncherViewMode.allCases[0]) })
+                ]),
+                SettingsGroup(path: page.appending("home"), title: "Home", fields: [
+                    SettingsField(
+                        path: page.appending("home").appending("location"),
+                        label: "Ainkrad Home",
+                        help: "The folder holding all of your workspaces and notes.",
+                        keywords: ["vault", "folder", "location", "path", "home", "storage"],
+                        kind: .custom(AnyView(HomeSettingsView()))),
+                    SettingsField(
+                        path: page.appending("home").appending("rerunSetup"),
+                        label: "Re-run setup",
+                        help: "Walk through the first-run wizard again. Your Home folder is "
+                            + "not re-asked, and nothing is reset until you change it.",
+                        keywords: ["wizard", "setup", "first run", "onboarding", "welcome"],
+                        kind: .action(title: "Re-run setup") {
+                            environment.isSettingsPresented = false
+                            environment.isSetupReplay = true
+                            environment.isSetupPresented = true
+                        })
+                ])
+            ])
+    }
+
+    // MARK: - You
+
+    /// The wizard's You step, made editable after first run.
+    private static func you(_ environment: AppEnvironment) -> SettingsPage {
+        let page = SettingsPath(["workspace", "you"])
+        return SettingsPage(
+            path: page, title: "You", icon: "person",
+            group: .workspace, order: 1,
+            groups: [
+                SettingsGroup(path: page.appending("profile"), title: "Profile", fields: [
+                    SettingsField(
+                        path: page.appending("profile").appending("fields"),
+                        label: "About you",
+                        help: "Your name, role and timezone, as the assistant knows them.",
+                        keywords: ["name", "profile", "role", "timezone", "about me", "user"],
+                        kind: .custom(AnyView(UserProfileSettingsView())))
                 ])
             ])
     }
@@ -74,7 +114,7 @@ enum HostSettingsCatalog {
         let page = SettingsPath(["workspace", "appearance"])
         return SettingsPage(
             path: page, title: "Appearance", icon: "paintbrush",
-            group: .workspace, order: 1,
+            group: .workspace, order: 2,
             groups: [
                 SettingsGroup(path: page.appending("theme"), title: "Theme", fields: [
                     SettingsField(
@@ -95,9 +135,10 @@ enum HostSettingsCatalog {
                 // Always expanded. This page is tabbed (3 groups), so the icon
                 // picker already sits behind one hiding mechanism; collapsing
                 // it too is what produced "I can't find the app icons
-                // settings". `AppIconSettingsView` draws its own "APP ICON"
-                // heading, so the tab label plus the pane heading label it
-                // fine without the catalog's disclosure header.
+                // settings". `AppIconSettingsView` renders its own
+                // `AinkradSettingsPanel(title: "App icon", ...)`, so the tab
+                // label plus that panel's title label it fine without the
+                // catalog's disclosure header.
                 SettingsGroup(path: page.appending("appIcon"), title: "App Icon", fields: [
                     SettingsField(
                         path: page.appending("appIcon").appending("picker"),
@@ -116,7 +157,7 @@ enum HostSettingsCatalog {
         let tokens = environment.themeManager.tokens
         return SettingsPage(
             path: page, title: "Sound & Voice", icon: "speaker.wave.2",
-            group: .workspace, order: 2,
+            group: .workspace, order: 3,
             groups: [
                 // Sound stays a `.custom` pane DELIBERATELY. It was decomposed
                 // in Task 7 and reverted after review: each of the 13 `UISound`
@@ -287,7 +328,7 @@ enum HostSettingsCatalog {
         let page = SettingsPath(["workspace", "keyboard"])
         return SettingsPage(
             path: page, title: "Keyboard", icon: "keyboard",
-            group: .workspace, order: 3,
+            group: .workspace, order: 4,
             groups: [
                 SettingsGroup(path: page.appending("shortcuts"), title: "Shortcuts", fields: [
                     SettingsField(

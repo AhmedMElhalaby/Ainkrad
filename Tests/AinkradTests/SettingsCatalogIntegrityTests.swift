@@ -50,7 +50,7 @@ struct HostSettingsCatalogIntegrityTests {
     func workspacePages() {
         let titles = HostSettingsCatalog.build(environment: .preview())
             .pages(in: .workspace).map(\.title)
-        #expect(titles == ["General", "Appearance", "Sound & Voice", "Keyboard"])
+        #expect(titles == ["General", "You", "Appearance", "Sound & Voice", "Keyboard"])
     }
 
     /// Every field in the live catalog must be genuinely reachable, not just

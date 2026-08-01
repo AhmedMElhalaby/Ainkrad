@@ -172,8 +172,10 @@ struct SetupAssistantStepView: View {
     }
 
     private func builtins(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SettingsSectionHeader(title: "STARTING AGENT", tokens: tokens)
+        AinkradSettingsPanel(
+            title: "Starting agent",
+            hint: "Plan and Build ship built-in — pick which one is active when you arrive."
+        ) {
             ForEach(BuiltInAgents.all) { agent in
                 builtinRow(agent, tokens: tokens)
             }
@@ -265,8 +267,10 @@ struct SetupAssistantStepView: View {
     }
 
     private func modelAndEffort(tokens: DesignTokens) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SettingsSectionHeader(title: "MODEL", tokens: tokens)
+        AinkradSettingsPanel(
+            title: "Model",
+            hint: "Which model handles requests, and how much effort it spends on each one."
+        ) {
             HStack(spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Model").font(AinkradFont.display(11)).foregroundStyle(tokens.foreground.opacity(0.5))
