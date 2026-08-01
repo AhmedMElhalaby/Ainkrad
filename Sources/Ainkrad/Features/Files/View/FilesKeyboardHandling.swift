@@ -6,6 +6,10 @@ import AppKit
 /// can extend it without touching the views.
 struct FilesKeyboardHandling: ViewModifier {
     let store: FilesPaneStore
+    let actions: FilesActions
+    let undoStack: UndoStack
+    let onUndo: () -> Void
+    let onRedo: () -> Void
     @Binding var isEditingPath: Bool
     @FocusState private var keyboardFocus: Bool
 
@@ -17,6 +21,14 @@ struct FilesKeyboardHandling: ViewModifier {
     /// Command-modified bindings stay live throughout, since the field never
     /// wants those.
     private var navigationEnabled: Bool { !isEditingPath }
+
+    /// Function keys are private-use unicode scalars, not `KeyEquivalent`
+    /// members — `.f5` does not exist. These are the AppKit `NSF*FunctionKey`
+    /// constants.
+    private static let f2 = KeyEquivalent(Character(UnicodeScalar(0xF705)!))
+    private static let f5 = KeyEquivalent(Character(UnicodeScalar(0xF708)!))
+    private static let f6 = KeyEquivalent(Character(UnicodeScalar(0xF709)!))
+    private static let f7 = KeyEquivalent(Character(UnicodeScalar(0xF70A)!))
 
     /// Shared by every arrow/page binding: guard, move, report handled.
     /// ⇧ extends the selection as it goes, which is the only case where
@@ -108,6 +120,31 @@ struct FilesKeyboardHandling: ViewModifier {
                 store.closeTab(at: store.activeTabIndex)
                 return .handled
             }
+            // Operations — the orthodox function-key set. Guarded like the
+            // navigation keys so they never fire while the path editor is up.
+            .onKeyPress(keys: [Self.f5, Self.f6, Self.f2, Self.f7], phases: .down) { press in
+                guard navigationEnabled else { return .ignored }
+                switch press.key {
+                case Self.f5: Task { await actions.copyToOtherPane() }
+                case Self.f6: Task { await actions.moveToOtherPane() }
+                case Self.f2: actions.beginRename()
+                case Self.f7: actions.beginNewFolder()
+                default: return .ignored
+                }
+                return .handled
+            }
+            .onKeyPress(keys: [.delete], phases: .down) { press in
+                // ⌘⌫ trashes; bare Delete still ascends (handled above).
+                guard navigationEnabled, press.modifiers.contains(.command) else { return .ignored }
+                Task { await actions.trashSelection() }
+                return .handled
+            }
+            // Undo / redo
+            .onKeyPress(keys: ["z"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                if press.modifiers.contains(.shift) { onRedo() } else { onUndo() }
+                return .handled
+            }
             // History
             .onKeyPress(keys: ["["], phases: .down) { press in
                 guard press.modifiers.contains(.command) else { return .ignored }
@@ -123,7 +160,13 @@ struct FilesKeyboardHandling: ViewModifier {
 }
 
 extension View {
-    func filesKeyboardHandling(store: FilesPaneStore, isEditingPath: Binding<Bool>) -> some View {
-        modifier(FilesKeyboardHandling(store: store, isEditingPath: isEditingPath))
+    func filesKeyboardHandling(store: FilesPaneStore, actions: FilesActions,
+                               undoStack: UndoStack,
+                               onUndo: @escaping () -> Void,
+                               onRedo: @escaping () -> Void,
+                               isEditingPath: Binding<Bool>) -> some View {
+        modifier(FilesKeyboardHandling(store: store, actions: actions, undoStack: undoStack,
+                                       onUndo: onUndo, onRedo: onRedo,
+                                       isEditingPath: isEditingPath))
     }
 }
