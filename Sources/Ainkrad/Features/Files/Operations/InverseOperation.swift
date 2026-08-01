@@ -34,12 +34,15 @@ indirect enum InverseAction: Codable, Equatable, Sendable {
 /// relaunch would be worse than none.
 struct RedoSpec: Codable, Equatable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case copy, move, rename, createFolder, trash
+        case copy, move, rename, createFolder, trash, batchRename
     }
     var kind: Kind
     var sources: [URL]
     var destinationDirectory: URL?
     var name: String?
+    /// Positional against `sources`, for `.batchRename`. Optional so a stack
+    /// written before batch rename existed still decodes.
+    var names: [String]?
     var policy: ConflictPolicy = .keepBoth
 }
 
@@ -140,6 +143,23 @@ extension InverseOperation {
             affectedURLs: [renamed],
             redo: RedoSpec(kind: .rename, sources: [original], destinationDirectory: nil,
                            name: renamed.lastPathComponent))
+    }
+
+    /// A whole batch rename as ONE entry, so ⌘Z puts every name back at once.
+    ///
+    /// Structurally just a multi-item `.moveBack` — which is safe here only
+    /// because the planner blocks any row whose new name is already taken, so a
+    /// batch can never contain a swap (a→b, b→a) whose reversal would collide
+    /// mid-flight.
+    static func forBatchRename(items: [MovedItem], at now: Date = Date()) -> InverseOperation {
+        InverseOperation(
+            label: itemLabel("Rename", items.count),
+            action: .moveBack(items.map { MovedItem(from: $0.to, to: $0.from) }),
+            recordedAt: now,
+            affectedURLs: items.map(\.to),
+            redo: RedoSpec(kind: .batchRename, sources: items.map(\.from),
+                           destinationDirectory: nil, name: nil,
+                           names: items.map { $0.to.lastPathComponent }))
     }
 
     static func forCreateFolder(at url: URL, now: Date = Date()) -> InverseOperation {

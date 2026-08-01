@@ -196,28 +196,22 @@ final class FilesActions {
     /// blocked — renaming them anyway after showing a warning is exactly the
     /// data loss the preview exists to prevent.
     ///
-    /// One `FileOperation` per row rather than one for the batch, because
-    /// `.rename` carries a single new name. That also means the undo stack
-    /// records each row separately: undoing a 200-file rename is 200 ⌘Z, which
-    /// is a known rough edge, not an oversight.
+    /// ONE `.batchRename` operation, not a rename per row — so the whole batch
+    /// is a single undo entry and ⌘Z puts every name back at once.
     func commitBatchRename(_ plan: [BatchRenamePlanItem]) async {
         batchRenameTargets = nil
         let applicable = plan.filter { $0.problem == nil }
         guard !applicable.isEmpty else { return }
 
-        var succeeded = 0
-        var failures: [OperationFailure] = []
-        for item in applicable {
-            let result = await engine.submit(FileOperation(
-                kind: .rename(newName: item.newName), sources: [item.entry.url],
-                destinationDirectory: nil))
-            succeeded += result.succeeded
-            failures.append(contentsOf: result.failures)
-        }
+        var result = await engine.submit(FileOperation(
+            kind: .batchRename(newNames: applicable.map(\.newName)),
+            sources: applicable.map(\.entry.url),
+            destinationDirectory: nil))
+        // Blocked rows were shown as blocked; count them as skipped so the
+        // toast reports the batch honestly rather than only its clean half.
+        result.skipped = plan.count - applicable.count
 
-        report(OperationResult(succeeded: succeeded, skipped: plan.count - applicable.count,
-                               failures: failures, wasCancelled: false),
-               verb: "Renamed")
+        report(result, verb: "Renamed")
         tab.reload()
     }
 

@@ -81,6 +81,9 @@ extension FileOperationEngine {
         case .trash:
             operation = FileOperation(kind: .trash, sources: spec.sources,
                                       destinationDirectory: nil)
+        case .batchRename:
+            operation = FileOperation(kind: .batchRename(newNames: spec.names ?? []),
+                                      sources: spec.sources, destinationDirectory: nil)
         }
         _ = await submit(operation)
         return nil

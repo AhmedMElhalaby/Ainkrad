@@ -93,7 +93,9 @@ struct FilesMCPServerTests {
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("renamed.txt").path))
     }
 
-    @Test("a batch rename is undoable step by step")
+    // ONE undo, not one per file: the tool's description promises a single
+    // step, and it used to submit a rename per path, which made that a lie.
+    @Test("a batch rename is undoable in a single step")
     func batchRenameUndoable() async throws {
         let (environment, root, _) = try makeWorkspace()
         let server = FilesMCPServer.make(environment: environment)
@@ -107,9 +109,10 @@ struct FilesMCPServerTests {
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("one.md").path))
 
         environment.filesOperationEngine.undo()
-        environment.filesOperationEngine.undo()
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("one.txt").path))
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("two.txt").path))
+        // Both names came back from that ONE undo, so there is nothing left.
+        #expect(!environment.filesOperationEngine.undoStack.canUndo)
     }
 
     @Test("trash is undoable and never deletes permanently")

@@ -246,24 +246,28 @@ enum FilesMCPServer {
                 return fail("Missing “paths”, “find” or “replace”.")
             }
 
-            var renamed = 0
-            var failures: [String] = []
+            // Resolve every path BEFORE renaming anything, so an out-of-scope
+            // path fails the whole call rather than half of it.
+            var sources: [URL] = []
+            var newNames: [String] = []
             for path in paths {
                 switch resolve(path, environment: environment) {
                 case .failure(let error): return error
                 case .success(let url):
                     let newName = url.lastPathComponent.replacingOccurrences(of: find, with: replace)
                     guard newName != url.lastPathComponent else { continue }
-                    let result = await engine.submit(FileOperation(
-                        kind: .rename(newName: newName), sources: [url], destinationDirectory: nil))
-                    if result.failures.isEmpty { renamed += 1 }
-                    else { failures.append("\(url.lastPathComponent): \(result.failures[0].reason)") }
+                    sources.append(url)
+                    newNames.append(newName)
                 }
             }
-            if renamed == 0 && failures.isEmpty { return ok("No names matched “\(find)”.") }
-            var text = "Renamed \(renamed) item(s)."
-            if !failures.isEmpty { text += " Failed: \(failures.joined(separator: "; "))" }
-            return AgentActionResult(text: text, isError: !failures.isEmpty)
+            guard !sources.isEmpty else { return ok("No names matched “\(find)”.") }
+
+            // One `.batchRename`, so the description's promise of a single undo
+            // step is actually true — it used to submit a rename per file.
+            let result = await engine.submit(FileOperation(
+                kind: .batchRename(newNames: newNames), sources: sources,
+                destinationDirectory: nil))
+            return summarise(result, success: "Renamed \(result.succeeded) item(s). Undo with ⌘Z.")
         })
     }
 

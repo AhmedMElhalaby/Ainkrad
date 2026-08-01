@@ -9,6 +9,10 @@ enum FileOperationKind: Sendable, Equatable {
     case copy
     case move
     case rename(newName: String)
+    /// Many renames as ONE undoable step. `newNames` is positional against
+    /// `sources` — the engine refuses the whole operation if the counts differ
+    /// rather than renaming a prefix of the batch under mismatched names.
+    case batchRename(newNames: [String])
     case createFolder(name: String)
     case trash
 }
