@@ -8,12 +8,15 @@ import AinkradHostRuntime
 ///
 /// The keys (`name`, `callMe`, `role`, `timezone`) are a contract — they are
 /// what the assistant sees in `USER.md`, not an implementation detail.
+///
+/// Takes the whole `values` dictionary rather than four named parameters so
+/// the caller can pass its state straight through, keyed by
+/// `UserProfileField.key` — nothing here re-lists the four keys, which is the
+/// same list `UserProfileField.all` already owns.
 @MainActor
 enum SetupYou {
-    static func apply(name: String, callMe: String, role: String, timezone: String,
-                      store: UserProfileStore) {
-        let fields = ["name": name, "callMe": callMe, "role": role, "timezone": timezone]
-        for (key, value) in fields {
+    static func apply(values: [String: String], store: UserProfileStore) {
+        for (key, value) in values {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             store.set(trimmed, for: key)
@@ -46,10 +49,11 @@ struct SetupYouStepView: View {
 
     let coordinator: SetupCoordinator
 
-    @State private var name = ""
-    @State private var callMe = ""
-    @State private var role = ""
-    @State private var timezone = TimeZone.current.identifier
+    /// Backs every field, keyed by `UserProfileField.key`. One dictionary
+    /// rather than one `@State` per field so `binding(for:)` and `commit()`
+    /// can both be driven directly off `UserProfileField.all` — a field added
+    /// there needs no matching case added here, and none can be missed.
+    @State private var values: [String: String] = ["timezone": TimeZone.current.identifier]
     /// Fields the user has typed in. A requirement note appears only for a
     /// field they have touched — see `message(for:)`.
     @State private var touched: Set<String> = []
@@ -86,15 +90,13 @@ struct SetupYouStepView: View {
                 coordinator.advance()
             }
         }
-        .onAppear { write(timezone, for: "timezone") }
+        .onAppear { write(values["timezone"] ?? "", for: "timezone") }
     }
 
     /// The rules live in `SetupValidation` so the next change to them is one
     /// file, not a `.disabled(...)` condition buried in this view.
     private var unmet: [SetupValidation.Requirement] {
-        SetupValidation.unmet(for: .you, values: [
-            "name": name, "callMe": callMe, "role": role, "timezone": timezone,
-        ])
+        SetupValidation.unmet(for: .you, values: values)
     }
 
     /// The warning for `key`, shown only once the user has typed in that field
@@ -147,16 +149,13 @@ struct SetupYouStepView: View {
         }
     }
 
-    /// Maps a `UserProfileField.key` to this step's own `@State` binding — the
-    /// bindings themselves are unchanged, only how `fieldGrid` reaches them.
+    /// Maps a `UserProfileField.key` to a binding into `values`. Generic over
+    /// the key rather than a `switch` over a fixed set of cases — a field
+    /// added to `UserProfileField.all` gets a working binding automatically,
+    /// with no case to remember to add and no silent no-op default to fall
+    /// into on a typo.
     private func binding(for key: String) -> Binding<String> {
-        switch key {
-        case "name": return $name
-        case "callMe": return $callMe
-        case "role": return $role
-        case "timezone": return $timezone
-        default: return .constant("")
-        }
+        Binding(get: { values[key] ?? "" }, set: { values[key] = $0 })
     }
 
     private func field(tokens: DesignTokens, title: String, subtitle: String,
@@ -200,8 +199,7 @@ struct SetupYouStepView: View {
     /// Belt-and-braces: `onChange` already commits every keystroke, but a field
     /// left mid-composition when Continue is hit must not be lost.
     private func commit() {
-        SetupYou.apply(name: name, callMe: callMe, role: role, timezone: timezone,
-                       store: environment.userProfileStore)
+        SetupYou.apply(values: values, store: environment.userProfileStore)
     }
 
     private func write(_ value: String, for key: String) {

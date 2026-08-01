@@ -22,7 +22,7 @@ struct UserProfileField: Identifiable {
                          placeholder: "Ada Lovelace"),
         UserProfileField(key: "callMe",
                          title: "What to call you",
-                         hint: "What the assistant says when it addresses you directly.",
+                         hint: "How the assistant addresses you.",
                          placeholder: "Ada"),
         UserProfileField(key: "role",
                          title: "Role",
@@ -30,7 +30,7 @@ struct UserProfileField: Identifiable {
                          placeholder: "Engineer"),
         UserProfileField(key: "timezone",
                          title: "Timezone",
-                         hint: "Used whenever the assistant reasons about your working hours.",
+                         hint: "Used for scheduling and time-aware answers.",
                          placeholder: TimeZone.current.identifier)
     ]
 }
