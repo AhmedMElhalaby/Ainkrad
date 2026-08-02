@@ -86,6 +86,11 @@ extension AppEnvironment {
         if PluginTrust.scansDevPluginsDirectory {
             pluginDirs.append(home.cacheRoot.appendingPathComponent("DevPlugins", isDirectory: true))
         }
+        // v0.16.0 app rename, bundle half. Must precede PluginLoader below: an
+        // installed bundle carries its app id INSIDE its Info.plist, so a
+        // v0.7.1 terminal.bundle still declares `terminal` and would register
+        // the retired app beside the new one.
+        RetiredPluginBundleCleanup.run(pluginsDirectories: pluginDirs)
         let pluginDataRoot = home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
         // v0.16.0 app rename. MUST precede every HostServicesImpl below: that
         // initialiser resolves `<pluginDataRoot>/<appID>`, so a store built
