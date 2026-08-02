@@ -29,6 +29,20 @@ public struct AppAppearanceEntry: Codable, Equatable {
 /// among many now — Terminal, Git Mage, and any plugin have their own entry).
 public struct AppAppearanceDocument: PersistableDocument {
     public static let documentID = "app-appearance"
+    public static let currentSchemaVersion = 2
+
+    /// v1 → v2: the 2026-08-02 app rename. Entries keyed by the retired ids
+    /// (`assistant`, `canvas`, `files`, `terminal`) move to their new ids so a
+    /// user's opacity, blur, presentation override and per-app fonts survive.
+    public static let migrators: [DocumentMigrator] = [
+        DocumentMigrator(from: 1) { payload in
+            guard case .object(var root) = payload,
+                  case .object(let entries)? = root["entries"] else { return payload }
+            root["entries"] = .object(AppIDRenames.rekeyed(entries))
+            return .object(root)
+        },
+    ]
+
     public var entries: [String: AppAppearanceEntry] = [:]
 
     public init(entries: [String: AppAppearanceEntry] = [:]) {
