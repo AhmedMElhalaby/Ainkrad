@@ -89,4 +89,22 @@ struct AppIDMigrationTests {
         #expect(doc.hooks.first?.match == "hoard_*")
         #expect(ToolHookMatcher.matches(pattern: doc.hooks[0].match, toolName: "hoard_navigate"))
     }
+
+    @Test("an installed Terminal is recognised as Rune, not duplicated")
+    func migratesInstalledPlugins() throws {
+        let dir = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        try seedV1("installed-plugins", payload: [
+            "installed": [
+                "terminal": ["version": "v0.7.1", "sourceRepo": "AhmedMElhalaby/AinkradTerminal"],
+                "gitmage": ["version": "v0.10.1", "sourceRepo": "AhmedMElhalaby/GitMage"],
+            ],
+        ], in: dir)
+
+        let store = FileDocumentStore(rootURL: dir)
+        let doc = try #require(store.load(InstalledPluginsDocument.self))
+
+        #expect(doc.installed["rune"]?.version == "v0.7.1")
+        #expect(doc.installed["terminal"] == nil)
+        #expect(doc.installed["gitmage"]?.version == "v0.10.1")
+    }
 }
