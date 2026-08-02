@@ -129,6 +129,37 @@ struct FilesTabTests {
     }
 
 
+    // Reported 2026-08-02: launch on Desktop (correct), sidebar to Downloads,
+    // sidebar back to Desktop — EMPTY pane. Sidebar Home, then sidebar Desktop
+    // again — correct. Both failing and working routes are sidebar clicks with
+    // the identical URL, so if the model were at fault this would reproduce it.
+    // It does not, which is what places the defect above `FilesTab`.
+    @Test("revisiting a directory by URL lists it again")
+    func revisitingRelistsTheDirectory() {
+        let fs = InMemoryFileSystem(home: home)
+        fs.add(directory: "/Users/test", children: ["Desktop/", "Downloads/"])
+        fs.add(directory: "/Users/test/Desktop", children: ["poster.png", "notes.md"])
+        fs.add(directory: "/Users/test/Downloads", children: ["installer.dmg"])
+
+        let desktop = home.appendingPathComponent("Desktop")
+        let tab = FilesTab(directory: desktop, fileSystem: fs)
+        #expect(tab.visibleEntries.count == 2)
+
+        tab.navigate(to: home.appendingPathComponent("Downloads"))
+        #expect(tab.visibleEntries.map(\.name) == ["installer.dmg"])
+
+        // The step that fails in the app.
+        tab.navigate(to: desktop)
+        #expect(tab.currentDirectory == desktop)
+        #expect(tab.loadError == nil)
+        #expect(tab.visibleEntries.count == 2)
+
+        // And the route that recovers it.
+        tab.navigate(to: home)
+        tab.navigate(to: desktop)
+        #expect(tab.visibleEntries.count == 2)
+    }
+
     // Right-clicking one of three selected files must act on all three;
     // right-clicking a fourth acts on that one alone. Backwards, this is a
     // menu that appears over one file and deletes others.
