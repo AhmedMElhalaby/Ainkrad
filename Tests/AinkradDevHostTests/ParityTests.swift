@@ -94,7 +94,22 @@ struct ParityTests {
             Issue.record("expected the host loader to fail at Bundle.load() on a binary-less fixture")
             return
         }
-        #expect(hostRejection.reason == "Bundle.load() failed")
+        // Prove the fixture reaches the load step by asserting validation
+        // ACCEPTS it, rather than pattern-matching the failure text.
+        //
+        // This used to pin the literal "Bundle.load() failed", which stopped
+        // being produced when `PluginLoadDiagnostics` began surfacing dyld's
+        // own message. Nothing noticed, because this target was not wired into
+        // `make test`. Matching on the message was always the wrong axis: the
+        // banner is a diagnostic for humans and is free to improve.
+        let info = try #require(Bundle(url: url)?.infoDictionary)
+        let metadata = try #require(try? PluginBundleMetadata.parse(infoDictionary: info).get())
+        #expect(throws: Never.self) {
+            try PluginValidator.validate(
+                metadata, infoDictionary: info,
+                minSupportedAPIVersion: AinkradAppKit.apiVersion).get()
+        }
+        #expect(!hostRejection.reason.isEmpty)
 
         let model = DevHostModel(loadBundle: loader.loadBundle)
         model.load(LaunchArguments(bundleURL: url, generation: nil))

@@ -127,6 +127,26 @@ else
       fail "$repo pins $pin, host pins $host_pin"
     fi
   done
+
+  # The CLI's EMBEDDED scaffold template is a second pin site inside a repo
+  # whose own manifest already passed. `ainkrad new` copies this file verbatim,
+  # so a stale revision here ships a generation-N plugin against a
+  # generation-N+1 host — it validates on the developer's machine and then
+  # fails `dlopen` in the real one. That is not hypothetical: this pin sat at
+  # 293f049 (generation 7) from 2026-07-23 to 2026-08-02 against a
+  # generation-8 host, invisible because only AinkradKit/Package.swift was
+  # ever checked.
+  template="$SIBLINGS/AinkradKit/Sources/ainkrad/Resources/Template/project.yml"
+  if [[ -f "$template" ]]; then
+    tpin="$(appkit_pin "$template")"
+    if [[ -z "$tpin" ]]; then
+      fail "could not read the embedded scaffold template's AinkradAppKit revision"
+    elif [[ "$tpin" == "$host_pin" ]]; then
+      ok "AinkradKit embedded template"
+    else
+      fail "AinkradKit embedded template pins $tpin, host pins $host_pin — 'ainkrad new' would scaffold against the wrong SDK"
+    fi
+  fi
 fi
 
 # --- 2. SDK ABI baseline is current ----------------------------------------

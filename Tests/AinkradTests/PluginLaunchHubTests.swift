@@ -8,17 +8,17 @@ struct PluginLaunchHubTests {
     @Test("payload is delivered to the target app exactly once")
     func deliverOnce() {
         let hub = PluginLaunchHub()
-        hub.enqueue(target: "terminal", payload: "{\"kind\":\"ssh\"}")
-        #expect(hub.takePending(for: "terminal") == "{\"kind\":\"ssh\"}")
-        #expect(hub.takePending(for: "terminal") == nil)          // consumed
+        hub.enqueue(target: "gitmage", payload: "{\"kind\":\"ssh\"}")
+        #expect(hub.takePending(for: "gitmage") == "{\"kind\":\"ssh\"}")
+        #expect(hub.takePending(for: "gitmage") == nil)          // consumed
     }
 
     @Test("payloads are isolated per target app")
     func perApp() {
         let hub = PluginLaunchHub()
-        hub.enqueue(target: "terminal", payload: "A")
+        hub.enqueue(target: "gitmage", payload: "A")
         #expect(hub.takePending(for: "leyline") == nil)
-        #expect(hub.takePending(for: "terminal") == "A")
+        #expect(hub.takePending(for: "gitmage") == "A")
     }
 
     @Test("requestOpen fires the wired handler with the app id")
@@ -26,8 +26,8 @@ struct PluginLaunchHubTests {
         let hub = PluginLaunchHub()
         var opened: [String] = []
         hub.setOpenHandler { opened.append($0) }
-        hub.requestOpen("terminal")
-        #expect(opened == ["terminal"])
+        hub.requestOpen("gitmage")
+        #expect(opened == ["gitmage"])
     }
 
     @Test("open via the facade enqueues then requests open")
@@ -36,9 +36,37 @@ struct PluginLaunchHubTests {
         var opened: [String] = []
         hub.setOpenHandler { opened.append($0) }
         let launcher = HostAppLauncher(appID: "leyline", hub: hub)
-        launcher.open(appID: "terminal", payload: "P")
-        #expect(opened == ["terminal"])
-        let terminalSide = HostAppLauncher(appID: "terminal", hub: hub)
-        #expect(terminalSide.takePendingLaunch() == "P")
+        launcher.open(appID: "gitmage", payload: "P")
+        #expect(opened == ["gitmage"])
+        let gitmageSide = HostAppLauncher(appID: "gitmage", hub: hub)
+        #expect(gitmageSide.takePendingLaunch() == "P")
+    }
+
+    /// The v0.16.0 rename broke every INSTALLED plugin that launches another app
+    /// by its old id. Leyline v0.6.1 ships `open(appID: "terminal")`; without an
+    /// alias that returns `.unknownApp` and its connect button silently does
+    /// nothing. The host resolves retired ids so already-installed plugins keep
+    /// working without an update of their own.
+    @Test("a retired app id still launches its replacement")
+    func retiredIDLaunchesReplacement() {
+        let hub = PluginLaunchHub()
+        var opened: [String] = []
+        hub.setOpenHandler { opened.append($0) }
+        hub.setAvailabilityProvider { $0 == "rune" ? .available : .unknown }
+
+        let leyline = HostAppLauncher(appID: "leyline", hub: hub)
+        let outcome = leyline.openReportingOutcome(appID: "terminal", payload: "SSH")
+
+        #expect(outcome == .opened)
+        #expect(opened == ["rune"])
+        #expect(HostAppLauncher(appID: "rune", hub: hub).takePendingLaunch() == "SSH")
+    }
+
+    @Test("an unknown app that is not a retired id still reports unknown")
+    func unknownStaysUnknown() {
+        let hub = PluginLaunchHub()
+        hub.setAvailabilityProvider { _ in .unknown }
+        let launcher = HostAppLauncher(appID: "leyline", hub: hub)
+        #expect(launcher.openReportingOutcome(appID: "nope", payload: nil) == .unknownApp("nope"))
     }
 }

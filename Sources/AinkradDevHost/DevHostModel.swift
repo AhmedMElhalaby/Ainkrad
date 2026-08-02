@@ -50,11 +50,11 @@ final class DevHostModel {
     /// `swift_unownedRetainStrong`. Any plugin that publishes agent context
     /// crashed the Dev Host on load, which is the one thing the Dev Host
     /// exists to rule out.
-    private static let contextHub = AgentContextRegistryHub()
-    private static let actionHub = AgentActionRegistryHub()
-    private static let launchHub = PluginLaunchHub()
+    static let contextHub = AgentContextRegistryHub()
+    static let actionHub = AgentActionRegistryHub()
+    static let launchHub = PluginLaunchHub()
 
-    private static func makeHostServices(appID: String, presentation: PluginPresentation) -> HostServices {
+    static func makeHostServices(appID: String, presentation: PluginPresentation) -> HostServices {
         HostServicesImpl(
             appID: appID,
             dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AinkradDevHost", isDirectory: true),
