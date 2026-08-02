@@ -38,17 +38,14 @@ struct FilesSidebar: View {
                             rowPadding: rowPadding,
                             onTap: { onSelect(root) }
                         )
-                        // Attached ONLY where there is something to offer:
-                        // an empty item list still presents an empty floating
-                        // panel, which reads as the app glitching. The kit's
-                        // menu rather than SwiftUI's, so this is not the one
-                        // unstyled surface in the pane.
+                        // Attached ONLY where there is something to offer, so
+                        // a standard place does not pop an empty menu. System
+                        // menu for the same reason as the file rows — see
+                        // `FileRowMenu`.
                         if section.isRemovable {
-                            row.ainkradContextMenu([
-                                AinkradMenuItem(title: "Remove from Favourites",
-                                                systemName: "star.slash",
-                                                action: { onRemove(root) })
-                            ])
+                            row.contextMenu {
+                                Button("Remove from Favourites") { onRemove(root) }
+                            }
                         } else {
                             row
                         }

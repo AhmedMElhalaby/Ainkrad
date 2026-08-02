@@ -51,54 +51,46 @@ private struct FileRowMenu: ViewModifier {
         }
     }
 
-    /// `AinkradMenuItem` carries no shortcut field, so the chord rides in the
-    /// title. Deliberately NOT a fake right-aligned column — without kit
-    /// support the spacing would drift per row and read as broken.
-    private func item(_ title: String, _ shortcut: String?, _ symbol: String,
-                      destructive: Bool = false,
-                      action: @escaping () -> Void) -> AinkradMenuItem {
-        AinkradMenuItem(title: shortcut.map { "\(title)  ·  \($0)" } ?? title,
-                        systemName: symbol, isDestructive: destructive, action: action)
-    }
-
-    private var items: [AinkradMenuItem] {
-        var items: [AinkradMenuItem] = [
-            item("Open", "↩", entry.isDirectory ? "folder" : "arrow.up.forward.app",
-                 action: targeting { actions.open(entry) }),
-            item("Rename", "⌘R", "character.cursor.ibeam",
-                 action: targeting { actions.rename(entry) }),
-            item("Copy", "⌘C", "doc.on.doc", action: targeting(actions.copy)),
-            item("Cut", "⌘X", "scissors", action: targeting(actions.cut)),
-            item("Paste", "⌘V", "doc.on.clipboard", action: actions.paste),
-            item("Compress", "⌥A", "archivebox", action: targeting(actions.compress))
-        ]
-
-        if actions.canExtract(entry) {
-            items.append(item("Extract", "⌥E", "arrow.up.bin",
-                              action: targeting(actions.extractArchives)))
-        }
-
-        if entry.isDirectory {
-            // NO shortcut shown: ⌘D pins the folder you are INSIDE, which is a
-            // different target from the folder you right-clicked. Labelling it
-            // ⌘D would teach a chord that does something else.
-            let pinned = actions.isPinned(entry)
-            items.append(item(pinned ? "Remove from Favourites" : "Add to Favourites",
-                              nil, pinned ? "star.slash" : "star",
-                              action: { actions.togglePin(entry) }))
-        }
-
-        // Last and tinted danger — it routes to the Trash like every delete
-        // here; nothing in this app deletes permanently.
-        items.append(item("Move to Trash", "⌘⌫", "trash", destructive: true,
-                          action: targeting(actions.trash)))
-        return items
-    }
-
+    /// SwiftUI's `.contextMenu`, NOT the kit's `.ainkradContextMenu`.
+    ///
+    /// The kit's version is the styled one and is where this belongs — but its
+    /// right-click catcher is an `NSView` installed in the row's BACKGROUND,
+    /// and on these rows it never receives the event: right-click stopped
+    /// working entirely when it was used here. Until that is fixed in the kit,
+    /// a working system menu beats a beautiful one that does nothing. The
+    /// chords still ride in each title, so the menu teaches the keyboard.
     func body(content: Content) -> some View {
-        // The kit's own menu, NOT SwiftUI's `.contextMenu`: that renders a
-        // system `NSMenu`, which cannot be styled and would drop a stock macOS
-        // panel into a surface that is otherwise entirely Cardinal.
-        content.ainkradContextMenu(items)
+        content.contextMenu {
+            Button("Open  ·  \u{21A9}", action: targeting { actions.open(entry) })
+            Button("Rename  ·  \u{2318}R", action: targeting { actions.rename(entry) })
+
+            Divider()
+
+            Button("Copy  ·  \u{2318}C", action: targeting(actions.copy))
+            Button("Cut  ·  \u{2318}X", action: targeting(actions.cut))
+            Button("Paste  ·  \u{2318}V", action: actions.paste)
+
+            Divider()
+
+            Button("Compress  ·  \u{2325}A", action: targeting(actions.compress))
+            if actions.canExtract(entry) {
+                Button("Extract  ·  \u{2325}E", action: targeting(actions.extractArchives))
+            }
+
+            if entry.isDirectory {
+                Divider()
+                // NO shortcut shown: \u{2318}D pins the folder you are INSIDE,
+                // which is a different target from the one you right-clicked.
+                Button(actions.isPinned(entry) ? "Remove from Favourites"
+                                               : "Add to Favourites") {
+                    actions.togglePin(entry)
+                }
+            }
+
+            Divider()
+
+            Button("Move to Trash  ·  \u{2318}\u{232B}", role: .destructive,
+                   action: targeting(actions.trash))
+        }
     }
 }
