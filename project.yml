@@ -61,8 +61,11 @@ packages:
     # group idiom shared with Settings (merge of feat/settings-panel-component).
     # Context menu: the catcher moved from the background to a hit-test-aware
     # overlay so a right-click lands on rows that draw interactive content, plus
-    # AinkradMenuItem.shortcut rendering an AinkradKbd keycap (PR #26).
-    revision: 809e608cf40c507de2564bbccca73866106e7b98
+    # AinkradMenuItem.shortcut rendering an AinkradKbd keycap (PR #26), and
+    # AinkradPanel gaining a `blending` parameter so a panel hosted in its own
+    # NSPanel can sample .behindWindow instead of rendering as a flat slab
+    # (PR #27). Default unchanged, so no existing surface moves.
+    revision: 31f89bc9e186354077035316a832237ce6993a09
 
 targets:
   AinkradHostRuntime:
