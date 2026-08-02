@@ -87,6 +87,11 @@ extension AppEnvironment {
             pluginDirs.append(home.cacheRoot.appendingPathComponent("DevPlugins", isDirectory: true))
         }
         let pluginDataRoot = home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
+        // v0.16.0 app rename. MUST precede every HostServicesImpl below: that
+        // initialiser resolves `<pluginDataRoot>/<appID>`, so a store built
+        // before the move points at a fresh empty directory and silently
+        // orphans the user's documents instead of reporting anything.
+        AppDataDirectoryRename.run(root: pluginDataRoot)
         let retainedDataRoot = home.vaultRoot
             .appendingPathComponent("Apps", isDirectory: true)
             .appendingPathComponent(".retained", isDirectory: true)
