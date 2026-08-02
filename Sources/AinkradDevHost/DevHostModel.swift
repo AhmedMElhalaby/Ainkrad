@@ -40,15 +40,29 @@ final class DevHostModel {
         })
     }
 
+    /// The three registry hubs, held for the process lifetime.
+    ///
+    /// `HostContextRegistry`, `HostActionRegistry` and `HostAppLauncher` all
+    /// hold their hub `unowned` — the real host gets away with that because
+    /// `AppEnvironment` owns them. `makeHostServices` used to construct each
+    /// hub INLINE, so all three died the moment it returned and the first
+    /// plugin to call `host.context.register(...)` aborted in
+    /// `swift_unownedRetainStrong`. Any plugin that publishes agent context
+    /// crashed the Dev Host on load, which is the one thing the Dev Host
+    /// exists to rule out.
+    private static let contextHub = AgentContextRegistryHub()
+    private static let actionHub = AgentActionRegistryHub()
+    private static let launchHub = PluginLaunchHub()
+
     private static func makeHostServices(appID: String, presentation: PluginPresentation) -> HostServices {
         HostServicesImpl(
             appID: appID,
             dataRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AinkradDevHost", isDirectory: true),
             secretStore: InMemorySecretStore(),
             themeManager: ThemeManager(persistence: InMemoryPersistenceStore()),
-            hub: AgentContextRegistryHub(),
-            actionHub: AgentActionRegistryHub(),
-            launchHub: PluginLaunchHub(),
+            hub: contextHub,
+            actionHub: actionHub,
+            launchHub: launchHub,
             declaredPresentation: presentation,
             appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore())
         )
