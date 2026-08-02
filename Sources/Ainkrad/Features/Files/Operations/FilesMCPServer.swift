@@ -206,6 +206,68 @@ enum FilesMCPServer {
         addTransferTool(to: server, environment: environment, isMove: true)
 
         server.addTool(MCPToolSpec(
+            name: "files_archive",
+            description: """
+            Compress paths into a single archive in a destination directory. \
+            Undoable — undo deletes the archive and leaves the inputs alone.
+            """,
+            schemaJSON: """
+            {"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"}},"destination":{"type":"string"},"name":{"type":"string"}},"required":["paths","destination"]}
+            """,
+            // Additive: it writes a new file and touches nothing existing.
+            destructive: false
+        ) { json in
+            let args = arguments(json)
+            guard let paths = args["paths"] as? [String], !paths.isEmpty,
+                  let destination = args["destination"] as? String else {
+                return fail("Missing “paths” or “destination”.")
+            }
+            var sources: [URL] = []
+            for path in paths {
+                switch resolve(path, environment: environment) {
+                case .failure(let error): return error   // fail the WHOLE call
+                case .success(let url): sources.append(url)
+                }
+            }
+            guard case .success(let directory) = resolve(destination, environment: environment) else {
+                return fail("Destination “\(destination)” is not reachable.")
+            }
+            let name = (args["name"] as? String)
+                ?? defaultArchiveName(for: sources, in: directory)
+            let result = await engine.submit(FileOperation(
+                kind: .archive(name: name), sources: sources, destinationDirectory: directory))
+            return summarise(result, success: "Created \(name). Undo with ⌘Z.")
+        })
+
+        server.addTool(MCPToolSpec(
+            name: "files_extract",
+            description: "Extract archives into a destination directory. Undoable.",
+            schemaJSON: """
+            {"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"}},"destination":{"type":"string"}},"required":["paths","destination"]}
+            """,
+            destructive: false
+        ) { json in
+            let args = arguments(json)
+            guard let paths = args["paths"] as? [String], !paths.isEmpty,
+                  let destination = args["destination"] as? String else {
+                return fail("Missing “paths” or “destination”.")
+            }
+            var archives: [URL] = []
+            for path in paths {
+                switch resolve(path, environment: environment) {
+                case .failure(let error): return error
+                case .success(let url): archives.append(url)
+                }
+            }
+            guard case .success(let directory) = resolve(destination, environment: environment) else {
+                return fail("Destination “\(destination)” is not reachable.")
+            }
+            let result = await engine.submit(FileOperation(
+                kind: .extract, sources: archives, destinationDirectory: directory))
+            return summarise(result, success: "Extracted \(result.succeeded) item(s). Undo with ⌘Z.")
+        })
+
+        server.addTool(MCPToolSpec(
             name: "files_trash",
             description: "Move paths to the Trash. Undoable — this never deletes permanently.",
             schemaJSON: """

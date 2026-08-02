@@ -44,7 +44,8 @@ struct FilesMCPServerTests {
 
         for expected in ["files_navigate", "files_get_selection", "files_reveal",
                          "files_copy", "files_move", "files_rename", "files_trash",
-                         "files_create_folder", "files_batch_rename"] {
+                         "files_create_folder", "files_batch_rename",
+                         "files_archive", "files_extract"] {
             #expect(response.contains(expected), "missing \(expected)")
         }
         // AgentKit already owns reading and editing content; duplicating it
@@ -205,4 +206,27 @@ struct FilesMCPServerTests {
             #expect(annotations?["destructiveHint"] as? Bool == true, "\(name) must be destructive")
         }
     }
+
+    // Archives were spec'd as tools from the start; `ArchiveService` existed
+    // with tests but nothing — not the UI, not the assistant — could reach it.
+    @Test("an assistant-created archive is undoable and leaves the inputs alone")
+    func archiveIsUndoable() async throws {
+        let (environment, root, _) = try makeWorkspace()
+        let server = FilesMCPServer.make(environment: environment)
+
+        let response = await call(server, "files_archive", [
+            "paths": [root.appendingPathComponent("one.txt").path],
+            "destination": root.path,
+            "name": "bundle.zip"
+        ])
+        #expect(!response.lowercased().contains("failed"))
+        let archive = root.appendingPathComponent("bundle.zip")
+        #expect(FileManager.default.fileExists(atPath: archive.path))
+
+        environment.filesOperationEngine.undo()
+        #expect(!FileManager.default.fileExists(atPath: archive.path))
+        // The input is untouched by the archive AND by its undo.
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("one.txt").path))
+    }
+
 }
