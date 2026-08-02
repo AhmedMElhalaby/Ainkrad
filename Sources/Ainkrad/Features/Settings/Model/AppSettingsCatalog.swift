@@ -17,7 +17,7 @@ import AinkradHostRuntime
 enum AppSettingsCatalog {
     /// App ids that declare their own appearance controls and must NOT also
     /// receive the host's auto-appended blur group.
-    private static var ownsItsAppearance: Set<String> { [AssistantApp.id, FilesApp.id] }
+    private static var ownsItsAppearance: Set<String> { [AssistantApp.id, HoardApp.id] }
 
     static func pages(environment: AppEnvironment) -> [SettingsPage] {
         environment.registry.enabledApps.enumerated().map { index, app in
@@ -44,7 +44,7 @@ enum AppSettingsCatalog {
             var groups: [SettingsGroup]
             // Host-embedded built-ins whose settings need `AppEnvironment` get
             // their page built here. The SDK's `settingsCatalog(host:)` is
-            // static and sees only `HostServices`, so an app like Files cannot
+            // static and sees only `HostServices`, so an app like Hoard cannot
             // declare stores-backed fields through it — and falling through to
             // the `.custom` wrap below is exactly the decay the ratchet in
             // `SettingsKitCompositionTests` rejects.
@@ -67,7 +67,7 @@ enum AppSettingsCatalog {
 
             // Apps that own their appearance are exempt from the host's
             // auto-appended blur group: the Assistant has an in-app Appearance
-            // tab, and Files declares blur beside its own transparency slider
+            // tab, and Hoard declares blur beside its own transparency slider
             // (they are one decision — blur does nothing while opaque), so
             // appending it again would strand a duplicate control in a
             // trailing group.
@@ -114,7 +114,7 @@ enum AppSettingsCatalog {
         appID: String, root: SettingsPath, environment: AppEnvironment
     ) -> [SettingsGroup]? {
         switch appID {
-        case FilesApp.id: return FilesSettingsCatalog.groups(root: root, environment: environment)
+        case HoardApp.id: return HoardSettingsCatalog.groups(root: root, environment: environment)
         default: return nil
         }
     }

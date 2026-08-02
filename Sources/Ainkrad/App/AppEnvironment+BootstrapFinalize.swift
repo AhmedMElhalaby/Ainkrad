@@ -100,32 +100,32 @@ extension AppEnvironment {
                                           hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Files (M1) — a host-embedded built-in like Assistant and Canvas. It
+        // Hoard (M1) — a host-embedded built-in like Assistant and Canvas. It
         // inherits the host's unsandboxed filesystem access; its own views read
         // `AppEnvironment` directly.
-        let filesHost = HostServicesImpl(appID: "files", dataRootURL: pluginDataRoot,
+        let filesHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
                                          secretStore: secrets, themeManager: themeManager,
                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Files' MCP server and agent context are built HERE, not in
-        // `FilesApp`, for the same reason its settings are: the SDK entry
+        // Hoard' MCP server and agent context are built HERE, not in
+        // `HoardApp`, for the same reason its settings are: the SDK entry
         // points are static and see only `HostServices`, while the server must
-        // drive the live stores on `AppEnvironment`. Files is host-embedded, so
+        // drive the live stores on `AppEnvironment`. Hoard is host-embedded, so
         // the host is entitled to wire it directly.
         var filesRegistration = RegisteredApp.builtIn(
-            FilesApp.self,
+            HoardApp.self,
             summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
             host: filesHost,
             chromeFillOverride: {
-                FilesApp.surfaceFill(
-                    opacity: appAppearanceStore.surfaceOpacity("files"),
+                HoardApp.surfaceFill(
+                    opacity: appAppearanceStore.surfaceOpacity("hoard"),
                     base: themeManager.tokens.background
                 )
             })
         filesRegistration.mcpServerFactory = { [weak environment] in
-            guard let environment else { return MCPAppServer(appID: FilesApp.id) }
-            return FilesMCPServer.make(environment: environment)
+            guard let environment else { return MCPAppServer(appID: HoardApp.id) }
+            return HoardMCPServer.make(environment: environment)
         }
 
         // Publish what the user is looking at, so the assistant has the
@@ -134,7 +134,7 @@ extension AppEnvironment {
             guard let environment,
                   let summary = environment.filesPaneCoordinator.contextSummary else { return nil }
             return AgentContextSnapshot(
-                kind: "files", title: "Files", text: summary)
+                kind: "hoard", title: "Hoard", text: summary)
         }
 
         let loaded = loader.loadAll(from: pluginDirs)
