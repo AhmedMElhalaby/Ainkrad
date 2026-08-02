@@ -31,17 +31,26 @@ struct FilesSidebar: View {
                             .padding(.bottom, 2)
                     }
                     ForEach(section.roots) { root in
-                        SidebarRootRow(
+                        let row = SidebarRootRow(
                             root: root,
                             isSelected: root.url == currentDirectory,
                             iconSize: iconSize,
                             rowPadding: rowPadding,
                             onTap: { onSelect(root) }
                         )
-                        .contextMenu {
-                            if section.isRemovable {
-                                Button("Remove from Favourites") { onRemove(root) }
-                            }
+                        // Attached ONLY where there is something to offer:
+                        // an empty item list still presents an empty floating
+                        // panel, which reads as the app glitching. The kit's
+                        // menu rather than SwiftUI's, so this is not the one
+                        // unstyled surface in the pane.
+                        if section.isRemovable {
+                            row.ainkradContextMenu([
+                                AinkradMenuItem(title: "Remove from Favourites",
+                                                systemName: "star.slash",
+                                                action: { onRemove(root) })
+                            ])
+                        } else {
+                            row
                         }
                     }
                 }
