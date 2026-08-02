@@ -15,6 +15,10 @@ import AinkradHostRuntime
 /// tab.
 @MainActor
 enum AppSettingsCatalog {
+    /// App ids that declare their own appearance controls and must NOT also
+    /// receive the host's auto-appended blur group.
+    private static var ownsItsAppearance: Set<String> { [AssistantApp.id, FilesApp.id] }
+
     static func pages(environment: AppEnvironment) -> [SettingsPage] {
         environment.registry.enabledApps.enumerated().map { index, app in
             let isBuiltIn = app.source == .builtIn
@@ -38,7 +42,15 @@ enum AppSettingsCatalog {
             // the fallback too would double-prefix its paths
             // (["app", id, "app", id, "settings"]).
             var groups: [SettingsGroup]
-            if let published {
+            // Host-embedded built-ins whose settings need `AppEnvironment` get
+            // their page built here. The SDK's `settingsCatalog(host:)` is
+            // static and sees only `HostServices`, so an app like Files cannot
+            // declare stores-backed fields through it — and falling through to
+            // the `.custom` wrap below is exactly the decay the ratchet in
+            // `SettingsKitCompositionTests` rejects.
+            if let builtInGroups = builtInGroups(appID: app.id, root: root, environment: environment) {
+                groups = builtInGroups
+            } else if let published {
                 groups = published.groups.map { namespaced($0, under: root) }
             } else {
                 groups = [
@@ -53,7 +65,13 @@ enum AppSettingsCatalog {
                 ]
             }
 
-            if app.id != AssistantApp.id {
+            // Apps that own their appearance are exempt from the host's
+            // auto-appended blur group: the Assistant has an in-app Appearance
+            // tab, and Files declares blur beside its own transparency slider
+            // (they are one decision — blur does nothing while opaque), so
+            // appending it again would strand a duplicate control in a
+            // trailing group.
+            if !Self.ownsItsAppearance.contains(app.id) {
                 groups.append(appearanceGroup(appID: app.id, root: root, environment: environment))
             }
 
@@ -87,6 +105,18 @@ enum AppSettingsCatalog {
             defaultDescription: field.defaultDescription,
             isModified: field.isModified,
             reset: field.reset)
+    }
+
+    /// Groups for a host-embedded built-in, or `nil` if the app isn't one.
+    /// These are host-authored and already rooted, so they skip the
+    /// re-rooting that untrusted plugin-published groups need.
+    private static func builtInGroups(
+        appID: String, root: SettingsPath, environment: AppEnvironment
+    ) -> [SettingsGroup]? {
+        switch appID {
+        case FilesApp.id: return FilesSettingsCatalog.groups(root: root, environment: environment)
+        default: return nil
+        }
     }
 
     private static func namespaced(_ group: SettingsGroup, under root: SettingsPath) -> SettingsGroup {
