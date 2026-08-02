@@ -39,13 +39,10 @@ struct FilesSidebar: View {
                             onTap: { onSelect(root) }
                         )
                         // Attached ONLY where there is something to offer, so
-                        // a standard place does not pop an empty menu. System
-                        // menu for the same reason as the file rows — see
-                        // `FileRowMenu`.
+                        // a standard place does not pop an empty menu. Same
+                        // styled menu as the file rows — see `FileRowMenu`.
                         if section.isRemovable {
-                            row.contextMenu {
-                                Button("Remove from Favourites") { onRemove(root) }
-                            }
+                            row.sidebarRootMenu(root: root, onRemove: onRemove)
                         } else {
                             row
                         }

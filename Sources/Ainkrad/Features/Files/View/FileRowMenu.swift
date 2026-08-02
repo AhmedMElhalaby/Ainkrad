@@ -1,6 +1,8 @@
 import SwiftUI
+import AppKit
 import AinkradAppKit
 import AinkradAppKitUI
+import AinkradHostRuntime
 
 /// What a row's context menu can do.
 ///
@@ -21,15 +23,152 @@ struct FileRowMenuActions {
     var isPinned: (FileEntry) -> Bool
 }
 
+/// One row of the menu: what it says, the chord that does the same thing, and
+/// whether it is the dangerous one.
+struct FilesMenuAction: Identifiable {
+    let id = UUID()
+    var title: String
+    var symbol: String
+    /// Shown as an `AinkradKbd` chip. `nil` where no chord does exactly this.
+    var shortcut: String?
+    var isDestructive = false
+    var run: () -> Void
+}
+
+/// Zero-footprint right-click detector.
+///
+/// The reason this exists rather than the kit's `.ainkradContextMenu`: that
+/// installs its catcher in the row's BACKGROUND, and these rows put opaque
+/// interactive content on top (`contentShape` plus tap and double-tap
+/// gestures), so the catcher never received the event and right-click stopped
+/// working entirely.
+///
+/// This one sits in an OVERLAY — above the content, where the event actually
+/// arrives — and stays invisible to everything else by returning `nil` from
+/// `hitTest` for any event that is not a right-click. Without that override an
+/// overlaid `NSView` would swallow every left click and break selection.
+private struct FilesRightClickCatcher: NSViewRepresentable {
+    let onRightClick: () -> Void
+
+    func makeNSView(context: Context) -> CatcherView {
+        let view = CatcherView()
+        view.onRightClick = onRightClick
+        return view
+    }
+
+    func updateNSView(_ nsView: CatcherView, context: Context) {
+        nsView.onRightClick = onRightClick
+    }
+
+    final class CatcherView: NSView {
+        var onRightClick: (() -> Void)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let event = NSApp.currentEvent else { return nil }
+            switch event.type {
+            case .rightMouseDown, .rightMouseUp, .rightMouseDragged:
+                return super.hitTest(point)
+            // ctrl-click is a right-click on macOS, and someone on a trackpad
+            // may well use it.
+            case .leftMouseDown where event.modifierFlags.contains(.control):
+                return super.hitTest(point)
+            default:
+                return nil
+            }
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            onRightClick?()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.control) { onRightClick?() }
+            else { super.mouseDown(with: event) }
+        }
+    }
+}
+
+/// The menu itself, in the Cardinal HUD language.
+struct FilesContextMenuList: View {
+    let actions: [FilesMenuAction]
+    let onSelect: () -> Void
+
+    @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradTypography) private var typo
+    @Environment(\.ainkradStatusColors) private var statusColors
+
+    private var tokens: DesignTokens { environment.themeManager.tokens }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(actions) { action in
+                row(action)
+            }
+        }
+        .padding(AinkradSpacing.xs)
+        .frame(width: 232)
+        .hudPanelChrome(tokens: tokens)
+    }
+
+    private func row(_ action: FilesMenuAction) -> some View {
+        FilesContextMenuRow(action: action, onSelect: onSelect)
+    }
+}
+
+private struct FilesContextMenuRow: View {
+    let action: FilesMenuAction
+    let onSelect: () -> Void
+
+    @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradTypography) private var typo
+    @Environment(\.ainkradStatusColors) private var statusColors
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+    @State private var hovering = false
+
+    private var tokens: DesignTokens { environment.themeManager.tokens }
+
+    private var tint: Color {
+        action.isDestructive ? statusColors.danger : tokens.foreground.opacity(0.9)
+    }
+
+    var body: some View {
+        Button {
+            action.run()
+            onSelect()
+        } label: {
+            HStack(spacing: AinkradSpacing.sm) {
+                Image(systemName: action.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 15)
+                Text(action.title)
+                    .font(AinkradFontResolver.font(.body, typography: typo))
+                Spacer(minLength: AinkradSpacing.md)
+                // The chord as a real key chip, right-aligned into its own
+                // column — the menu teaches the keyboard rather than replacing
+                // it.
+                if let shortcut = action.shortcut {
+                    AinkradKbd(shortcut)
+                }
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, AinkradSpacing.sm)
+            .padding(.vertical, AinkradSpacing.xs)
+            .background(ChamferShape(cut: 4).fill(
+                hovering ? tokens.accentSecondary.opacity(0.14) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: hovering)
+    }
+}
+
 extension View {
     /// The right-click menu for one row.
     ///
     /// Until this existed, **every** operation in Files was keyboard-only —
     /// rename was F2 and nothing else, which on a Mac laptop means Fn+F2, so
     /// the single most ordinary thing you do to a file was effectively hidden.
-    /// The keyboard remains the fast path; this is the discoverable one, and
-    /// every row names its chord so the menu teaches the keyboard rather than
-    /// replacing it.
     func fileRowMenu(entry: FileEntry, tab: FilesTab,
                      actions: FileRowMenuActions) -> some View {
         modifier(FileRowMenu(entry: entry, tab: tab, actions: actions))
@@ -41,6 +180,8 @@ private struct FileRowMenu: ViewModifier {
     let tab: FilesTab
     let actions: FileRowMenuActions
 
+    @State private var isPresented = false
+
     /// Right-clicking a row that is NOT part of the current selection retargets
     /// onto it — the standard behaviour everywhere, and the alternative is a
     /// menu that appears over one file and acts on three others.
@@ -51,46 +192,95 @@ private struct FileRowMenu: ViewModifier {
         }
     }
 
-    /// SwiftUI's `.contextMenu`, NOT the kit's `.ainkradContextMenu`.
-    ///
-    /// The kit's version is the styled one and is where this belongs — but its
-    /// right-click catcher is an `NSView` installed in the row's BACKGROUND,
-    /// and on these rows it never receives the event: right-click stopped
-    /// working entirely when it was used here. Until that is fixed in the kit,
-    /// a working system menu beats a beautiful one that does nothing. The
-    /// chords still ride in each title, so the menu teaches the keyboard.
-    func body(content: Content) -> some View {
-        content.contextMenu {
-            Button("Open  ·  \u{21A9}", action: targeting { actions.open(entry) })
-            Button("Rename  ·  \u{2318}R", action: targeting { actions.rename(entry) })
+    private var menuActions: [FilesMenuAction] {
+        var items: [FilesMenuAction] = [
+            FilesMenuAction(title: "Open",
+                            symbol: entry.isDirectory ? "folder" : "arrow.up.forward.app",
+                            shortcut: "\u{21A9}",
+                            run: targeting { actions.open(entry) }),
+            FilesMenuAction(title: "Rename", symbol: "character.cursor.ibeam",
+                            shortcut: "\u{2318}R",
+                            run: targeting { actions.rename(entry) }),
+            FilesMenuAction(title: "Copy", symbol: "doc.on.doc", shortcut: "\u{2318}C",
+                            run: targeting(actions.copy)),
+            FilesMenuAction(title: "Cut", symbol: "scissors", shortcut: "\u{2318}X",
+                            run: targeting(actions.cut)),
+            FilesMenuAction(title: "Paste", symbol: "doc.on.clipboard", shortcut: "\u{2318}V",
+                            run: actions.paste),
+            FilesMenuAction(title: "Compress", symbol: "archivebox", shortcut: "\u{2325}A",
+                            run: targeting(actions.compress))
+        ]
 
-            Divider()
-
-            Button("Copy  ·  \u{2318}C", action: targeting(actions.copy))
-            Button("Cut  ·  \u{2318}X", action: targeting(actions.cut))
-            Button("Paste  ·  \u{2318}V", action: actions.paste)
-
-            Divider()
-
-            Button("Compress  ·  \u{2325}A", action: targeting(actions.compress))
-            if actions.canExtract(entry) {
-                Button("Extract  ·  \u{2325}E", action: targeting(actions.extractArchives))
-            }
-
-            if entry.isDirectory {
-                Divider()
-                // NO shortcut shown: \u{2318}D pins the folder you are INSIDE,
-                // which is a different target from the one you right-clicked.
-                Button(actions.isPinned(entry) ? "Remove from Favourites"
-                                               : "Add to Favourites") {
-                    actions.togglePin(entry)
-                }
-            }
-
-            Divider()
-
-            Button("Move to Trash  ·  \u{2318}\u{232B}", role: .destructive,
-                   action: targeting(actions.trash))
+        if actions.canExtract(entry) {
+            items.append(FilesMenuAction(title: "Extract", symbol: "arrow.up.bin",
+                                         shortcut: "\u{2325}E",
+                                         run: targeting(actions.extractArchives)))
         }
+
+        if entry.isDirectory {
+            // NO shortcut: ⌘D pins the folder you are INSIDE, a different
+            // target from the folder you right-clicked. Showing ⌘D here would
+            // teach a chord that does something else.
+            let pinned = actions.isPinned(entry)
+            items.append(FilesMenuAction(
+                title: pinned ? "Remove from Favourites" : "Add to Favourites",
+                symbol: pinned ? "star.slash" : "star",
+                shortcut: nil,
+                run: { actions.togglePin(entry) }))
+        }
+
+        // Last and danger-tinted. It routes to the Trash like every delete
+        // here; nothing in this app deletes permanently.
+        items.append(FilesMenuAction(title: "Move to Trash", symbol: "trash",
+                                     shortcut: "\u{2318}\u{232B}", isDestructive: true,
+                                     run: targeting(actions.trash)))
+        return items
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                FilesRightClickCatcher {
+                    // Retarget BEFORE the menu opens, so the highlighted row
+                    // is the one the menu is about.
+                    tab.targetContextMenu(at: entry)
+                    isPresented = true
+                }
+            )
+            // A floating panel, never `.contextMenu`: that renders a system
+            // `NSMenu` — native chrome, native highlight — inside an interface
+            // that is deliberately not macOS-shaped. The panel is app-level, so
+            // it is also never clipped by the scroll view's bounds.
+            .ainkradFloatingPanel(isPresented: $isPresented, maxHeight: 360) {
+                FilesContextMenuList(actions: menuActions) { isPresented = false }
+            }
+    }
+}
+
+extension View {
+    /// The sidebar's one-item menu, in the same language as the file rows'.
+    func sidebarRootMenu(root: SidebarRoot,
+                         onRemove: @escaping (SidebarRoot) -> Void) -> some View {
+        modifier(SidebarRootMenu(root: root, onRemove: onRemove))
+    }
+}
+
+private struct SidebarRootMenu: ViewModifier {
+    let root: SidebarRoot
+    let onRemove: (SidebarRoot) -> Void
+
+    @State private var isPresented = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(FilesRightClickCatcher { isPresented = true })
+            .ainkradFloatingPanel(isPresented: $isPresented, maxHeight: 120) {
+                FilesContextMenuList(actions: [
+                    FilesMenuAction(title: "Remove from Favourites",
+                                    symbol: "star.slash",
+                                    shortcut: nil,
+                                    run: { onRemove(root) })
+                ]) { isPresented = false }
+            }
     }
 }
