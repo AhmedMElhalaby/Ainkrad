@@ -42,6 +42,14 @@ struct VisualEffectBlur: NSViewRepresentable {
 /// the overlay opacity/blur settings live.
 private struct HUDPanelChrome: ViewModifier {
     let tokens: DesignTokens
+    /// How the blur samples what it sits over.
+    ///
+    /// `.withinWindow` is right for an overlay drawn INSIDE the app window —
+    /// it blurs the app content behind it. A panel hosted in its own
+    /// `NSPanel` (anything presented via `ainkradFloatingPanel`) has nothing
+    /// behind it within that window, so the blur renders as a flat fill and
+    /// the panel reads opaque; those need `.behindWindow`.
+    let blending: NSVisualEffectView.BlendingMode
     @Environment(AppEnvironment.self) private var environment
 
     func body(content: Content) -> some View {
@@ -50,7 +58,7 @@ private struct HUDPanelChrome: ViewModifier {
             .background {
                 ZStack {
                     if store.overlayBlurEnabled {
-                        VisualEffectBlur()
+                        VisualEffectBlur(blending: blending)
                     }
                     tokens.background.opacity(store.overlayBackgroundOpacity)
                 }
@@ -77,7 +85,8 @@ extension View {
     /// Applies the shared HUD panel finish (background, clip, border glow,
     /// shadow stack) used by the Launcher, Settings, App Store, Workspace
     /// Overview, and Quit panels.
-    func hudPanelChrome(tokens: DesignTokens) -> some View {
-        modifier(HUDPanelChrome(tokens: tokens))
+    func hudPanelChrome(tokens: DesignTokens,
+                        blending: NSVisualEffectView.BlendingMode = .withinWindow) -> some View {
+        modifier(HUDPanelChrome(tokens: tokens, blending: blending))
     }
 }

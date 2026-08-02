@@ -112,7 +112,10 @@ struct FilesContextMenuList: View {
         }
         .padding(AinkradSpacing.xs)
         .frame(width: 232)
-        .hudPanelChrome(tokens: tokens)
+        // `.behindWindow`: this panel is its own window, so a `.withinWindow`
+        // blur has nothing to sample and the menu reads as a flat opaque slab
+        // instead of matching the app's other overlays.
+        .hudPanelChrome(tokens: tokens, blending: .behindWindow)
     }
 
     private func row(_ action: FilesMenuAction) -> some View {
@@ -161,6 +164,10 @@ private struct FilesContextMenuRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The panel gives its first button keyboard focus, and SwiftUI's
+        // default focus ring is a heavy system rectangle that has nothing to do
+        // with this design language. Hover is the only highlight here.
+        .focusEffectDisabled()
         .onHover { hovering = $0 }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: hovering)
     }
