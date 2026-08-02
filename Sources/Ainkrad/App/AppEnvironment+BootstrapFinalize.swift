@@ -75,27 +75,30 @@ extension AppEnvironment {
             }
         }
 
-        // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
+        // Rune (formerly Terminal) ships as an App Store plugin, not compiled in.
         // Still migrate any pre-4a host-global settings into its scoped store so the
-        // installed plugin sees the user's existing configuration.
-        let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
+        // installed plugin sees the user's existing configuration. Scoped to "rune":
+        // `AppDataDirectoryRename` has already moved <Apps>/terminal to <Apps>/rune
+        // earlier in bootstrap, so writing to the old id would strand this migration
+        // in a directory the plugin no longer reads.
+        let runeHost = HostServicesImpl(appID: "rune", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                             declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
-            scoped: terminalHost.documents, defaults: defaults)
+            scoped: runeHost.documents, defaults: defaults)
 
         // Sage is a host-embedded built-in (its views read `AppEnvironment`
         // directly), scoped like any other app for its documents/secrets/theme/context.
-        let assistantHost = HostServicesImpl(appID: "sage", dataRootURL: pluginDataRoot,
+        let sageHost = HostServicesImpl(appID: "sage", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
                                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Live Scry (M7 Slice 7) is likewise a host-embedded built-in — its
         // pane reads `AppEnvironment.canvasStore` directly (see `ScryApp`).
-        let canvasHost = HostServicesImpl(appID: "scry", dataRootURL: pluginDataRoot,
+        let scryHost = HostServicesImpl(appID: "scry", dataRootURL: pluginDataRoot,
                                           secretStore: secrets, themeManager: themeManager,
                                           hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
@@ -103,7 +106,7 @@ extension AppEnvironment {
         // Hoard (M1) — a host-embedded built-in like Sage and Scry. It
         // inherits the host's unsandboxed filesystem access; its own views read
         // `AppEnvironment` directly.
-        let filesHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
+        let hoardHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
                                          secretStore: secrets, themeManager: themeManager,
                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
@@ -116,7 +119,7 @@ extension AppEnvironment {
         var filesRegistration = RegisteredApp.builtIn(
             HoardApp.self,
             summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
-            host: filesHost,
+            host: hoardHost,
             chromeFillOverride: {
                 HoardApp.surfaceFill(
                     opacity: appAppearanceStore.surfaceOpacity("hoard"),
@@ -130,7 +133,7 @@ extension AppEnvironment {
 
         // Publish what the user is looking at, so the assistant has the
         // browser's state without having to ask for it.
-        _ = filesHost.context.register { [weak environment] in
+        _ = hoardHost.context.register { [weak environment] in
             guard let environment,
                   let summary = environment.filesPaneCoordinator.contextSummary else { return nil }
             return AgentContextSnapshot(
@@ -143,7 +146,7 @@ extension AppEnvironment {
                 RegisteredApp.builtIn(
                     SageApp.self,
                     summary: "Your in-workspace AI assistant — chat about your code, run gated tools, and drive the terminal and git without leaving Ainkrad.",
-                    host: assistantHost,
+                    host: sageHost,
                     // Reading `surfaceOpacity` inside this closure — invoked
                     // synchronously from `TileLayoutView.hasTranslucentPane`
                     // and `BlockView.headerBackground` during their view
@@ -159,7 +162,7 @@ extension AppEnvironment {
                 RegisteredApp.builtIn(
                     ScryApp.self,
                     summary: "The Live Scry — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
-                    host: canvasHost),
+                    host: scryHost),
                 filesRegistration
             ],
             loaded: loaded.apps,
