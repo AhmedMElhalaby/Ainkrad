@@ -36,6 +36,10 @@ struct FilesToastMessage: Equatable, Identifiable {
     var text: String
     /// Secondary line — the undo hint, or the failure detail.
     var detail: String?
+    /// Per-item reasons behind a "3 failed" summary. Carried on the message so
+    /// the count is always expandable to WHICH items and WHY — a summary you
+    /// cannot drill into is just a number.
+    var failures: [OperationFailure] = []
 }
 
 /// Transient confirmation, in the Cardinal HUD language.
@@ -47,6 +51,8 @@ struct FilesToastMessage: Equatable, Identifiable {
 struct FilesToast: View {
     let message: FilesToastMessage
     let onDismiss: () -> Void
+    /// Show the per-item reasons. Only offered when there are any.
+    var onShowDetails: (() -> Void)?
 
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradTypography) private var typo
@@ -84,6 +90,16 @@ struct FilesToast: View {
                 }
             }
 
+            if !message.failures.isEmpty, let onShowDetails {
+                Button(action: onShowDetails) {
+                    Text("Details")
+                        .font(AinkradFontResolver.font(.caption, weight: .medium, typography: typo))
+                        .foregroundStyle(accent)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, AinkradSpacing.xs)
+            }
+
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
@@ -115,5 +131,67 @@ struct FilesToast: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8),
                    value: message.id)
+    }
+}
+
+/// The per-item reasons behind a "3 failed" summary.
+///
+/// Filesystem work fails constantly and normally — permission denied, a volume
+/// ejected mid-copy, a file that vanished between listing and operating. The
+/// count tells you something went wrong; only this tells you what to do about
+/// it, so the count is never the end of the trail.
+struct FilesFailureSheet: View {
+    let failures: [OperationFailure]
+    let onClose: () -> Void
+
+    @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradTypography) private var typo
+    @Environment(\.ainkradStatusColors) private var statusColors
+
+    private var tokens: DesignTokens { environment.themeManager.tokens }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AinkradSpacing.lg) {
+            HStack(spacing: AinkradSpacing.md) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(statusColors.warning)
+                    .frame(width: 26, height: 26)
+                    .background(ChamferShape(cut: 5).fill(statusColors.warning.opacity(0.15)))
+                Text("\(failures.count) item\(failures.count == 1 ? "" : "s") failed")
+                    .font(AinkradFontResolver.font(.headline, weight: .medium, typography: typo))
+                    .foregroundStyle(tokens.foreground)
+                Spacer(minLength: 0)
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: AinkradSpacing.sm) {
+                    ForEach(Array(failures.enumerated()), id: \.offset) { _, failure in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(failure.url.lastPathComponent)
+                                .font(AinkradFontResolver.font(.body, weight: .medium,
+                                                               typography: typo))
+                                .foregroundStyle(tokens.foreground)
+                            Text(failure.reason)
+                                .font(AinkradFontResolver.font(.caption, typography: typo))
+                                .foregroundStyle(tokens.foreground.opacity(0.6))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(AinkradSpacing.sm)
+            }
+            .frame(height: 200)
+            .background(ChamferShape(cut: 6).fill(tokens.foreground.opacity(0.05)))
+
+            HStack {
+                Spacer()
+                AinkradButton(title: "Done", style: .primary, action: onClose)
+            }
+        }
+        .padding(AinkradSpacing.xl)
+        .frame(width: 520)
+        .hudPanelChrome(tokens: tokens)
     }
 }

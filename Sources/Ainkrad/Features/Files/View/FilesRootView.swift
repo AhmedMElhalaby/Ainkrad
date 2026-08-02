@@ -20,6 +20,8 @@ struct FilesRootView: View {
     @State private var isEditingPath = false
     @State private var watcher: DirectoryWatcher?
     @State private var toast: FilesToastMessage?
+    /// Per-item failure reasons, shown when the summary's "Details" is tapped.
+    @State private var failureDetails: [OperationFailure] = []
     @State private var search: FilesSearchStore?
     /// The pane's ONE focus state, shared by the list and the search field.
     @FocusState private var focus: FilesFocusTarget?
@@ -171,11 +173,17 @@ struct FilesRootView: View {
         }
         .overlay(alignment: .bottom) {
             if let toast {
-                FilesToast(message: toast) { self.toast = nil }
+                FilesToast(
+                    message: toast,
+                    onDismiss: { self.toast = nil },
+                    onShowDetails: { failureDetails = toast.failures })
                     .padding(.bottom, AinkradSpacing.lg)
                     .task(id: toast.id) {
-                        // Auto-dismiss; a confirmation that lingers becomes
-                        // clutter you learn to ignore.
+                        // Auto-dismiss successes; a confirmation that lingers
+                        // becomes clutter you learn to ignore. FAILURES stay
+                        // until dismissed — auto-hiding them would take the
+                        // only route to the per-item reasons with it.
+                        guard !toast.kind.isProblem else { return }
                         try? await Task.sleep(for: .seconds(3))
                         if self.toast?.id == toast.id { self.toast = nil }
                     }
@@ -221,6 +229,10 @@ struct FilesRootView: View {
                     onCancel: { actions.cancelBatchRename() },
                     onApply: { plan in Task { await actions.commitBatchRename(plan) } })
             }
+        }
+        .sheet(isPresented: Binding(get: { !failureDetails.isEmpty },
+                                    set: { if !$0 { failureDetails = [] } })) {
+            FilesFailureSheet(failures: failureDetails) { failureDetails = [] }
         }
         .sheet(isPresented: Binding(get: { resolver.pending != nil },
                                     set: { if !$0 { resolver.cancel() } })) {

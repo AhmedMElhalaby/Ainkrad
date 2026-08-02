@@ -278,7 +278,9 @@ final class FilesActions {
             lastToast = FilesToastMessage(
                 kind: .failure,
                 text: "\(verb) \(result.succeeded) item\(result.succeeded == 1 ? "" : "s")",
-                detail: detailParts.joined(separator: " · "))
+                detail: detailParts.joined(separator: " · "),
+                // Carried so "3 failed" can be opened to WHICH three and why.
+                failures: result.failures)
             return
         }
 

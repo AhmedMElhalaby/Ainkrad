@@ -206,4 +206,23 @@ struct FilesActionsTests {
         #expect(harness.mutator.fileExists(url("one.txt")))
         #expect(harness.actions.lastToast == nil)
     }
+
+    // "3 failed" is only useful if you can find out WHICH three and why. The
+    // reasons come back from the engine; this pins that they reach the toast.
+    @Test("a failure summary carries the per-item reasons")
+    func failureCarriesReasons() async {
+        let harness = makeHarness()
+        harness.mutator.addDirectory("/elsewhere")
+        harness.mutator.addFile("/elsewhere/blocked.txt")
+        // An unwritable destination makes the copy fail for a stated reason.
+        harness.mutator.unwritablePaths = [url("blocked.txt").path]
+        harness.clipboard.copy([URL(fileURLWithPath: "/elsewhere/blocked.txt")])
+
+        await harness.actions.paste()
+
+        #expect(harness.actions.lastToast?.kind == .failure)
+        #expect(harness.actions.lastToast?.failures.count == 1)
+        #expect(harness.actions.lastToast?.failures.first?.reason.isEmpty == false)
+    }
+
 }
