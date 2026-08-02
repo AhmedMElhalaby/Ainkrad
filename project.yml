@@ -59,7 +59,10 @@ packages:
     # (merge of feat/settings-kit-composition).
     # Settings panes: AinkradSettingsPanel + AinkradCaptionedRow, the wizard's
     # group idiom shared with Settings (merge of feat/settings-panel-component).
-    revision: 69c7f5f435d2de98bd2906236f356b131df7b999
+    # Context menu: the catcher moved from the background to a hit-test-aware
+    # overlay so a right-click lands on rows that draw interactive content, plus
+    # AinkradMenuItem.shortcut rendering an AinkradKbd keycap (PR #26).
+    revision: 809e608cf40c507de2564bbccca73866106e7b98
 
 targets:
   AinkradHostRuntime:
