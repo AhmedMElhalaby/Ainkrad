@@ -47,8 +47,8 @@ struct SetupHomePreview {
     /// deliberately not a row of its own.
     ///
     /// Exhaustive and `default`-free on purpose: this is the compile-time gate.
-    /// The four `nil` cases are not omissions — `Assistant/memory`,
-    /// `/skills`, `/commands` and `/sessions` are all INSIDE `Assistant/`, and
+    /// The four `nil` cases are not omissions — `Sage/memory`,
+    /// `/skills`, `/commands` and `/sessions` are all INSIDE `Sage/`, and
     /// the listing shows top-level folders. `.agents`' copy names them.
     private static func description(of domain: SharedDomain)
         -> (detail: String, icon: String, order: Int)? {
@@ -110,7 +110,7 @@ struct SetupHomePreview {
     }
 
     /// The first path component of a domain's location under the vault root, as
-    /// a folder name. `.memory` and friends live INSIDE `Assistant/`, so the top
+    /// a folder name. `.memory` and friends live INSIDE `Sage/`, so the top
     /// level of this listing is the set of first components, not the set of
     /// domains.
     ///
