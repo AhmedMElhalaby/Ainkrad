@@ -91,6 +91,27 @@ struct FileListView: View {
                     .padding(.vertical, AinkradSpacing.xs)
                     }
                 }
+                // Keyed on the DIRECTORY, so arriving somewhere new builds a
+                // fresh scroll view that necessarily starts at the top.
+                //
+                // A `ScrollView` keeps its content offset when its contents
+                // change. Leaving a folder you had scrolled down in and
+                // entering a shorter one therefore left the view parked past
+                // the end of the new listing — a blank pane, with the status
+                // bar cheerfully reporting "5 items" underneath it. It read as
+                // a folder that had failed to load, and it "recovered" only by
+                // visiting something long enough to reach the stale offset.
+                //
+                // Deliberately NOT `proxy.scrollTo` on navigation: that needs
+                // the target row to be registered with the lazy stack at the
+                // moment the change fires, and silently does nothing when it
+                // is not. Identity has no such timing dependency.
+                //
+                // Keyed on the directory and not on the entries, so the
+                // watcher's reload after a file changes keeps your scroll
+                // position — being thrown to the top because something wrote
+                // to the folder you are reading would be its own bug.
+                .id(tab.currentDirectory)
                 .onChange(of: tab.cursorIndex) { _, _ in
                     guard let entry = tab.cursorEntry else { return }
                     // `anchor: nil` scrolls the MINIMUM distance needed to
