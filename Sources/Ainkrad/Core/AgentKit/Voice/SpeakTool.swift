@@ -26,7 +26,7 @@ struct SpeakTool: AgentTool {
     /// downloadable audio card in the transcript, not just played. Defaulted so
     /// existing call sites/tests compile unchanged.
     var producer: (any SpeechAudioProducing)? = nil
-    var store: CanvasStore? = nil
+    var store: ScryStore? = nil
     let mediaStore: GeneratedMediaStore
     var player: any AudioPlaying = SystemAudioPlayer()
 
@@ -57,7 +57,7 @@ struct SpeakTool: AgentTool {
                 let (data, ext) = try await producer.audio(for: text)
                 let url = try mediaStore.write(data, fileExtension: ext)
                 player.play(data)
-                let element = CanvasElement(
+                let element = ScryElement(
                     id: UUID().uuidString, kind: .audio,
                     title: "Speech", body: url.absoluteString)
                 let id = store.add(element)

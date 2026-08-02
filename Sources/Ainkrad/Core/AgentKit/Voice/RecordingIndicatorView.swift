@@ -21,7 +21,7 @@ enum RecordingIndicatorState: Equatable {
 /// Cardinal-HUD recording indicator bound to `pushToTalk.status`: hidden at
 /// idle, a pulsing waveform meter while recording, a themed spinner while
 /// transcribing, and a compact danger glyph+message on failure. Built only
-/// from kit components (`AinkradSpinner`) plus a custom `Canvas`/`TimelineView`
+/// from kit components (`AinkradSpinner`) plus a custom `Scry`/`TimelineView`
 /// waveform — no native controls, no plain `Label`/`ProgressView`.
 @MainActor
 struct RecordingIndicatorView: View {

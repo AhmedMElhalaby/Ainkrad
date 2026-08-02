@@ -16,7 +16,7 @@ protocol MediaBackend: Sendable {
 
 /// Sniffs an image MIME type from leading magic bytes, for backends that return
 /// raw image bytes (Pollinations, Hugging Face) rather than a declared type.
-/// Defaults to `image/png` — the type the Live Canvas + `AgentContentBlock`
+/// Defaults to `image/png` — the type the Live Scry + `AgentContentBlock`
 /// already assume — when the signature is unrecognized.
 /// Derives a file extension from a URL path, for backends that return a link to
 /// a generated asset (Replicate/Luma/Runway/fal videos). Pure and unit-tested.

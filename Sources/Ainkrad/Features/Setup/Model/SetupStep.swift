@@ -18,7 +18,7 @@ enum SetupStep: String, CaseIterable, Identifiable, Sendable {
         case .motionAndSound: return "Motion & Sound"
         case .you:            return "You"
         case .providers:      return "Connect an AI Provider"
-        case .assistant:      return "Your Assistant"
+        case .assistant:      return "Your Sage"
         case .done:           return "Ready"
         }
     }

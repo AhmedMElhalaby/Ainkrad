@@ -115,7 +115,7 @@ struct GeminiProvider: LLMProvider {
         return request
     }
 
-    /// Maps one `AgentMessage` to a Gemini `content` object. Assistant → "model".
+    /// Maps one `AgentMessage` to a Gemini `content` object. Sage → "model".
     nonisolated private static func wireContent(_ message: AgentMessage) -> [String: Any] {
         let role = message.role == .assistant ? "model" : "user"
         let parts: [[String: Any]] = message.wireContent.map { block in

@@ -24,32 +24,32 @@ struct AppAppearanceStoreTests {
 
     @Test func clampsSurfaceOpacityPerApp() {
         let store = AppAppearanceStore(persistence: InMemoryPersistenceStore())
-        store.setSurfaceOpacity("assistant", 1.7)
-        #expect(store.surfaceOpacity("assistant") == 1.0)
-        store.setSurfaceOpacity("assistant", -0.4)
-        #expect(store.surfaceOpacity("assistant") == 0.0)
-        store.setSurfaceOpacity("assistant", 0.55)
-        #expect(store.surfaceOpacity("assistant") == 0.55)
+        store.setSurfaceOpacity("sage", 1.7)
+        #expect(store.surfaceOpacity("sage") == 1.0)
+        store.setSurfaceOpacity("sage", -0.4)
+        #expect(store.surfaceOpacity("sage") == 0.0)
+        store.setSurfaceOpacity("sage", 0.55)
+        #expect(store.surfaceOpacity("sage") == 0.55)
     }
 
     @Test func persistsAcrossReload() {
         let persistence = InMemoryPersistenceStore()
         let store = AppAppearanceStore(persistence: persistence)
-        store.setSurfaceOpacity("assistant", 0.6)
+        store.setSurfaceOpacity("sage", 0.6)
         store.setBlurEnabled("terminal", true)
 
         let reloaded = AppAppearanceStore(persistence: persistence)
-        #expect(reloaded.surfaceOpacity("assistant") == 0.6)
+        #expect(reloaded.surfaceOpacity("sage") == 0.6)
         #expect(reloaded.blurEnabled("terminal") == true)
     }
 
     @Test func migratesLegacyAssistantDocumentIntoAssistantEntry() {
         let persistence = InMemoryPersistenceStore()
-        // Seed the Slice-2c Assistant-only document, then build the new store.
+        // Seed the Slice-2c Sage-only document, then build the new store.
         persistence.save(LegacyAssistantAppearanceDocument(surfaceOpacity: 0.4, blurEnabled: true))
         let store = AppAppearanceStore(persistence: persistence)
-        #expect(store.surfaceOpacity("assistant") == 0.4)
-        #expect(store.blurEnabled("assistant") == true)
+        #expect(store.surfaceOpacity("sage") == 0.4)
+        #expect(store.blurEnabled("sage") == true)
     }
 
     @Test("presentation override round-trips and defaults to nil")
@@ -63,15 +63,15 @@ struct AppAppearanceStoreTests {
     }
 }
 
-@Suite("AssistantApp.surfaceFill")
+@Suite("SageApp.surfaceFill")
 @MainActor
-struct AssistantSurfaceFillTests {
+struct SageSurfaceFillTests {
     @Test func opaqueAtFullOpacityReturnsNil() {
-        #expect(AssistantApp.surfaceFill(opacity: 1.0, base: .white) == nil)
+        #expect(SageApp.surfaceFill(opacity: 1.0, base: .white) == nil)
     }
 
     @Test func translucentBelowFullOpacityReturnsAColor() {
-        #expect(AssistantApp.surfaceFill(opacity: 0.5, base: .white) != nil)
-        #expect(AssistantApp.surfaceFill(opacity: 0.0, base: .white) != nil)
+        #expect(SageApp.surfaceFill(opacity: 0.5, base: .white) != nil)
+        #expect(SageApp.surfaceFill(opacity: 0.0, base: .white) != nil)
     }
 }

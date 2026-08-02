@@ -11,7 +11,7 @@ enum SessionShareRenderer {
         let safeTitle = esc(redact(title, redactions))
         var body = ""
         for m in messages {
-            let who = m.role == .user ? "User" : "Assistant"
+            let who = m.role == .user ? "User" : "Sage"
             body += "<section class=\"turn \(m.role.rawValue)\"><h3>\(esc(who))</h3>"
             for block in m.content {
                 switch block {

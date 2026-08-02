@@ -15,11 +15,16 @@ extension PersistableDocument {
 }
 
 /// Transforms a document payload from `fromVersion` to `fromVersion + 1`.
-public struct DocumentMigrator {
+///
+/// `Sendable` because migrators are declared as `static let` on the document
+/// type: a static stored property must be concurrency-safe, and a migrator is
+/// a pure `JSONValue → JSONValue` transform with no captured state, so the
+/// conformance is honest rather than an escape hatch.
+public struct DocumentMigrator: Sendable {
     let fromVersion: Int
-    let migrate: (JSONValue) -> JSONValue
+    let migrate: @Sendable (JSONValue) -> JSONValue
 
-    public init(from fromVersion: Int, _ migrate: @escaping (JSONValue) -> JSONValue) {
+    public init(from fromVersion: Int, _ migrate: @escaping @Sendable (JSONValue) -> JSONValue) {
         self.fromVersion = fromVersion
         self.migrate = migrate
     }

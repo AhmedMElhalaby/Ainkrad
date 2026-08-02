@@ -46,7 +46,7 @@ final class VoiceService {
         pushToTalk.onNotice = { [weak self] in self?.lastNotice = $0 }
     }
 
-    /// Wire auto-send through the normal Assistant path — voice is not privileged.
+    /// Wire auto-send through the normal Sage path — voice is not privileged.
     func attachSession(_ session: AgentSession) {
         pushToTalk.onAutoSend = { session.send($0) }
     }
