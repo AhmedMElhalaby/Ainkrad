@@ -39,7 +39,7 @@ struct BlockView: View {
     }
 
     /// The pane is translucent when its app declares a sub-opaque window fill
-    /// (Assistant opacity slider, Terminal scheme opacity, Git Mage transparency).
+    /// (Sage opacity slider, Terminal scheme opacity, Git Mage transparency).
     private var isTranslucentPane: Bool {
         guard let fill = app?.chromeFill() else { return false }
         return NSColor(fill).alphaComponent < 1
@@ -88,7 +88,7 @@ struct BlockView: View {
             content(tokens: tokens)
         }
         // The pane body is clear, so a translucent app (Terminal scheme
-        // opacity, Git Mage transparency, Assistant opacity) reveals whatever
+        // opacity, Git Mage transparency, Sage opacity) reveals whatever
         // sits behind it: the shared sharp workspace backdrop by default, or —
         // when this app's blur is enabled — the host-rendered Gaussian blur
         // below. A view can't blur the layers behind it, so the host draws its

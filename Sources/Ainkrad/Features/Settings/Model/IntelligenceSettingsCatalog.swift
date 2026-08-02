@@ -3,12 +3,12 @@ import AinkradAppKit
 import AinkradAppKitContract
 import AinkradHostRuntime
 
-/// The agent stack, flattened out of the Assistant's former pill bar into
+/// The agent stack, flattened out of the Sage's former pill bar into
 /// sibling pages. This collapses the deepest path in the app from four
 /// levels to two and puts MCP/LSP/Skills/Memory beside the model and
 /// permissions they actually serve.
 ///
-/// The Assistant's own section builders are unchanged — they are wrapped as
+/// The Sage's own section builders are unchanged — they are wrapped as
 /// `.custom` fields here. What went away is the nested tab bar, not the UI.
 @MainActor
 enum IntelligenceSettingsCatalog {
@@ -36,7 +36,7 @@ enum IntelligenceSettingsCatalog {
                         help: "Providers, base URLs, and API keys the assistant can reach.",
                         keywords: ["api key", "token", "openai", "anthropic", "provider",
                                    "base url", "auth", "subscription", "oauth", "connection"],
-                        kind: .custom(AnyView(AssistantSettingsView.ConnectionsSection())))
+                        kind: .custom(AnyView(SageSettingsView.ConnectionsSection())))
                 ]),
                 SettingsGroup(path: page.appending("picker"), title: "Model", fields: [
                     SettingsField(
@@ -45,7 +45,7 @@ enum IntelligenceSettingsCatalog {
                         help: "Which model answers, and how much reasoning effort it spends.",
                         keywords: ["opus", "sonnet", "haiku", "effort", "reasoning", "gpt",
                                    "claude", "gemini", "llm"],
-                        kind: .custom(AnyView(AssistantSettingsView.ModelSection())))
+                        kind: .custom(AnyView(SageSettingsView.ModelSection())))
                 ])
             ])
     }
@@ -66,7 +66,7 @@ enum IntelligenceSettingsCatalog {
                         help: "What the assistant may do without asking.",
                         keywords: ["approve", "allow", "deny", "ask", "auto", "allowlist",
                                    "full-auto", "permission"],
-                        kind: .custom(AnyView(AssistantSettingsView.PermissionsSection())))
+                        kind: .custom(AnyView(SageSettingsView.PermissionsSection())))
                 ]),
                 SettingsGroup(path: page.appending("sandbox"), title: "Sandbox", fields: [
                     SettingsField(
@@ -236,7 +236,7 @@ enum IntelligenceSettingsCatalog {
                         help: "What the assistant is allowed to read from your workspace.",
                         keywords: ["privacy", "context", "redact", "exclude", "data",
                                    "terminal", "git", "claude.md"],
-                        kind: .custom(AnyView(AssistantSettingsView.ContextPrivacySection())))
+                        kind: .custom(AnyView(SageSettingsView.ContextPrivacySection())))
                 ])
             ])
     }

@@ -2,7 +2,7 @@ import SwiftUI
 import AinkradAppKit
 
 /// The compiled-in Live Canvas app — a tiled surface of agent-rendered layered
-/// cards. Host-embedded (reads `AppEnvironment` directly like `AssistantApp`);
+/// cards. Host-embedded (reads `AppEnvironment` directly like `SageApp`);
 /// `host` satisfies the registration contract only.
 enum CanvasApp: AinkradApp {
     static let id = "canvas"

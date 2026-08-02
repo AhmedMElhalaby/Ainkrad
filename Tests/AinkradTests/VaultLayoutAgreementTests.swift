@@ -27,8 +27,8 @@ struct VaultLayoutAgreementTests {
     }
 
     /// Mirrors `AppEnvironment.bootstrapCoreStores`: the assistant's documents are
-    /// rooted at `Assistant/`, everything else at `Config/`, and chat history at
-    /// `Assistant/sessions/`.
+    /// rooted at `Sage/`, everything else at `Config/`, and chat history at
+    /// `Sage/sessions/`.
     private func readPaths(_ home: Home) -> (config: PersistenceStore,
                                              assistant: PersistenceStore,
                                              sessions: PersistenceStore) {
@@ -50,7 +50,7 @@ struct VaultLayoutAgreementTests {
         legacyStore.save(AgentsDocument(custom: [], activeID: agentID))
         legacyStore.save(ConnectionsDocument(connections: []))
         let sessionID = UUID()
-        legacyStore.save(AssistantSessionsDocument(
+        legacyStore.save(SageSessionsDocument(
             sessions: [SavedSession(id: sessionID, title: "Old chat",
                                     createdAt: .init(timeIntervalSince1970: 1),
                                     updatedAt: .init(timeIntervalSince1970: 2))],
@@ -61,11 +61,11 @@ struct VaultLayoutAgreementTests {
 
         let paths = readPaths(t.home)
         #expect(paths.assistant.load(AgentsDocument.self)?.activeID == agentID,
-                "agents.json must be readable from Assistant/")
+                "agents.json must be readable from Sage/")
         #expect(paths.assistant.load(ConnectionsDocument.self) != nil,
-                "connections.json must be readable from Assistant/")
-        #expect(paths.sessions.load(AssistantSessionsDocument.self)?.sessions.first?.title == "Old chat",
-                "chat history must be readable from Assistant/sessions/")
+                "connections.json must be readable from Sage/")
+        #expect(paths.sessions.load(SageSessionsDocument.self)?.sessions.first?.title == "Old chat",
+                "chat history must be readable from Sage/sessions/")
         #expect(paths.config.load(GlobalSettings.self) != nil,
                 "everything else stays in Config/")
     }
@@ -82,7 +82,7 @@ struct VaultLayoutAgreementTests {
         let legacyStore = FileDocumentStore(rootURL: documents)
         legacyStore.save(AgentsDocument())
         legacyStore.save(ConnectionsDocument(connections: []))
-        legacyStore.save(AssistantSessionsDocument())
+        legacyStore.save(SageSessionsDocument())
         legacyStore.save(GlobalSettings())
 
         _ = try VaultMigration.migrate(fromContainer: container, into: t.home)
@@ -90,7 +90,7 @@ struct VaultLayoutAgreementTests {
         let config = t.home.shared(.config)
         for name in ["agents.json", "connections.json", "assistant-sessions.json"] {
             #expect(!fm.fileExists(atPath: config.appendingPathComponent(name).path),
-                    "\(name) belongs under Assistant/, not Config/")
+                    "\(name) belongs under Sage/, not Config/")
         }
         #expect(fm.fileExists(atPath: config.appendingPathComponent("global-settings.json").path))
         let assistant = t.home.shared(.agents)
@@ -138,7 +138,7 @@ struct VaultLayoutAgreementTests {
             "\(ConnectionsDocument.documentID).json",
         ])
         #expect(VaultMigration.sessionJSONNames == [
-            "\(AssistantSessionsDocument.documentID).json",
+            "\(SageSessionsDocument.documentID).json",
         ])
     }
 }

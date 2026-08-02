@@ -86,9 +86,9 @@ extension AppEnvironment {
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
             scoped: terminalHost.documents, defaults: defaults)
 
-        // Assistant is a host-embedded built-in (its views read `AppEnvironment`
+        // Sage is a host-embedded built-in (its views read `AppEnvironment`
         // directly), scoped like any other app for its documents/secrets/theme/context.
-        let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
+        let assistantHost = HostServicesImpl(appID: "sage", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
                                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
@@ -100,7 +100,7 @@ extension AppEnvironment {
                                           hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Hoard (M1) — a host-embedded built-in like Assistant and Canvas. It
+        // Hoard (M1) — a host-embedded built-in like Sage and Canvas. It
         // inherits the host's unsandboxed filesystem access; its own views read
         // `AppEnvironment` directly.
         let filesHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
@@ -141,7 +141,7 @@ extension AppEnvironment {
         registry.install(
             builtIn: [
                 RegisteredApp.builtIn(
-                    AssistantApp.self,
+                    SageApp.self,
                     summary: "Your in-workspace AI assistant — chat about your code, run gated tools, and drive the terminal and git without leaving Ainkrad.",
                     host: assistantHost,
                     // Reading `surfaceOpacity` inside this closure — invoked
@@ -150,8 +150,8 @@ extension AppEnvironment {
                     // bodies — registers an @Observable dependency, so dialing
                     // the slider live re-evaluates the backdrop + header.
                     chromeFillOverride: {
-                        AssistantApp.surfaceFill(
-                            opacity: appAppearanceStore.surfaceOpacity("assistant"),
+                        SageApp.surfaceFill(
+                            opacity: appAppearanceStore.surfaceOpacity("sage"),
                             base: themeManager.tokens.background
                         )
                     }

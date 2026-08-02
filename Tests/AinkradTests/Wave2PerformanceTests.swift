@@ -59,7 +59,7 @@ struct TranscriptTimelineCacheTests {
 
 @MainActor
 @Suite("Chat history writes are coalesced")
-struct AssistantSessionStoreCoalescingTests {
+struct SageSessionStoreCoalescingTests {
 
     /// Counts writes so the test can assert on *how many* happened, which is
     /// the whole point — the old code wrote once per message mutation.
@@ -84,7 +84,7 @@ struct AssistantSessionStoreCoalescingTests {
     @Test("A burst of transcript updates does not write once per update")
     func burstIsCoalesced() async throws {
         let persistence = CountingPersistence()
-        let store = AssistantSessionStore(persistence: persistence)
+        let store = SageSessionStore(persistence: persistence)
         let baseline = persistence.writes
 
         // Stand in for a streamed reply: many mutations in quick succession.
@@ -105,11 +105,11 @@ struct AssistantSessionStoreCoalescingTests {
     @Test("The coalesced write lands after the interval")
     func coalescedWriteEventuallyLands() async throws {
         let persistence = CountingPersistence()
-        let store = AssistantSessionStore(persistence: persistence)
+        let store = SageSessionStore(persistence: persistence)
         let baseline = persistence.writes
 
         for i in 0..<20 { store.syncActive(messages: (0...i).map { message("c\($0)") }) }
-        try await Task.sleep(for: AssistantSessionStore.saveCoalescingInterval + .milliseconds(400))
+        try await Task.sleep(for: SageSessionStore.saveCoalescingInterval + .milliseconds(400))
 
         #expect(persistence.writes == baseline + 1, "expected exactly one coalesced write")
     }
@@ -117,7 +117,7 @@ struct AssistantSessionStoreCoalescingTests {
     @Test("flush() writes immediately, for quit")
     func flushIsImmediate() {
         let persistence = CountingPersistence()
-        let store = AssistantSessionStore(persistence: persistence)
+        let store = SageSessionStore(persistence: persistence)
         store.syncActive(messages: [message("unsaved")])
         let before = persistence.writes
 
@@ -131,7 +131,7 @@ struct AssistantSessionStoreCoalescingTests {
     @Test("Structural edits still write through immediately")
     func structuralEditsAreDurableNow() {
         let persistence = CountingPersistence()
-        let store = AssistantSessionStore(persistence: persistence)
+        let store = SageSessionStore(persistence: persistence)
         let before = persistence.writes
         // Creating/switching/deleting a chat is rare and must survive a crash
         // straight away — only the per-message mirroring is coalesced.

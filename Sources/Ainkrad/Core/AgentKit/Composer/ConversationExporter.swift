@@ -23,7 +23,7 @@ enum ConversationExporter {
     private static func markdown(_ messages: [AgentMessage], title: String, redactions: [String]) -> String {
         var out = "# \(title)\n\n"
         for m in messages {
-            out += "**\(m.role == .user ? "User" : "Assistant")**\n\n"
+            out += "**\(m.role == .user ? "User" : "Sage")**\n\n"
             for block in m.content {
                 switch block {
                 case .text(let t): out += redact(t, redactions) + "\n\n"
@@ -46,7 +46,7 @@ enum ConversationExporter {
     private static func html(_ messages: [AgentMessage], title: String, redactions: [String]) -> String {
         var body = ""
         for m in messages {
-            body += "<section class=\"\(m.role.rawValue)\"><h3>\(m.role == .user ? "User" : "Assistant")</h3>"
+            body += "<section class=\"\(m.role.rawValue)\"><h3>\(m.role == .user ? "User" : "Sage")</h3>"
             for block in m.content {
                 switch block {
                 case .text(let t): body += "<p>\(esc(redact(t, redactions)))</p>"

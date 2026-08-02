@@ -672,7 +672,7 @@ final class AgentSession {
         var iterations = 0
         let resolved = await resolveTurn()
         guard let connection = resolved.connection else {
-            state = .failed("No connection configured. Add one in Assistant settings.")
+            state = .failed("No connection configured. Add one in Sage settings.")
             return
         }
         let allKeys = authProfiles?.keys(for: connection) ?? (connections.token(for: connection).map { [$0] } ?? [])
@@ -693,7 +693,7 @@ final class AgentSession {
             }
         } catch {
             state = .failed("Your Claude subscription needs to be re-authorized. " +
-                            "Open Assistant settings and sign in again.")
+                            "Open Sage settings and sign in again.")
             return
         }
         // A resolver that yields no credentials would otherwise crash the subscript below.

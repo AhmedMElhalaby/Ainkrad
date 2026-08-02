@@ -87,7 +87,7 @@ final class AppEnvironmentTests {
         let runManager = RunManager(
             persistence: persistence,
             runner: BackgroundRunRunner(makeSession: { _ in agentSession }))
-        let assistantSessionStore = AssistantSessionStore(persistence: persistence)
+        let assistantSessionStore = SageSessionStore(persistence: persistence)
         let scheduleStore = ScheduleStore(persistence: persistence)
         let triggerDispatcher = TriggerDispatcher(store: scheduleStore, runs: runManager)
         let scheduleRunner = ScheduleRunner(store: scheduleStore, runs: runManager)
@@ -208,10 +208,10 @@ final class AppEnvironmentTests {
         defer { t.cleanup() }
         let environment = AppEnvironment.bootstrap(home: t.home, defaults: t.defaults)
         #expect(environment.themeManager.currentTheme == .neonBlue)
-        // Terminal is an App Store plugin, not built-in; Assistant, Canvas and
+        // Terminal is an App Store plugin, not built-in; Sage, Canvas and
         // Hoard are the compiled-in built-ins the host registers itself
         // (M5 Phase B, M7 Slice 7, Hoard M1).
-        #expect(environment.registry.allApps.map(\.id) == ["assistant", "canvas", "hoard"])
+        #expect(environment.registry.allApps.map(\.id) == ["sage", "canvas", "hoard"])
         #expect(environment.workspaceManager.workspaces.count == 1)
         #expect(environment.isLauncherPresented == false)
         #expect(environment.isSettingsPresented == false)

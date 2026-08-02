@@ -35,7 +35,7 @@ struct VideoGenerateTool: AgentTool {
         }
         guard backend.isConfigured else {
             return ToolResult(
-                content: "Video generation is not configured. Add a provider API key in Settings → Assistant → Video.",
+                content: "Video generation is not configured. Add a provider API key in Settings → Sage → Video.",
                 isError: false)
         }
         let video = try await backend.generateVideo(prompt: prompt)

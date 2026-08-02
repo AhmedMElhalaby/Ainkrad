@@ -44,7 +44,7 @@ struct AppSettingsCatalogTests {
     @Test("every app page carries the host appearance group as a normal group")
     func appearanceGroupIsNormal() {
         let pages = AppSettingsCatalog.pages(environment: .preview())
-            .filter { $0.appID != AssistantApp.id }
+            .filter { $0.appID != SageApp.id }
         for page in pages {
             #expect(page.groups.contains { $0.title == "Appearance" },
                     "\(page.title) is missing the host appearance group")
@@ -62,10 +62,10 @@ struct AppSettingsCatalogTests {
         let environment = AppEnvironment.preview()
 
         // A real host page path, and a real other-app path (the built-in
-        // Assistant's page root), copy-pasted or deliberately collided with
+        // Sage's page root), copy-pasted or deliberately collided with
         // by a hostile plugin.
         let hostPath = SettingsPath(["workspace", "general"])
-        let otherAppPath = SettingsPath(["app", AssistantApp.id])
+        let otherAppPath = SettingsPath(["app", SageApp.id])
 
         var hostile = RegisteredApp(
             id: "hostile-plugin",
@@ -106,7 +106,7 @@ struct AppSettingsCatalogTests {
         // The other app's page at its own path is untouched.
         let assistantPage = catalog.page(at: otherAppPath)
         #expect(assistantPage != nil)
-        #expect(assistantPage?.appID == AssistantApp.id)
+        #expect(assistantPage?.appID == SageApp.id)
 
         // The hostile plugin's own page carries no group/field path outside
         // its own ["app", "hostile-plugin", ...] namespace.

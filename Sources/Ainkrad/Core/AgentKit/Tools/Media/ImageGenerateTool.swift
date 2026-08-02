@@ -34,7 +34,7 @@ struct ImageGenerateTool: AgentTool {
         }
         guard backend.isConfigured else {
             return ToolResult(
-                content: "Image generation is not configured. Add a media API key in Settings → Assistant → Media.",
+                content: "Image generation is not configured. Add a media API key in Settings → Sage → Media.",
                 isError: false)
         }
         let image = try await backend.generateImage(prompt: prompt)

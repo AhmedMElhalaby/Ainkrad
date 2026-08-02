@@ -6,7 +6,7 @@ import AinkradHostRuntime
 /// Persisted root directory for the `@`-mention file index (M7 Slice 5c Task 22).
 /// Defaults to the user's home directory until a later folder-picker (Task 22b,
 /// not built here) lets the user change it.
-struct AssistantWorkspaceSettings: PersistableDocument {
+struct SageWorkspaceSettings: PersistableDocument {
     static let documentID = "assistant-workspace"
     var workingDirectoryPath: String
 
@@ -78,7 +78,7 @@ final class AppEnvironment {
     let filesPinnedRoots: HoardPinnedRoots
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
-    /// Assistant session-share (M8) — writes self-contained HTML share artifacts
+    /// Sage session-share (M8) — writes self-contained HTML share artifacts
     /// to disk and tracks their metadata, backing the composer's "Share…" flow.
     let sessionShareStore: SessionShareStore
     let skySettingsStore: SkySettingsStore
@@ -120,8 +120,8 @@ final class AppEnvironment {
     let editJournal: EditJournal
     let subagentCoordinator: SubagentCoordinator
     let runManager: RunManager
-    /// Persisted history of Assistant chats, surfaced by the block's history sidebar.
-    let assistantSessionStore: AssistantSessionStore
+    /// Persisted history of Sage chats, surfaced by the block's history sidebar.
+    let assistantSessionStore: SageSessionStore
     /// M7 Slice 3b (Autonomy: scheduling/triggers) — the persisted `AgentSchedule`s
     /// the `ScheduleUIView` create/edit list reads/writes, `scheduleRunner` (time
     /// triggers) and `fileChangeWatcher`+`triggerDispatcher` (event triggers) fire
@@ -162,7 +162,7 @@ final class AppEnvironment {
     let oauthStore: OAuthCredentialStore
     let commandRegistry: CommandRegistry
     /// The root directory `workspaceFileIndex` was built from — persisted via
-    /// `AssistantWorkspaceSettings`, defaulting to the home directory. Task 22b's
+    /// `SageWorkspaceSettings`, defaulting to the home directory. Task 22b's
     /// folder-picker will add a setter that persists a new root and rebuilds the
     /// index; not built here.
     let assistantWorkingDirectory: URL
@@ -202,7 +202,7 @@ final class AppEnvironment {
     /// Terminal streaming (Task 7): the store `run_terminal`'s live stdout/stderr
     /// lands in and `AgentTurnTimelineView` reads for the running tool card — one
     /// instance shared by the main `agentSession`'s `RunTerminalTool` and the
-    /// Assistant timeline, same pattern as `canvasStore` above.
+    /// Sage timeline, same pattern as `canvasStore` above.
     let toolStreamStore: ToolStreamStore
     /// Tool Hooks (M8 assistant-tool-hooks Task 5): persisted, observable CRUD
     /// over user-authored PreToolUse/PostToolUse hooks — one instance shared
@@ -328,7 +328,7 @@ final class AppEnvironment {
         editJournal: EditJournal,
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
-        assistantSessionStore: AssistantSessionStore,
+        assistantSessionStore: SageSessionStore,
         scheduleStore: ScheduleStore,
         scheduleRunner: ScheduleRunner,
         triggerDispatcher: TriggerDispatcher,

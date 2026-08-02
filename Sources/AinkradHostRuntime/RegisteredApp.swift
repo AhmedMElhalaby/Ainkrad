@@ -97,7 +97,7 @@ extension RegisteredApp {
             makeRootView: { app.makeRootView(host: host) },
             makeSettingsView: { app.makeSettingsView(host: host) },
             // A built-in whose fill depends on host-side state the SDK
-            // `chromeFill(host:)` can't see (e.g. the Assistant's appearance
+            // `chromeFill(host:)` can't see (e.g. the Sage's appearance
             // store) supplies it here; otherwise fall back to the SDK path.
             chromeFill: chromeFillOverride ?? { app.chromeFill(host: host) },
             presentation: .pane

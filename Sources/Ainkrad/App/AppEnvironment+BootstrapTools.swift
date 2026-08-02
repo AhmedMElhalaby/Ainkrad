@@ -241,7 +241,7 @@ extension AppEnvironment {
         // resolved live so a folder change is reflected without re-registering —
         // same derivation as the @-mention index in bootstrapSession.
         let searchRootProvider: @MainActor () -> URL = { [persistence] in
-            persistence.load(AssistantWorkspaceSettings.self)
+            persistence.load(SageWorkspaceSettings.self)
                 .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
                 ?? FileManager.default.homeDirectoryForCurrentUser
         }
@@ -259,7 +259,7 @@ extension AppEnvironment {
     /// (builtins + `/stop`).
     static func bootstrapModelRouting(
         persistence: PersistenceStore,
-        // `agents.json` is an Assistant/ document, not a Config/ one — see
+        // `agents.json` is an Sage/ document, not a Config/ one — see
         // `bootstrapCoreStores`. Everything else in this block is Config/.
         assistantDocuments: PersistenceStore,
         secrets: SecretStore,

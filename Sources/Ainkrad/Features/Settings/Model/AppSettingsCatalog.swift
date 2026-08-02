@@ -11,13 +11,13 @@ import AinkradHostRuntime
 ///
 /// The host-owned "Appearance" group (the per-app blur toggle) is appended as
 /// a NORMAL group, not a block bolted below whatever the app rendered. The
-/// Assistant is exempt — it owns its own appearance in its in-app Appearance
+/// Sage is exempt — it owns its own appearance in its in-app Appearance
 /// tab.
 @MainActor
 enum AppSettingsCatalog {
     /// App ids that declare their own appearance controls and must NOT also
     /// receive the host's auto-appended blur group.
-    private static var ownsItsAppearance: Set<String> { [AssistantApp.id, HoardApp.id] }
+    private static var ownsItsAppearance: Set<String> { [SageApp.id, HoardApp.id] }
 
     static func pages(environment: AppEnvironment) -> [SettingsPage] {
         environment.registry.enabledApps.enumerated().map { index, app in
@@ -66,7 +66,7 @@ enum AppSettingsCatalog {
             }
 
             // Apps that own their appearance are exempt from the host's
-            // auto-appended blur group: the Assistant has an in-app Appearance
+            // auto-appended blur group: the Sage has an in-app Appearance
             // tab, and Hoard declares blur beside its own transparency slider
             // (they are one decision — blur does nothing while opaque), so
             // appending it again would strand a duplicate control in a
@@ -128,7 +128,7 @@ enum AppSettingsCatalog {
             fields: group.fields.map { namespaced($0, under: root) })
     }
 
-    /// The blur toggle every app but the Assistant gets — the host renders
+    /// The blur toggle every app but the Sage gets — the host renders
     /// the blurred backdrop behind a translucent pane. Mirrors the semantics
     /// of the former `appAppearanceSection`: `AppAppearanceStore` defaults an
     /// app's blur to off.

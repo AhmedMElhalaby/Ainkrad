@@ -60,7 +60,7 @@ struct PluginLifecycleTeardownTests {
         final class Log { var ids: [String] = [] }
         let log = Log()
         var builtIn = RegisteredApp(
-            id: "assistant", displayName: "Assistant", icon: "app", isEnabledByDefault: true,
+            id: "sage", displayName: "Sage", icon: "app", isEnabledByDefault: true,
             source: .builtIn,
             makeRootView: { AnyView(EmptyView()) },
             makeSettingsView: { AnyView(EmptyView()) },
@@ -70,7 +70,7 @@ struct PluginLifecycleTeardownTests {
         reg.onAppTornDown = { log.ids.append($0) }
         reg.install(builtIn: [builtIn])
 
-        reg.deregister(id: "assistant")
+        reg.deregister(id: "sage")
 
         #expect(log.ids.isEmpty, "a still-installed app's server must stay cached")
     }
@@ -88,7 +88,7 @@ struct PluginLifecycleTeardownTests {
         final class Flag { var torndown = false }
         let flag = Flag()
         var builtIn = RegisteredApp(
-            id: "assistant", displayName: "Assistant", icon: "app", isEnabledByDefault: true,
+            id: "sage", displayName: "Sage", icon: "app", isEnabledByDefault: true,
             source: .builtIn,
             makeRootView: { AnyView(EmptyView()) },
             makeSettingsView: { AnyView(EmptyView()) },
@@ -97,7 +97,7 @@ struct PluginLifecycleTeardownTests {
         let reg = registry()
         reg.install(builtIn: [builtIn])
 
-        reg.deregister(id: "assistant")
+        reg.deregister(id: "sage")
 
         #expect(!flag.torndown)
         #expect(reg.allApps.count == 1, "a built-in must not be removable")

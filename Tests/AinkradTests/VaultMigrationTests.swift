@@ -50,7 +50,7 @@ struct VaultMigrationTests {
         #expect(report.skipped.isEmpty)
         #expect(fm.fileExists(
             atPath: t.home.shared(.config).appendingPathComponent("global-settings.json").path))
-        // `agents.json` is an Assistant/ document, NOT a Config/ one.
+        // `agents.json` is an Sage/ document, NOT a Config/ one.
         #expect(!fm.fileExists(
             atPath: t.home.shared(.config).appendingPathComponent("agents.json").path))
         #expect(try String(contentsOf: t.home.shared(.agents)

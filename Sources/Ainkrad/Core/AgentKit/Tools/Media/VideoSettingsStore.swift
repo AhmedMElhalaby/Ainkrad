@@ -29,7 +29,7 @@ struct VideoSettingsDocument: PersistableDocument {
     private enum CodingKeys: String, CodingKey { case provider, model, customBaseURL, localURL }
 }
 
-/// Backs the Assistant Settings VIDEO section's provider picker. Mirrors
+/// Backs the Sage Settings VIDEO section's provider picker. Mirrors
 /// `MediaSettingsStore`.
 @MainActor
 @Observable

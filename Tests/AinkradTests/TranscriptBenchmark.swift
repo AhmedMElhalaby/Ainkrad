@@ -55,7 +55,7 @@ struct TranscriptBenchmark {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let persistence = FileDocumentStore(rootURL: root)
-        let store = AssistantSessionStore(persistence: persistence)
+        let store = SageSessionStore(persistence: persistence)
 
         // 20 past chats of 40 messages each — an ordinary few weeks of use.
         for _ in 0..<20 {

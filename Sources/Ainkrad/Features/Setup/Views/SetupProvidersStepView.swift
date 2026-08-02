@@ -608,7 +608,7 @@ struct SetupProvidersStepView: View {
     }
 
     /// Resolves a subscription credential exactly the way
-    /// `AssistantSettingsView+Connections.testConnection` does, probes it, and
+    /// `SageSettingsView+Connections.testConnection` does, probes it, and
     /// commits or rolls back.
     private func settleSubscription(_ connection: Connection,
                                     controller: ClaudeOAuthLoginController,

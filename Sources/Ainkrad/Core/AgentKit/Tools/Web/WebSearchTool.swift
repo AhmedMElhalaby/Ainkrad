@@ -30,7 +30,7 @@ struct WebSearchTool: AgentTool {
         }
         guard backend.isConfigured else {
             return ToolResult(
-                content: "Web search is not configured. Add a search API key in Settings → Assistant → Web.",
+                content: "Web search is not configured. Add a search API key in Settings → Sage → Web.",
                 isError: false)
         }
         var count = 5

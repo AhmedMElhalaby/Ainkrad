@@ -3,7 +3,7 @@ import AinkradAppKit
 import AinkradAppKitUI
 
 /// The compiled-in Hoard app — a keyboard-driven, git-aware file browser.
-/// Host-embedded rather than a real plugin (same as `AssistantApp` and
+/// Host-embedded rather than a real plugin (same as `SageApp` and
 /// `CanvasApp`): its views read `AppEnvironment` directly via
 /// `@Environment(AppEnvironment.self)`, so `host` is unused here beyond
 /// satisfying the registration contract shared with dynamically-loaded
@@ -22,7 +22,7 @@ enum HoardApp: AinkradApp {
     }
 
     /// The pane's window fill for a given surface opacity — the same contract
-    /// `AssistantApp` implements, and the mechanism that makes a pane
+    /// `SageApp` implements, and the mechanism that makes a pane
     /// translucent at all.
     ///
     /// Returning a sub-opaque color is what drives the whole chain:
