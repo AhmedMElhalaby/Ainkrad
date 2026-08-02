@@ -91,13 +91,18 @@ private struct FilesRightClickCatcher: NSViewRepresentable {
 /// The menu itself, in the Cardinal HUD language.
 struct FilesContextMenuList: View {
     let actions: [FilesMenuAction]
+    /// Passed IN, never read from the environment.
+    ///
+    /// `ainkradFloatingPanel` hosts its content in a separate `NSHostingView`,
+    /// so the pane's `AppEnvironment` does not reach it — reading it here
+    /// crashed the app the moment the panel measured its content. The kit
+    /// re-injects theme, typography and status colours; anything else has to
+    /// be captured at the call site.
+    let tokens: DesignTokens
     let onSelect: () -> Void
 
-    @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradTypography) private var typo
     @Environment(\.ainkradStatusColors) private var statusColors
-
-    private var tokens: DesignTokens { environment.themeManager.tokens }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -111,21 +116,19 @@ struct FilesContextMenuList: View {
     }
 
     private func row(_ action: FilesMenuAction) -> some View {
-        FilesContextMenuRow(action: action, onSelect: onSelect)
+        FilesContextMenuRow(action: action, tokens: tokens, onSelect: onSelect)
     }
 }
 
 private struct FilesContextMenuRow: View {
     let action: FilesMenuAction
+    let tokens: DesignTokens
     let onSelect: () -> Void
 
-    @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradTypography) private var typo
     @Environment(\.ainkradStatusColors) private var statusColors
     @Environment(\.ainkradReduceMotion) private var reduceMotion
     @State private var hovering = false
-
-    private var tokens: DesignTokens { environment.themeManager.tokens }
 
     private var tint: Color {
         action.isDestructive ? statusColors.danger : tokens.foreground.opacity(0.9)
@@ -180,6 +183,9 @@ private struct FileRowMenu: ViewModifier {
     let tab: FilesTab
     let actions: FileRowMenuActions
 
+    /// Read HERE, where the pane's environment exists, and handed to the panel
+    /// as a plain value.
+    @Environment(AppEnvironment.self) private var environment
     @State private var isPresented = false
 
     /// Right-clicking a row that is NOT part of the current selection retargets
@@ -252,7 +258,16 @@ private struct FileRowMenu: ViewModifier {
             // that is deliberately not macOS-shaped. The panel is app-level, so
             // it is also never clipped by the scroll view's bounds.
             .ainkradFloatingPanel(isPresented: $isPresented, maxHeight: 360) {
-                FilesContextMenuList(actions: menuActions) { isPresented = false }
+                // `.environment(environment)` is REQUIRED, not defensive: the
+                // panel is a separate `NSHostingView`, and `hudPanelChrome`
+                // reads `AppEnvironment` for the live opacity/blur settings.
+                // Without this the app crashes the instant the panel measures
+                // its content.
+                FilesContextMenuList(actions: menuActions,
+                                     tokens: environment.themeManager.tokens) {
+                    isPresented = false
+                }
+                .environment(environment)
             }
     }
 }
@@ -269,18 +284,22 @@ private struct SidebarRootMenu: ViewModifier {
     let root: SidebarRoot
     let onRemove: (SidebarRoot) -> Void
 
+    @Environment(AppEnvironment.self) private var environment
     @State private var isPresented = false
 
     func body(content: Content) -> some View {
         content
             .overlay(FilesRightClickCatcher { isPresented = true })
             .ainkradFloatingPanel(isPresented: $isPresented, maxHeight: 120) {
-                FilesContextMenuList(actions: [
-                    FilesMenuAction(title: "Remove from Favourites",
-                                    symbol: "star.slash",
-                                    shortcut: nil,
-                                    run: { onRemove(root) })
-                ]) { isPresented = false }
+                FilesContextMenuList(
+                    actions: [
+                        FilesMenuAction(title: "Remove from Favourites",
+                                        symbol: "star.slash",
+                                        shortcut: nil,
+                                        run: { onRemove(root) })
+                    ],
+                    tokens: environment.themeManager.tokens) { isPresented = false }
+                .environment(environment)
             }
     }
 }
