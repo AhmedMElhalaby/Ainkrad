@@ -52,4 +52,41 @@ struct AppIDMigrationTests {
         #expect(doc.enabled["files"] == nil)
         #expect(doc.enabled["leyline"] == true)
     }
+
+    @Test("a permission allowlist entry follows its tool's rename")
+    func migratesPermissionAllowlist() throws {
+        let dir = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        try seedV1("agent-permissions", payload: [
+            "defaultMode": "ask",
+            "allowlist": ["files_navigate", "run_terminal", "web_search"],
+            "perWorkspace": [String: String](),
+            "gateReads": true,
+        ], in: dir)
+
+        let store = FileDocumentStore(rootURL: dir)
+        let doc = try #require(store.load(AgentPermissionDocument.self))
+
+        #expect(doc.allowlist.contains("hoard_navigate"))
+        #expect(!doc.allowlist.contains("files_navigate"))
+        // Untouched: not an app-id prefix, despite containing "terminal".
+        #expect(doc.allowlist.contains("run_terminal"))
+        #expect(doc.allowlist.contains("web_search"))
+    }
+
+    @Test("a tool hook keeps firing after its tool is renamed")
+    func migratesToolHookGlob() throws {
+        let dir = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        try seedV1("agent-tool-hooks", payload: [
+            "hooks": [[
+                "id": UUID().uuidString, "enabled": true, "event": "preToolUse",
+                "match": "files_*", "command": "echo hi", "timeoutSeconds": 5,
+            ]],
+        ], in: dir)
+
+        let store = FileDocumentStore(rootURL: dir)
+        let doc = try #require(store.load(ToolHooksDocument.self))
+
+        #expect(doc.hooks.first?.match == "hoard_*")
+        #expect(ToolHookMatcher.matches(pattern: doc.hooks[0].match, toolName: "hoard_navigate"))
+    }
 }

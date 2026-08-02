@@ -4,6 +4,24 @@ import AinkradHostRuntime
 
 struct AgentPermissionDocument: PersistableDocument {
     static let documentID = "agent-permissions"
+    static let currentSchemaVersion = 2
+
+    /// v1 → v2: the 2026-08-02 app rename. Rewrites allowlisted tool names so a
+    /// user's approvals survive. Failing to migrate would fail SAFE (the tool
+    /// re-prompts), unlike the hook migration in `ToolHooksDocument` — but a
+    /// silently emptied allowlist is still a regression the user has to
+    /// rediscover one approval at a time.
+    static let migrators: [DocumentMigrator] = [
+        DocumentMigrator(from: 1) { payload in
+            guard case .object(var root) = payload,
+                  case .array(let list)? = root["allowlist"] else { return payload }
+            root["allowlist"] = .array(list.map { entry in
+                guard case .string(let name) = entry else { return entry }
+                return .string(AppIDRenames.renamedToolName(name))
+            })
+            return .object(root)
+        },
+    ]
 
     var defaultMode: AgentPermissionMode = .ask
     var allowlist: [String] = []
