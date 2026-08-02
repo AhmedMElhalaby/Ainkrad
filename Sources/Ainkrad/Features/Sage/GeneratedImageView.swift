@@ -19,7 +19,7 @@ struct GeneratedImageView: View {
     @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     private var decoded: (image: NSImage, data: Data, ext: String)? {
-        guard let data = CanvasImageDecoding.base64Payload(dataURL), let image = NSImage(data: data) else { return nil }
+        guard let data = ScryImageDecoding.base64Payload(dataURL), let image = NSImage(data: data) else { return nil }
         return (image, data, Self.fileExtension(for: dataURL))
     }
 

@@ -3,12 +3,12 @@ import Testing
 @testable import Ainkrad
 import AinkradHostRuntime
 
-@Suite("CanvasRenderTool")
+@Suite("ScryRenderTool")
 @MainActor
-struct CanvasRenderToolTests {
-    private func make() -> (CanvasRenderTool, CanvasStore) {
-        let store = CanvasStore(persistence: InMemoryPersistenceStore(), sessionKey: "s")
-        return (CanvasRenderTool(store: store), store)
+struct ScryRenderToolTests {
+    private func make() -> (ScryRenderTool, ScryStore) {
+        let store = ScryStore(persistence: InMemoryPersistenceStore(), sessionKey: "s")
+        return (ScryRenderTool(store: store), store)
     }
 
     @Test func addCreatesElement() async throws {
@@ -69,8 +69,8 @@ struct CanvasRenderToolTests {
 
         // Replay: reconstructing from the same transcript must agree with live.
         let message = AgentMessage(role: .assistant,
-                                    content: [.toolUse(id: "1", name: "canvas_render", input: input)])
-        let replayed = CanvasReconstruction.rebuild(from: [message])
+                                    content: [.toolUse(id: "1", name: "scry_render", input: input)])
+        let replayed = ScryReconstruction.rebuild(from: [message])
         let fromReplay = replayed.elements.first(where: { $0.id == "ghost" })
         #expect(fromReplay?.body == live?.body)
         #expect(fromReplay?.kind == live?.kind)

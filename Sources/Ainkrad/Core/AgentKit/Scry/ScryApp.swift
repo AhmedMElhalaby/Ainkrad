@@ -1,21 +1,21 @@
 import SwiftUI
 import AinkradAppKit
 
-/// The compiled-in Live Canvas app — a tiled surface of agent-rendered layered
+/// The compiled-in Live Scry app — a tiled surface of agent-rendered layered
 /// cards. Host-embedded (reads `AppEnvironment` directly like `SageApp`);
 /// `host` satisfies the registration contract only.
-enum CanvasApp: AinkradApp {
-    static let id = "canvas"
-    static let displayName = "Canvas"
+enum ScryApp: AinkradApp {
+    static let id = "scry"
+    static let displayName = "Scry"
     static let icon = "square.on.square"
 
-    static func makeRootView(host: HostServices) -> AnyView { AnyView(CanvasHostView()) }
+    static func makeRootView(host: HostServices) -> AnyView { AnyView(ScryHostView()) }
     static func makeSettingsView(host: HostServices) -> AnyView { AnyView(EmptyView()) }
 }
 
 /// Thin wrapper so the pane can pull `canvasStore` from the environment.
 @MainActor
-private struct CanvasHostView: View {
+private struct ScryHostView: View {
     @Environment(AppEnvironment.self) private var environment
-    var body: some View { CanvasView(store: environment.canvasStore) }
+    var body: some View { ScryView(store: environment.canvasStore) }
 }

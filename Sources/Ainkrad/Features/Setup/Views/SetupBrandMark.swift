@@ -340,7 +340,7 @@ struct SetupBrandMark: View {
 
     /// The whole field, in one layer BEHIND the mark.
     ///
-    /// `Canvas` rather than a stack of `Circle` views: the links are recomputed
+    /// `Scry` rather than a stack of `Circle` views: the links are recomputed
     /// every frame from every pair of sparks, which is drawing rather than view
     /// structure — and twenty views each carrying their own shadow would cost far
     /// more than one immediate-mode pass.
@@ -373,7 +373,7 @@ struct SetupBrandMark: View {
                                   width: radius * 2, height: radius * 2)
 
                 // The bloom is a second, blurred, oversized dot rather than a
-                // shadow: `Canvas` has no per-shape shadow, and this is what
+                // shadow: `Scry` has no per-shape shadow, and this is what
                 // makes a spark read as a light rather than a dot.
                 var bloom = context
                 bloom.addFilter(.blur(radius: radius * 1.5))

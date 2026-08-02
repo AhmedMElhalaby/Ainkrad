@@ -28,9 +28,9 @@ struct AgentTurnTimelineView: View {
     /// and defaulted so existing call sites/previews compile unchanged; wired
     /// from the Sage root in a follow-up task.
     var toolStream: ToolStreamStore? = nil
-    /// Canvas store used to resolve an `image_generate` call's rendered image for
+    /// Scry store used to resolve an `image_generate` call's rendered image for
     /// inline display. Optional/defaulted so existing call sites/previews compile.
-    var canvasStore: CanvasStore? = nil
+    var canvasStore: ScryStore? = nil
     /// Presents an inline generated image full-screen (handled at the window root).
     var onOpenImage: ((NSImage) -> Void)? = nil
     /// Presents an inline generated video full-screen (handled at the window root).

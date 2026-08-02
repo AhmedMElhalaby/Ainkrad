@@ -100,7 +100,7 @@ struct BlockView: View {
                     // `isLive: false` — this copy exists only to be blurred at
                     // radius 26, where 30fps starfield drift is not
                     // perceptible. Each blurred pane was running its own full
-                    // live sky (~570 Canvas fills + 18 radial gradients per
+                    // live sky (~570 Scry fills + 18 radial gradients per
                     // frame), so three translucent panes cost four live skies
                     // to render one visible one. The real sky behind the
                     // workspace still animates; nothing the user can actually

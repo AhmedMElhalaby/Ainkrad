@@ -1,20 +1,20 @@
 import Foundation
 import AinkradHostRuntime
 
-struct CanvasModel: Codable, Equatable, Sendable {
+struct ScryModel: Codable, Equatable, Sendable {
     static let schemaVersion = 1
-    var elements: [CanvasElement] = []
+    var elements: [ScryElement] = []
 
-    init(elements: [CanvasElement] = []) { self.elements = elements }
+    init(elements: [ScryElement] = []) { self.elements = elements }
 
     // Forward-compatible decode (wave-1 idiom): every field tolerates absence.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        elements = try c.decodeIfPresent([CanvasElement].self, forKey: .elements) ?? []
+        elements = try c.decodeIfPresent([ScryElement].self, forKey: .elements) ?? []
     }
 
     /// Z-ascending (back-to-front), stable for equal z.
-    var ordered: [CanvasElement] {
+    var ordered: [ScryElement] {
         elements.enumerated()
             .sorted { $0.element.z != $1.element.z ? $0.element.z < $1.element.z : $0.offset < $1.offset }
             .map(\.element)
@@ -22,7 +22,7 @@ struct CanvasModel: Codable, Equatable, Sendable {
 
     var nextZ: Int { (elements.map(\.z).max() ?? -1) + 1 }
 
-    mutating func upsert(_ element: CanvasElement) {
+    mutating func upsert(_ element: ScryElement) {
         if let i = elements.firstIndex(where: { $0.id == element.id }) {
             elements[i] = element
         } else {
@@ -33,12 +33,12 @@ struct CanvasModel: Codable, Equatable, Sendable {
     mutating func remove(id: String) { elements.removeAll { $0.id == id } }
 }
 
-struct CanvasWorkspaceDocument: PersistableDocument {
+struct ScryWorkspaceDocument: PersistableDocument {
     static let documentID = "agent-canvas"
-    var version = CanvasModel.schemaVersion
-    var canvases: [String: CanvasModel] = [:]
+    var version = ScryModel.schemaVersion
+    var canvases: [String: ScryModel] = [:]
 
-    init(version: Int = CanvasModel.schemaVersion, canvases: [String: CanvasModel] = [:]) {
+    init(version: Int = ScryModel.schemaVersion, canvases: [String: ScryModel] = [:]) {
         self.version = version
         self.canvases = canvases
     }
@@ -49,7 +49,7 @@ struct CanvasWorkspaceDocument: PersistableDocument {
     enum CodingKeys: String, CodingKey { case version, canvases }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? CanvasModel.schemaVersion
-        self.canvases = try c.decodeIfPresent([String: CanvasModel].self, forKey: .canvases) ?? [:]
+        self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? ScryModel.schemaVersion
+        self.canvases = try c.decodeIfPresent([String: ScryModel].self, forKey: .canvases) ?? [:]
     }
 }

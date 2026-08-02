@@ -6,7 +6,7 @@ import AinkradHostRuntime
 /// Pure table-body → rows parser (markdown pipe table or CSV). Unit-tested.
 /// Detects the separator from the body (`|` wins over `,`), then drops a
 /// markdown separator row (all-dash cells) so header/data rows line up.
-enum CanvasTableParse {
+enum ScryTableParse {
     static func rows(from body: String) -> [[String]] {
         let lines = body.split(whereSeparator: \.isNewline).map(String.init)
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -24,16 +24,16 @@ enum CanvasTableParse {
 
 /// A render failure isolated to one element — surfaced as an inline error
 /// card rather than propagating and taking down the rest of the canvas.
-struct CanvasElementRenderError: Error {
+struct ScryElementRenderError: Error {
     let message: String
 }
 
-/// Renders one canvas element. A failure in any branch degrades to an inline
+/// Renders one scry element. A failure in any branch degrades to an inline
 /// error card; an unknown kind degrades to a placeholder — never a crash,
 /// and never takes any other element on the canvas down with it.
 @MainActor
-struct CanvasElementView: View {
-    let element: CanvasElement
+struct ScryElementView: View {
+    let element: ScryElement
     let tokens: DesignTokens
 
     var body: some View {
@@ -51,7 +51,7 @@ struct CanvasElementView: View {
         do {
             return try buildContent()
         } catch {
-            let message = (error as? CanvasElementRenderError)?.message
+            let message = (error as? ScryElementRenderError)?.message
                 ?? String(describing: error)
             return AnyView(errorCard(message))
         }
@@ -76,7 +76,7 @@ struct CanvasElementView: View {
         case .audio:
             return AnyView(audioBody)
         case .diagram, .chart:
-            return AnyView(CanvasDiagramView(element: element, tokens: tokens))
+            return AnyView(ScryDiagramView(element: element, tokens: tokens))
         case .unknown:
             return AnyView(placeholder("Unsupported element type"))
         }
@@ -106,12 +106,12 @@ struct CanvasElementView: View {
             return Text(attributed).font(AinkradFont.display(13))
                 .foregroundStyle(tokens.foreground.opacity(0.9))
         } catch {
-            throw CanvasElementRenderError(message: "Markdown parse failed: \(error.localizedDescription)")
+            throw ScryElementRenderError(message: "Markdown parse failed: \(error.localizedDescription)")
         }
     }
 
     private var tableBody: some View {
-        let rows = CanvasTableParse.rows(from: element.body)
+        let rows = ScryTableParse.rows(from: element.body)
         return VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 HStack(spacing: 10) {
@@ -144,7 +144,7 @@ struct CanvasElementView: View {
 
     @ViewBuilder
     private var imageBody: some View {
-        if let nsImage = CanvasImageDecoding.dataURLImage(element.body) {
+        if let nsImage = ScryImageDecoding.dataURLImage(element.body) {
             // `data:` URL (e.g. from `image_generate`) — decode the bytes directly;
             // AsyncImage/URLSession does not load the `data:` scheme.
             Image(nsImage: nsImage).resizable().scaledToFit()

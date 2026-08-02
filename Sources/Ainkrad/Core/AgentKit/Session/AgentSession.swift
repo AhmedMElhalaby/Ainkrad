@@ -27,7 +27,7 @@ final class AgentSession {
     developer workspace. You can read and edit files using the provided tools. \
     Answer concisely and precisely. For structured or comparative output — \
     tables, diagrams, charts, code, status boards, or several related cards — \
-    prefer the `canvas_render` tool over inline chat; it persists as movable \
+    prefer the `scry_render` tool over inline chat; it persists as movable \
     HUD cards you can update in place for live progress. Keep short \
     conversational answers and one-off inline snippets in chat. Don't invoke \
     tools or skills for greetings, small talk, or when no concrete task is \

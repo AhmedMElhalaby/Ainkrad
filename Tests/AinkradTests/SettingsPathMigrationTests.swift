@@ -28,7 +28,8 @@ struct SettingsPathMigrationTests {
             ("assistant.appearance",           "app.sage"),
             // The v0.16.0 app rename: an app page id derives from the app id.
             ("app.assistant",                  "app.sage"),
-            ("app.files",                      "app.hoard")
+            ("app.files",                      "app.hoard"),
+            ("app.canvas",                     "app.scry")
         ]
         for (old, new) in cases {
             let resolved = SettingsPathAliases.resolve(SettingsPath(rawValue: old)!)

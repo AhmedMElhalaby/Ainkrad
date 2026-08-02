@@ -4,21 +4,21 @@ import AppKit
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// Which concrete branch `CanvasDiagramView` will render for a given element.
+/// Which concrete branch `ScryDiagramView` will render for a given element.
 /// A pure, synchronous seam over the kind/body dispatch logic so the routing
 /// itself is unit-testable without spinning up WebKit.
-enum CanvasDiagramRoute: Equatable {
+enum ScryDiagramRoute: Equatable {
     case diagram(source: String)
     case diagramFallback
-    case chart(bars: [CanvasChartBar])
+    case chart(bars: [ScryChartBar])
     case chartFallback
 }
 
-enum CanvasDiagramRouting {
-    static func route(for element: CanvasElement) -> CanvasDiagramRoute {
+enum ScryDiagramRouting {
+    static func route(for element: ScryElement) -> ScryDiagramRoute {
         switch element.kind {
         case .chart:
-            let bars = CanvasChartParse.bars(from: element.body)
+            let bars = ScryChartParse.bars(from: element.body)
             return bars.isEmpty ? .chartFallback : .chart(bars: bars)
         default:
             let source = element.body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,25 +28,25 @@ enum CanvasDiagramRouting {
 }
 
 /// Routes `.diagram` (mermaid, rendered via `WKWebView`) and `.chart`
-/// (native shape-drawn bars) canvas elements. This is the ONE approved web
+/// (native shape-drawn bars) scry elements. This is the ONE approved web
 /// surface in the app — every other element on the canvas, and every part
 /// of this view besides the mermaid host itself, is native SwiftUI per the
 /// Cardinal HUD design language. Malformed data for either kind degrades to
 /// a preformatted `AinkradCodeBlock` fallback card — never a crash, and
-/// never takes any other canvas element down with it.
+/// never takes any other scry element down with it.
 @MainActor
-struct CanvasDiagramView: View {
-    let element: CanvasElement
+struct ScryDiagramView: View {
+    let element: ScryElement
     let tokens: DesignTokens
 
     var body: some View {
-        switch CanvasDiagramRouting.route(for: element) {
+        switch ScryDiagramRouting.route(for: element) {
         case .diagram(let source):
             MermaidDiagramHost(source: source, tokens: tokens)
         case .diagramFallback:
             fallback(caption: "Diagram preview pending", language: "mermaid")
         case .chart(let bars):
-            CanvasChartView(bars: bars, tokens: tokens)
+            ScryChartView(bars: bars, tokens: tokens)
         case .chartFallback:
             fallback(caption: "Chart data unavailable", language: "csv")
         }
@@ -79,7 +79,7 @@ private struct MermaidDiagramHost: View {
                 }
             }
         }
-        // A later `canvas_render` can correct a previously-bad diagram body
+        // A later `scry_render` can correct a previously-bad diagram body
         // in place (stable element id, new `source`). Without this, once
         // `renderError` is set the `Group` above permanently pins the error
         // branch and the web view is never shown again for this element
@@ -94,7 +94,7 @@ private struct MermaidDiagramHost: View {
 }
 
 /// Native inline error card shown when mermaid fails to parse/render — the
-/// isolation contract from `CanvasElementView.errorCard` mirrored here so a
+/// isolation contract from `ScryElementView.errorCard` mirrored here so a
 /// bad diagram body never propagates past this one element.
 private struct MermaidErrorCard: View {
     let message: String

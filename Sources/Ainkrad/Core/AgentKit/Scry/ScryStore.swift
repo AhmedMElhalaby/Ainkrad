@@ -3,32 +3,32 @@ import CoreGraphics
 import Observation
 import AinkradHostRuntime
 
-/// Observable CRUD + geometry store for the agent canvas, one `CanvasModel`
+/// Observable CRUD + geometry store for the agent canvas, one `ScryModel`
 /// per `sessionKey`. Every mutation round-trips through `persistence.save`
 /// so the active canvas survives relaunch and session switches persist
 /// independently (switching `sessionKey` swaps the active canvas; each
 /// session's layout is kept in `document.canvases[sessionKey]`).
 @MainActor
 @Observable
-final class CanvasStore {
+final class ScryStore {
     private let persistence: PersistenceStore
-    private var document: CanvasWorkspaceDocument
+    private var document: ScryWorkspaceDocument
 
     var sessionKey: String
 
     init(persistence: PersistenceStore, sessionKey: String = "default") {
         self.persistence = persistence
         self.sessionKey = sessionKey
-        self.document = persistence.load(CanvasWorkspaceDocument.self) ?? CanvasWorkspaceDocument()
+        self.document = persistence.load(ScryWorkspaceDocument.self) ?? ScryWorkspaceDocument()
     }
 
-    /// The active session's canvas. Live-observable so `CanvasView` redraws.
-    var model: CanvasModel {
-        document.canvases[sessionKey] ?? CanvasModel()
+    /// The active session's canvas. Live-observable so `ScryView` redraws.
+    var model: ScryModel {
+        document.canvases[sessionKey] ?? ScryModel()
     }
 
     @discardableResult
-    func add(_ element: CanvasElement) -> String {
+    func add(_ element: ScryElement) -> String {
         var m = model
         var e = element
         if e.id.isEmpty { e = copy(e, id: UUID().uuidString) }
@@ -40,16 +40,16 @@ final class CanvasStore {
 
     /// Add-or-replace by id, unconditionally — unlike `update(id:mutate:)` this
     /// never guards on the id already existing. Used where the caller has
-    /// already computed the full resulting element (e.g. `CanvasRenderTool`,
-    /// which must match `CanvasReconstruction.apply`'s create-or-merge
+    /// already computed the full resulting element (e.g. `ScryRenderTool`,
+    /// which must match `ScryReconstruction.apply`'s create-or-merge
     /// semantics so a live render and a transcript replay never diverge).
-    func upsert(_ element: CanvasElement) {
+    func upsert(_ element: ScryElement) {
         var m = model
         m.upsert(element)
         commit(m)
     }
 
-    func update(id: String, mutate: (inout CanvasElement) -> Void) {
+    func update(id: String, mutate: (inout ScryElement) -> Void) {
         var m = model
         guard var e = m.elements.first(where: { $0.id == id }) else { return }
         mutate(&e)
@@ -81,18 +81,18 @@ final class CanvasStore {
     }
 
     func clear() {
-        commit(CanvasModel())
+        commit(ScryModel())
     }
 
     // MARK: - helpers
 
-    private func commit(_ m: CanvasModel) {
+    private func commit(_ m: ScryModel) {
         document.canvases[sessionKey] = m
         persistence.save(document)
     }
 
-    private func copy(_ e: CanvasElement, id: String) -> CanvasElement {
-        CanvasElement(id: id, kind: e.kind, title: e.title, body: e.body,
+    private func copy(_ e: ScryElement, id: String) -> ScryElement {
+        ScryElement(id: id, kind: e.kind, title: e.title, body: e.body,
                       language: e.language, rect: e.rect, z: e.z, pinned: e.pinned)
     }
 }

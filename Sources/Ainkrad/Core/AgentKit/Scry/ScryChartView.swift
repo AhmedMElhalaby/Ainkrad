@@ -3,26 +3,26 @@ import AinkradAppKit
 import AinkradHostRuntime
 
 /// One parsed chart data point: a label and its non-negative value.
-struct CanvasChartBar: Equatable, Sendable {
+struct ScryChartBar: Equatable, Sendable {
     let label: String
     let value: Double
 }
 
-/// Pure CSV `label,value` → bar parser, built on `CanvasTableParse`. A row
+/// Pure CSV `label,value` → bar parser, built on `ScryTableParse`. A row
 /// that isn't exactly two cells, has an empty label, or whose value isn't a
 /// finite non-negative number is skipped rather than failing the whole
 /// chart — one bad line shouldn't blank every other bar. If every row is
 /// skipped the result is empty and the caller falls back to a preformatted
 /// card. Unit-tested.
-enum CanvasChartParse {
-    static func bars(from body: String) -> [CanvasChartBar] {
-        CanvasTableParse.rows(from: body).compactMap { row -> CanvasChartBar? in
+enum ScryChartParse {
+    static func bars(from body: String) -> [ScryChartBar] {
+        ScryTableParse.rows(from: body).compactMap { row -> ScryChartBar? in
             guard row.count == 2 else { return nil }
             let label = row[0]
             guard !label.isEmpty, let value = Double(row[1]), value.isFinite, value >= 0 else {
                 return nil
             }
-            return CanvasChartBar(label: label, value: value)
+            return ScryChartBar(label: label, value: value)
         }
     }
 }
@@ -32,8 +32,8 @@ enum CanvasChartParse {
 /// a zero-value row still renders (as the minimum-width capsule) so it
 /// stays visible rather than vanishing.
 @MainActor
-struct CanvasChartView: View {
-    let bars: [CanvasChartBar]
+struct ScryChartView: View {
+    let bars: [ScryChartBar]
     let tokens: DesignTokens
 
     private var maxValue: Double {
@@ -48,7 +48,7 @@ struct CanvasChartView: View {
         }
     }
 
-    private func row(index: Int, bar: CanvasChartBar) -> some View {
+    private func row(index: Int, bar: ScryChartBar) -> some View {
         HStack(spacing: 8) {
             Text(bar.label)
                 .font(AinkradFont.mono(10))

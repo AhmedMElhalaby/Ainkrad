@@ -194,11 +194,11 @@ final class AppEnvironment {
     /// state — wrapping `runManager` via `RunManagerMenuBarAdapter`. Constructed
     /// in `bootstrap()` alongside `runManager` so both share the same instance.
     let menuBarPresence: MenuBarPresence
-    /// M7 Slice 7 (Live Canvas): the spatial-card store `CanvasApp`'s pane binds
-    /// to and `canvas_render` (appended to the shared `agentToolRegistry` in
+    /// M7 Slice 7 (Live Scry): the spatial-card store `ScryApp`'s pane binds
+    /// to and `scry_render` (appended to the shared `agentToolRegistry` in
     /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
     /// `runManager`/`scheduleStore` above.
-    let canvasStore: CanvasStore
+    let canvasStore: ScryStore
     /// Terminal streaming (Task 7): the store `run_terminal`'s live stdout/stderr
     /// lands in and `AgentTurnTimelineView` reads for the running tool card — one
     /// instance shared by the main `agentSession`'s `RunTerminalTool` and the
@@ -353,7 +353,7 @@ final class AppEnvironment {
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
         menuBarPresence: MenuBarPresence,
-        canvasStore: CanvasStore,
+        canvasStore: ScryStore,
         toolStreamStore: ToolStreamStore,
         toolHooksStore: ToolHooksStore,
         customCommandStore: CustomCommandStore,

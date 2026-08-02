@@ -32,6 +32,7 @@ enum SettingsPathAliases {
         // selection or an old deep-link resolving instead of dead-ending.
         "app.assistant":        "app.sage",
         "app.files":            "app.hoard",
+        "app.canvas":           "app.scry",
     ]
 
     /// Follows the alias chain to a fixed point, so retiring an already-retired

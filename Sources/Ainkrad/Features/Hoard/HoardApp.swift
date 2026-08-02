@@ -4,7 +4,7 @@ import AinkradAppKitUI
 
 /// The compiled-in Hoard app — a keyboard-driven, git-aware file browser.
 /// Host-embedded rather than a real plugin (same as `SageApp` and
-/// `CanvasApp`): its views read `AppEnvironment` directly via
+/// `ScryApp`): its views read `AppEnvironment` directly via
 /// `@Environment(AppEnvironment.self)`, so `host` is unused here beyond
 /// satisfying the registration contract shared with dynamically-loaded
 /// `AinkradApp`s.

@@ -2,14 +2,14 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// The Live Canvas: agent-rendered elements as movable/resizable layered HUD
+/// The Live Scry: agent-rendered elements as movable/resizable layered HUD
 /// cards with hover + parallax. The user can rearrange/pin/dismiss; layout
-/// persists per session via `CanvasStore`. Reconstructable from the transcript.
+/// persists per session via `ScryStore`. Reconstructable from the transcript.
 @MainActor
-struct CanvasView: View {
+struct ScryView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradReduceMotion) private var reduceMotion
-    let store: CanvasStore
+    let store: ScryStore
 
     @State private var hoverPoint: CGPoint = .zero
 
@@ -28,7 +28,7 @@ struct CanvasView: View {
                 }
 
                 ForEach(store.model.ordered) { element in
-                    CanvasCard(element: element, store: store, tokens: tokens,
+                    ScryCard(element: element, store: store, tokens: tokens,
                                parallax: parallax(for: element, in: proxy.size),
                                reduceMotion: reduceMotion)
                         .zIndex(Double(element.z))
@@ -39,7 +39,7 @@ struct CanvasView: View {
     }
 
     /// Small pointer-driven parallax per card (deeper z drifts less).
-    private func parallax(for element: CanvasElement, in size: CGSize) -> CGSize {
+    private func parallax(for element: ScryElement, in size: CGSize) -> CGSize {
         guard !reduceMotion, size.width > 0 else { return .zero }
         let dx = (hoverPoint.x / size.width - 0.5) * 8
         let dy = (hoverPoint.y / size.height - 0.5) * 8
@@ -58,19 +58,19 @@ struct CanvasView: View {
     }
 }
 
-/// One draggable/resizable card wrapping a `CanvasElementView`.
+/// One draggable/resizable card wrapping a `ScryElementView`.
 @MainActor
-private struct CanvasCard: View {
-    let element: CanvasElement
-    let store: CanvasStore
+private struct ScryCard: View {
+    let element: ScryElement
+    let store: ScryStore
     let tokens: DesignTokens
     let parallax: CGSize
     let reduceMotion: Bool
     @State private var isHovering = false
-    @GestureState private var dragStart: CanvasRect?
-    @GestureState private var resizeStart: CanvasRect?
+    @GestureState private var dragStart: ScryRect?
+    @GestureState private var resizeStart: ScryRect?
     // Perf fix (I2/M1): live-drag/resize preview state ONLY — the store is a
-    // synchronous full-document atomic-write persistence layer (`CanvasStore.
+    // synchronous full-document atomic-write persistence layer (`ScryStore.
     // commit`), so writing it on every `DragGesture.onChanged` tick was a disk
     // write per pixel of movement. These hold the in-flight visual delta;
     // the store is committed exactly once, in `.onEnded`.
@@ -82,7 +82,7 @@ private struct CanvasCard: View {
     /// any in-flight drag/resize preview. `element.rect` itself never changes
     /// mid-gesture (the store isn't written to until `.onEnded`), so it stays
     /// a stable anchor for the whole gesture.
-    private var previewRect: CanvasRect {
+    private var previewRect: ScryRect {
         var r = element.rect
         r.x += dragPreviewOffset.width
         r.y += dragPreviewOffset.height
@@ -94,7 +94,7 @@ private struct CanvasCard: View {
     }
 
     var body: some View {
-        CanvasElementView(element: element, tokens: tokens)
+        ScryElementView(element: element, tokens: tokens)
             .overlay(alignment: .topTrailing) { if isHovering { controls } }
             .overlay(alignment: .bottomTrailing) { if isHovering { resizeHandle } }
             .scaleEffect(isHovering ? 1.01 : 1.0)

@@ -110,7 +110,7 @@ struct ToolPresentation: Equatable {
         case "read_file":         return ("doc.text", .secondary)
         case "memory_write":      return ("brain", .primary)
         case "memory_search":     return ("brain.head.profile", .secondary)
-        case "canvas_render":     return ("paintpalette", .secondary)
+        case "scry_render":     return ("paintpalette", .secondary)
         case "spawn_subagent":    return ("person.2", .secondary)
         case "use_skill":         return ("wand.and.stars", .secondary)
         case "propose_skill":     return ("lightbulb", .secondary)

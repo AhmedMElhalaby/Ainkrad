@@ -151,15 +151,15 @@ extension AppEnvironment {
         // `permissionModeOverride`. A `nil` posture (plain `.chat` runs) or an
         // unresolvable `sandboxProfileID` falls back to the SAME `.background`-
         // tier default as before — fail-closed, never `.host`, never escalation.
-        // `canvas_render` is EXCLUDED from the background/headless tool list: it's
+        // `scry_render` is EXCLUDED from the background/headless tool list: it's
         // bound to the foreground `canvasStore` (sessionKey "default", the SAME
-        // store the `CanvasApp` pane reads), so an autonomous background/schedule/
+        // store the `ScryApp` pane reads), so an autonomous background/schedule/
         // trigger run calling it would silently mutate the canvas the user is
         // looking at — a cross-session split-brain. The foreground
-        // `agentToolRegistry` above keeps `canvas_render`; only this background
+        // `agentToolRegistry` above keeps `scry_render`; only this background
         // copy drops it.
         var backgroundAgentTools = agentTools.filter {
-            !($0 is CanvasRenderTool) && !AppEnvironment.isUnattendedNetworkTool($0)
+            !($0 is ScryRenderTool) && !AppEnvironment.isUnattendedNetworkTool($0)
         }
         if let idx = backgroundAgentTools.firstIndex(where: { $0.name == "run_terminal" }) {
             backgroundAgentTools[idx] = RunTerminalTool(

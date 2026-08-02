@@ -93,14 +93,14 @@ extension AppEnvironment {
                                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Live Canvas (M7 Slice 7) is likewise a host-embedded built-in — its
-        // pane reads `AppEnvironment.canvasStore` directly (see `CanvasApp`).
-        let canvasHost = HostServicesImpl(appID: "canvas", dataRootURL: pluginDataRoot,
+        // Live Scry (M7 Slice 7) is likewise a host-embedded built-in — its
+        // pane reads `AppEnvironment.canvasStore` directly (see `ScryApp`).
+        let canvasHost = HostServicesImpl(appID: "scry", dataRootURL: pluginDataRoot,
                                           secretStore: secrets, themeManager: themeManager,
                                           hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Hoard (M1) — a host-embedded built-in like Sage and Canvas. It
+        // Hoard (M1) — a host-embedded built-in like Sage and Scry. It
         // inherits the host's unsandboxed filesystem access; its own views read
         // `AppEnvironment` directly.
         let filesHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
@@ -157,8 +157,8 @@ extension AppEnvironment {
                     }
                 ),
                 RegisteredApp.builtIn(
-                    CanvasApp.self,
-                    summary: "The Live Canvas — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
+                    ScryApp.self,
+                    summary: "The Live Scry — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
                     host: canvasHost),
                 filesRegistration
             ],

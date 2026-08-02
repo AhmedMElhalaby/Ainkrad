@@ -4,7 +4,7 @@ import AppKit
 /// Decodes a `data:` image URL (as produced by `image_generate`) into bytes /
 /// an `NSImage`. `AsyncImage`/`URLSession` do not load the `data:` scheme, so
 /// the canvas decodes these directly. The byte parse is pure and unit-tested.
-enum CanvasImageDecoding {
+enum ScryImageDecoding {
     /// Extracts the raw bytes from a base64 `data:` URL, e.g.
     /// `data:image/jpeg;base64,<...>`. Returns `nil` for non-data URLs or a
     /// malformed/empty payload.
