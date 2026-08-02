@@ -140,10 +140,10 @@ struct PluginLaunchOutcomeTests {
         hub.setAvailabilityProvider { _ in .unknown }
         let launcher = HostAppLauncher(appID: "leyline", hub: hub)
 
-        #expect(launcher.openReportingOutcome(appID: "terminal", payload: "{}")
-                == .unknownApp("terminal"))
+        #expect(launcher.openReportingOutcome(appID: "gitmage", payload: "{}")
+                == .unknownApp("gitmage"))
         // And no payload is left queued for an app that never opens.
-        #expect(hub.takePending(for: "terminal") == nil)
+        #expect(hub.takePending(for: "gitmage") == nil)
     }
 
     @Test("A disabled app is distinguished from a missing one")
@@ -151,8 +151,8 @@ struct PluginLaunchOutcomeTests {
         let hub = PluginLaunchHub()
         hub.setAvailabilityProvider { _ in .disabled }
         let launcher = HostAppLauncher(appID: "leyline", hub: hub)
-        #expect(launcher.openReportingOutcome(appID: "terminal", payload: nil)
-                == .disabled("terminal"))
+        #expect(launcher.openReportingOutcome(appID: "gitmage", payload: nil)
+                == .disabled("gitmage"))
     }
 
     @Test("An available app opens and receives its payload")
@@ -163,9 +163,9 @@ struct PluginLaunchOutcomeTests {
         hub.setOpenHandler { opened = $0 }
         let launcher = HostAppLauncher(appID: "leyline", hub: hub)
 
-        #expect(launcher.openReportingOutcome(appID: "terminal", payload: "payload") == .opened)
-        #expect(opened == "terminal")
-        #expect(hub.takePending(for: "terminal") == "payload")
+        #expect(launcher.openReportingOutcome(appID: "gitmage", payload: "payload") == .opened)
+        #expect(opened == "gitmage")
+        #expect(hub.takePending(for: "gitmage") == "payload")
     }
 
     @Test("With no availability provider, behaviour is unchanged")

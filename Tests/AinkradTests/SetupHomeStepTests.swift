@@ -284,7 +284,7 @@ struct SetupHomeStepTests {
     /// folder must appear in the listing, so adding one that creates a new
     /// folder at the root of the vault fails here until someone decides what to
     /// tell the user about it. A domain that lives inside an existing folder
-    /// (as `.memory` and friends do inside `Assistant/`) passes, correctly.
+    /// (as `.memory` and friends do inside `Sage/`) passes, correctly.
     @Test func everySharedDomainIsAccountedForInTheFolderPreview() {
         let root = URL(fileURLWithPath: "/tmp/preview-home", isDirectory: true)
         let home = Home(vaultRoot: root, cacheRoot: root)
@@ -299,14 +299,14 @@ struct SetupHomeStepTests {
         }
     }
 
-    /// The domains that live inside `Assistant/` fold into its one row rather
+    /// The domains that live inside `Sage/` fold into its one row rather
     /// than appearing as phantom top-level folders.
     @Test func theFolderPreviewFoldsAssistantSubdirectoriesIntoOneRow() {
         let names = SetupHomePreview.entries.map(\.name)
         #expect(Set(names).count == names.count, "no folder may be listed twice")
-        #expect(names.contains("Assistant/"))
+        #expect(names.contains("Sage/"))
         for absent in ["memory/", "skills/", "commands/", "sessions/"] {
-            #expect(!names.contains(absent), "\(absent) is inside Assistant/, not top level")
+            #expect(!names.contains(absent), "\(absent) is inside Sage/, not top level")
         }
     }
 

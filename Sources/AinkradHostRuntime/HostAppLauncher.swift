@@ -26,7 +26,15 @@ public struct HostAppLauncher: PluginAppLauncher, PluginAppLauncherResult {
         _ = openReportingOutcome(appID: appID, payload: payload)
     }
 
-    public func openReportingOutcome(appID target: String, payload: String?) -> PluginLaunchOutcome {
+    public func openReportingOutcome(appID requested: String, payload: String?) -> PluginLaunchOutcome {
+        // Resolve a retired app id to its replacement. An INSTALLED plugin
+        // carries whatever id it was built against: Leyline v0.6.1 ships
+        // `open(appID:)` with "terminal", and after the v0.16.0 rename that returns
+        // `.unknownApp` — its connect button silently does nothing. Aliasing
+        // here fixes every already-installed plugin at once, rather than
+        // requiring each one to ship an update first.
+        let target = AppIDRenames.map[requested] ?? requested
+
         // Ask the hub whether the target is actually openable BEFORE enqueuing
         // a payload for it — a payload left pending for an app that never
         // opens is a leak that also mis-fires if that app is installed later.

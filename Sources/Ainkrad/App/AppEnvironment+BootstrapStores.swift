@@ -43,6 +43,14 @@ extension AppEnvironment {
         discoveredModelsStore: DiscoveredModelsStore,
         assistantDocuments: PersistenceStore
     ) {
+        // FIRST, before anything resolves a shared path. v0.16.2 renamed the
+        // assistant's vault directory `Assistant/` → `Sage/` along with the app,
+        // and every store below is built from `home.shared(_:)`, which now
+        // points at the new name. A store constructed before the move would
+        // create an empty tree beside the user's real one and silently orphan
+        // their connections, memory, skills and session history.
+        HomeLayoutMigration.run(vaultRoot: home.vaultRoot)
+
         let persistence = FileDocumentStore(rootURL: home.shared(.config))
         // Sage's own documents live under `Assistant/`, not `Config/` —
         // `agents.json` and `connections.json` sit directly in it, alongside the

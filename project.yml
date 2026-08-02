@@ -65,7 +65,7 @@ packages:
     # AinkradPanel gaining a `blending` parameter so a panel hosted in its own
     # NSPanel can sample .behindWindow instead of rendering as a flat slab
     # (PR #27). Default unchanged, so no existing surface moves.
-    revision: 31f89bc9e186354077035316a832237ce6993a09
+    revision: 60036ad9abe5d0ca4e84109bcc78a51f7b8578f0
 
 targets:
   AinkradHostRuntime:
@@ -231,13 +231,19 @@ schemes:
       targets:
         Ainkrad: all
         AinkradTests: [test]
+        AinkradDevHostTests: [test]
         HelloPlugin: [run]
     run:
       config: Debug
     test:
       config: Debug
+      # AinkradDevHostTests runs here too. It used to hang off the
+      # AinkradDevHost scheme alone, so `make test` never touched it — which is
+      # why a Dev Host that aborted on loading any context-publishing plugin
+      # went unnoticed until someone load-verified a bundle by hand.
       targets:
         - AinkradTests
+        - AinkradDevHostTests
 
   AinkradDevHost:
     build:
