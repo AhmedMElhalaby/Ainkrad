@@ -34,7 +34,7 @@ indirect enum InverseAction: Codable, Equatable, Sendable {
 /// relaunch would be worse than none.
 struct RedoSpec: Codable, Equatable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case copy, move, rename, createFolder, trash, batchRename
+        case copy, move, rename, createFolder, trash, batchRename, archive, extract
     }
     var kind: Kind
     var sources: [URL]
@@ -160,6 +160,31 @@ extension InverseOperation {
             redo: RedoSpec(kind: .batchRename, sources: items.map(\.from),
                            destinationDirectory: nil, name: nil,
                            names: items.map { $0.to.lastPathComponent }))
+    }
+
+    /// Archive create and extract share an inverse: delete what was produced.
+    /// The inputs are untouched by either, so nothing needs restoring.
+    static func forArchive(created: [URL], sources: [URL], name: String,
+                           at now: Date = Date()) -> InverseOperation {
+        InverseOperation(
+            label: itemLabel("Compress", sources.count),
+            action: .delete(created),
+            recordedAt: now,
+            affectedURLs: created,
+            redo: RedoSpec(kind: .archive, sources: sources,
+                           destinationDirectory: created.first?.deletingLastPathComponent(),
+                           name: name))
+    }
+
+    static func forExtract(created: [URL], archives: [URL],
+                           into directory: URL, at now: Date = Date()) -> InverseOperation {
+        InverseOperation(
+            label: itemLabel("Extract", archives.count),
+            action: .delete(created),
+            recordedAt: now,
+            affectedURLs: created,
+            redo: RedoSpec(kind: .extract, sources: archives,
+                           destinationDirectory: directory))
     }
 
     static func forCreateFolder(at url: URL, now: Date = Date()) -> InverseOperation {

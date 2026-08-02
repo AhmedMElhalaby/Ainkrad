@@ -15,6 +15,10 @@ enum FileOperationKind: Sendable, Equatable {
     case batchRename(newNames: [String])
     case createFolder(name: String)
     case trash
+    /// Compress `sources` into `name` inside the destination directory.
+    case archive(name: String)
+    /// Extract each source archive into the destination directory.
+    case extract
 }
 
 /// A described intent, not an execution. Values are cheap to build, test and

@@ -170,6 +170,41 @@ final class FilesActions {
         tab.reload()
     }
 
+    // MARK: - Archives
+    //
+    // `ArchiveService` shipped in M5 with tests and no caller — it was reachable
+    // from nothing. These are the wiring, and they go through the engine so
+    // compressing is undoable like every other mutation.
+
+    func archiveSelection() async {
+        let sources = operands
+        guard !sources.isEmpty else { return }
+        let directory = tab.currentDirectory
+        let result = await engine.submit(FileOperation(
+            kind: .archive(name: defaultArchiveName(for: sources, in: directory)),
+            sources: sources, destinationDirectory: directory))
+        report(result, verb: "Compressed")
+        tab.reload()
+    }
+
+    /// Extracts every selected archive into the current directory. Rows that
+    /// are not archives are skipped rather than failed — selecting a folder
+    /// and its zip and hitting extract should extract the zip.
+    func extractSelection(using archiver: any Archiving = SystemArchiveService()) async {
+        let archives = selectedEntries
+            .filter { !$0.isDirectory && archiver.canExtract($0.url) }
+            .map(\.url)
+        guard !archives.isEmpty else {
+            lastToast = FilesToastMessage(kind: .warning, text: "Nothing to extract",
+                                          detail: "Select a .zip or .tar archive")
+            return
+        }
+        let result = await engine.submit(FileOperation(
+            kind: .extract, sources: archives, destinationDirectory: tab.currentDirectory))
+        report(result, verb: "Extracted")
+        tab.reload()
+    }
+
     // MARK: - Batch rename
 
     /// The rows the batch-rename sheet is acting on, or nil while it is closed.
@@ -261,7 +296,7 @@ final class FilesActions {
         case "Copied": return .copied
         case "Moved": return .moved
         case "Moved to Trash": return .deleted
-        case "Created": return .created
+        case "Created", "Compressed", "Extracted": return .created
         default: return .moved
         }
     }

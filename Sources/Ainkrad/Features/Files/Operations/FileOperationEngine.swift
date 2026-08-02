@@ -27,6 +27,7 @@ typealias ConflictResolving = @MainActor (ConflictQuestion) async -> ConflictAns
 final class FileOperationEngine {
     private let mutator: any FileMutating
     private let trash: any Trashing
+    private let archiver: any Archiving
     let undoStack: UndoStack
 
     private let serializer = VolumeSerializer()
@@ -35,10 +36,12 @@ final class FileOperationEngine {
     /// deliberately outlive the pane that started them.
     private(set) var activeJobs: [OperationProgress] = []
 
-    init(mutator: any FileMutating, trash: any Trashing, undoStack: UndoStack) {
+    init(mutator: any FileMutating, trash: any Trashing, undoStack: UndoStack,
+         archiver: any Archiving = SystemArchiveService()) {
         self.mutator = mutator
         self.trash = trash
         self.undoStack = undoStack
+        self.archiver = archiver
     }
 
     // MARK: - Seams for the undo extension
@@ -104,6 +107,8 @@ final class FileOperationEngine {
         case .copy: return "Copying \(operation.sources.count) item\(operation.sources.count == 1 ? "" : "s")"
         case .move: return "Moving \(operation.sources.count) item\(operation.sources.count == 1 ? "" : "s")"
         case .rename: return "Renaming"
+        case .archive: return "Compressing \(operation.sources.count) item\(operation.sources.count == 1 ? "" : "s")"
+        case .extract: return "Extracting \(operation.sources.count) archive\(operation.sources.count == 1 ? "" : "s")"
         case .batchRename: return "Renaming \(operation.sources.count) item\(operation.sources.count == 1 ? "" : "s")"
         case .createFolder: return "Creating folder"
         case .trash: return "Deleting \(operation.sources.count) item\(operation.sources.count == 1 ? "" : "s")"
@@ -124,7 +129,11 @@ final class FileOperationEngine {
         case .createFolder(let name):
             return createFolder(operation, named: name)
         case .trash:
-            return trashItems(operation, progress: progress)
+            return await trashItems(operation, progress: progress)
+        case .archive(let name):
+            return await createArchive(operation, named: name)
+        case .extract:
+            return await extractArchives(operation, progress: progress)
         }
     }
 
@@ -202,17 +211,28 @@ final class FileOperationEngine {
                 || sourceVolume != destinationVolume
 
             do {
+                // The actual byte-shifting runs OFF the main actor. It used to
+                // run on it, which meant copying a large folder froze the whole
+                // window — including the progress panel that was supposed to be
+                // showing you the copy. State updates stay here on the main
+                // actor; only the blocking call crosses over.
+                let mutator = self.mutator
+                // Bound to a `let` first: `destination` is a mutable local
+                // (keep-both rewrites it), and Swift 6 refuses to send a
+                // closure that captures a `var`.
+                let target = destination
                 if isMove && !isCrossVolume {
-                    try mutator.moveItem(at: source, to: destination)
+                    try await Task.detached { try mutator.moveItem(at: source, to: target) }.value
                     moved.append(MovedItem(from: source, to: destination))
                 } else {
-                    try mutator.copyItem(at: source, to: destination)
+                    try await Task.detached { try mutator.copyItem(at: source, to: target) }.value
                     created.append(destination)
                     if isMove {
                         // Copy-then-TRASH, never remove: the source must stay
                         // recoverable for the inverse.
                         sawCrossVolume = true
-                        let inTrash = try trash.trash(source)
+                        let trash = self.trash
+                        let inTrash = try await Task.detached { try trash.trash(source) }.value
                         trashedSources.append(TrashedItem(original: source, inTrash: inTrash))
                     }
                 }
@@ -344,15 +364,79 @@ final class FileOperationEngine {
         }
     }
 
+    /// Compress into the destination directory. One archive from N inputs, so
+    /// there is no per-item progress to report — the job is atomic.
+    private func createArchive(_ operation: FileOperation,
+                               named name: String) async -> OperationResult {
+        guard let directory = operation.destinationDirectory, !operation.sources.isEmpty else {
+            return OperationResult(succeeded: 0, skipped: 0, failures: [], wasCancelled: false)
+        }
+        let destination = directory.appendingPathComponent(name)
+        guard !mutator.fileExists(destination) else {
+            return OperationResult(succeeded: 0, skipped: 0, failures: [OperationFailure(
+                url: destination, reason: "A file named “\(name)” already exists.")],
+                wasCancelled: false)
+        }
+
+        let archiver = self.archiver
+        let sources = operation.sources
+        // `ditto` on a large folder is seconds of work — off the main actor,
+        // or the whole window stops redrawing while it runs.
+        let outcome = await Task.detached { Result { try archiver.archive(sources, to: destination) } }.value
+
+        switch outcome {
+        case .success(let created):
+            undoStack.push(.forArchive(created: [created], sources: sources, name: name))
+            return OperationResult(succeeded: 1, skipped: 0, failures: [], wasCancelled: false)
+        case .failure(let error):
+            return OperationResult(succeeded: 0, skipped: 0, failures: [OperationFailure(
+                url: destination, reason: error.localizedDescription)], wasCancelled: false)
+        }
+    }
+
+    private func extractArchives(_ operation: FileOperation,
+                                 progress: OperationProgress) async -> OperationResult {
+        guard let directory = operation.destinationDirectory else {
+            return OperationResult(succeeded: 0, skipped: 0, failures: [], wasCancelled: false)
+        }
+        var created: [URL] = []
+        var failures: [OperationFailure] = []
+
+        for source in operation.sources {
+            if progress.isCancelled { break }
+            let archiver = self.archiver
+            let outcome = await Task.detached {
+                Result { try archiver.extract(source, into: directory) }
+            }.value
+
+            switch outcome {
+            case .success(let products): created.append(contentsOf: products)
+            case .failure(let error):
+                failures.append(OperationFailure(url: source, reason: error.localizedDescription))
+            }
+            progress.advance()
+        }
+
+        // Only what actually landed — an extract that half-failed is still
+        // wholly undoable for the half that worked.
+        if !created.isEmpty {
+            undoStack.push(.forExtract(created: created, archives: operation.sources,
+                                       into: directory))
+        }
+        return OperationResult(succeeded: created.count, skipped: 0,
+                               failures: failures, wasCancelled: progress.isCancelled)
+    }
+
     private func trashItems(_ operation: FileOperation,
-                            progress: OperationProgress) -> OperationResult {
+                            progress: OperationProgress) async -> OperationResult {
         var items: [TrashedItem] = []
         var failures: [OperationFailure] = []
 
         for source in operation.sources {
             if progress.isCancelled { break }
             do {
-                let inTrash = try trash.trash(source)
+                let trash = self.trash
+                let inTrash = try await Task.detached { try trash.trash(source) }.value
                 items.append(TrashedItem(original: source, inTrash: inTrash))
             } catch {
                 failures.append(OperationFailure(url: source, reason: error.localizedDescription))

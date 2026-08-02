@@ -81,6 +81,13 @@ extension FileOperationEngine {
         case .trash:
             operation = FileOperation(kind: .trash, sources: spec.sources,
                                       destinationDirectory: nil)
+        case .archive:
+            operation = FileOperation(kind: .archive(name: spec.name ?? ""),
+                                      sources: spec.sources,
+                                      destinationDirectory: spec.destinationDirectory)
+        case .extract:
+            operation = FileOperation(kind: .extract, sources: spec.sources,
+                                      destinationDirectory: spec.destinationDirectory)
         case .batchRename:
             operation = FileOperation(kind: .batchRename(newNames: spec.names ?? []),
                                       sources: spec.sources, destinationDirectory: nil)

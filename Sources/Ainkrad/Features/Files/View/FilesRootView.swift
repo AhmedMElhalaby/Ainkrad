@@ -145,18 +145,25 @@ struct FilesRootView: View {
             // ⌘⇧F rides an AppKit local monitor, not `.onKeyPress` — see
             // `FilesKeyMonitor` for why. Zero-size and invisible; it lives as
             // long as the pane does.
-            FilesKeyMonitor(
-                onFocusScopedSearch: {
+            FilesKeyMonitor(chords: [
+                FilesOptionChord(keyCode: FilesOptionChord.f) {
                     let searchStore = ensureSearch()
                     searchStore.scopedRoot = store.activeTab.currentDirectory
                     // Set the shared focus target directly — no request counter,
                     // no second focus state to lose a race with.
                     focus = .search
                 },
-                // ⌥R rides the same monitor for the same reason ⌥F does: the
-                // chord must work whether the caret is in the list, the
+                // ⌥R, ⌥A and ⌥E ride the same monitor for the same reason ⌥F
+                // does: they must work whether the caret is in the list, the
                 // breadcrumb or the search field.
-                onBatchRename: { actions.beginBatchRename() })
+                FilesOptionChord(keyCode: FilesOptionChord.r) { actions.beginBatchRename() },
+                FilesOptionChord(keyCode: FilesOptionChord.a) {
+                    Task { await actions.archiveSelection() }
+                },
+                FilesOptionChord(keyCode: FilesOptionChord.e) {
+                    Task { await actions.extractSelection() }
+                }
+            ])
             .frame(width: 0, height: 0)
         )
         .overlay(alignment: .bottomTrailing) {
