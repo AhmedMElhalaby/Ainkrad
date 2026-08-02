@@ -38,7 +38,7 @@ struct MediaSettingsDocument: PersistableDocument {
     private enum CodingKeys: String, CodingKey { case provider, localSDURL, model, imageSize, customBaseURL }
 }
 
-/// Backs the Assistant Settings MEDIA section's provider picker. Mirrors
+/// Backs the Sage Settings MEDIA section's provider picker. Mirrors
 /// `WebSearchSettingsStore`: loads the persisted document at init, writes
 /// through on every setter call.
 @MainActor

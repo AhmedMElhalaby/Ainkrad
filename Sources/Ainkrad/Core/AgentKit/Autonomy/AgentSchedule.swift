@@ -5,7 +5,7 @@ import AinkradHostRuntime
 /// B): a future case this build doesn't know yet must decode to `.unknown`
 /// rather than throwing and losing the whole `AgentSchedule` (and everything
 /// else in the same `SchedulesDocument`). The synthesized-rawValue trick used
-/// elsewhere (e.g. `CanvasElementKind`) doesn't apply here since these cases
+/// elsewhere (e.g. `ScryElementKind`) doesn't apply here since these cases
 /// carry associated values — instead each known case's keyed payload is
 /// attempted in turn, falling back to `.unknown` only once none match.
 ///

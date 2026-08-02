@@ -56,7 +56,7 @@ final class AgentConfigStore {
 /// and the router's cost/quality policy. Distinct from `AgentConfigDocument` (the
 /// standing default model/effort) — this is the ephemeral layer `resolveTurn()`
 /// consults FIRST, before falling back to the Agent's default or the config.
-struct AssistantRuntimeOptions: PersistableDocument {
+struct SageRuntimeOptions: PersistableDocument {
     static let documentID = "assistant-runtime"
     var verbose = false
     var trace = false
@@ -89,12 +89,12 @@ struct AssistantRuntimeOptions: PersistableDocument {
 @MainActor
 @Observable
 final class RuntimeOptionsStore {
-    private(set) var options: AssistantRuntimeOptions
+    private(set) var options: SageRuntimeOptions
     private let persistence: PersistenceStore
 
     init(persistence: PersistenceStore) {
         self.persistence = persistence
-        self.options = persistence.load(AssistantRuntimeOptions.self) ?? AssistantRuntimeOptions()
+        self.options = persistence.load(SageRuntimeOptions.self) ?? SageRuntimeOptions()
     }
 
     func setVerbose(_ v: Bool) { options.verbose = v; save() }

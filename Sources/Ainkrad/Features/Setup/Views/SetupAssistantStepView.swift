@@ -2,7 +2,7 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// Applies the Assistant step. `AgentStore.setActive` is a no-op unless the id is
+/// Applies the Sage step. `AgentStore.setActive` is a no-op unless the id is
 /// already in `agents`, so a custom profile must be added before it is activated.
 @MainActor
 enum SetupAssistant {
@@ -27,8 +27,8 @@ enum SetupAssistant {
     }
 
     /// The model to seed the step with: the active connection's first curated
-    /// model, mirroring `AssistantModelPickerModel.selectConnection`
-    /// (Sources/Ainkrad/Features/Assistant/AssistantModelPicker.swift
+    /// model, mirroring `SageModelPickerModel.selectConnection`
+    /// (Sources/Ainkrad/Features/Sage/SageModelPicker.swift
     /// ~lines 178-180) — the existing precedent for defaulting a model off a
     /// connection rather than a hardcoded Anthropic id. Falls back to
     /// `AgentConfigDocument`'s own default only when there is no connection
@@ -43,7 +43,7 @@ enum SetupAssistant {
     }
 }
 
-/// The Assistant step: a confirmation, not an authoring task. Plan and Build —
+/// The Sage step: a confirmation, not an authoring task. Plan and Build —
 /// the two built-in agents — are shown with their instructions so the user can
 /// see what they do; Build is the default (matching `AgentStore.active`'s own
 /// fallback). A custom persona is a secondary path via `AgentProfile.custom`,
@@ -147,7 +147,7 @@ struct SetupAssistantStepView: View {
 
     /// Effort only means anything to `ClaudeProvider` (see
     /// `AgentSession.effortString`); Settings gates its own effort picker on
-    /// `active?.kind == .claude` (AssistantSettingsView+Sections.swift
+    /// `active?.kind == .claude` (SageSettingsView+Sections.swift
     /// ~line 91), so this step mirrors that rather than showing a control
     /// that silently does nothing for OpenAI/Ollama/Groq/etc.
     private var activeConnectionIsClaude: Bool {

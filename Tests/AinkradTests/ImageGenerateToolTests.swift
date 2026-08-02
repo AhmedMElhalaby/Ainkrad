@@ -13,8 +13,8 @@ struct ImageGenerateToolTests {
             GeneratedImage(mediaType: "image/png", base64: "QUJD")
         }
     }
-    private func make(configured: Bool) -> (ImageGenerateTool, CanvasStore) {
-        let store = CanvasStore(persistence: InMemoryPersistenceStore(), sessionKey: "s")
+    private func make(configured: Bool) -> (ImageGenerateTool, ScryStore) {
+        let store = ScryStore(persistence: InMemoryPersistenceStore(), sessionKey: "s")
         return (ImageGenerateTool(backend: StubBackend(configured: configured), store: store), store)
     }
     @Test func addsImageCanvasElement() async throws {

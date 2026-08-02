@@ -11,7 +11,7 @@ extension AppEnvironment {
     /// Third block of `bootstrap()`: M7 Slice 6 (Security & Sandboxing) —
     /// every execution backend registered by kind, plus the base agent tool
     /// set (read/edit/workspace/terminal/git, memory tools if available,
-    /// skill tools, MCP registry, and the Live Canvas render tool).
+    /// skill tools, MCP registry, and the Live Scry render tool).
     static func bootstrapExecutionAndTools(
         home: Home,
         persistence: PersistenceStore,
@@ -42,7 +42,7 @@ extension AppEnvironment {
         executionRouter: ExecutionRouter,
         agentTools: [any AgentTool],
         mcpServerRegistry: MCPServerRegistry,
-        canvasStore: CanvasStore,
+        canvasStore: ScryStore,
         toolStreamStore: ToolStreamStore,
         terminalController: TerminalProcessController
     ) {
@@ -193,16 +193,16 @@ extension AppEnvironment {
         agentTools.append(UseSkillTool(registry: skillRegistry))
         agentTools.append(ProposeSkillTool(registry: skillRegistry))
 
-        // M7 Slice 7 (Live Canvas): `canvas_render` only draws structured cards
+        // M7 Slice 7 (Live Scry): `scry_render` only draws structured cards
         // from agent-supplied data — it executes nothing and touches no files
-        // or system state (see `CanvasRenderTool`), so it's appended alongside
+        // or system state (see `ScryRenderTool`), so it's appended alongside
         // the other read-class tools. `canvasStore` defaults to sessionKey
         // "default" (PROVISIONAL — per-session keying awaits a stable session
         // identifier from Slice 5; see Task 12 brief).
-        let canvasStore = CanvasStore(persistence: persistence)
-        agentTools.append(CanvasRenderTool(store: canvasStore))
+        let canvasStore = ScryStore(persistence: persistence)
+        agentTools.append(ScryRenderTool(store: canvasStore))
 
-        // Media tools (read-class, render to the Live Canvas). Key in SecretStore.
+        // Media tools (read-class, render to the Live Scry). Key in SecretStore.
         agentTools.append(ImageGenerateTool(
             backend: RoutingMediaBackend(
                 persistence: persistence,
@@ -241,7 +241,7 @@ extension AppEnvironment {
         // resolved live so a folder change is reflected without re-registering —
         // same derivation as the @-mention index in bootstrapSession.
         let searchRootProvider: @MainActor () -> URL = { [persistence] in
-            persistence.load(AssistantWorkspaceSettings.self)
+            persistence.load(SageWorkspaceSettings.self)
                 .map { URL(fileURLWithPath: $0.workingDirectoryPath) }
                 ?? FileManager.default.homeDirectoryForCurrentUser
         }
@@ -259,7 +259,7 @@ extension AppEnvironment {
     /// (builtins + `/stop`).
     static func bootstrapModelRouting(
         persistence: PersistenceStore,
-        // `agents.json` is an Assistant/ document, not a Config/ one — see
+        // `agents.json` is an Sage/ document, not a Config/ one — see
         // `bootstrapCoreStores`. Everything else in this block is Config/.
         assistantDocuments: PersistenceStore,
         secrets: SecretStore,

@@ -75,91 +75,94 @@ extension AppEnvironment {
             }
         }
 
-        // Terminal ships as an App Store plugin (AinkradTerminal), not compiled in.
+        // Rune (formerly Terminal) ships as an App Store plugin, not compiled in.
         // Still migrate any pre-4a host-global settings into its scoped store so the
-        // installed plugin sees the user's existing configuration.
-        let terminalHost = HostServicesImpl(appID: "terminal", dataRootURL: pluginDataRoot,
+        // installed plugin sees the user's existing configuration. Scoped to "rune":
+        // `AppDataDirectoryRename` has already moved <Apps>/terminal to <Apps>/rune
+        // earlier in bootstrap, so writing to the old id would strand this migration
+        // in a directory the plugin no longer reads.
+        let runeHost = HostServicesImpl(appID: "rune", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                             declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
-            scoped: terminalHost.documents, defaults: defaults)
+            scoped: runeHost.documents, defaults: defaults)
 
-        // Assistant is a host-embedded built-in (its views read `AppEnvironment`
+        // Sage is a host-embedded built-in (its views read `AppEnvironment`
         // directly), scoped like any other app for its documents/secrets/theme/context.
-        let assistantHost = HostServicesImpl(appID: "assistant", dataRootURL: pluginDataRoot,
+        let sageHost = HostServicesImpl(appID: "sage", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
                                              hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Live Canvas (M7 Slice 7) is likewise a host-embedded built-in — its
-        // pane reads `AppEnvironment.canvasStore` directly (see `CanvasApp`).
-        let canvasHost = HostServicesImpl(appID: "canvas", dataRootURL: pluginDataRoot,
+        // Live Scry (M7 Slice 7) is likewise a host-embedded built-in — its
+        // pane reads `AppEnvironment.canvasStore` directly (see `ScryApp`).
+        let scryHost = HostServicesImpl(appID: "scry", dataRootURL: pluginDataRoot,
                                           secretStore: secrets, themeManager: themeManager,
                                           hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Files (M1) — a host-embedded built-in like Assistant and Canvas. It
+        // Hoard (M1) — a host-embedded built-in like Sage and Scry. It
         // inherits the host's unsandboxed filesystem access; its own views read
         // `AppEnvironment` directly.
-        let filesHost = HostServicesImpl(appID: "files", dataRootURL: pluginDataRoot,
+        let hoardHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
                                          secretStore: secrets, themeManager: themeManager,
                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
-        // Files' MCP server and agent context are built HERE, not in
-        // `FilesApp`, for the same reason its settings are: the SDK entry
+        // Hoard' MCP server and agent context are built HERE, not in
+        // `HoardApp`, for the same reason its settings are: the SDK entry
         // points are static and see only `HostServices`, while the server must
-        // drive the live stores on `AppEnvironment`. Files is host-embedded, so
+        // drive the live stores on `AppEnvironment`. Hoard is host-embedded, so
         // the host is entitled to wire it directly.
         var filesRegistration = RegisteredApp.builtIn(
-            FilesApp.self,
+            HoardApp.self,
             summary: "Browse, search and organise your files — keyboard-driven, git-aware, and wired into the assistant.",
-            host: filesHost,
+            host: hoardHost,
             chromeFillOverride: {
-                FilesApp.surfaceFill(
-                    opacity: appAppearanceStore.surfaceOpacity("files"),
+                HoardApp.surfaceFill(
+                    opacity: appAppearanceStore.surfaceOpacity("hoard"),
                     base: themeManager.tokens.background
                 )
             })
         filesRegistration.mcpServerFactory = { [weak environment] in
-            guard let environment else { return MCPAppServer(appID: FilesApp.id) }
-            return FilesMCPServer.make(environment: environment)
+            guard let environment else { return MCPAppServer(appID: HoardApp.id) }
+            return HoardMCPServer.make(environment: environment)
         }
 
         // Publish what the user is looking at, so the assistant has the
         // browser's state without having to ask for it.
-        _ = filesHost.context.register { [weak environment] in
+        _ = hoardHost.context.register { [weak environment] in
             guard let environment,
                   let summary = environment.filesPaneCoordinator.contextSummary else { return nil }
             return AgentContextSnapshot(
-                kind: "files", title: "Files", text: summary)
+                kind: "hoard", title: "Hoard", text: summary)
         }
 
         let loaded = loader.loadAll(from: pluginDirs)
         registry.install(
             builtIn: [
                 RegisteredApp.builtIn(
-                    AssistantApp.self,
+                    SageApp.self,
                     summary: "Your in-workspace AI assistant — chat about your code, run gated tools, and drive the terminal and git without leaving Ainkrad.",
-                    host: assistantHost,
+                    host: sageHost,
                     // Reading `surfaceOpacity` inside this closure — invoked
                     // synchronously from `TileLayoutView.hasTranslucentPane`
                     // and `BlockView.headerBackground` during their view
                     // bodies — registers an @Observable dependency, so dialing
                     // the slider live re-evaluates the backdrop + header.
                     chromeFillOverride: {
-                        AssistantApp.surfaceFill(
-                            opacity: appAppearanceStore.surfaceOpacity("assistant"),
+                        SageApp.surfaceFill(
+                            opacity: appAppearanceStore.surfaceOpacity("sage"),
                             base: themeManager.tokens.background
                         )
                     }
                 ),
                 RegisteredApp.builtIn(
-                    CanvasApp.self,
-                    summary: "The Live Canvas — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
-                    host: canvasHost),
+                    ScryApp.self,
+                    summary: "The Live Scry — the assistant lays out tables, diagrams, charts, code and status as movable HUD cards.",
+                    host: scryHost),
                 filesRegistration
             ],
             loaded: loaded.apps,

@@ -3,7 +3,7 @@ import Testing
 import AinkradAppKitContract
 
 /// The information-architecture invariant for Settings: everything is at most
-/// two levels deep, and every section that used to live behind the Assistant's
+/// two levels deep, and every section that used to live behind the Sage's
 /// pill bar has a home among the INTELLIGENCE pages.
 @Suite("Settings information architecture")
 @MainActor
@@ -22,7 +22,7 @@ struct SettingsIATests {
         ])
     }
 
-    @Test("every former Assistant tab section has a home in INTELLIGENCE")
+    @Test("every former Sage tab section has a home in INTELLIGENCE")
     func everyAssistantSectionIsPlaced() {
         let labels = Set(catalog.pages(in: .intelligence).flatMap { $0.allFields.map(\.label) })
         for required in ["Connections", "Model", "Permissions", "Sandbox", "Tool hooks",

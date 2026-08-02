@@ -136,7 +136,7 @@ enum VaultMigration {
         let apps = home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
 
         return [
-            // The assistant's own documents go to `Assistant/`, not `Config/` —
+            // The assistant's own documents go to `Sage/`, not `Config/` —
             // the published vault layout, and where the app now reads them.
             Row(label: "agents.json+connections.json", reportPrefix: "",
                 source: documents, destination: home.shared(.agents),

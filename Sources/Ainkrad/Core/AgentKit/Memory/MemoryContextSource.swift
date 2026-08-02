@@ -18,6 +18,6 @@ enum MemoryContextSource {
         let body = loaded
             .map { "### \($0.0.rawValue)\n\($0.1)" }
             .joined(separator: "\n\n")
-        return AgentContextSnapshot(kind: kind, title: "Assistant Memory", text: body)
+        return AgentContextSnapshot(kind: kind, title: "Sage Memory", text: body)
     }
 }

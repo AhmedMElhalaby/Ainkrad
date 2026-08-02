@@ -44,7 +44,7 @@ extension AppEnvironment {
         assistantDocuments: PersistenceStore
     ) {
         let persistence = FileDocumentStore(rootURL: home.shared(.config))
-        // The assistant's own documents live under `Assistant/`, not `Config/` —
+        // Sage's own documents live under `Assistant/`, not `Config/` —
         // `agents.json` and `connections.json` sit directly in it, alongside the
         // `memory/`, `skills/`, `commands/` and `sessions/` subdirectories. That
         // is the published vault layout other apps in the family build against,
@@ -87,6 +87,11 @@ extension AppEnvironment {
             pluginDirs.append(home.cacheRoot.appendingPathComponent("DevPlugins", isDirectory: true))
         }
         let pluginDataRoot = home.vaultRoot.appendingPathComponent("Apps", isDirectory: true)
+        // v0.16.0 app rename. MUST precede every HostServicesImpl below: that
+        // initialiser resolves `<pluginDataRoot>/<appID>`, so a store built
+        // before the move points at a fresh empty directory and silently
+        // orphans the user's documents instead of reporting anything.
+        AppDataDirectoryRename.run(root: pluginDataRoot)
         let retainedDataRoot = home.vaultRoot
             .appendingPathComponent("Apps", isDirectory: true)
             .appendingPathComponent(".retained", isDirectory: true)
@@ -206,7 +211,7 @@ extension AppEnvironment {
     ) {
         // AgentKit services (M5 Phase B): one shared streaming HTTP client
         // backs both providers; `AgentSession` is the single read-only chat
-        // loop the Assistant built-in (and, later, the ambient island) bind to.
+        // loop the Sage built-in (and, later, the ambient island) bind to.
         let streamingHTTP = URLSessionStreamingHTTPClient()
         let agentConfigStore = AgentConfigStore(persistence: persistence)
         let agentContextSettingsStore = AgentContextSettingsStore(persistence: persistence)
@@ -216,7 +221,7 @@ extension AppEnvironment {
             currentWorkspaceID: { [weak workspaceManager] in
                 workspaceManager?.activeWorkspaceID ?? UUID()
             })
-        // Assistant memory (M7 Slice 1). Degrade-don't-crash: if the FTS index can't
+        // Sage memory (M7 Slice 1). Degrade-don't-crash: if the FTS index can't
         // open, the assistant runs memory-less this launch (mirrors FileDocumentStore's
         // corrupt-file quarantine posture) rather than taking the app down.
         // Memory is vault. Its markdown files and profile are authored/curated,

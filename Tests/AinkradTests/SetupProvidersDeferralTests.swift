@@ -329,8 +329,8 @@ struct SetupProvidersDeferralTests {
 
     /// The premise an earlier version of this asserted — "nothing can become
     /// active without having passed a probe" — is FALSE:
-    /// `AssistantSettingsView+Connections.addConnection` writes a connection and
-    /// its Keychain token with no probe, and `AssistantModelPicker` makes any
+    /// `SageSettingsView+Connections.addConnection` writes a connection and
+    /// its Keychain token with no probe, and `SageModelPicker` makes any
     /// connection active unconditionally. So an unverified credential must not
     /// silently satisfy the one step whose entire purpose is verification.
     @Test func anunverifiedExistingConnectionDoesNotSettleTheDebt() async {

@@ -65,7 +65,7 @@ struct AgentContextServiceTests {
 
         #expect(result.contains("Git — main"))
         #expect(result.contains("clean"))
-        #expect(!result.contains("Assistant Memory"))
+        #expect(!result.contains("Sage Memory"))
     }
 
     @Test("oversized snapshot text is truncated with marker")

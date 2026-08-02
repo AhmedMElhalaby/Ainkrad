@@ -45,7 +45,7 @@ ok()   { echo "  ✓ $*"; }
 # `*Plugin` schemes, not `*Feature` — the test action is configured on the
 # plugin scheme, which is not guessable from the repo name.
 PLUGIN_REPOS=(
-  "AinkradTerminal:TerminalPlugin"
+  "AinkradRune:RunePlugin"
   "GitMage:GitMagePlugin"
   "AinkradLore:LorePlugin"
   "AinkradLeyline:LeylinePlugin"
@@ -62,7 +62,7 @@ echo "▸ AinkradAppKit pin equality"
 # Fail loudly rather than skipping — this is exactly the kind of temporary
 # arrangement that gets forgotten.
 path_deps=0
-for repo in Ainkrad AinkradKit AinkradPluginTemplate AinkradTerminal GitMage AinkradLore AinkradLeyline; do
+for repo in Ainkrad AinkradKit AinkradPluginTemplate AinkradRune GitMage AinkradLore AinkradLeyline; do
   dir="$SIBLINGS/$repo"; [[ "$repo" == "Ainkrad" ]] && dir="$HOST_ROOT"
   [[ -d "$dir" ]] || continue
   for manifest in "$dir/project.yml" "$dir/Package.swift"; do
@@ -106,7 +106,7 @@ if [[ -z "$host_pin" ]]; then
   fi
 else
   echo "  host: $host_pin"
-  for repo in AinkradKit AinkradPluginTemplate AinkradTerminal GitMage AinkradLore AinkradLeyline; do
+  for repo in AinkradKit AinkradPluginTemplate AinkradRune GitMage AinkradLore AinkradLeyline; do
     dir="$SIBLINGS/$repo"
     [[ -d "$dir" ]] || { echo "  – $repo (not present, skipped)"; continue; }
     pin=""
@@ -235,7 +235,7 @@ while read -r repo name url rev; do
     fail "$repo pins $name @ ${rev:0:8}, which does not exist in $url"
   fi
 done < <(
-  for repo in Ainkrad AinkradKit AinkradPluginTemplate AinkradTerminal GitMage AinkradLore AinkradLeyline; do
+  for repo in Ainkrad AinkradKit AinkradPluginTemplate AinkradRune GitMage AinkradLore AinkradLeyline; do
     dir="$SIBLINGS/$repo"; [[ "$repo" == "Ainkrad" ]] && dir="$HOST_ROOT"
     [[ -d "$dir" ]] || continue
     for manifest in "$dir/project.yml" "$dir/Package.swift"; do

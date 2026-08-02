@@ -15,7 +15,7 @@ import Foundation
 ///
 /// The `[String: String]` shape keeps this pure and testable: no SwiftUI, no
 /// stores. Each step's view builds the dictionary from its own `@State` (the
-/// Assistant step's `isCustom` lives in the view, and arrives here as
+/// Sage step's `isCustom` lives in the view, and arrives here as
 /// `"isCustom": "true"`).
 ///
 /// Steps whose requirement is STRUCTURAL rather than a text field — Home wants
@@ -23,7 +23,7 @@ import Foundation
 /// are expressed here too, as a flag in the same dictionary
 /// (`"hasHome"`, `"isConnected"`). They were briefly left out on the grounds
 /// that a probe result "isn't a field"; that was wrong on both counts. The
-/// Assistant step already passes pure view state (`isCustom`) the same way, so
+/// Sage step already passes pure view state (`isCustom`) the same way, so
 /// the shape never needed to flex — and leaving them out made `canAdvance`
 /// return `true` for two steps the UI blocks, which is a trap for any future
 /// caller that reads the function's name and believes it.

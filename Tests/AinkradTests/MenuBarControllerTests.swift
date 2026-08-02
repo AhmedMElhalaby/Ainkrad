@@ -30,7 +30,7 @@ struct MenuBarControllerTests {
     /// The first-run gate is a full-screen scrim INSIDE the window plus a
     /// window-local key monitor. The status item is on `NSStatusBar.system` and
     /// its popover is anchored outside the window, so neither reaches it — it
-    /// was the one route to the full Assistant while setup was still running,
+    /// was the one route to the full Sage while setup was still running,
     /// and everything done through it persisted into the provisional home that
     /// the Home step's swap discards. It must simply not exist while gated.
     @Test func suppressedInstallCreatesNoStatusItem() {

@@ -9,7 +9,7 @@ struct MediaToolsRegistrationTests {
     private func makeImageTool() -> ImageGenerateTool {
         ImageGenerateTool(
             backend: OpenAIImageBackend(secrets: InMemorySecretStore(), http: URLSessionDataHTTPClient()),
-            store: CanvasStore(persistence: InMemoryPersistenceStore(), sessionKey: "s"))
+            store: ScryStore(persistence: InMemoryPersistenceStore(), sessionKey: "s"))
     }
 
     @Test func imageGenerateIsReadClass() {

@@ -21,11 +21,15 @@ struct SettingsPathMigrationTests {
             ("workspace.lsp",                  "intelligence.tools"),
             ("workspace.skills",               "intelligence.skills"),
             ("workspace.memory",               "intelligence.memory"),
-            // NOT workspace.appearance: the Assistant's appearance settings
+            // NOT workspace.appearance: the Sage's appearance settings
             // (surface opacity, blur, message font/size) never moved there —
-            // they are still `AssistantSettingsView.appearanceSection`, on the
-            // Assistant's own app page.
-            ("assistant.appearance",           "app.assistant")
+            // they are still `SageSettingsView.appearanceSection`, on the
+            // Sage's own app page.
+            ("assistant.appearance",           "app.sage"),
+            // The v0.16.0 app rename: an app page id derives from the app id.
+            ("app.assistant",                  "app.sage"),
+            ("app.files",                      "app.hoard"),
+            ("app.canvas",                     "app.scry")
         ]
         for (old, new) in cases {
             let resolved = SettingsPathAliases.resolve(SettingsPath(rawValue: old)!)

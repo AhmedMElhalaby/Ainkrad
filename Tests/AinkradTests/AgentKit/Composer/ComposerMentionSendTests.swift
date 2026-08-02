@@ -11,7 +11,7 @@ import Foundation
     }
     @Test func outgoingTextEmbedsEmbedModeMention() throws {
         let path = try tempFile("struct A {}")
-        let out = AssistantComposerBar.outgoingText(
+        let out = SageComposerBar.outgoingText(
             draft: "explain @\(path)",
             mentions: [ComposerMention(path: path, mode: .embed)])
         #expect(out.contains("<mentioned_files>"))
@@ -19,7 +19,7 @@ import Foundation
     }
     @Test func outgoingTextLeavesReferenceModeAsPathOnly() throws {
         let path = try tempFile("struct A {}")
-        let out = AssistantComposerBar.outgoingText(
+        let out = SageComposerBar.outgoingText(
             draft: "explain @\(path)",
             mentions: [ComposerMention(path: path, mode: .reference)])
         #expect(out == "explain @\(path)")
