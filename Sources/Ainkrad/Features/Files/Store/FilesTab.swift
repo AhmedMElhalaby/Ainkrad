@@ -209,6 +209,20 @@ final class FilesTab: Identifiable {
         return true
     }
 
+    /// Retargets onto `entry` for a context menu, unless it is already part of
+    /// the selection.
+    ///
+    /// The rule everywhere: right-clicking one of three selected files acts on
+    /// all three; right-clicking a fourth acts on that one alone. Getting this
+    /// backwards means a menu that appears over one file and deletes others.
+    func targetContextMenu(at entry: FileEntry) {
+        guard !selection.contains(entry.url) else { return }
+        // `placeCursor` already replaces the selection wholesale, so the row
+        // ends up both cursored and solely selected — which is what the menu's
+        // actions then operate on.
+        placeCursor(at: entry)
+    }
+
     func selectAll() {
         selection = Set(visibleEntries.map(\.url))
     }

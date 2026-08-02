@@ -128,4 +128,33 @@ struct FilesTabTests {
         #expect(tab.visibleEntries.count == 3)
     }
 
+
+    // Right-clicking one of three selected files must act on all three;
+    // right-clicking a fourth acts on that one alone. Backwards, this is a
+    // menu that appears over one file and deletes others.
+    @Test("a context menu on a selected row keeps the whole selection")
+    func contextMenuKeepsSelection() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        let entries = tab.visibleEntries
+        tab.selection = Set(entries.map(\.url))
+
+        tab.targetContextMenu(at: entries[0])
+
+        #expect(tab.selection.count == entries.count)
+    }
+
+    @Test("a context menu on an unselected row retargets onto it alone")
+    func contextMenuRetargets() {
+        let tab = FilesTab(directory: home, fileSystem: makeFS())
+        let entries = tab.visibleEntries
+        tab.selection = [entries[0].url]
+
+        tab.targetContextMenu(at: entries[1])
+
+        // Solely selected AND cursored — the menu's actions read the
+        // selection, so it must name exactly the row that was clicked.
+        #expect(tab.selection == [entries[1].url])
+        #expect(tab.cursorEntry == entries[1])
+    }
+
 }

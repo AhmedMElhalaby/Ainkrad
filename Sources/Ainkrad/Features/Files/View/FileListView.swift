@@ -20,6 +20,8 @@ struct FileListView: View {
     /// the list stays testable and unaware of how status is fetched.
     let gitStatus: (URL) -> GitFileStatus?
     let isCut: (URL) -> Bool
+    /// Right-click actions. The list itself performs none of them.
+    let menuActions: FileRowMenuActions
     /// Opening a search hit navigates to it — the list cannot do that itself
     /// because a hit may live several directories down.
     let onOpenHit: (SearchHit) -> Void
@@ -81,6 +83,7 @@ struct FileListView: View {
                                 onTap: { tab.placeCursor(at: entry) },
                                 onDoubleTap: { tab.descend(into: entry) }
                             )
+                            .fileRowMenu(entry: entry, tab: tab, actions: menuActions)
                             .id(entry.url)
                         }
                     }
@@ -122,6 +125,7 @@ struct FileListView: View {
                             isCut: isCut(hit.entry.url),
                             onTap: { tab.selection = [hit.entry.url] },
                             onDoubleTap: { onOpenHit(hit) })
+                            .fileRowMenu(entry: hit.entry, tab: tab, actions: menuActions)
                         Text(hit.relativeDirectory)
                             .font(AinkradFontResolver.font(.caption, typography: typo))
                             .foregroundStyle(theme.foreground.opacity(0.4))
@@ -151,6 +155,7 @@ struct FileListView: View {
                     iconSize: iconSize * 2.2,
                     onTap: { tab.placeCursor(at: entry) },
                     onDoubleTap: { tab.descend(into: entry) })
+                    .fileRowMenu(entry: entry, tab: tab, actions: menuActions)
                     .id(entry.url)
             }
         }

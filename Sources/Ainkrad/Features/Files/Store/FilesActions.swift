@@ -147,6 +147,10 @@ final class FilesActions {
         prompt = .rename(entry)
     }
 
+    /// Rename a specific row — what the context menu calls, since the row you
+    /// right-clicked is the one you mean, cursor or not.
+    func beginRename(_ entry: FileEntry) { prompt = .rename(entry) }
+
     func commitRename(_ entry: FileEntry, to newName: String) async {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != entry.name else { prompt = nil; return }

@@ -78,6 +78,7 @@ struct FilesRootView: View {
                     useGrid: settings.useGrid,
                     gitStatus: { git.status(for: $0) },
                     isCut: { environment.filesClipboard.isCut($0) },
+                    menuActions: rowMenu(store: store, actions: actions),
                     onOpenHit: { hit in accept(hit, store: store) }
                 )
                 FilesStatusBar(
@@ -241,6 +242,25 @@ struct FilesRootView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: toast)
+    }
+
+    /// The right-click menu's wiring. Everything here already exists as a
+    /// keyboard chord — this is the discoverable path to the same actions,
+    /// which the app had none of until now.
+    private func rowMenu(store: FilesPaneStore, actions: FilesActions) -> FileRowMenuActions {
+        let pins = environment.filesPinnedRoots
+        return FileRowMenuActions(
+            open: { store.activeTab.descend(into: $0) },
+            rename: { actions.beginRename($0) },
+            copy: { actions.copySelection() },
+            cut: { actions.cutSelection() },
+            paste: { Task { await actions.paste() } },
+            compress: { Task { await actions.archiveSelection() } },
+            extractArchives: { Task { await actions.extractSelection() } },
+            trash: { Task { await actions.trashSelection() } },
+            togglePin: { pins.toggle($0.url) },
+            canExtract: { SystemArchiveService().canExtract($0.url) },
+            isPinned: { pins.isPinned($0.url) })
     }
 
     /// `/` and ⌘P work off data already in memory; ⌘F walks the disk, so it

@@ -163,6 +163,15 @@ struct FilesKeyboardHandling: ViewModifier {
                 store.persist()
                 return .handled
             }
+            // ⌘R renames, alongside F2. F2 is the orthodox chord this app was
+            // designed around, but on a Mac laptop it means Fn+F2 — so the
+            // most ordinary operation in a file manager was the hardest to
+            // reach. ⌘R costs nothing and is what a Mac user will try.
+            .onKeyPress(keys: ["r"], phases: .down) { press in
+                guard navigationEnabled, press.modifiers == [.command] else { return .ignored }
+                actions.beginRename()
+                return .handled
+            }
             // ⌘D pins the current folder. The design specified favourites but
             // not how to add one; this is the chord, and the sidebar's context
             // menu is how you take one away.
