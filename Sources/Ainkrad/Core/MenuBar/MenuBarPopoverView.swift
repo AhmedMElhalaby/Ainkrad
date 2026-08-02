@@ -2,18 +2,18 @@ import SwiftUI
 import AinkradAppKit
 import AinkradHostRuntime
 
-/// The menu-bar popover: the SAME Assistant surface as ⌘⇧Space, plus live run
+/// The menu-bar popover: the SAME Sage surface as ⌘⇧Space, plus live run
 /// status and a quick Agent/model switch. Complements — does not replace —
-/// ⌘⇧Space and the main Assistant pane (all three share `agentSession`).
+/// ⌘⇧Space and the main Sage pane (all three share `agentSession`).
 @MainActor
 struct MenuBarPopoverView: View {
     @Environment(AppEnvironment.self) private var environment
     let presence: MenuBarPresence
 
-    /// Owned locally — same pattern as `AssistantComposerBar`'s caller: the
+    /// Owned locally — same pattern as `SageComposerBar`'s caller: the
     /// connection·model picker's logic lives in this `@State`-held model,
     /// independent of whichever surface is rendering the pill.
-    @State private var modelPicker = AssistantModelPickerModel()
+    @State private var modelPicker = SageModelPickerModel()
 
     var body: some View {
         let tokens = environment.themeManager.tokens
@@ -29,7 +29,7 @@ struct MenuBarPopoverView: View {
                 startPoint: .leading, endPoint: .trailing
             )
             .frame(height: 1)
-            AssistantRootView(showsHeader: false, autoFocusComposer: true)
+            SageRootView(showsHeader: false, autoFocusComposer: true)
                 .frame(minHeight: 260, maxHeight: 360)
             quickSwitch(tokens: tokens)
         }
@@ -47,10 +47,10 @@ struct MenuBarPopoverView: View {
             RecordingIndicatorView(status: environment.voiceService.pushToTalk.status, tokens: tokens,
                                     notice: environment.voiceService.lastNotice)
             AinkradIconButton(systemName: "arrow.up.forward.app") {
-                environment.workspaceManager.activeWorkspace.tileLayout.openApp(AssistantApp.id)
+                environment.workspaceManager.activeWorkspace.tileLayout.openApp(SageApp.id)
                 presence.close()
             }
-            .help("Open in the Assistant pane")
+            .help("Open in the Sage pane")
         }
         .padding(.horizontal, 14).frame(height: 40)
     }
@@ -78,14 +78,14 @@ struct MenuBarPopoverView: View {
     }
 
     /// Quick Agent + model switch strip — the real Slice 5 controls
-    /// (`AgentSwitcherView`, `AssistantConnectionModelPicker`), driving the
+    /// (`AgentSwitcherView`, `SageConnectionModelPicker`), driving the
     /// canonical `AgentStore.setActive` / `RuntimeOptionsStore.pinModel` seams.
     /// Same components the composer bar embeds; this is a second, independent
     /// surface onto the same shared stores.
     private func quickSwitch(tokens: DesignTokens) -> some View {
         HStack(spacing: 8) {
             AgentSwitcherView(store: environment.agentStore, tokens: tokens)
-            AssistantConnectionModelPicker(
+            SageConnectionModelPicker(
                 model: modelPicker,
                 tokens: tokens,
                 onManageConnections: {

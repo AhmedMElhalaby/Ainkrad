@@ -21,12 +21,18 @@ enum SettingsPathAliases {
         "assistant.data":       "intelligence.privacy",
         "assistant.web":        "intelligence.tools",
         "assistant.voice":      "workspace.soundAndVoice",
-        // The Assistant's appearance (surface opacity, blur, message font and
-        // size) did NOT move to WORKSPACE ▸ Appearance — that page is the
-        // workspace theme, Living Sky, and app icon. Those controls are still
-        // `AssistantSettingsView.appearanceSection`, which renders on the
-        // Assistant's own app page.
-        "assistant.appearance": "app.assistant"
+        // Sage's appearance (surface opacity, blur, message font and size) did
+        // NOT move to WORKSPACE ▸ Appearance — that page is the workspace
+        // theme, Living Sky, and app icon. Those controls are still
+        // `SageSettingsView.appearanceSection`, which renders on Sage's own
+        // app page.
+        "assistant.appearance": "app.sage",
+        // The v0.16.0 app rename. An app's settings page id is derived from its
+        // app id, so renaming the app moved its page. These keep a persisted
+        // selection or an old deep-link resolving instead of dead-ending.
+        "app.assistant":        "app.sage",
+        "app.files":            "app.hoard",
+        "app.canvas":           "app.scry",
     ]
 
     /// Follows the alias chain to a fixed point, so retiring an already-retired

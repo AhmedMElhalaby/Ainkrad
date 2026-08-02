@@ -14,8 +14,8 @@ struct DocumentConformanceTests {
         #expect(UsageLedgerDocument.documentID == "usage-ledger")
         #expect(RouterOutcomeDocument.documentID == "router-outcomes")
         #expect(AuthProfilesDocument.documentID == "auth-profiles")
-        #expect(AssistantRuntimeOptions.documentID == "assistant-runtime")
-        #expect(AssistantWorkspaceSettings.documentID == "assistant-workspace")
+        #expect(SageRuntimeOptions.documentID == "assistant-runtime")
+        #expect(SageWorkspaceSettings.documentID == "assistant-workspace")
         #expect(MCPServersDocument.documentID == "mcp-servers")
         #expect(LSPServersDocument.documentID == "lsp-servers")
         #expect(AgentRunsDocument.documentID == "agent-runs")
@@ -23,7 +23,7 @@ struct DocumentConformanceTests {
         #expect(SkillCommandsDocument.documentID == "skill-commands")
         #expect(DiscoveredModelsDocument.documentID == "discovered-models")
         #expect(SchedulesDocument.documentID == "agent-schedules")
-        #expect(CanvasWorkspaceDocument.documentID == "agent-canvas")
+        #expect(ScryWorkspaceDocument.documentID == "agent-canvas")
         #expect(VoiceSettingsDocument.documentID == "voice-settings")
     }
 

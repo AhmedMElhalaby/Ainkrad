@@ -1,7 +1,7 @@
 // Tests/AinkradTests/ComposerCommandsWiringTests.swift
 //
 // M7 Slice 5c Task 22a: `/compact` and `/export` wiring. The plan's draft test
-// referenced `AssistantCommands.makeBuiltins`, which never existed — the real
+// referenced `SageCommands.makeBuiltins`, which never existed — the real
 // factory is `BuiltinCommands.make` (Commands/CommandRegistry.swift). These
 // tests exercise it against a live `AgentSession` so a vacuous "command is
 // registered" check isn't the only coverage.

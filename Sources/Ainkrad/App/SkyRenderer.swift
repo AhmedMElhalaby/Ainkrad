@@ -19,7 +19,7 @@ extension Color {
     }
 }
 
-/// Canvas drawing for every layer of the ambient sky. Pure functions of
+/// Scry drawing for every layer of the ambient sky. Pure functions of
 /// (time, size, tokens) — all motion math lives in `SkyMath`, all gating in
 /// `AmbientSkyView`. Kept apart from the view so each effect stays a small,
 /// independently readable pass.

@@ -13,7 +13,7 @@ struct WebSearchSettingsDocument: PersistableDocument {
     var searxngURL: String = ""
 }
 
-/// Backs the Assistant Settings WEB section's provider picker. Mirrors the
+/// Backs the Sage Settings WEB section's provider picker. Mirrors the
 /// other `@Observable` settings stores (`VoiceSettingsStore`, `AppAppearanceStore`):
 /// loads the persisted document at init, writes through on every setter call.
 @MainActor

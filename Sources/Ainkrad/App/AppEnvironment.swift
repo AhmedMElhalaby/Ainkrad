@@ -6,7 +6,7 @@ import AinkradHostRuntime
 /// Persisted root directory for the `@`-mention file index (M7 Slice 5c Task 22).
 /// Defaults to the user's home directory until a later folder-picker (Task 22b,
 /// not built here) lets the user change it.
-struct AssistantWorkspaceSettings: PersistableDocument {
+struct SageWorkspaceSettings: PersistableDocument {
     static let documentID = "assistant-workspace"
     var workingDirectoryPath: String
 
@@ -50,35 +50,35 @@ final class AppEnvironment {
     let quitCoordinator: QuitCoordinator
     let generalSettingsStore: GeneralSettingsStore
     let appAppearanceStore: AppAppearanceStore
-    /// Files' own display settings (icon size, metadata columns). Constructed
+    /// Hoard' own display settings (icon size, metadata columns). Constructed
     /// in `init` from `persistence` rather than threaded through bootstrap's
     /// parameter list — it depends on nothing else.
-    let filesSettingsStore: FilesSettingsStore
-    /// Tracks open Files panes so F5/F6 can resolve "the other pane". Must live
+    let filesSettingsStore: HoardSettingsStore
+    /// Tracks open Hoard panes so F5/F6 can resolve "the other pane". Must live
     /// here, not in a pane: host tiling destroys panes, and closing the one you
     /// copied FROM would otherwise take the coordination with it.
     let filesPaneCoordinator: PaneCoordinator
-    /// One shared filesystem service for every Files pane. M1 had each pane
+    /// One shared filesystem service for every Hoard pane. M1 had each pane
     /// construct its own; `PaneCoordinator` makes panes talk to each other, so
     /// they need to agree on one.
     let filesSystemService: LocalFileSystemService
-    /// The undo stack and engine every Files mutation funnels through —
+    /// The undo stack and engine every Hoard mutation funnels through —
     /// keyboard, context menu, and (from M4) the assistant alike, which is what
     /// makes an assistant-initiated batch rename ⌘Z-able like any other.
     let filesUndoStack: UndoStack
     let filesOperationEngine: FileOperationEngine
-    /// Per-repo git status for the Files browser. Shelling out to `git`, cached
+    /// Per-repo git status for the Hoard browser. Shelling out to `git`, cached
     /// per repository — see `GitStatusProvider` for why the cache is the design
     /// rather than an optimisation.
     let filesGitStatusProvider: GitStatusProvider
     /// ⌘C/⌘X/⌘V, backed by `NSPasteboard` so it interoperates with the Finder.
-    let filesClipboard: FilesClipboard
+    let filesClipboard: HoardClipboard
     /// Sidebar favourites. App-wide rather than per-pane: a folder pinned in
     /// one pane must appear in every pane.
-    let filesPinnedRoots: FilesPinnedRoots
+    let filesPinnedRoots: HoardPinnedRoots
     let webSearchSettingsStore: WebSearchSettingsStore
     let mediaSettingsStore: MediaSettingsStore
-    /// Assistant session-share (M8) — writes self-contained HTML share artifacts
+    /// Sage session-share (M8) — writes self-contained HTML share artifacts
     /// to disk and tracks their metadata, backing the composer's "Share…" flow.
     let sessionShareStore: SessionShareStore
     let skySettingsStore: SkySettingsStore
@@ -120,8 +120,8 @@ final class AppEnvironment {
     let editJournal: EditJournal
     let subagentCoordinator: SubagentCoordinator
     let runManager: RunManager
-    /// Persisted history of Assistant chats, surfaced by the block's history sidebar.
-    let assistantSessionStore: AssistantSessionStore
+    /// Persisted history of Sage chats, surfaced by the block's history sidebar.
+    let assistantSessionStore: SageSessionStore
     /// M7 Slice 3b (Autonomy: scheduling/triggers) — the persisted `AgentSchedule`s
     /// the `ScheduleUIView` create/edit list reads/writes, `scheduleRunner` (time
     /// triggers) and `fileChangeWatcher`+`triggerDispatcher` (event triggers) fire
@@ -162,7 +162,7 @@ final class AppEnvironment {
     let oauthStore: OAuthCredentialStore
     let commandRegistry: CommandRegistry
     /// The root directory `workspaceFileIndex` was built from — persisted via
-    /// `AssistantWorkspaceSettings`, defaulting to the home directory. Task 22b's
+    /// `SageWorkspaceSettings`, defaulting to the home directory. Task 22b's
     /// folder-picker will add a setter that persists a new root and rebuilds the
     /// index; not built here.
     let assistantWorkingDirectory: URL
@@ -194,15 +194,15 @@ final class AppEnvironment {
     /// state — wrapping `runManager` via `RunManagerMenuBarAdapter`. Constructed
     /// in `bootstrap()` alongside `runManager` so both share the same instance.
     let menuBarPresence: MenuBarPresence
-    /// M7 Slice 7 (Live Canvas): the spatial-card store `CanvasApp`'s pane binds
-    /// to and `canvas_render` (appended to the shared `agentToolRegistry` in
+    /// M7 Slice 7 (Live Scry): the spatial-card store `ScryApp`'s pane binds
+    /// to and `scry_render` (appended to the shared `agentToolRegistry` in
     /// `bootstrap()`) mutates — same one-instance-shared-everywhere pattern as
     /// `runManager`/`scheduleStore` above.
-    let canvasStore: CanvasStore
+    let canvasStore: ScryStore
     /// Terminal streaming (Task 7): the store `run_terminal`'s live stdout/stderr
     /// lands in and `AgentTurnTimelineView` reads for the running tool card — one
     /// instance shared by the main `agentSession`'s `RunTerminalTool` and the
-    /// Assistant timeline, same pattern as `canvasStore` above.
+    /// Sage timeline, same pattern as `canvasStore` above.
     let toolStreamStore: ToolStreamStore
     /// Tool Hooks (M8 assistant-tool-hooks Task 5): persisted, observable CRUD
     /// over user-authored PreToolUse/PostToolUse hooks — one instance shared
@@ -328,7 +328,7 @@ final class AppEnvironment {
         editJournal: EditJournal,
         subagentCoordinator: SubagentCoordinator,
         runManager: RunManager,
-        assistantSessionStore: AssistantSessionStore,
+        assistantSessionStore: SageSessionStore,
         scheduleStore: ScheduleStore,
         scheduleRunner: ScheduleRunner,
         triggerDispatcher: TriggerDispatcher,
@@ -353,7 +353,7 @@ final class AppEnvironment {
         skillWatcher: SkillWatcher,
         skillCommandStore: SkillCommandStore,
         menuBarPresence: MenuBarPresence,
-        canvasStore: CanvasStore,
+        canvasStore: ScryStore,
         toolStreamStore: ToolStreamStore,
         toolHooksStore: ToolHooksStore,
         customCommandStore: CustomCommandStore,
@@ -377,7 +377,7 @@ final class AppEnvironment {
         self.quitCoordinator = quitCoordinator
         self.generalSettingsStore = generalSettingsStore
         self.appAppearanceStore = appAppearanceStore
-        self.filesSettingsStore = FilesSettingsStore(persistence: persistence)
+        self.filesSettingsStore = HoardSettingsStore(persistence: persistence)
         self.filesPaneCoordinator = PaneCoordinator()
         self.filesSystemService = LocalFileSystemService()
         let filesUndoStack = UndoStack(persistence: persistence)
@@ -385,8 +385,8 @@ final class AppEnvironment {
         self.filesOperationEngine = FileOperationEngine(
             mutator: LocalFileMutator(), trash: SystemTrashService(), undoStack: filesUndoStack)
         self.filesGitStatusProvider = GitStatusProvider(fileSystem: LocalFileSystemService())
-        self.filesClipboard = FilesClipboard()
-        self.filesPinnedRoots = FilesPinnedRoots(persistence: persistence)
+        self.filesClipboard = HoardClipboard()
+        self.filesPinnedRoots = HoardPinnedRoots(persistence: persistence)
         self.webSearchSettingsStore = webSearchSettingsStore
         self.mediaSettingsStore = mediaSettingsStore
         self.sessionShareStore = sessionShareStore

@@ -17,10 +17,10 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     /// launch, torn down on quit (M7 Slice 7).
     var menuBarController: MenuBarController?
     /// Wired alongside the above. Chat-history writes are coalesced (see
-    /// `AssistantSessionStore.syncActive`), so the last few hundred
+    /// `SageSessionStore.syncActive`), so the last few hundred
     /// milliseconds of a transcript may still be pending when the user quits —
     /// this is where that gets forced to disk.
-    var assistantSessionStore: AssistantSessionStore?
+    var assistantSessionStore: SageSessionStore?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         quitCoordinator?.requestTerminate() ?? .terminateNow

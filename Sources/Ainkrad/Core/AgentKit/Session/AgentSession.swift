@@ -27,7 +27,7 @@ final class AgentSession {
     developer workspace. You can read and edit files using the provided tools. \
     Answer concisely and precisely. For structured or comparative output — \
     tables, diagrams, charts, code, status boards, or several related cards — \
-    prefer the `canvas_render` tool over inline chat; it persists as movable \
+    prefer the `scry_render` tool over inline chat; it persists as movable \
     HUD cards you can update in place for live progress. Keep short \
     conversational answers and one-off inline snippets in chat. Don't invoke \
     tools or skills for greetings, small talk, or when no concrete task is \
@@ -672,7 +672,7 @@ final class AgentSession {
         var iterations = 0
         let resolved = await resolveTurn()
         guard let connection = resolved.connection else {
-            state = .failed("No connection configured. Add one in Assistant settings.")
+            state = .failed("No connection configured. Add one in Sage settings.")
             return
         }
         let allKeys = authProfiles?.keys(for: connection) ?? (connections.token(for: connection).map { [$0] } ?? [])
@@ -693,7 +693,7 @@ final class AgentSession {
             }
         } catch {
             state = .failed("Your Claude subscription needs to be re-authorized. " +
-                            "Open Assistant settings and sign in again.")
+                            "Open Sage settings and sign in again.")
             return
         }
         // A resolver that yields no credentials would otherwise crash the subscript below.

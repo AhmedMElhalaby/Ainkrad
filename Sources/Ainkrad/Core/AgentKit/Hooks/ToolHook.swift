@@ -21,6 +21,27 @@ struct ToolHook: Codable, Equatable, Identifiable, Sendable {
 
 struct ToolHooksDocument: PersistableDocument {
     static let documentID = "agent-tool-hooks"
+    static let currentSchemaVersion = 2
+
+    /// v1 → v2: the 2026-08-02 app rename. A hook's `match` is a tool-name glob,
+    /// and a hook that matches nothing is SILENT — no error, no UI signal,
+    /// nothing anywhere reports a hook that never fired. This migrator is the
+    /// only thing standing between the rename and a user's automation quietly
+    /// ceasing to run.
+    static let migrators: [DocumentMigrator] = [
+        DocumentMigrator(from: 1) { payload in
+            guard case .object(var root) = payload,
+                  case .array(let hooks)? = root["hooks"] else { return payload }
+            root["hooks"] = .array(hooks.map { hook in
+                guard case .object(var fields) = hook,
+                      case .string(let match)? = fields["match"] else { return hook }
+                fields["match"] = .string(AppIDRenames.renamedToolName(match))
+                return .object(fields)
+            })
+            return .object(root)
+        },
+    ]
+
     var hooks: [ToolHook]
 }
 

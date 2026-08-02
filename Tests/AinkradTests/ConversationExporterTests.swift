@@ -12,7 +12,7 @@ struct ConversationExporterTests {
     @Test func markdownRoundTrip() {
         let md = ConversationExporter.export(convo, format: .markdown)
         #expect(md.contains("**User**"))
-        #expect(md.contains("**Assistant**"))
+        #expect(md.contains("**Sage**"))
         #expect(md.contains("hello"))
     }
 

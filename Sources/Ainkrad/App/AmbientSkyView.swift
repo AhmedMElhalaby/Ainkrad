@@ -50,7 +50,7 @@ struct AmbientSkyView: View {
     /// `false` for the *decorative copies*. A view cannot blur the layers
     /// behind it, so every translucent pane with blur enabled draws its own
     /// sky + island copy and blurs that (`BlockView`). Those copies were fully
-    /// live: N blurred panes meant N extra 30fps scenes, each ~570 Canvas
+    /// live: N blurred panes meant N extra 30fps scenes, each ~570 Scry
     /// fills and 18 radial gradients — by a wide margin the most expensive
     /// thing the app did, and all of it under a 26pt Gaussian blur where the
     /// motion is not perceptible. The frozen branch below already existed for
@@ -65,7 +65,7 @@ struct AmbientSkyView: View {
         let sky = environment.skySettingsStore
         let animated = sky.motionEnabled && isLive
         // Register the per-effect switches as a body-level dependency: most
-        // reads happen inside the Canvas renderer closure, which @Observable
+        // reads happen inside the Scry renderer closure, which @Observable
         // doesn't track — without this line, toggles wouldn't repaint the
         // frozen sky.
         let _ = sky.effectEnabled
@@ -153,7 +153,7 @@ struct AmbientSkyView: View {
         return seconds / 86400
     }
 
-    /// One Canvas pass, back to front. Each effect draws only while its
+    /// One Scry pass, back to front. Each effect draws only while its
     /// switch is on; streaks and events need `time > 0` (they don't exist in
     /// the frozen arrangement).
     private func canvas(

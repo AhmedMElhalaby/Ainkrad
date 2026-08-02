@@ -2,17 +2,17 @@ import Foundation
 import AinkradHostRuntime
 
 /// Generates a video from a prompt, writes it to disk, and renders it as a
-/// `video` card on the Live Canvas (body = a `file:` URL). Read-class + reversible
+/// `video` card on the Live Scry (body = a `file:` URL). Read-class + reversible
 /// (it draws a card and writes a scratch file; the paid network call is the only
 /// meaningful side effect, gated by the approval backstop). Video generation is
 /// slow, so the tool may take a while to return.
 struct VideoGenerateTool: AgentTool {
     let backend: any VideoBackend
-    let store: CanvasStore
+    let store: ScryStore
     let mediaStore: GeneratedMediaStore
 
     let name = "video_generate"
-    let description = "Generate a short video from a text prompt and render it as a video card on the Live Canvas."
+    let description = "Generate a short video from a text prompt and render it as a video card on the Live Scry."
     let permission: ToolPermissionClass = .read
 
     var parametersSchema: JSONValue {
@@ -35,16 +35,16 @@ struct VideoGenerateTool: AgentTool {
         }
         guard backend.isConfigured else {
             return ToolResult(
-                content: "Video generation is not configured. Add a provider API key in Settings → Assistant → Video.",
+                content: "Video generation is not configured. Add a provider API key in Settings → Sage → Video.",
                 isError: false)
         }
         let video = try await backend.generateVideo(prompt: prompt)
         let fileURL = try mediaStore.write(video.data, fileExtension: video.fileExtension)
-        let element = CanvasElement(
+        let element = ScryElement(
             id: UUID().uuidString, kind: .video,
             title: input["title"]?.stringValue ?? prompt, body: fileURL.absoluteString)
         let id = store.add(element)
-        return ToolResult(content: "Rendered generated video as canvas element \(id).", isError: false)
+        return ToolResult(content: "Rendered generated video as scry element \(id).", isError: false)
     }
 
     func approvalPreview(_ input: JSONValue) -> ToolApprovalPreview {

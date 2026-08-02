@@ -3,7 +3,7 @@ import Observation
 import AinkradAppKit
 
 /// One app's surface appearance. `surfaceOpacity` is honored only for
-/// host-background apps (the Assistant); every app honors `blurEnabled`.
+/// host-background apps (the Sage); every app honors `blurEnabled`.
 public struct AppAppearanceEntry: Codable, Equatable {
     public var surfaceOpacity: Double = 1.0
     public var blurEnabled: Bool = false
@@ -25,10 +25,24 @@ public struct AppAppearanceEntry: Codable, Equatable {
     }
 }
 
-/// Per-app surface appearance, keyed by `appID` (the Assistant is one surface
+/// Per-app surface appearance, keyed by `appID` (the Sage is one surface
 /// among many now — Terminal, Git Mage, and any plugin have their own entry).
 public struct AppAppearanceDocument: PersistableDocument {
     public static let documentID = "app-appearance"
+    public static let currentSchemaVersion = 2
+
+    /// v1 → v2: the 2026-08-02 app rename. Entries keyed by the retired ids
+    /// (`assistant`, `canvas`, `files`, `terminal`) move to their new ids so a
+    /// user's opacity, blur, presentation override and per-app fonts survive.
+    public static let migrators: [DocumentMigrator] = [
+        DocumentMigrator(from: 1) { payload in
+            guard case .object(var root) = payload,
+                  case .object(let entries)? = root["entries"] else { return payload }
+            root["entries"] = .object(AppIDRenames.rekeyed(entries))
+            return .object(root)
+        },
+    ]
+
     public var entries: [String: AppAppearanceEntry] = [:]
 
     public init(entries: [String: AppAppearanceEntry] = [:]) {
@@ -36,9 +50,9 @@ public struct AppAppearanceDocument: PersistableDocument {
     }
 }
 
-/// The Slice-2c Assistant-only document. Retained ONLY so a first load can
-/// migrate the user's existing Assistant opacity/blur into the `"assistant"`
-/// entry of the per-app store. Not `private` so the migration test can seed it.
+/// The Slice-2c Assistant-only document (named for the app Sage used to be).
+/// Retained ONLY so a first load can migrate that opacity/blur into the
+/// `"sage"` entry of the per-app store. Not `private` so the migration test can seed it.
 public struct LegacyAssistantAppearanceDocument: PersistableDocument {
     public static let documentID = "assistant-appearance"
     public var surfaceOpacity: Double
@@ -68,10 +82,12 @@ public final class AppAppearanceStore {
         self.persistence = persistence
         var doc = persistence.load(AppAppearanceDocument.self) ?? AppAppearanceDocument()
         // One-time migration: fold the Slice-2c Assistant-only store into the
-        // per-app map so the user's current Assistant opacity/blur carries over.
-        if doc.entries["assistant"] == nil,
+        // per-app map so the user's opacity/blur carries over. Targets "sage",
+        // NOT "assistant": the schema-v2 migrator above has already rekeyed the
+        // map, so folding into the retired id would write an entry nothing reads.
+        if doc.entries["sage"] == nil,
            let legacy = persistence.load(LegacyAssistantAppearanceDocument.self) {
-            doc.entries["assistant"] = AppAppearanceEntry(
+            doc.entries["sage"] = AppAppearanceEntry(
                 surfaceOpacity: legacy.surfaceOpacity, blurEnabled: legacy.blurEnabled)
             persistence.save(doc)
         }

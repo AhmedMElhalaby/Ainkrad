@@ -27,9 +27,9 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// `keyDown` monitor. The status item is neither: it lives on
     /// `NSStatusBar.system` and its popover is an `NSPopover` anchored to the
     /// status button, so it is reachable with the mouse while every in-window
-    /// surface is blocked. Through it the whole Assistant is reachable, and
+    /// surface is blocked. Through it the whole Sage is reachable, and
     /// every action there (a composed message, an agent switch, a pinned model,
-    /// "Open in the Assistant pane") persists into the PROVISIONAL home that the
+    /// "Open in the Sage pane") persists into the PROVISIONAL home that the
     /// Home step's swap then silently discards — the same class of bug the
     /// `.commands` block was gated for. `onManageConnections` is worse still: it
     /// latches `isSettingsPresented` invisibly beneath the gate.
@@ -37,7 +37,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// Suppression is enforced at BOTH ends — no status item is created while
     /// the gate is up, and a click on one that somehow exists does nothing —
     /// because the gate can be raised after an install only in principle, and a
-    /// silent reachable Assistant is not a failure worth being subtle about.
+    /// silent reachable Sage is not a failure worth being subtle about.
     var isSuppressed: () -> Bool = { false }
 
     func install() {
@@ -45,7 +45,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "sparkles",
-                                   accessibilityDescription: "Ainkrad Assistant")
+                                   accessibilityDescription: "Ainkrad Sage")
             button.image?.isTemplate = true
             button.action = #selector(statusButtonClicked)
             button.target = self
