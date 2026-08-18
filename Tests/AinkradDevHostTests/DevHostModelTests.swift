@@ -99,3 +99,51 @@ struct DevHostModelTests {
         #expect(!loadBundleCalled)
     }
 }
+
+/// A `RegisteredApp` whose two view factories record which one the Dev Host
+/// asked for. Rendering `AnyView` and inspecting it is not possible, so the
+/// factories themselves are the observation point — the stage picking the
+/// wrong one shows up as the wrong marker, not as a view that merely looks
+/// different.
+@MainActor
+private final class SurfaceProbe {
+    var asked: [String] = []
+    func app() -> RegisteredApp {
+        RegisteredApp(id: "hello", displayName: "Hello", icon: "hand.wave", isEnabledByDefault: true,
+                      source: .plugin(url: URL(fileURLWithPath: "/tmp/hello.bundle"),
+                                      apiVersion: GenerationSupport.current),
+                      makeRootView: { self.asked.append("root"); return AnyView(EmptyView()) },
+                      makeSettingsView: { self.asked.append("settings"); return AnyView(EmptyView()) },
+                      chromeFill: { nil })
+    }
+}
+
+@MainActor
+struct DevHostSettingsSurfaceTests {
+    @Test("the stage renders the root view on the root surface")
+    func rootSurfaceUsesRootFactory() {
+        let probe = SurfaceProbe()
+        _ = PluginStageView.view(for: probe.app(), surface: .root)
+        #expect(probe.asked == ["root"])
+    }
+
+    @Test("the stage renders the plugin's settings view on the settings surface")
+    func settingsSurfaceUsesSettingsFactory() {
+        let probe = SurfaceProbe()
+        _ = PluginStageView.view(for: probe.app(), surface: .settings)
+        #expect(probe.asked == ["settings"])
+    }
+
+    @Test("a newly loaded bundle starts on the root surface")
+    func loadResetsToRoot() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try writeBundle(in: dir, name: "hello", info: validInfo)
+
+        let model = DevHostModel(loadBundle: { _ in .success(stubApp()) })
+        model.surface = .settings
+        model.load(LaunchArguments(bundleURL: dir.appendingPathComponent("hello.bundle"), generation: nil))
+
+        #expect(model.surface == .root)
+    }
+}
