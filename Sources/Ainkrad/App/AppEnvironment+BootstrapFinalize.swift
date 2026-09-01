@@ -81,6 +81,28 @@ extension AppEnvironment {
         // center is attached rather than injected.
         environment.runManager.attachSignalCenter(signalCenter)
 
+        // App-store outcomes into the feed. An install or update is exactly the
+        // kind of thing the user starts and then looks away from, which is what
+        // the feed is for.
+        environment.appStoreStore.onOperationFinished = { [weak environment] operation, appID, error in
+            guard let environment, let center = environment.signalCenter else { return }
+            // Prefer the registry's display name; fall back to the id, which is
+            // all there is for an app that failed before it registered.
+            let name = environment.registry.allApps.first { $0.id == appID }?.displayName ?? appID
+            switch (operation, error) {
+            case (.install, nil):
+                center.emit(.appInstalled(displayName: name), from: .host)
+            case (.install, let error?):
+                center.emit(.appInstallFailed(displayName: name,
+                                              reason: Self.describe(error)), from: .host)
+            case (.update, nil):
+                center.emit(.appUpdated(displayName: name), from: .host)
+            case (.update, let error?):
+                center.emit(.appUpdateFailed(displayName: name,
+                                             reason: Self.describe(error)), from: .host)
+            }
+        }
+
         environment.menuBarController = MenuBarController(presence: environment.menuBarPresence) { [weak environment] in
             guard let environment else { return AnyView(EmptyView()) }
             return AnyView(MenuBarPopoverView(presence: environment.menuBarPresence).environment(environment))
@@ -188,6 +210,14 @@ extension AppEnvironment {
         }
 
         let loaded = loader.loadAll(from: pluginDirs)
+        // A bundle that fails to load is the most confusing failure in the
+        // product: the app is simply absent, with nothing on screen saying why.
+        // It was already recorded in `registry.loadFailures` and read by the
+        // App Store overlay only — so a user who never opens that overlay had
+        // no way to find out.
+        for failure in loaded.failures {
+            signalCenter.emit(.pluginLoadFailed(failure), from: .host)
+        }
         registry.install(
             builtIn: [
                 RegisteredApp.builtIn(
@@ -292,5 +322,16 @@ extension AppEnvironment {
         }
 
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")
+    }
+
+    /// A user-facing reason string. `AppStoreError` already writes for humans;
+    /// anything else falls back to its description rather than being dropped,
+    /// because "failed to install" with no reason is the least useful
+    /// notification the feed could carry.
+    private static func describe(_ error: Error) -> String {
+        if let storeError = error as? AppStoreError {
+            return String(describing: storeError)
+        }
+        return String(describing: error)
     }
 }

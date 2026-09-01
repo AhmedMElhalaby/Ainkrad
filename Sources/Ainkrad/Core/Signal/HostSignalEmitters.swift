@@ -1,4 +1,5 @@
 import Foundation
+import AinkradHostRuntime
 import AinkradSignal
 
 extension SignalDraft {
@@ -30,18 +31,49 @@ extension SignalDraft {
                            dedupeKey: "run:\(run.id.uuidString)")
     }
 
-    /// An app finished installing or updating from the store.
+    // MARK: - App store
+
+    /// An app finished installing from the store.
     static func appInstalled(displayName: String) -> SignalDraft {
         SignalDraft(kind: "install.completed", severity: .success,
                     title: "\(displayName) installed", importance: .normal,
                     dedupeKey: "install:\(displayName)")
     }
 
-    /// A plugin bundle failed to load. Almost always a pin mismatch, so the
-    /// body says so rather than leaving the user to guess.
-    static func appLoadFailed(displayName: String, reason: String) -> SignalDraft {
+    /// An install failed. `.urgent`: the user asked for this app and does not
+    /// have it, which is work they must redo.
+    static func appInstallFailed(displayName: String, reason: String) -> SignalDraft {
         SignalDraft(kind: "install.failed", severity: .failure,
-                    title: "\(displayName) failed to load", body: reason,
-                    importance: .urgent, dedupeKey: "loadfail:\(displayName)")
+                    title: "\(displayName) failed to install", body: reason,
+                    importance: .urgent, dedupeKey: "installfail:\(displayName)")
+    }
+
+    static func appUpdated(displayName: String) -> SignalDraft {
+        SignalDraft(kind: "update.completed", severity: .success,
+                    title: "\(displayName) updated", importance: .normal,
+                    dedupeKey: "update:\(displayName)")
+    }
+
+    /// Distinct kind from `install.failed` so a user can mute update noise
+    /// without also muting the installs they explicitly asked for.
+    static func appUpdateFailed(displayName: String, reason: String) -> SignalDraft {
+        SignalDraft(kind: "update.failed", severity: .failure,
+                    title: "\(displayName) failed to update", body: reason,
+                    importance: .urgent, dedupeKey: "updatefail:\(displayName)")
+    }
+
+    /// A plugin bundle failed to load at launch.
+    ///
+    /// Named by BUNDLE, not display name: a bundle that failed to load never
+    /// gave us its metadata, so the file name is genuinely all we have. This is
+    /// almost always a pin mismatch — the host embeds one copy of the SDK and a
+    /// plugin built against a newer revision dies at `Bundle.load()` — so the
+    /// loader's reason goes in the body verbatim rather than being summarised
+    /// into something friendlier and less useful.
+    static func pluginLoadFailed(_ failure: PluginLoadFailure) -> SignalDraft {
+        let bundle = failure.url.lastPathComponent
+        return SignalDraft(kind: "plugin.load-failed", severity: .failure,
+                           title: "\(bundle) failed to load", body: failure.reason,
+                           importance: .urgent, dedupeKey: "loadfail:\(bundle)")
     }
 }
