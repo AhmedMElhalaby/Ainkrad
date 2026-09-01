@@ -141,6 +141,18 @@ final class SignalCenter {
         refreshFromStore()
     }
 
+    /// Total rows currently held, for the Settings history panel.
+    var eventCount: Int { store?.page(filter: .all, before: nil, limit: Int.max).count ?? degradedBuffer.count }
+
+    /// Empties the feed, keeping pinned rows - the same exemption retention
+    /// uses, so "clear" never destroys something the user deliberately kept.
+    func clearFeed() {
+        store?.enforceRetention(RetentionPolicy(maxAgeDays: 0, maxEvents: 0))
+        degradedBuffer.removeAll()
+        refreshFromStore()
+        if store == nil { recent = []; unreadCounts = [:] }
+    }
+
     func unreadCount(for source: SignalSource) -> Int { unreadCounts[source] ?? 0 }
 
     private func refreshFromStore() {

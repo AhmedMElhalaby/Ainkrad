@@ -70,7 +70,7 @@ packages:
     # plus the umbrella re-export that makes the module reachable by
     # consumers at all. A new TARGET, not a renamed symbol - the API
     # generation stays 8 and every existing plugin pin remains loadable.
-    revision: c2659ae35dcbb5a79e9ac79f9ef0500129ae6d73
+    revision: 075ee7fcda9d40a83fb20bc8a6db4d800770a5e6
 
 targets:
   AinkradHostRuntime:

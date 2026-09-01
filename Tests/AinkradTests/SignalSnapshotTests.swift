@@ -34,7 +34,7 @@ struct SignalSnapshotTests {
                                   SignalAction(id: "open", label: "Open log")],
                         dedupeKey: "b:main"),
             SignalEvent(timestamp: now.addingTimeInterval(-240), source: .app(appID: "com.ainkrad.quest"),
-                        kind: "session.needsInput", severity: .warning,
+                        kind: "session.needs-input", severity: .warning,
                         title: "Quest is waiting for you",
                         body: "The agent paused for approval before running a destructive command."),
             SignalEvent(timestamp: now.addingTimeInterval(-3600), source: .host,
@@ -145,6 +145,48 @@ struct SignalSnapshotTests {
 
         let png = try Self.render(view, size: CGSize(width: 420, height: 320))
         try png.write(to: outputDirectory.appendingPathComponent("signal-toasts.png"))
+    }
+
+    @Test("render the notifications settings pane")
+    func renderSettingsPane() throws {
+        let now = Date()
+        let theme = Theme.neonBlue
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        final class NullDeliverer: SignalDeliverer {
+            func deliver(_ event: SignalEvent, to channels: Set<DeliveryChannel>) {}
+        }
+        struct Ctx: SignalContextProviding {
+            var deliveryContext = DeliveryContext(hostIsFrontmost: true, visibleAppIDs: [],
+                                                  systemDoNotDisturb: false, hostFocusMode: false)
+        }
+        let center = SignalCenter(store: try SignalStore(url: url),
+                                  deliverer: NullDeliverer(), contextProvider: Ctx())
+        for event in sampleEvents(now: now) {
+            center.emit(SignalDraft(kind: event.kind, severity: event.severity,
+                                    title: event.title, body: event.body), from: event.source)
+        }
+        // One muted source, so the toggles are not all in the same state.
+        center.rules.mutedSources.insert(.sage)
+
+        let view = SignalSettingsPane(
+            center: center,
+            sources: [.host, .sage,
+                      .app(appID: "com.ainkrad.raven"), .app(appID: "com.ainkrad.quest")])
+            .padding(16)
+            .frame(width: 560, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(HostThemeTokens(from: theme).background)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 560, height: 660))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-settings.png"))
     }
 
     /// Renders through a real `NSHostingView` in an offscreen window.
