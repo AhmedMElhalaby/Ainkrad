@@ -65,6 +65,22 @@ enum WorkspaceChord {
         return number - 1
     }
 
+    /// Key codes for the top-row digits 1-9. Matched by CODE, not by character,
+    /// because ⌥1 does not produce "1" — macOS turns it into "¡" (⌥2 into "™",
+    /// and so on), so `charactersIgnoringModifiers` is useless for an
+    /// Option-digit chord. These positions are the same across the Latin
+    /// layouts; see the keyCode note on `KeyboardShortcutMonitor`.
+    private static let digitKeyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    /// ⌥1-⌥9 — direct jump to a pane (Focus-Mode tab) in the active workspace.
+    /// Zero-based. Deliberately Option WITHOUT Command: ⌘1-9 already jumps
+    /// between workspaces, so panes get the neighbouring modifier rather than a
+    /// three-key chord.
+    static func paneIndex(keyCode: UInt16, command: Bool, option: Bool, shift: Bool) -> Int? {
+        guard option, !command, !shift else { return nil }
+        return digitKeyCodes.firstIndex(of: keyCode)
+    }
+
     /// ⌘D splits the focused pane to the trailing edge, ⌘⇧D to the bottom.
     /// `characters` is expected already lowercased, as `handle` lowercases it
     /// (`charactersIgnoringModifiers` still applies Shift, so ⌘⇧D arrives "D").
@@ -87,6 +103,7 @@ enum WorkspaceChord {
                         option: Bool, shift: Bool) -> Bool {
         cycleDirection(keyCode: keyCode, command: command, option: option) != nil
             || paneDirection(keyCode: keyCode, command: command, option: option) != nil
+            || paneIndex(keyCode: keyCode, command: command, option: option, shift: shift) != nil
             || workspaceIndex(characters: characters, command: command, shift: shift) != nil
             || splitEdge(characters: characters, command: command, shift: shift) != nil
             || togglesFocusMode(characters: characters, command: command, shift: shift)
