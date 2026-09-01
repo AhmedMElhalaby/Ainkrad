@@ -97,21 +97,16 @@ struct WorkspaceOverviewView: View {
         Self.panelChromeHeight + max(workspaceListHeight, idealDetailHeight)
     }
 
-    /// The detail column's ideal height, which depends on what the selected
-    /// workspace actually has in it — an empty one needs a fraction of what a
-    /// busy one does.
-    private var idealDetailHeight: CGFloat {
-        guard let workspace = selectedWorkspace else { return Self.noSelectionHeight }
-        let count = workspace.tileLayout.blocks.count
-        guard count > 0 else {
-            return Self.detailHeaderHeight + Self.emptyWorkspaceHeight + 16
-        }
-        return Self.detailHeaderHeight
-            + Self.maximumPreviewHeight
-            + 14
-            + Self.appSectionHeaderHeight
-            + Self.appGridHeight(count: count)
-    }
+    /// The detail column's height, which deliberately does NOT depend on the
+    /// selection.
+    ///
+    /// It used to: an empty workspace produced a 382pt panel and a filled one
+    /// 624pt, so the panel changed size as the selection moved down the list.
+    /// Each state was individually well-fitted and the transitions between them
+    /// were awful, which is the wrong trade on a screen that exists for moving
+    /// between states. `WorkspaceOverviewDetail` now fits every state into one
+    /// height, giving the slack to the preview.
+    private var idealDetailHeight: CGFloat { Self.detailHeight }
 
     /// The height the panel actually gets: what it wants, or what the window can
     /// show, whichever is smaller.

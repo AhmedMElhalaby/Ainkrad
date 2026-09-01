@@ -50,16 +50,11 @@ struct WorkspaceOverviewLayoutTests {
         }
     }
 
-    /// The panel's ceiling has to clear the tallest content the panel can hold on
-    /// a large window, or a busy workspace overflows the chrome rather than
-    /// scrolling inside it.
-    @Test("the tallest possible detail column still fits under the panel's maximum")
-    func tallestContentFitsUnderCeiling() {
-        let detail = WorkspaceOverviewView.detailHeaderHeight
-            + WorkspaceOverviewView.maximumPreviewHeight
-            + WorkspaceOverviewView.appSectionHeaderHeight
-            + WorkspaceOverviewView.appGridHeight(count: 200)
-        let panel = WorkspaceOverviewView.panelChromeHeight + detail
+    /// The panel's ceiling has to clear the content on a large window, or the
+    /// panel overflows its chrome instead of scrolling inside it.
+    @Test("the detail column fits under the panel's maximum")
+    func contentFitsUnderCeiling() {
+        let panel = WorkspaceOverviewView.panelChromeHeight + WorkspaceOverviewView.detailHeight
         #expect(panel <= WorkspaceOverviewView.maximumPanelHeight)
     }
 
@@ -82,37 +77,68 @@ struct WorkspaceOverviewLayoutTests {
         let tiny = WorkspaceOverviewView.ceiling(forWindowHeight: 300)
         #expect(tiny == 420)
 
-        let tallestContent = WorkspaceOverviewView.panelChromeHeight
-            + WorkspaceOverviewView.detailHeaderHeight
-            + WorkspaceOverviewView.maximumPreviewHeight
-            + WorkspaceOverviewView.appSectionHeaderHeight
-            + WorkspaceOverviewView.appGridHeight(count: 200)
-        #expect(min(tallestContent, tiny) == tiny)
+        let content = WorkspaceOverviewView.panelChromeHeight
+            + WorkspaceOverviewView.detailHeight
+        #expect(min(content, tiny) == tiny)
     }
 
-    /// An empty workspace has nothing to preview, and used to be given a
-    /// full-size preview saying "empty" AND a separate "No apps" block — making
-    /// the emptiest workspace the tallest thing the panel had to show, which is
-    /// what stopped it hugging at all.
-    @Test("an empty workspace asks for far less height than a busy one")
-    func emptyWorkspaceIsShorterThanABusyOne() {
+    // MARK: - A constant height
+
+    /// The panel must not resize as the selection moves down the list. Every
+    /// state is fitted into one height instead of each being individually
+    /// tight — so these assert SAMENESS, where an earlier version asserted that
+    /// an empty workspace was shorter.
+    @Test("an empty workspace occupies exactly the same column height as a filled one")
+    func emptyAndFilledAreTheSameHeight() {
         let empty = WorkspaceOverviewView.detailHeaderHeight
             + WorkspaceOverviewView.emptyWorkspaceHeight + 16
-        let busy = WorkspaceOverviewView.detailHeaderHeight
-            + WorkspaceOverviewView.maximumPreviewHeight + 14
-            + WorkspaceOverviewView.appSectionHeaderHeight
-            + WorkspaceOverviewView.appGridHeight(count: 3)
-
-        #expect(empty < busy)
-        // And comfortably inside even the smallest ceiling, so the shortest
-        // possible content can always actually hug.
-        #expect(WorkspaceOverviewView.panelChromeHeight + empty < 420)
+        #expect(empty == WorkspaceOverviewView.detailHeight)
     }
 
-    @Test("the preview can shrink but not below the point where its cells stop reading")
-    func previewHasARange() {
-        #expect(WorkspaceOverviewView.minimumPreviewHeight
-                < WorkspaceOverviewView.maximumPreviewHeight)
-        #expect(WorkspaceOverviewView.minimumPreviewHeight > 0)
+    @Test("no pane count changes the column height")
+    func paneCountNeverChangesHeight() {
+        for count in [1, 2, 3, 4, 6, 9, 12, 40, 200] {
+            let column = WorkspaceOverviewView.detailHeaderHeight
+                + WorkspaceOverviewView.previewBottomPadding
+                + WorkspaceOverviewView.previewHeight(forAppCount: count)
+                + WorkspaceOverviewView.appSectionHeaderHeight
+                + WorkspaceOverviewView.appGridHeight(count: count)
+            #expect(column == WorkspaceOverviewView.detailHeight,
+                    "\(count) panes changed the column height")
+        }
+    }
+
+    @Test("having nothing selected doesn't resize the panel either")
+    func noSelectionIsTheSameHeight() {
+        #expect(WorkspaceOverviewView.noSelectionHeight == WorkspaceOverviewView.detailHeight)
+    }
+
+    /// A constant height only costs nothing because the slack goes somewhere
+    /// useful: fewer panes buy a bigger preview.
+    @Test("the preview absorbs the slack, and stays within its readable range")
+    func previewAbsorbsTheSlack() {
+        let few = WorkspaceOverviewView.previewHeight(forAppCount: 1)
+        let many = WorkspaceOverviewView.previewHeight(forAppCount: 12)
+        #expect(few > many)
+        #expect(few == WorkspaceOverviewView.maximumPreviewHeight)
+
+        for count in [1, 3, 6, 12, 40, 200] {
+            let height = WorkspaceOverviewView.previewHeight(forAppCount: count)
+            #expect(height >= WorkspaceOverviewView.minimumPreviewHeight)
+            #expect(height <= WorkspaceOverviewView.maximumPreviewHeight)
+        }
+    }
+
+    /// If the grid ever grows enough that the preview would be squeezed below its
+    /// floor, the column silently grows past `detailHeight` and the panel starts
+    /// resizing again — so the floor has to be reachable but not breached.
+    @Test("even the largest app grid leaves the preview above its floor")
+    func largestGridStillClearsThePreviewFloor() {
+        let fixed = WorkspaceOverviewView.detailHeaderHeight
+            + WorkspaceOverviewView.previewBottomPadding
+            + WorkspaceOverviewView.appSectionHeaderHeight
+            + WorkspaceOverviewView.appGridHeight(count: 200)
+        #expect(WorkspaceOverviewView.detailHeight - fixed
+                >= WorkspaceOverviewView.minimumPreviewHeight)
     }
 }

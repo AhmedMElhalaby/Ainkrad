@@ -44,15 +44,14 @@ extension WorkspaceOverviewView {
                             tokens: tokens,
                             style: .feature
                         )
-                        // Screen-shaped, capped, and ABLE TO SHRINK. The range
-                        // matters: it is the one region that absorbs the
-                        // difference when the panel's ceiling is lower than the
-                        // content's ideal height, which is what stops a short
-                        // window overflowing instead of adapting.
+                        // Screen-shaped, and given exactly the height the app
+                        // grid leaves over — see `previewHeight(forAppCount:)`.
+                        // The aspect ratio then sets its width, so it stays a
+                        // miniature of a screen rather than a stretched panel.
                         .aspectRatio(Self.previewAspectRatio, contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .frame(minHeight: Self.minimumPreviewHeight,
-                               maxHeight: Self.maximumPreviewHeight)
+                        .frame(height: Self.previewHeight(
+                            forAppCount: workspace.tileLayout.blocks.count))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -113,17 +112,52 @@ extension WorkspaceOverviewView {
     static var previewAspectRatio: CGFloat { 16.0 / 10.0 }
     /// The preview's ceiling — past this it stops being a preview.
     static let maximumPreviewHeight: CGFloat = 340
-    /// Its floor — below this the pane cells stop being readable, and the panel
-    /// should scroll or clamp rather than shrink it further.
+    /// Its floor — below this the pane cells stop being readable.
     static let minimumPreviewHeight: CGFloat = 150
-    /// The merged empty-workspace state, including its dashed frame.
-    static let emptyWorkspaceHeight: CGFloat = 200
-    /// The nothing-selected placeholder.
-    static let noSelectionHeight: CGFloat = 320
+
+    /// The detail column's height, and it is a CONSTANT.
+    ///
+    /// Deriving it from the selected workspace made the panel the right size for
+    /// every individual state and the wrong size for moving between them: it
+    /// jumped as the selection moved down the list — 382pt on an empty workspace,
+    /// 624pt on a filled one — and a switcher that resizes under the pointer is
+    /// worse than one carrying some slack. Height stability beats per-state
+    /// tightness on a screen whose whole purpose is moving between states.
+    ///
+    /// Sized for the most common filled case (a full-height preview above one
+    /// row of apps); every other case is fitted into it rather than changing it.
+    static var detailHeight: CGFloat {
+        detailHeaderHeight
+            + previewBottomPadding
+            + maximumPreviewHeight
+            + appSectionHeaderHeight
+            + appGridHeight(count: 3)
+    }
+
     /// Name, badges and the Open Workspace button.
     static let detailHeaderHeight: CGFloat = 60
     /// The "OPEN APPS n" label and its spacing.
     static let appSectionHeaderHeight: CGFloat = 30
+    static let previewBottomPadding: CGFloat = 14
+    /// The nothing-selected placeholder — the same height as everything else, so
+    /// the panel does not resize when the selection is cleared either.
+    static var noSelectionHeight: CGFloat { detailHeight }
+
+    /// The preview takes whatever the app grid doesn't, so the column's total
+    /// stays `detailHeight` whatever the pane count.
+    ///
+    /// This is what makes a constant height cost nothing: the slack has somewhere
+    /// useful to go. Few panes means a larger preview, many panes a smaller one,
+    /// and the panel never moves.
+    static func previewHeight(forAppCount count: Int) -> CGFloat {
+        let fixed = detailHeaderHeight + previewBottomPadding
+            + appSectionHeaderHeight + appGridHeight(count: count)
+        return min(max(detailHeight - fixed, minimumPreviewHeight), maximumPreviewHeight)
+    }
+
+    /// The merged empty-workspace state fills the same column, so an empty
+    /// workspace and a busy one produce identical panels.
+    static var emptyWorkspaceHeight: CGFloat { detailHeight - detailHeaderHeight - 16 }
 
     private func detailHeader(_ workspace: Workspace, tokens: DesignTokens) -> some View {
         HStack(spacing: 10) {
