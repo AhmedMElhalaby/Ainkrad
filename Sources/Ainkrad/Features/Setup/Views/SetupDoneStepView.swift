@@ -138,6 +138,7 @@ struct SetupDoneStepView: View {
         // and nothing else installs it after launch, so this is where the menu
         // bar comes back. `install()` is guarded idempotent.
         environment.menuBarController?.install()
+        environment.signalBellController?.install()
     }
 
     private func point(title: String, body: String, icon: String,

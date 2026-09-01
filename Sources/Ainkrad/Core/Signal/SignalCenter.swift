@@ -29,6 +29,12 @@ final class SignalCenter {
     private let store: SignalStore?
     private let ingest: SignalIngest?
     private weak var deliverer: (any SignalDeliverer)?
+    /// Kept alive by whoever built the center when the dispatcher has no other
+    /// owner. `deliverer` is weak so a torn-down host does not leak, which
+    /// means an unretained dispatcher turns every delivery into a silent no-op
+    /// - a failure mode no routing test can see.
+    private var retainedDeliverer: (any SignalDeliverer)?
+    var deliveryTargetIsAliveForTesting: Bool { deliverer != nil }
     private let contextProvider: any SignalContextProviding
 
     private var degradedBuffer: [SignalEvent] = []
@@ -36,7 +42,12 @@ final class SignalCenter {
 
     /// Newest-first window over the feed, kept live for the UI.
     private(set) var recent: [SignalEvent] = []
-    private(set) var unreadCounts: [SignalSource: Int] = [:]
+    private(set) var unreadCounts: [SignalSource: Int] = [:] {
+        didSet { onUnreadChanged?(totalUnread) }
+    }
+    /// Fired whenever the unread total moves, so the menu-bar badge does not
+    /// have to poll or set up its own observation.
+    var onUnreadChanged: ((Int) -> Void)?
     var totalUnread: Int { unreadCounts.values.reduce(0, +) }
     /// True when the store could not be opened; the feed is memory-only.
     let isDegraded: Bool
@@ -154,6 +165,12 @@ final class SignalCenter {
     }
 
     func unreadCount(for source: SignalSource) -> Int { unreadCounts[source] ?? 0 }
+
+    /// Takes ownership of the dispatcher. Used by the bootstrap factory, where
+    /// the dispatcher exists only to serve this center.
+    func retainDeliverer(_ deliverer: any SignalDeliverer) {
+        retainedDeliverer = deliverer
+    }
 
     private func refreshFromStore() {
         guard let store else { return }

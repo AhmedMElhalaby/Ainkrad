@@ -77,6 +77,13 @@ struct RootView: View {
                 .transition(.opacity)
             }
 
+            if environment.isSignalFeedPresented, let center = environment.signalCenter {
+                SignalFeedOverlayView(center: center) {
+                    environment.isSignalFeedPresented = false
+                }
+                .transition(.opacity)
+            }
+
             if environment.isQuickAskPresented {
                 QuickAskOverlayView {
                     environment.isQuickAskPresented = false
@@ -109,6 +116,20 @@ struct RootView: View {
                 }
                 .transition(.opacity)
             }
+
+            // Toasts. Above the workspace and every dismissible overlay, but
+            // deliberately BELOW the first-run gate (zIndex 100) and the quit
+            // confirmation (200): a toast is not interactive enough to matter,
+            // and one floating over the gate would be another surface the
+            // scrim cannot cover.
+            SignalToastStack(model: environment.signalToasts) { event in
+                guard let center = environment.signalCenter else { return }
+                center.markRead(ids: [event.id])
+                environment.isSignalFeedPresented = true
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .allowsHitTesting(!environment.isSetupPresented)
+            .zIndex(50)
 
             // The first-run gate. Deliberately no `onDismiss` closure, no scrim
             // tap and no escape handler — that trio is exactly what makes every

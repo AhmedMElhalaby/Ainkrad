@@ -143,6 +143,10 @@ final class RunManager {
         save()
     }
 
+    /// Attached after construction: the center is built in `finalizeBootstrap`,
+    /// which runs after this manager exists. Held weakly, as at init.
+    func attachSignalCenter(_ center: SignalCenter) { signalCenter = center }
+
     private func index(_ id: UUID) -> Int? { document.runs.firstIndex { $0.id == id } }
     private func save() { persistence.save(document) }
 }
