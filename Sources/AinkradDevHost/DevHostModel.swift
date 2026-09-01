@@ -19,6 +19,23 @@ final class DevHostModel {
 
     private(set) var state: State = .empty
 
+    /// Which of the plugin's two view factories the stage is showing.
+    ///
+    /// The Dev Host used to stage `makeRootView` and nothing else, so a
+    /// plugin's settings — a surface the REAL host renders via
+    /// `AppSettingsCatalog` — were unreachable here, and every settings
+    /// claim went to review GUI-unverified because there was no way to look
+    /// at them. Both factories are part of the `AinkradApp` contract; a host
+    /// that exercises only one of them is not exercising the contract.
+    enum Surface: String, CaseIterable {
+        case root, settings
+    }
+
+    /// Reset to `.root` by `load`, never carried across bundles: the surface
+    /// belongs to the app on the stage, and a reload that kept `.settings`
+    /// would open a new plugin on a screen its author may not have.
+    var surface: Surface = .root
+
     /// The in-process load step, injected so this model's validation path can
     /// be exercised end-to-end in tests without a compiled plugin binary
     /// (mirrors `PluginInstaller`'s `loadBundle` seam) while the default in
@@ -97,6 +114,7 @@ final class DevHostModel {
 
         switch loadBundle(args.bundleURL) {
         case .success(let app):
+            surface = .root
             state = .loaded(app)
         case .failure(let rejection):
             state = .invalid(rejection.reason)

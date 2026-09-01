@@ -7,6 +7,9 @@ import AinkradHostRuntime
 /// is intentionally ephemeral.
 struct PaneSnapshot: Codable, Equatable {
     var appID: String?
+    /// The leaf's user-given tab name, when it has one. Optional so layouts
+    /// written before renaming existed still decode.
+    var title: String?
     var axis: String?
     var fractions: [Double]?
     var children: [PaneSnapshot]?
@@ -16,6 +19,7 @@ struct PaneSnapshot: Codable, Equatable {
         switch node {
         case .leaf(let block):
             appID = block.appID
+            title = block.title
         case .split(let axis, let children, let fractions):
             self.axis = axis == .horizontal ? "h" : "v"
             self.fractions = fractions
@@ -25,7 +29,7 @@ struct PaneSnapshot: Codable, Equatable {
 
     func makeNode() -> PaneNode? {
         if let appID {
-            return .leaf(Block(appID: appID))
+            return .leaf(Block(appID: appID, title: title))
         }
         guard let axis, let children, let fractions,
               children.count == fractions.count, !children.isEmpty else { return nil }

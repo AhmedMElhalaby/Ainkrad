@@ -29,73 +29,59 @@ struct RootView: View {
             // Sky and workspace blur TOGETHER while an overlay is up —
             // blurring only the workspace would rasterize it separately
             // from the sky and visibly seam the composition.
-            ZStack {
-                AmbientSkyView()
-
-                // Extends under the (hidden) title bar so the HUD is the
-                // top of the screen itself — the traffic lights float
-                // inside it. The bar is always shown; in full screen it also
-                // carries the status readouts, and the traffic lights within
-                // it reveal on top-edge hover (see `HUDBar`).
-                VStack(spacing: 0) {
-                    HUDBar()
-
-                    // Persistent, undismissable: the app genuinely cannot do
-                    // its main job in this state, and the user chose to postpone
-                    // fixing it. Hidden while the gate is up so the wizard it
-                    // summons is not shouted at from behind.
-                    if environment.deferredSetupSteps.contains(.providers),
-                       !environment.isSetupPresented {
-                        SetupDeferredProvidersBanner()
-                    }
-
-                    // ALL workspaces stay in the hierarchy — switching
-                    // only toggles visibility, so PTY-backed sessions in
-                    // background workspaces keep running. They're laid out
-                    // as a horizontal carousel: the active one sits at
-                    // center, the others wait one screen-width to either
-                    // side by their order, so switching slides the new
-                    // workspace in from the direction it lives (spatially
-                    // matching the HUD's workspace row).
-                    workspaceCarousel
-                }
-                .ignoresSafeArea(edges: .top)
+            //
+            // `WorkspaceStack` is its own view, taking no inputs, so raising an
+            // overlay does NOT rebuild it. Inline here it was rebuilt whenever
+            // this body re-evaluated — and this body re-evaluates on every
+            // overlay flag — so summoning the Workspace Overview reconstructed
+            // the live sky, the HUD bar and every mounted workspace in the same
+            // frame that rasterized the blur.
+            OverlayBackdrop(isBlurred: isOverlayPresented) {
+                WorkspaceStack()
             }
-            .blur(radius: isOverlayPresented ? 14 : 0)
 
+            // Every overlay fades, and none of them scale.
+            //
+            // They all used to arrive with `.scale(scale: 0.985)` as well — a
+            // 1.5% size change, which is close to invisible, over a panel whose
+            // shared chrome hosts an `NSVisualEffectView` doing within-window
+            // blur. Scaling that forces AppKit to re-blur on every frame of the
+            // transition, and it measured at ~12ms of main-thread time per open
+            // against a 0.9ms idle floor. An imperceptible flourish is not worth
+            // a dropped frame, so the transition is the fade alone.
             if environment.isLauncherPresented {
                 LauncherView(store: environment.launcherStore) {
                     environment.isLauncherPresented = false
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
 
             if environment.isWorkspaceOverviewPresented {
                 WorkspaceOverviewView {
                     environment.isWorkspaceOverviewPresented = false
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
 
             if environment.isSettingsPresented {
                 SettingsOverlayView(focusedAppID: focusedAppID) {
                     environment.isSettingsPresented = false
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
 
             if environment.isAppStorePresented {
                 AppStoreOverlayView(store: environment.appStoreStore) {
                     environment.isAppStorePresented = false
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
 
             if environment.isQuickAskPresented {
                 QuickAskOverlayView {
                     environment.isQuickAskPresented = false
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
 
             #if DEBUG
@@ -103,13 +89,13 @@ struct RootView: View {
                 ComponentGalleryView {
                     environment.isComponentGalleryPresented = false
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
             #endif
 
             if environment.quitCoordinator.isConfirming {
                 QuitConfirmationView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    .transition(.opacity)
                     // Above everything, including the first-run gate: ⌘Q must
                     // still quit while setup is up, and a confirmation HUD the
                     // gate covered would be exactly the trap the gate must not be.
@@ -121,7 +107,7 @@ struct RootView: View {
                 PluginOverlayView(app: app, tokens: environment.themeManager.tokens) {
                     environment.presentedOverlayAppID = nil
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .transition(.opacity)
             }
 
             // The first-run gate. Deliberately no `onDismiss` closure, no scrim
@@ -131,7 +117,7 @@ struct RootView: View {
             // other overlay, always, whatever order they were raised in.
             if environment.isSetupPresented {
                 SetupOverlayView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    .transition(.opacity)
                     .zIndex(100)
             }
         }
@@ -171,12 +157,69 @@ struct RootView: View {
         }
     }
 
+}
+
+/// Everything an overlay sits in front of: the ambient sky, the HUD bar, the
+/// deferred-setup banner and the workspace carousel.
+///
+/// Extracted from `RootView` for one measured reason — see `OverlayBackdrop`.
+/// It takes no inputs and reads what it needs from the environment, so SwiftUI
+/// has nothing to diff when an overlay flag flips and skips rebuilding the whole
+/// live composition.
+private struct WorkspaceStack: View {
+    @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    /// A one-shot zoom for the focused pane on a Focus toggle: it pops from this
+    /// scale back to 1. A *scale* (not a frame morph) so the terminal's cols and
+    /// rows never change mid-animation — the size still snaps in one step (one
+    /// clean reflow) while the pane visually grows into place.
+    @State private var focusPop: CGFloat = 1
+
+    var body: some View {
+        ZStack {
+            AmbientSkyView()
+
+            // Extends under the (hidden) title bar so the HUD is the
+            // top of the screen itself — the traffic lights float
+            // inside it. The bar is always shown; in full screen it also
+            // carries the status readouts, and the traffic lights within
+            // it reveal on top-edge hover (see `HUDBar`).
+            VStack(spacing: 0) {
+                HUDBar()
+
+                // Persistent, undismissable: the app genuinely cannot do
+                // its main job in this state, and the user chose to postpone
+                // fixing it. Hidden while the gate is up so the wizard it
+                // summons is not shouted at from behind.
+                if environment.deferredSetupSteps.contains(.providers),
+                   !environment.isSetupPresented {
+                    SetupDeferredProvidersBanner()
+                }
+
+                // ALL workspaces stay in the hierarchy — switching
+                // only toggles visibility, so PTY-backed sessions in
+                // background workspaces keep running. They're laid out
+                // as a horizontal carousel: the active one sits at
+                // center, the others wait one screen-width to either
+                // side by their order, so switching slides the new
+                // workspace in from the direction it lives (spatially
+                // matching the HUD's workspace row).
+                workspaceCarousel
+            }
+            .ignoresSafeArea(edges: .top)
+        }
+    }
+
     private var workspaceCarousel: some View {
         GeometryReader { proxy in
             let manager = environment.workspaceManager
             let activeIndex = manager.workspaces.firstIndex { $0.id == manager.activeWorkspaceID } ?? 0
 
-            ZStack {
+            ZStack(alignment: .topLeading) {
+                // Per-workspace chrome: tab strip, seams, backdrop, badge,
+                // empty state. Still one view per workspace, because all of
+                // that belongs to one workspace's layout tree.
                 ForEach(Array(manager.workspaces.enumerated()), id: \.element.id) { index, workspace in
                     let isActive = index == activeIndex
                     TileLayoutView(workspace: workspace, registry: environment.registry)
@@ -186,11 +229,81 @@ struct RootView: View {
                         .allowsHitTesting(isActive)
                         .accessibilityHidden(!isActive)
                 }
+
+                // ONE layer for every pane in every workspace — see
+                // `WorkspacePaneLayer`. This is what makes moving a pane
+                // between workspaces a reposition rather than a destroy-and-
+                // recreate, so a terminal keeps its shell. It sits above the
+                // chrome so panes cover the translucency backdrop, and the
+                // badge (drawn in the chrome) is deliberately the one piece
+                // that does not need to be above them.
+                WorkspacePaneLayer(
+                    registry: environment.registry,
+                    size: proxy.size,
+                    focusPop: focusPop
+                )
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             .clipped()
             .animation(.spring(response: 0.42, dampingFraction: 0.88), value: manager.activeWorkspaceID)
+            // The Focus-Mode zoom, owned here now that the panes are. Only the
+            // active workspace's panes are visible, so its mode is the only one
+            // that can call for a pop.
+            .onChange(of: manager.activeWorkspace.viewMode) { _, _ in
+                popFocusedPane()
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Zooms the now-visible pane(s) in on a Focus toggle: set the start scale,
+    /// then spring it to 1 on the next tick (so the start frame renders first),
+    /// animating only the scale — the pane size has already snapped, so the
+    /// terminal never reflows mid-animation.
+    private func popFocusedPane() {
+        guard !reduceMotion else { return }
+        focusPop = 0.92
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                focusPop = 1
+            }
+        }
+    }
+}
+
+/// Blurs everything behind an overlay — the sky, the HUD bar and every mounted
+/// workspace — and animates that blur in ONE direction only.
+///
+/// A SwiftUI `.blur` over the whole window has to rasterize the entire live
+/// composition (animated sky, live terminals, every mounted workspace) and
+/// Gaussian-blur it. That is the expensive part of raising an overlay, and the
+/// two directions are not symmetric, which is the whole point of this type:
+///
+/// - **Blurring in** is expensive at full radius. Animating it ramps 0 → 14, so
+///   the early frames blur at small (cheap) radii and the cost is spread across
+///   the transition. Snapping straight to 14 does less total work but pays it
+///   all in ONE frame, and one big stall is what a user sees as a glitch.
+///   Measured A/B in a single build, back to back: animated 22.1ms median /
+///   48.5ms p90, snapped 32.0 / 74.6. Animating wins.
+/// - **Blurring out** has nothing to compute at radius 0. Animating it walks
+///   back down through every expensive intermediate radius for no visual gain
+///   whatsoever — the overlay on top is already fading away. Snapping: 10.8ms
+///   median / 22.1ms p90 → 3.5 / 11.6.
+///
+/// So: ease in, snap out. Both numbers are against a 0.9ms idle floor.
+private struct OverlayBackdrop<Content: View>: View {
+    /// The radius, tuned so overlay text reads cleanly over a busy sky.
+    private static var radius: CGFloat { 14 }
+
+    let isBlurred: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .blur(radius: isBlurred ? Self.radius : 0)
+            // `RootView` wraps this whole stack in an `.easeOut(0.16)` keyed on
+            // the same flag; this overrides it per direction, and the `nil` on
+            // the way out is what stops the blur inheriting it.
+            .animation(isBlurred ? .easeOut(duration: 0.16) : nil, value: isBlurred)
     }
 }

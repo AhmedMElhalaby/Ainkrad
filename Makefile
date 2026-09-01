@@ -29,8 +29,16 @@ generate: ## Generate the Xcode project from project.yml
 open: generate ## Generate the project and open it in Xcode
 	open $(PROJECT)
 
+# `-derivedDataPath build`, matching `devhost` and `test`.
+#
+# Without it this target alone wrote to Xcode's default DerivedData while every
+# other target in this repo — and every script and sibling repo that looks for
+# a built app — reads ./build. The visible symptom is that `make build`
+# succeeds and `./build/.../Ainkrad.app` stays whatever it was: during M9 that
+# was a three-week-old binary that failed to launch with a dyld symbol error,
+# and the build kept "succeeding".
 build: generate ## Build the app (Debug)
-	xcodebuild -scheme $(SCHEME) -configuration Debug -destination 'platform=macOS' build
+	xcodebuild -scheme $(SCHEME) -configuration Debug -derivedDataPath build -destination 'platform=macOS' build
 
 test: generate ## Run the test suite
 	xcodebuild -scheme $(SCHEME) -destination 'platform=macOS' test

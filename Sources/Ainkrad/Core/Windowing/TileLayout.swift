@@ -152,13 +152,60 @@ final class TileLayout {
         onStructuralChange?()
     }
 
+    /// Moves focus to the pane `offset` places away in TAB ORDER — the order
+    /// `blocks` reads in, which is the order the Focus-Mode tab strip shows.
+    ///
+    /// Distinct from `focusNeighbor`, which walks the split TREE geometrically.
+    /// Geometric movement is right for Split Mode, where panes really are laid
+    /// out left/right/up/down — but it is wrong for a tab strip, where the panes
+    /// are stacked on top of each other and the only order the user can see is
+    /// the strip's. Against a nested tree ("two columns, the second split into
+    /// three rows") a geometric ⌘→ steps out of the current container and past
+    /// its siblings, which is what made arrow navigation appear to skip tabs.
+    ///
+    /// Clamps at both ends rather than wrapping: arrows in a tab strip are
+    /// directional, and silently jumping from the last tab to the first reads as
+    /// a skip too.
+    func focusAdjacentInOrder(offset: Int) {
+        let panes = blocks
+        guard !panes.isEmpty else { return }
+        guard let current = panes.firstIndex(where: { $0.id == focusedBlockID }) else {
+            focus(panes[0].id)
+            return
+        }
+        let target = min(max(current + offset, 0), panes.count - 1)
+        guard target != current else { return }
+        focus(panes[target].id)
+    }
+
+    /// Focuses the pane at `index` in tab order (the ⌥1-9 direct jumps). Out of
+    /// range is a no-op, so ⌥7 with three tabs open does nothing rather than
+    /// clamping to a tab the user didn't aim at.
+    func focusPane(at index: Int) {
+        let panes = blocks
+        guard panes.indices.contains(index) else { return }
+        guard panes[index].id != focusedBlockID else { return }
+        focus(panes[index].id)
+    }
+
+    /// Renames a pane (its Focus-Mode tab). Routed through the layout rather
+    /// than set on the `Block` directly so the new name is persisted with the
+    /// rest of the layout — a rename that vanishes on relaunch is not a rename.
+    func rename(_ id: UUID, to title: String) {
+        guard let block = blocks.first(where: { $0.id == id }) else { return }
+        block.rename(to: title)
+        onStructuralChange?()
+    }
+
     /// Splits a pane: opens a NEW pane of the same app on the given edge —
     /// joining its container as an equal sibling when the edge is parallel
     /// to it, or wrapping it into a stacked 50/50 pair when perpendicular.
     @discardableResult
     func split(_ id: UUID, edge: PaneEdge) -> Block? {
         guard let root, let source = blocks.first(where: { $0.id == id }) else { return nil }
-        let block = Block(appID: source.appID)
+        // A split inherits the source pane's name — it is the same app, and a
+        // renamed pane splitting into an unnamed one reads as a different app.
+        let block = Block(appID: source.appID, title: source.title)
         self.root = Self.inserting(block, at: id, edge: edge, in: root)
         focusedBlockID = block.id
         onStructuralChange?()

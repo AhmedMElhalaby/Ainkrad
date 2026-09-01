@@ -26,7 +26,21 @@ struct DevHostApp: App {
     var body: some Scene {
         WindowGroup("Ainkrad Dev Host") {
             VStack(spacing: 0) {
-                PluginStageView(state: model.state)
+                // Shown only with a plugin on the stage: with nothing loaded
+                // there are no surfaces to choose between, and a live picker
+                // over a placeholder invites the reading that the bundle
+                // loaded and its settings are simply blank.
+                if case .loaded = model.state {
+                    Picker("Surface", selection: $model.surface) {
+                        Text("App").tag(DevHostModel.Surface.root)
+                        Text("Settings").tag(DevHostModel.Surface.settings)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .padding(6)
+                }
+                PluginStageView(state: model.state, surface: model.surface)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 ValidationBanner(state: model.state)
                 LogPaneView(logTail: logTail, subsystem: Self.pluginSubsystem)
