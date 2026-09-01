@@ -18,25 +18,36 @@ extension EnvironmentValues {
     }
 }
 
-/// One workspace's content: its pane tree in Split Mode, or Focus Mode —
-/// the focused panel filling the canvas with the other panels reachable
-/// from a compact switcher rail. Empty workspaces show the island empty
-/// state.
+/// One workspace's CHROME: the Focus-Mode tab strip along the top edge, the
+/// seams between panes, the translucency backdrop, the shortcut badge, and the
+/// island empty state. Everything except the panes.
 ///
-/// RENDERING CONTRACT: every panel renders exactly once, in a flat layer
-/// keyed by its stable Block id; the layout tree only computes frames
-/// (see `paneGeometry`). Structural changes therefore MOVE views instead
-/// of re-creating them — a dragged terminal keeps its live session.
+/// RENDERING CONTRACT: every panel renders exactly once, in a flat layer keyed
+/// by its stable Block id; the layout tree only computes frames (see
+/// `paneGeometry`). Structural changes therefore MOVE views instead of
+/// re-creating them — a dragged terminal keeps its live session.
+///
+/// That flat layer is `WorkspacePaneLayer`, and it lives ABOVE the carousel,
+/// spanning every workspace, which is why the panes are not drawn here. Inside
+/// one workspace this view used to satisfy the contract on its own; across
+/// workspaces it could not, because SwiftUI identity is scoped to a container —
+/// so moving a pane to another workspace destroyed and re-created it, killing
+/// live sessions. The chrome stays per workspace; the panes went up a level.
+///
+/// The two lay out against the same rectangle, and both derive it from
+/// `PaneCanvasMetrics` so the seams stay between the panes they separate.
 struct TileLayoutView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
     let workspace: Workspace
     let registry: BuiltInAppRegistry
 
-    /// A one-shot zoom for the focused pane on a Focus toggle: it pops from
-    /// this scale back to 1. A *scale* (not a frame morph) so the terminal's
-    /// cols/rows never change mid-animation — the size still snaps in one step
-    /// (one clean reflow), while the pane visually grows into place.
-    @State private var focusPop: CGFloat = 1
+    /// The pane the floating shortcut badge is currently announcing, and the
+    /// token that lets a later switch cancel an earlier badge's dismissal (so
+    /// switching twice quickly shows the second badge for its full time rather
+    /// than having the first one's timer close it early).
+    @State private var badgeBlockID: UUID?
+    @State private var badgeToken = 0
 
     private var tileLayout: TileLayout { workspace.tileLayout }
 
@@ -55,123 +66,114 @@ struct TileLayoutView: View {
         if tileLayout.isEmpty {
             EmptyWorkspaceView(isActiveWorkspace: workspace.id == environment.workspaceManager.activeWorkspaceID)
         } else {
-            HStack(spacing: 0) {
-                paneCanvas
+            GeometryReader { proxy in
+                let showsStrip = PaneGeometryResolver.showsTabStrip(workspace)
+                let canvas = PaneCanvasMetrics.canvasRect(in: proxy.size, showsTabStrip: showsStrip)
+                let stripRect = PaneCanvasMetrics.tabStripRect(in: proxy.size)
 
-                if workspace.viewMode == .focus, tileLayout.blocks.count > 1 {
-                    FocusSwitcherRail(workspace: workspace)
-                        .padding(.leading, AinkradSpacing.sm)
-                        // Only the rail fades in/out; the panes must NOT
-                        // animate their size on a Focus toggle (that flood of
-                        // intermediate resizes duplicates terminal output).
-                        .transition(.opacity)
-                        .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
-                }
-            }
-            .padding([.horizontal, .bottom], AinkradSpacing.sm)
-            .padding(.top, AinkradSpacing.xs)
-        }
-    }
+                ZStack(alignment: .topLeading) {
+                    // Everything that lives INSIDE the pane canvas, in
+                    // canvas-local coordinates. It is its own container, sized
+                    // and offset to the canvas rect, because `"pane-canvas"` is
+                    // the coordinate space `SeamView`'s drag gesture resolves
+                    // boundary positions in — and those come from
+                    // `paneGeometry`, which is canvas-local. Naming the
+                    // workspace frame instead would offset every seam drag by
+                    // the insets.
+                    ZStack(alignment: .topLeading) {
+                        // One shared workspace backdrop behind every pane, so
+                        // translucent terminals reveal slices of a SINGLE
+                        // blurred island rather than each carrying its own.
+                        // Only present when transparency is enabled (otherwise
+                        // opaque panes cover it).
+                        if hasTranslucentPane {
+                            workspaceBackdrop
+                                .frame(width: canvas.width, height: canvas.height)
+                        }
 
-    private var paneCanvas: some View {
-        GeometryReader { proxy in
-            // Always compute the normal split geometry. Focus Mode is handled
-            // in the view (below) WITHOUT collapsing panes to zero size —
-            // zero-resizing a terminal corrupts/duplicates its output.
-            let geometry = tileLayout.paneGeometry(in: proxy.size, gap: AinkradSpacing.sm, collapseTo: nil)
-            let inFocus = workspace.viewMode == .focus && tileLayout.blocks.count > 1
-            let focusedID = tileLayout.focusedBlockID
-            let fullRect = CGRect(origin: .zero, size: proxy.size)
+                        seams(in: canvas.size)
 
-            ZStack(alignment: .topLeading) {
-                // One shared workspace backdrop behind every pane, so
-                // translucent terminals reveal slices of a SINGLE blurred
-                // island rather than each carrying its own. Only present when
-                // transparency is enabled (otherwise opaque panes cover it).
-                if hasTranslucentPane {
-                    workspaceBackdrop
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
+                        // Bottom-trailing: out of the way of a terminal's
+                        // prompt and of the tab strip it refers to, and the
+                        // corner the eye is least likely to be reading when the
+                        // pane changes.
+                        shortcutBadge
+                            .frame(width: canvas.width, height: canvas.height, alignment: .bottomTrailing)
+                    }
+                    .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
+                    .coordinateSpace(name: "pane-canvas")
+                    .offset(x: canvas.minX, y: canvas.minY)
 
-                // One stable view per panel — identity is the Block id, so
-                // moves/splits/closes reposition instead of re-creating.
-                // `.position` (not `.offset`) so the layout/hit-test frame
-                // tracks where the pane is drawn.
-                //
-                // In Focus Mode EVERY pane sits at full-canvas size — only the
-                // focused one is shown. Holding them all full (rather than at
-                // their split frame) makes switching the active pane a pure
-                // visibility swap: no resize, so no reflow lag/flash on switch.
-                // Panes resize once on entering/leaving Focus, never on switch.
-                ForEach(tileLayout.blocks) { (block: Block) in
-                    let normalFrame = geometry.frames[block.id] ?? .zero
-                    let isFocusedPane = block.id == focusedID
-                    let frame = inFocus ? fullRect : normalFrame
-                    let isVisible = inFocus
-                        ? isFocusedPane
-                        : (normalFrame.width >= 1 && normalFrame.height >= 1)
-                    BlockView(block: block, tileLayout: tileLayout, registry: registry, workspace: workspace, paneSize: frame.size)
-                        // The focused Focus-Mode pane resizes immediately (no
-                        // debounce) so its tile→full grow fills without an empty
-                        // flash; all other panes keep the trailing debounce.
-                        .environment(\.paneResizesImmediately, inFocus && isFocusedPane)
-                        // Generation 8: the HOST says which pane is active.
-                        // Plugins previously had to infer it — Terminal bound
-                        // the agent's context to whichever pane was created
-                        // last, so with two terminals open the assistant read
-                        // the wrong buffer, silently. Only the host knows: it
-                        // owns the layout, the focused id, focus mode and
-                        // workspace switching.
-                        .environment(\.ainkradPaneIsFocused, isFocusedPane)
-                        // Every VISIBLE pane zooms into place on a Focus toggle
-                        // (scale-pop, driven by `focusPop`): entering, that's the
-                        // one focused pane; exiting, it's the whole split grid
-                        // popping back. Scale is a render transform — it never
-                        // changes the terminal's cols/rows, so the size still
-                        // resizes exactly once (no empty-space-then-snap).
-                        .scaleEffect(isVisible ? focusPop : 1)
-                        .opacity(isVisible ? 1 : 0)
-                        .frame(width: max(frame.width, 0), height: max(frame.height, 0))
-                        .position(x: frame.midX, y: frame.midY)
-                        .allowsHitTesting(isVisible)
-                }
-
-                if !inFocus {
-                    ForEach(geometry.seams) { seam in
-                        SeamView(placement: seam, tileLayout: tileLayout)
-                            .frame(width: seam.frame.width, height: seam.frame.height)
-                            .position(x: seam.frame.midX, y: seam.frame.midY)
+                    if showsStrip {
+                        FocusTabStrip(workspace: workspace)
+                            .frame(width: stripRect.width, height: stripRect.height)
+                            .offset(x: stripRect.minX, y: stripRect.minY)
+                            // Only the strip fades in/out; the panes must NOT
+                            // animate their size on a Focus toggle (that flood
+                            // of intermediate resizes duplicates terminal
+                            // output).
+                            .transition(.opacity)
+                            .animation(.easeInOut(duration: 0.2), value: workspace.viewMode)
                     }
                 }
-            }
-            .coordinateSpace(name: "pane-canvas")
-            // Zoom the now-visible pane(s) in on EVERY Focus toggle — entering
-            // and exiting. The size has already snapped in this same update;
-            // we set the start scale, then spring it to 1 on the next tick (so
-            // the start frame actually renders first), animating only the scale.
-            .onChange(of: workspace.viewMode) { _, _ in
-                popFocusedPane()
-            }
-            // Switching the active pane WHILE in Focus Mode swaps which pane
-            // fills the canvas — zoom the newcomer in too. In Split Mode a focus
-            // change only moves the glow (no resize), so it gets no pop.
-            .onChange(of: tileLayout.focusedBlockID) { _, _ in
-                guard workspace.viewMode == .focus else { return }
-                popFocusedPane()
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                .onChange(of: tileLayout.focusedBlockID) { _, newValue in
+                    guard workspace.viewMode == .focus, tileLayout.blocks.count > 1 else { return }
+                    announceShortcut(for: newValue)
+                }
             }
         }
     }
 
-    /// Zooms the now-visible pane(s) in: set the start scale, then spring it to
-    /// 1 on the next tick (so the start frame renders first), animating only the
-    /// scale — the pane size has already snapped, so the terminal never reflows
-    /// mid-animation.
-    private func popFocusedPane() {
-        focusPop = 0.92
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
-                focusPop = 1
+    /// The energy seams between sibling panes. Drawn here rather than in the
+    /// pane layer because they belong to ONE workspace's split tree, and
+    /// positioned from the same `PaneCanvasMetrics` rectangle the panes use so
+    /// they land exactly in the gaps between them.
+    @ViewBuilder
+    private func seams(in canvasSize: CGSize) -> some View {
+        if !PaneGeometryResolver.isInFocusMode(workspace) {
+            let geometry = tileLayout.paneGeometry(in: canvasSize, gap: AinkradSpacing.sm, collapseTo: nil)
+            ForEach(geometry.seams) { seam in
+                SeamView(placement: seam, tileLayout: tileLayout)
+                    .frame(width: seam.frame.width, height: seam.frame.height)
+                    .offset(x: seam.frame.minX, y: seam.frame.minY)
             }
+        }
+    }
+
+    // MARK: - Shortcut badge
+
+    /// Shows the badge for the pane that just came forward, then dismisses it.
+    /// The token guards against an earlier switch's dismissal closing a later
+    /// badge: only the most recent announcement is allowed to clear the state.
+    private func announceShortcut(for blockID: UUID?) {
+        guard let blockID else { return }
+        badgeToken += 1
+        let token = badgeToken
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.14)) {
+            badgeBlockID = blockID
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            guard badgeToken == token else { return }
+            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.22)) {
+                badgeBlockID = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var shortcutBadge: some View {
+        if let badgeBlockID,
+           let index = tileLayout.blocks.firstIndex(where: { $0.id == badgeBlockID }) {
+            let block = tileLayout.blocks[index]
+            let appName = registry.allApps.first { $0.id == block.appID }?.displayName
+            PaneShortcutBadge(
+                title: block.displayTitle(appName: appName),
+                shortcut: PaneShortcut.label(forOrdinal: index),
+                tokens: environment.themeManager.tokens
+            )
+            .padding(AinkradSpacing.md)
+            .transition(.opacity)
         }
     }
 
@@ -206,70 +208,6 @@ struct TileLayoutView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-}
-
-/// Focus Mode's compact switcher: one chip per panel (not a tab bar), the
-/// focused one wearing targeting brackets; clicking a chip brings that
-/// panel forward.
-private struct FocusSwitcherRail: View {
-    @Environment(AppEnvironment.self) private var environment
-    let workspace: Workspace
-
-    var body: some View {
-        let tokens = environment.themeManager.tokens
-        let tileLayout = workspace.tileLayout
-
-        VStack(spacing: 8) {
-            ForEach(tileLayout.blocks) { block in
-                let isFocused = tileLayout.focusedBlockID == block.id
-
-                Button {
-                    tileLayout.focus(block.id)
-                } label: {
-                    chipContent(block, tokens: tokens)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            ChamferShape(cut: AinkradRadius.sm)
-                                .fill(isFocused ? tokens.accentPrimary.opacity(0.16) : tokens.surface.opacity(0.6))
-                        )
-                        .overlay(
-                            ChamferShape(cut: AinkradRadius.sm)
-                                .strokeBorder(isFocused ? tokens.accentPrimary.opacity(0.5) : tokens.foreground.opacity(0.1), lineWidth: 1)
-                        )
-                        .overlay(
-                            TargetingBrackets(length: 6)
-                                .stroke(isFocused ? tokens.accentSecondary.opacity(0.9) : .clear, lineWidth: 1.2)
-                                .padding(-1)
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(environment.registry.allApps.first(where: { $0.id == block.appID })?.displayName ?? block.appID)
-            }
-
-            Spacer()
-
-            Button {
-                workspace.viewMode = .split
-                environment.workspaceManager.persist()
-            } label: {
-                Image(systemName: "rectangle.split.2x2")
-                    .font(.system(size: 12))
-                    .foregroundStyle(tokens.foreground.opacity(0.55))
-                    .frame(width: 36, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Back to Split Mode (⌘M)")
-        }
-        .frame(width: 44)
-        .padding(.vertical, 2)
-    }
-
-    private func chipContent(_ block: Block, tokens: DesignTokens) -> some View {
-        let symbol = environment.registry.allApps.first(where: { $0.id == block.appID })?.icon ?? "app"
-        return NeonAppTile(symbol: symbol, tokens: tokens, size: 26)
-    }
 }
 
 /// An energy seam between sibling panes, absolutely positioned by its

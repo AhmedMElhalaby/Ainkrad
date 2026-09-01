@@ -242,6 +242,27 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                 return perform(action, in: environment)
             }
 
+            // ⌥1-⌥9 jump straight to a Focus-Mode tab. Placed above the
+            // `guard command` below because it is the one pane chord with no
+            // Command in it.
+            if !environment.isSetupPresented, !environment.isLauncherPresented,
+               !environment.isWorkspaceOverviewPresented, !environment.isSettingsPresented,
+               !environment.isAppStorePresented,
+               let index = WorkspaceChord.paneIndex(keyCode: event.keyCode,
+                                                    command: command,
+                                                    option: isOption,
+                                                    shift: isShifted) {
+                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                guard layout.blocks.indices.contains(index) else { return true }
+                layout.focusPane(at: index)
+                // No `makeFirstResponder(nil)` here, and none on the pane-arrow
+                // path below either: the whole point of moving pane focus is
+                // that the pane gets the keyboard, and clearing the first
+                // responder is the opposite of that. `PaneKeyFocusAnchor` hands
+                // it to the arriving pane's app.
+                return true
+            }
+
             guard command else { return false }
 
             // ⌘⌥←/→ cycle to the previous/next workspace (wrapping around),
@@ -269,12 +290,22 @@ struct KeyboardShortcutMonitor: NSViewRepresentable {
                !environment.isAppStorePresented,
                let direction = WorkspaceChord.paneDirection(keyCode: event.keyCode,
                                                             command: command, option: isOption) {
-                let layout = environment.workspaceManager.activeWorkspace.tileLayout
+                let workspace = environment.workspaceManager.activeWorkspace
+                let layout = workspace.tileLayout
                 if isShifted {
                     layout.resizeFocused(direction)
+                } else if workspace.viewMode == .focus {
+                    // In Focus Mode the panes are stacked, not laid out — the
+                    // only order the user can see is the tab strip's, so arrows
+                    // walk THAT. Walking the split tree here is what made
+                    // navigation skip tabs: a geometric step out of a nested
+                    // container jumps past its siblings.
+                    switch direction {
+                    case .left, .up: layout.focusAdjacentInOrder(offset: -1)
+                    case .right, .down: layout.focusAdjacentInOrder(offset: 1)
+                    }
                 } else {
                     layout.focusNeighbor(direction)
-                    window?.makeFirstResponder(nil)
                 }
                 return true
             }
