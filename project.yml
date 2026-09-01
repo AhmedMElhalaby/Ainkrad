@@ -73,7 +73,7 @@ packages:
     # Generation 9: HostServices.signals + PluginSignalEmitter, and the Signal
     # feed components moved into the UI kit. minSupportedAPIVersion is 8, so
     # every installed generation-8 bundle keeps loading.
-    revision: f8c207e1e6f7bdeb8ef67f776f6d5ae12701c11f
+    revision: 8c699bdbaf8129070dae8333b231a63ed9d618aa
 
 targets:
   AinkradHostRuntime:

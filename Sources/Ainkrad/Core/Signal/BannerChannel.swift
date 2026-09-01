@@ -7,13 +7,14 @@ import AinkradSignal
 }
 
 /// macOS banner delivery. Authorization is requested lazily on the first
-/// banner-routed event, not at launch, so the user is not prompted before
-/// there is anything to show - the behaviour `UserNotificationRunNotifier`
-/// established and this generalizes.
+/// banner-routed event, not at launch, so the user is not prompted before there
+/// is anything to show — the behaviour the old run notifier established and
+/// this generalizes.
 ///
-/// In M1 this channel never sees `run.*` from `.host`: `RunNotifier` still
-/// owns those banners and `RoutingRules.suppressBannerForHostRuns` keeps them
-/// away from here. M2 deletes `RunNotifier` and lifts the exemption.
+/// As of generation 9 this channel is the ONLY thing that posts a macOS banner,
+/// including for completed agent runs. There is no second path any more, so a
+/// bug here is a notification the user never sees rather than one they see
+/// twice.
 @MainActor
 final class UserNotificationBannerChannel: BannerPosting {
     private var didRequestAuthorization = false

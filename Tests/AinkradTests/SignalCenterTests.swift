@@ -59,12 +59,12 @@ final class SignalCenterTests {
         #expect(deliverer.delivered.isEmpty)
     }
 
-    @Test("the M1 exemption suppresses run banners but still records the run")
-    func runBannerExemption() {
+    @Test("a run event routes like any other, now that the exemption is gone")
+    func runEventsAreOrdinary() {
         center.emit(draft("run.finished"), from: .host)
-        #expect(center.recent.count == 1, "the feed is complete from day one")
-        #expect(!deliverer.delivered[0].1.contains(.banner),
-                "RunNotifier still owns this banner in M1 - two banners is the bug")
+        #expect(center.recent.count == 1)
+        #expect(deliverer.delivered[0].1.contains(.banner),
+                "the exemption used to strip this; stripping it now means no banner at all")
     }
 
     @Test("marking read clears the unread count")

@@ -91,7 +91,7 @@ final class SignalCenter {
     }
 
     /// Record an event and deliver it. Never throws, never fails the caller -
-    /// the doctrine inherited from `UserNotificationRunNotifier`: a run's
+    /// the doctrine inherited from the old run notifier: a run's
     /// success is never gated on a notification.
     func emit(_ draft: SignalDraft, from source: SignalSource) {
         let event: SignalEvent

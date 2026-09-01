@@ -63,18 +63,6 @@ struct SignalSettingsPane: View {
                 }
             }
 
-            AinkradSettingsPanel(
-                title: "Agent runs",
-                hint: "Completed background runs currently notify through the older run "
-                    + "notifier, so the feed records them without posting a second banner. "
-                    + "This goes away when runs move fully onto the feed."
-            ) {
-                AinkradCaptionedRow("Run banners") {
-                    AinkradBadge(
-                        text: center.rules.suppressBannerForHostRuns ? "Legacy notifier" : "Feed",
-                        status: center.rules.suppressBannerForHostRuns ? .warning : .success)
-                }
-            }
         }
         .confirmationDialog("Clear the notification feed?",
                             isPresented: $confirmingClear, titleVisibility: .visible) {
