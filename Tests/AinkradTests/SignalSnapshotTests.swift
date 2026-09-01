@@ -75,6 +75,28 @@ struct SignalSnapshotTests {
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
+    @Test("render the bell popover")
+    func renderBellPopover() throws {
+        let now = Date()
+        let events = sampleEvents(now: now)
+        let theme = Theme.neonBlue
+
+        let view = SignalBellPopover(
+            events: events,
+            unread: 3,
+            repeatCounts: [events[0].id: 4],
+            readIDs: [events[3].id, events[4].id],
+            now: now)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 380, height: 470))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-bell-popover.png"))
+    }
+
     /// Renders through a real `NSHostingView` in an offscreen window.
     ///
     /// `ImageRenderer` was the first choice and produced a blank image: it does
