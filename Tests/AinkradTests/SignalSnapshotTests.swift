@@ -64,7 +64,7 @@ struct SignalSnapshotTests {
             .frame(width: 380, height: 420)
             .background(HostThemeTokens(from: theme).surface)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -141,7 +141,7 @@ struct SignalSnapshotTests {
         }
             .frame(width: 560, height: 470)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -182,7 +182,7 @@ struct SignalSnapshotTests {
         }
             .frame(width: 780, height: 620)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -209,7 +209,7 @@ struct SignalSnapshotTests {
         }
             .frame(width: 420, height: 320)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -252,7 +252,7 @@ struct SignalSnapshotTests {
             .frame(maxHeight: .infinity, alignment: .top)
             .background(HostThemeTokens(from: theme).background)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -261,6 +261,20 @@ struct SignalSnapshotTests {
         let png = try Self.render(view, size: CGSize(width: 560, height: 660))
         try png.write(to: outputDirectory.appendingPathComponent("signal-settings.png"))
     }
+
+    /// The typography the running app injects (`AinkradApp` sets
+    /// `fontFamilyName` from `themeManager.uiFontFamily`), not
+    /// `AinkradTypography.default` — whose `fontFamilyName` is nil, which falls
+    /// back to the SYSTEM face.
+    ///
+    /// This mattered: after the feed components moved into the kit they resolve
+    /// type through `AinkradFontResolver`, which reads this environment value,
+    /// where before they used the host's `AinkradFont` and its statically
+    /// configured family. A harness passing `.default` therefore rendered the
+    /// brand face before the move and the system face after it, and the
+    /// snapshot diff blamed the move for a defect in the harness.
+    static let hostTypography = AinkradTypography(
+        fontFamilyName: UIFontFamily.exo2.fontName, scale: 1.0)
 
     /// Renders through a real `NSHostingView` in an offscreen window.
     ///

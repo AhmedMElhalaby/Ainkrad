@@ -22,7 +22,7 @@ struct SignalSettingsPane: View {
             ) {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                        AinkradCaptionedRow(SignalRowFormatter.sourceLabel(source)) {
+                        AinkradCaptionedRow(SignalPresentation.sourceLabel(source)) {
                             AinkradToggle(isOn: Binding(
                                 get: { !center.rules.mutedSources.contains(source) },
                                 set: { allowed in

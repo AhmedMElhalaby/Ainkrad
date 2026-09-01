@@ -502,6 +502,7 @@ final class AppEnvironment {
         let (
             persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
+            signalHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
             assistantDocuments
@@ -630,6 +631,7 @@ final class AppEnvironment {
             localModelAvailability: localModelAvailability, mcpServerRegistry: mcpServerRegistry,
             lspServerRegistry: lspServerRegistry, persistence: persistence, secrets: secrets,
             themeManager: themeManager, agentContextHub: agentContextHub, agentActionHub: agentActionHub,
+            signalHub: signalHub,
             pluginLaunchHub: pluginLaunchHub, appAppearanceStore: appAppearanceStore,
             pluginDataRoot: pluginDataRoot, pluginDirs: pluginDirs, loader: loader, registry: registry,
             workspaceManager: workspaceManager, home: home, defaults: defaults

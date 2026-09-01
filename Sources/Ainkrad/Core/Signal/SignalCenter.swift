@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AinkradHostRuntime
 import AinkradSignal
 
 /// Receives the routing decision and does something about it. Split out so
@@ -185,5 +186,25 @@ final class SignalCenter {
         recent = store.page(filter: .all, before: nil, limit: 200)
         rowStates = store.rowStates(limit: 200)
         unreadCounts = store.unreadCounts()
+    }
+}
+
+/// Lets `SignalEmitterHub` (in `AinkradHostRuntime`, which cannot see this
+/// type) drive the feed. The hub holds this weakly, so a torn-down host does
+/// not keep the feed alive.
+extension SignalCenter: SignalEmitting {
+    func record(_ appID: String, kind: String, severity: SignalSeverity, title: String,
+                body: String?, importance: SignalImportance,
+                deepLink: SignalDeepLink?, actions: [SignalAction], dedupeKey: String?) {
+        emit(SignalDraft(kind: kind, severity: severity, title: title, body: body,
+                         importance: importance, deepLink: deepLink,
+                         actions: actions, dedupeKey: dedupeKey),
+             from: .app(appID: appID))
+    }
+
+    func events(forAppID appID: String, limit: Int) -> [SignalEvent] {
+        var filter = SignalFilter.all
+        filter.sources = [.app(appID: appID)]
+        return page(filter: filter, before: nil, limit: limit)
     }
 }

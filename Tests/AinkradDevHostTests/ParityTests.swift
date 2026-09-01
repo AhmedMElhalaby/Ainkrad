@@ -43,6 +43,7 @@ struct ParityTests {
             hub: AgentContextRegistryHub(),
             actionHub: AgentActionRegistryHub(),
             launchHub: PluginLaunchHub(),
+            signalHub: SignalEmitterHub(),
             declaredPresentation: presentation,
             appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore())
         )

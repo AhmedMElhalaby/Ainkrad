@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The single window's content: every workspace's tile layout stays
 /// mounted (hidden when inactive) so running sessions survive switching;

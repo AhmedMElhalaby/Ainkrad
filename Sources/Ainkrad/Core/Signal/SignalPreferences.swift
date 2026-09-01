@@ -1,4 +1,5 @@
 import Foundation
+import AinkradAppKit
 import AinkradSignal
 
 struct SignalPreferences: Codable, Equatable {

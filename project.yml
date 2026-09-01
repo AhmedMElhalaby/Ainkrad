@@ -70,7 +70,10 @@ packages:
     # plus the umbrella re-export that makes the module reachable by
     # consumers at all. A new TARGET, not a renamed symbol - the API
     # generation stays 8 and every existing plugin pin remains loadable.
-    revision: 170c742c406adb73218e12a3b4ac1e67e79c80db
+    # Generation 9: HostServices.signals + PluginSignalEmitter, and the Signal
+    # feed components moved into the UI kit. minSupportedAPIVersion is 8, so
+    # every installed generation-8 bundle keeps loading.
+    revision: f8c207e1e6f7bdeb8ef67f776f6d5ae12701c11f
 
 targets:
   AinkradHostRuntime:

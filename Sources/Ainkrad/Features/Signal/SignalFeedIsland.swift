@@ -87,7 +87,7 @@ struct SignalFeedIsland: View {
             ForEach(SignalSeverity.allCases, id: \.self) { severity in
                 AinkradSwatchChip(
                     label: severity.rawValue.capitalized,
-                    swatch: SignalRowFormatter.status(for: severity)
+                    swatch: SignalPresentation.status(for: severity)
                         .color(in: theme, statusColors: status),
                     isOn: activeSeverities.contains(severity)) {
                     if activeSeverities.contains(severity) { activeSeverities.remove(severity) }
@@ -96,7 +96,7 @@ struct SignalFeedIsland: View {
             }
             ForEach(Array(knownSources.enumerated()), id: \.offset) { _, source in
                 AinkradSwatchChip(
-                    label: SignalRowFormatter.sourceLabel(source),
+                    label: SignalPresentation.sourceLabel(source),
                     swatch: theme.accentSecondary,
                     isOn: activeSource == source) {
                     activeSource = (activeSource == source) ? nil : source

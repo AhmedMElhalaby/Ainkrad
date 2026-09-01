@@ -21,6 +21,7 @@ extension AppEnvironment {
         themeManager: ThemeManager,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        signalHub: SignalEmitterHub,
         pluginLaunchHub: PluginLaunchHub,
         appAppearanceStore: AppAppearanceStore,
         pluginDataRoot: URL,
@@ -77,6 +78,9 @@ extension AppEnvironment {
                 SignalPreferences(rules: signalCenter.rules, retention: retention))
         }
         environment.signalCenter = signalCenter
+        // The hub was built in `bootstrapCoreStores`, before the feed existed;
+        // this is where it gains something to record into.
+        signalHub.attach(sink: signalCenter)
         // `RunManager` is built in `bootstrapSession`, before this runs, so the
         // center is attached rather than injected.
         environment.runManager.attachSignalCenter(signalCenter)
@@ -152,7 +156,7 @@ extension AppEnvironment {
         // in a directory the plugin no longer reads.
         let runeHost = HostServicesImpl(appID: "rune", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
-                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                             declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
@@ -162,14 +166,14 @@ extension AppEnvironment {
         // directly), scoped like any other app for its documents/secrets/theme/context.
         let sageHost = HostServicesImpl(appID: "sage", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
-                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Live Scry (M7 Slice 7) is likewise a host-embedded built-in — its
         // pane reads `AppEnvironment.canvasStore` directly (see `ScryApp`).
         let scryHost = HostServicesImpl(appID: "scry", dataRootURL: pluginDataRoot,
                                           secretStore: secrets, themeManager: themeManager,
-                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Hoard (M1) — a host-embedded built-in like Sage and Scry. It
@@ -177,7 +181,7 @@ extension AppEnvironment {
         // `AppEnvironment` directly.
         let hoardHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
                                          secretStore: secrets, themeManager: themeManager,
-                                         hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                         hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Hoard' MCP server and agent context are built HERE, not in
