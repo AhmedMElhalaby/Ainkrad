@@ -77,6 +77,20 @@ struct RootView: View {
                 .transition(.opacity)
             }
 
+            // The bell's dropdown. Anchored below the top bar on the trailing
+            // edge, under the bell that opened it. Presented here rather than
+            // as an overlay on `HUDBar` because that strip is 30pt tall and
+            // would clip it.
+            if environment.isSignalDropdownPresented, let center = environment.signalCenter {
+                SignalBellDropdownOverlay(center: center) {
+                    environment.isSignalDropdownPresented = false
+                } onViewAll: {
+                    environment.isSignalDropdownPresented = false
+                    environment.isSignalFeedPresented = true
+                }
+                .zIndex(60)
+            }
+
             if environment.isSignalFeedPresented, let center = environment.signalCenter {
                 SignalFeedOverlayView(center: center) {
                     environment.isSignalFeedPresented = false

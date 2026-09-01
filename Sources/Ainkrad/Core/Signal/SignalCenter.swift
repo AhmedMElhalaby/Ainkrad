@@ -42,6 +42,13 @@ final class SignalCenter {
 
     /// Newest-first window over the feed, kept live for the UI.
     private(set) var recent: [SignalEvent] = []
+    /// Per-row read state and coalesce counts for `recent`. Kept beside the
+    /// events rather than on them: `SignalEvent` is the plugin-facing envelope.
+    private(set) var rowStates: [UUID: SignalStore.SignalRowState] = [:]
+    /// Ids in `recent` the user has already seen.
+    var readIDs: Set<UUID> { Set(rowStates.filter { $0.value.isRead }.map(\.key)) }
+    /// Coalesce counts, for the `xN` badge.
+    var repeatCounts: [UUID: Int] { rowStates.mapValues(\.repeatCount) }
     private(set) var unreadCounts: [SignalSource: Int] = [:] {
         didSet { onUnreadChanged?(totalUnread) }
     }
@@ -77,6 +84,7 @@ final class SignalCenter {
         if let store {
             store.enforceRetention(retention)
             self.recent = store.page(filter: .all, before: nil, limit: 200)
+            self.rowStates = store.rowStates(limit: 200)
             self.unreadCounts = store.unreadCounts()
         }
     }
@@ -175,6 +183,7 @@ final class SignalCenter {
     private func refreshFromStore() {
         guard let store else { return }
         recent = store.page(filter: .all, before: nil, limit: 200)
+        rowStates = store.rowStates(limit: 200)
         unreadCounts = store.unreadCounts()
     }
 }

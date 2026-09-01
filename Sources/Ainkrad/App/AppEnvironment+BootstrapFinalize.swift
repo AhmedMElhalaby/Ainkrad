@@ -81,29 +81,6 @@ extension AppEnvironment {
         // center is attached rather than injected.
         environment.runManager.attachSignalCenter(signalCenter)
 
-        environment.signalBellController = SignalBellController { [weak environment] in
-            guard let environment, let center = environment.signalCenter else {
-                return AnyView(EmptyView())
-            }
-            return AnyView(
-                SignalBellPopover(
-                    events: center.recent,
-                    unread: center.totalUnread,
-                    readIDs: [],
-                    onActivate: { _ in },
-                    onMarkAllRead: { center.markAllRead(filter: .all) },
-                    onOpenFeed: {
-                        environment.signalBellController?.hidePopover()
-                        environment.isSignalFeedPresented = true
-                    })
-                    .environment(environment))
-        }
-        let bell = environment.signalBellController
-        signalCenter.onUnreadChanged = { unread in
-            bell?.updateBadge(unread: unread)
-        }
-        bell?.updateBadge(unread: signalCenter.totalUnread)
-
         environment.menuBarController = MenuBarController(presence: environment.menuBarPresence) { [weak environment] in
             guard let environment else { return AnyView(EmptyView()) }
             return AnyView(MenuBarPopoverView(presence: environment.menuBarPresence).environment(environment))

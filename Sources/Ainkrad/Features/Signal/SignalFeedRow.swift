@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 struct SignalDayGroup: Identifiable, Equatable {
@@ -8,8 +9,8 @@ struct SignalDayGroup: Identifiable, Equatable {
 }
 
 /// Pure presentation helpers, kept out of the `View` so they are testable
-/// without rendering. Anything in here that needs a clock takes it as a
-/// parameter - no `Date()` inside a formatter.
+/// without rendering. Anything that needs a clock takes it as a parameter —
+/// no `Date()` inside a formatter.
 enum SignalRowFormatter {
     static func relativeTime(_ date: Date, now: Date) -> String {
         let elapsed = max(0, now.timeIntervalSince(date))
@@ -43,12 +44,28 @@ enum SignalRowFormatter {
         }
     }
 
+    /// Severity in the kit's own vocabulary, so Signal colours itself from the
+    /// same `AinkradStatus` ramp every other component uses instead of a
+    /// parallel palette of its own.
+    ///
+    /// `.info` maps to `.neutral` rather than a tinted success: an informational
+    /// event is not a small success, and rendering it green said it was.
+    static func status(for severity: SignalSeverity) -> AinkradStatus {
+        switch severity {
+        case .info: return .neutral
+        case .success: return .success
+        case .warning: return .warning
+        case .failure: return .danger
+        @unknown default: return .neutral
+        }
+    }
+
     static func color(for severity: SignalSeverity, in status: AinkradStatusColors) -> Color {
         switch severity {
-        case .info: return status.success.opacity(0.55)
         case .success: return status.success
         case .warning: return status.warning
         case .failure: return status.danger
+        case .info: return status.success.opacity(0.55)
         @unknown default: return status.success.opacity(0.55)
         }
     }
@@ -63,8 +80,10 @@ enum SignalRowFormatter {
     }
 }
 
-/// One event. No separator lines anywhere: separation is carried by the
-/// elevated surface on hover and by spacing, per the host's design language.
+/// One event, in the house style: Exo 2 for prose, JetBrains Mono for the
+/// readout, `ChamferShape` for every surface, and the `AinkradStatus` ramp for
+/// severity. No separator lines — separation is spacing plus the elevated
+/// surface on hover.
 struct SignalFeedRow: View {
     let event: SignalEvent
     var repeatCount: Int = 1
@@ -74,15 +93,16 @@ struct SignalFeedRow: View {
     var onAction: (SignalEvent, SignalAction) -> Void = { _, _ in }
 
     @Environment(\.ainkradTheme) private var theme
-    @Environment(\.ainkradStatusColors) private var status
+    @Environment(\.ainkradStatusColors) private var statusColors
     @State private var isHovered = false
 
-    private var accent: Color { SignalRowFormatter.color(for: event.severity, in: status) }
+    private var status: AinkradStatus { SignalRowFormatter.status(for: event.severity) }
+    private var accent: Color { status.color(in: theme, statusColors: statusColors) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            // The severity glyph is its own layer: it lifts slightly on hover
-            // rather than the whole row sliding as one image.
+        HStack(alignment: .top, spacing: AinkradSpacing.sm) {
+            // Its own layer: the glyph lifts on hover rather than the whole row
+            // sliding as one image.
             Image(systemName: SignalRowFormatter.iconSymbol(for: event.severity))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(accent)
@@ -90,72 +110,84 @@ struct SignalFeedRow: View {
                 .scaleEffect(isHovered ? 1.12 : 1)
                 .offset(y: isHovered ? -1 : 0)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: AinkradSpacing.xs / 2) {
+                HStack(spacing: AinkradSpacing.xs + 2) {
                     Text(event.title)
-                        .font(.system(size: 12.5, weight: isUnread ? .semibold : .regular))
+                        .font(AinkradFont.display(12.5, weight: isUnread ? .semibold : .regular))
                         .foregroundStyle(theme.foreground)
                         .lineLimit(1)
                     if repeatCount > 1 {
-                        Text("+\(repeatCount - 1)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(theme.foreground.opacity(0.7))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(theme.surfaceElevated))
+                        AinkradBadge(text: "×\(repeatCount)", status: status)
                     }
-                    Spacer(minLength: 4)
+                    Spacer(minLength: AinkradSpacing.xs)
+                    // A readout, so mono — the same language as the clock and
+                    // battery in the top bar.
                     Text(SignalRowFormatter.relativeTime(event.timestamp, now: now))
-                        .font(.system(size: 10.5))
+                        .font(AinkradFont.mono(10, weight: .medium))
                         .foregroundStyle(theme.foreground.opacity(0.45))
-                        .monospacedDigit()
                 }
 
                 if let body = event.body, !body.isEmpty {
                     Text(body)
-                        .font(.system(size: 11.5))
+                        .font(AinkradFont.display(11.5))
                         .foregroundStyle(theme.foreground.opacity(0.62))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                HStack(spacing: 6) {
+                HStack(spacing: AinkradSpacing.xs + 2) {
                     Text(SignalRowFormatter.sourceLabel(event.source))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(theme.foreground.opacity(0.5))
-                    if !event.actions.isEmpty {
-                        ForEach(event.actions, id: \.id) { action in
-                            Button(action.label) { onAction(event, action) }
-                                .buttonStyle(.plain)
-                                .font(.system(size: 10.5, weight: .medium))
-                                .foregroundStyle(action.isDestructive ? status.danger : theme.accentPrimary)
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(Capsule().fill(theme.surfaceElevated.opacity(isHovered ? 1 : 0.55)))
-                        }
+                        .font(AinkradFont.mono(9.5, weight: .medium))
+                        .foregroundStyle(theme.foreground.opacity(0.45))
+                        .tracking(0.4)
+                    ForEach(event.actions, id: \.id) { action in
+                        rowAction(action)
                     }
                 }
-                .opacity(isHovered || !event.actions.isEmpty ? 1 : 0.85)
             }
 
-            // The dot's column is always reserved, even when read: letting it
-            // collapse pulled the timestamps of read rows further right than
-            // unread ones, so a column that should read as a straight edge
-            // visibly zig-zagged.
+            // The column is always reserved, even when read: letting it
+            // collapse pulled read rows' timestamps further right than unread
+            // ones, so a column that should read as a straight edge zig-zagged.
             Circle()
                 .fill(accent)
                 .frame(width: 5, height: 5)
                 .opacity(isUnread ? 1 : 0)
                 .padding(.top, 6)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, AinkradSpacing.md)
+        .padding(.vertical, AinkradSpacing.sm + 1)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            ChamferShape(cut: AinkradRadius.sm)
                 .fill(theme.surfaceElevated.opacity(isHovered ? 0.9 : 0))
         )
-        .contentShape(Rectangle())
+        .overlay(
+            ChamferShape(cut: AinkradRadius.sm)
+                .strokeBorder(theme.accentSecondary.opacity(isHovered ? 0.35 : 0), lineWidth: 1)
+        )
+        .contentShape(ChamferShape(cut: AinkradRadius.sm))
         .onTapGesture { onActivate(event) }
         .onHover { hovering in
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) { isHovered = hovering }
+            withAnimation(AinkradMotion.hover) { isHovered = hovering }
         }
+    }
+
+    /// Inline action. `AinkradButton` is the right control for a footer or a
+    /// dialog, but its `AinkradSpacing.lg` padding is far too heavy for a row,
+    /// so this is built from the same primitives it uses — `ChamferShape`, the
+    /// spacing ramp, the brand face — rather than a raw capsule.
+    private func rowAction(_ action: SignalAction) -> some View {
+        let tint = action.isDestructive ? statusColors.danger : theme.accentPrimary
+        return Button { onAction(event, action) } label: {
+            Text(action.label)
+                .font(AinkradFont.display(10.5, weight: .medium))
+                .foregroundStyle(tint)
+                .padding(.horizontal, AinkradSpacing.sm)
+                .padding(.vertical, AinkradSpacing.xs / 2)
+                .background(ChamferShape(cut: 4).fill(tint.opacity(0.14)))
+                .overlay(ChamferShape(cut: 4).strokeBorder(tint.opacity(0.5), lineWidth: 1))
+                .contentShape(ChamferShape(cut: 4))
+        }
+        .buttonStyle(.plain)
     }
 }

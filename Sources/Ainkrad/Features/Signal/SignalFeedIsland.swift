@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 /// The in-window feed: the full surface, with search, filters and bulk read.
@@ -49,118 +50,91 @@ struct SignalFeedIsland: View {
                                onAction: onAction)
             }
         }
-        .background(theme.surface)
+        // No background of its own: the hosting `AinkradPanel` supplies the
+        // blur and tint, and an opaque fill here would cover its glass.
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Text("Feed")
-                .font(.system(size: 15, weight: .semibold))
+        HStack(spacing: AinkradSpacing.sm + 2) {
+            Text("Notifications")
+                .font(AinkradFont.display(15, weight: .semibold))
                 .foregroundStyle(theme.foreground)
             if unread > 0 {
-                Text("\(unread) new")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(theme.background)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(theme.accentPrimary))
+                AinkradBadge(text: "\(unread) new", tint: theme.accentSecondary)
             }
             Spacer()
-            searchField
+            AinkradSearchField(text: $query, placeholder: "Search") { onSearch(query) }
+                .frame(width: 190)
             if unread > 0 {
-                Button("Mark all read", action: onMarkAllRead)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(theme.accentPrimary)
+                Button(action: onMarkAllRead) {
+                    Text("Mark all read")
+                        .font(AinkradFont.display(10.5, weight: .medium))
+                        .foregroundStyle(theme.accentPrimary)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(theme.foreground.opacity(0.4))
-            TextField("Search", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 11.5))
-                .foregroundStyle(theme.foreground)
-                .frame(width: 130)
-                .onSubmit { onSearch(query) }
-        }
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(theme.surfaceElevated))
+        .padding(.horizontal, AinkradSpacing.lg)
+        .padding(.top, AinkradSpacing.lg - 2)
+        .padding(.bottom, AinkradSpacing.sm + 2)
     }
 
     private var filterBar: some View {
-        HStack(spacing: 6) {
+        // `AinkradSwatchChip` is the kit's toggle chip: chamfered, hover-lit,
+        // and it carries a colour dot — which is exactly what a severity filter
+        // wants, so the severity ramp is legible without reading the label.
+        HStack(spacing: AinkradSpacing.xs + 2) {
             ForEach(SignalSeverity.allCases, id: \.self) { severity in
-                chip(label: severity.rawValue.capitalized,
-                     tint: SignalRowFormatter.color(for: severity, in: status),
-                     isOn: activeSeverities.contains(severity)) {
+                AinkradSwatchChip(
+                    label: severity.rawValue.capitalized,
+                    swatch: SignalRowFormatter.status(for: severity)
+                        .color(in: theme, statusColors: status),
+                    isOn: activeSeverities.contains(severity)) {
                     if activeSeverities.contains(severity) { activeSeverities.remove(severity) }
                     else { activeSeverities.insert(severity) }
                 }
             }
-            if !knownSources.isEmpty {
-                ForEach(Array(knownSources.enumerated()), id: \.offset) { _, source in
-                    chip(label: SignalRowFormatter.sourceLabel(source),
-                         tint: theme.accentSecondary,
-                         isOn: activeSource == source) {
-                        activeSource = (activeSource == source) ? nil : source
-                    }
+            ForEach(Array(knownSources.enumerated()), id: \.offset) { _, source in
+                AinkradSwatchChip(
+                    label: SignalRowFormatter.sourceLabel(source),
+                    swatch: theme.accentSecondary,
+                    isOn: activeSource == source) {
+                    activeSource = (activeSource == source) ? nil : source
                 }
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-    }
-
-    private func chip(label: String, tint: Color, isOn: Bool,
-                      action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isOn ? theme.background : theme.foreground.opacity(0.62))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Capsule().fill(isOn ? tint : theme.surfaceElevated))
-        }
-        .buttonStyle(.plain)
+        .padding(.horizontal, AinkradSpacing.lg)
+        .padding(.bottom, AinkradSpacing.sm)
     }
 
     /// The feed still works with no store - it just cannot remember. Saying so
     /// is better than a mysteriously short history.
     private var degradedNotice: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: AinkradSpacing.sm - 1) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10.5))
                 .foregroundStyle(status.warning)
             Text("History unavailable — events are kept in memory for this session only.")
-                .font(.system(size: 10.5))
+                .font(AinkradFont.display(10.5))
                 .foregroundStyle(theme.foreground.opacity(0.62))
         }
-        .padding(.horizontal, 16).padding(.vertical, 7)
+        .padding(.horizontal, AinkradSpacing.lg)
+        .padding(.vertical, AinkradSpacing.sm - 1)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.surfaceElevated.opacity(0.6))
     }
 
     private var noMatches: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: AinkradSpacing.sm) {
             Text("No matching events")
-                .font(.system(size: 12, weight: .medium))
+                .font(AinkradFont.display(12, weight: .medium))
                 .foregroundStyle(theme.foreground.opacity(0.55))
-            Button("Clear filters") {
+            AinkradButton(title: "Clear filters", style: .ghost) {
                 activeSeverities.removeAll(); activeSource = nil
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 10.5, weight: .medium))
-            .foregroundStyle(theme.accentPrimary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, AinkradSpacing.xl + AinkradSpacing.lg)
     }
 }

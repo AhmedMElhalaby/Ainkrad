@@ -144,12 +144,6 @@ struct AinkradHostApp: App {
         environment.menuBarController?.isSuppressed = { [weak environment] in
             environment?.isSetupPresented ?? false
         }
-        // Same gate, same reasoning, and it matters more here: the feed's rows
-        // deep-link into apps, so a reachable bell would open surfaces behind
-        // the setup scrim.
-        environment.signalBellController?.isSuppressed = { [weak environment] in
-            environment?.isSetupPresented ?? false
-        }
         // Retire the outgoing status item first: `NSStatusBar` would otherwise
         // keep showing it, still bound to the previous environment's presence.
         // No-op on the initial boot, where there is no previous controller.
@@ -172,14 +166,8 @@ struct AinkradHostApp: App {
             outgoing.teardown()
             environment.menuBarController?.install()
         }
-        if appDelegate.signalBellController !== environment.signalBellController,
-           let outgoingBell = appDelegate.signalBellController {
-            outgoingBell.teardown()
-            environment.signalBellController?.install()
-        }
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController
-        appDelegate.signalBellController = environment.signalBellController
         appDelegate.assistantSessionStore = environment.assistantSessionStore
     }
 

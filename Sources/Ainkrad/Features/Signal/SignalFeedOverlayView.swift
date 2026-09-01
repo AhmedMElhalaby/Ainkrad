@@ -19,20 +19,24 @@ struct SignalFeedOverlayView: View {
                 .ignoresSafeArea()
                 .onTapGesture(perform: onDismiss)
 
-            SignalFeedIsland(
-                events: events,
-                unread: center.totalUnread,
-                readIDs: [],
-                knownSources: knownSources,
-                isDegraded: center.isDegraded,
-                onSearch: { query in
-                    searchResults = query.isEmpty ? nil : center.search(query)
-                },
-                onActivate: { event in center.markRead(ids: [event.id]) },
-                onMarkAllRead: { center.markAllRead(filter: .all) })
-                .frame(width: 640, height: 520)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: .black.opacity(0.45), radius: 28, y: 12)
+            // The shared HUD panel finish, same as every other overlay in the
+            // app: blur backing, chamfered clip, luminous accent stroke and
+            // corner brackets. A plain rounded rectangle read as a web modal.
+            AinkradPanel(showsBrackets: true) {
+                SignalFeedIsland(
+                    events: events,
+                    unread: center.totalUnread,
+                    repeatCounts: center.repeatCounts,
+                    readIDs: center.readIDs,
+                    knownSources: knownSources,
+                    isDegraded: center.isDegraded,
+                    onSearch: { query in
+                        searchResults = query.isEmpty ? nil : center.search(query)
+                    },
+                    onActivate: { event in center.markRead(ids: [event.id]) },
+                    onMarkAllRead: { center.markAllRead(filter: .all) })
+                    .frame(width: 660, height: 520)
+            }
         }
     }
 

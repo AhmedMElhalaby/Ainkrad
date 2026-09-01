@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 @MainActor
@@ -105,11 +106,8 @@ struct SignalToastStack: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
             if model.overflowCount > 0 {
-                Text("+\(model.overflowCount) more")
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(theme.foreground.opacity(0.6))
-                    .padding(.horizontal, 9).padding(.vertical, 4)
-                    .background(Capsule().fill(theme.surfaceElevated))
+                AinkradBadge(text: "+\(model.overflowCount) more",
+                             tint: theme.accentSecondary)
                     .transition(.opacity)
             }
             ForEach(model.visible) { event in
@@ -126,18 +124,18 @@ struct SignalToastStack: View {
 
     private func toast(_ event: SignalEvent) -> some View {
         let accent = SignalRowFormatter.color(for: event.severity, in: status)
-        return HStack(alignment: .top, spacing: 9) {
+        return HStack(alignment: .top, spacing: AinkradSpacing.sm + 1) {
             Image(systemName: SignalRowFormatter.iconSymbol(for: event.severity))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(accent)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AinkradSpacing.xs / 2) {
                 Text(event.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AinkradFont.display(12, weight: .semibold))
                     .foregroundStyle(theme.foreground)
                     .lineLimit(1)
                 if let body = event.body, !body.isEmpty {
                     Text(body)
-                        .font(.system(size: 11))
+                        .font(AinkradFont.display(11))
                         .foregroundStyle(theme.foreground.opacity(0.6))
                         .lineLimit(2)
                 }
@@ -151,15 +149,16 @@ struct SignalToastStack: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, AinkradSpacing.md)
+        .padding(.vertical, AinkradSpacing.sm + 2)
         // A fixed width, not content-sized: a stack of toasts with ragged
         // right edges reads as a layout accident rather than one surface.
         .frame(width: 330, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(theme.surfaceElevated)
-        )
+        // Chamfered and accent-stroked like every other Ainkrad surface; a
+        // continuous rounded rectangle read as a foreign toast library.
+        .background(ChamferShape(cut: AinkradRadius.md).fill(theme.surfaceElevated))
+        .overlay(ChamferShape(cut: AinkradRadius.md)
+            .strokeBorder(accent.opacity(event.severity == .failure ? 0.55 : 0.3), lineWidth: 1))
         // A failure toast carries a hairline of its own severity colour rather
         // than a separator: it has to be distinguishable at a glance, since it
         // is the one toast that never auto-dismisses.
@@ -168,7 +167,7 @@ struct SignalToastStack: View {
                 Capsule().fill(accent).frame(width: 2.5).padding(.vertical, 8)
             }
         }
-        .contentShape(Rectangle())
+        .contentShape(ChamferShape(cut: AinkradRadius.md))
         .onTapGesture { onActivate(event) }
     }
 }

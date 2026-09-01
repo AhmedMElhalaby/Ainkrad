@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 /// Day-grouped list of events. Deliberately dumb: it owns no state and reads
@@ -24,7 +25,8 @@ struct SignalFeedList: View {
             emptyState
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(alignment: .leading, spacing: AinkradSpacing.xs / 2,
+                           pinnedViews: [.sectionHeaders]) {
                     ForEach(groups) { group in
                         Section {
                             ForEach(group.events) { event in
@@ -40,8 +42,8 @@ struct SignalFeedList: View {
                         }
                     }
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 6)
+                .padding(.vertical, AinkradSpacing.xs + 2)
+                .padding(.horizontal, AinkradSpacing.xs + 2)
             }
         }
     }
@@ -49,13 +51,16 @@ struct SignalFeedList: View {
     /// A header, not a separator: the design language forbids rules, so the day
     /// break is carried by weight and a soft scrim behind the pinned label.
     private func dayHeader(_ day: Date) -> some View {
+        // Mono, uppercase, tracked: a date is a readout, and this is the same
+        // treatment the top bar gives the clock.
         Text(Self.dayLabel(day, now: now, calendar: calendar))
-            .font(.system(size: 10, weight: .semibold))
+            .font(AinkradFont.mono(9.5, weight: .semibold))
             .foregroundStyle(theme.foreground.opacity(0.42))
             .textCase(.uppercase)
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 4)
+            .tracking(0.7)
+            .padding(.horizontal, AinkradSpacing.md)
+            .padding(.top, AinkradSpacing.sm + 2)
+            .padding(.bottom, AinkradSpacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.surface.opacity(0.92))
     }
@@ -71,19 +76,17 @@ struct SignalFeedList: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: AinkradSpacing.xs + 2) {
             Image(systemName: "bell.slash")
                 .font(.system(size: 18, weight: .light))
                 .foregroundStyle(theme.foreground.opacity(0.3))
             Text("Nothing yet")
-                .font(.system(size: 12, weight: .medium))
+                .font(AinkradFont.display(12, weight: .medium))
                 .foregroundStyle(theme.foreground.opacity(0.55))
-            Text("Runs, builds and app events will show up here.")
-                .font(.system(size: 11))
-                .foregroundStyle(theme.foreground.opacity(0.38))
+            AinkradCaption("Runs, builds and app events will show up here.")
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 34)
+        .padding(.vertical, AinkradSpacing.xl + AinkradSpacing.sm)
     }
 }

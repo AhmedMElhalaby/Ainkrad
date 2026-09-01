@@ -64,6 +64,7 @@ struct SignalSnapshotTests {
             .frame(width: 380, height: 420)
             .background(HostThemeTokens(from: theme).surface)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, .default)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -75,50 +76,120 @@ struct SignalSnapshotTests {
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
-    @Test("render the bell popover")
-    func renderBellPopover() throws {
-        let now = Date()
-        let events = sampleEvents(now: now)
+    @Test("render the top-bar bell")
+    func renderTopBarBell() throws {
         let theme = Theme.neonBlue
+        let tokens = theme.tokens
 
-        let view = SignalBellPopover(
-            events: events,
-            unread: 3,
-            repeatCounts: [events[0].id: 4],
-            readIDs: [events[3].id, events[4].id],
-            now: now)
+        // The bell as it sits in HUDBar: floating on the sky beside the
+        // workspace diamonds, with the readout chips to its left for scale.
+        let view = HStack(spacing: 12) {
+            Text("3:32 PM").font(AinkradFont.mono(11, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.85))
+            Text("Tue, 1 Sep").font(AinkradFont.mono(11, weight: .medium))
+                .foregroundStyle(tokens.foreground.opacity(0.5))
+            Spacer()
+            SignalBellButton(unread: 3, tokens: tokens) {}
+            HStack(spacing: 8) {
+                ChevronMark().fill(tokens.accentSecondary).frame(width: 10, height: 8.5)
+                Rectangle().fill(tokens.foreground.opacity(0.28))
+                    .frame(width: 5, height: 5).rotationEffect(.degrees(45))
+            }
+        }
+            .padding(.horizontal, 14)
+            .frame(width: 620, height: 30)
+            .background(HostThemeTokens(from: theme).background)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradStatusColors, AinkradStatusColors(
-                success: theme.tokens.success,
-                warning: theme.tokens.warning,
-                danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 380, height: 470))
-        try png.write(to: outputDirectory.appendingPathComponent("signal-bell-popover.png"))
+        let png = try Self.render(view, size: CGSize(width: 620, height: 30))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-topbar-bell.png"))
     }
 
-    @Test("render the in-window feed island")
-    func renderFeedIsland() throws {
+    @Test("render the bell dropdown")
+    func renderBellDropdown() throws {
         let now = Date()
         let events = sampleEvents(now: now)
         let theme = Theme.neonBlue
 
-        let view = SignalFeedIsland(
-            events: events,
-            unread: 3,
-            repeatCounts: [events[0].id: 4],
-            readIDs: [events[3].id, events[4].id],
-            knownSources: [.app(appID: "com.ainkrad.raven"), .app(appID: "com.ainkrad.quest"), .host],
-            now: now)
-            .frame(width: 620, height: 480)
+        // Shown over a sky-toned ground with the top bar above it, so the
+        // panel's chrome and its position under the bell are both visible.
+        let view = ZStack(alignment: .topTrailing) {
+            HostThemeTokens(from: theme).background
+            HStack(spacing: 12) {
+                Text("3:32 PM").font(AinkradFont.mono(11, weight: .medium))
+                    .foregroundStyle(theme.tokens.foreground.opacity(0.85))
+                Spacer()
+                SignalBellButton(unread: 3, tokens: theme.tokens) {}
+                HStack(spacing: 8) {
+                    ChevronMark().fill(theme.tokens.accentSecondary).frame(width: 10, height: 8.5)
+                    Rectangle().fill(theme.tokens.foreground.opacity(0.28))
+                        .frame(width: 5, height: 5).rotationEffect(.degrees(45))
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            SignalBellDropdown(
+                events: events,
+                unread: 3,
+                repeatCounts: [events[0].id: 4],
+                readIDs: [events[3].id, events[4].id],
+                now: now)
+                .padding(.top, 34)
+                .padding(.trailing, 10)
+        }
+            .frame(width: 560, height: 470)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, .default)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
                 danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 620, height: 480))
-        try png.write(to: outputDirectory.appendingPathComponent("signal-feed-island.png"))
+        let png = try Self.render(view, size: CGSize(width: 560, height: 470))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-dropdown.png"))
+    }
+
+    @Test("render the feed overlay")
+    func renderFeedOverlay() throws {
+        let now = Date()
+        let theme = Theme.neonBlue
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // The REAL overlay, not the island in isolation: the island has no
+        // background of its own by design (the hosting `AinkradPanel` supplies
+        // the glass), so rendering it bare shows light text on nothing.
+        let center = SignalCenter(store: try SignalStore(url: url),
+                                  deliverer: SnapshotDeliverer(), contextProvider: SnapshotContext())
+        for event in sampleEvents(now: now).reversed() {
+            center.emit(SignalDraft(kind: event.kind, severity: event.severity,
+                                    title: event.title, body: event.body,
+                                    actions: event.actions,
+                                    dedupeKey: event.dedupeKey), from: event.source)
+        }
+        // Coalesce the build failure so the xN badge renders, and read the two
+        // oldest rows so unread dots are not uniformly on.
+        center.emit(SignalDraft(kind: "build.failed", severity: .failure,
+                                title: "Build failed", dedupeKey: "b:main"), from: .app(appID: "com.ainkrad.raven"))
+        center.markRead(ids: Array(center.recent.suffix(2).map(\.id)))
+
+        let view = ZStack {
+            HostThemeTokens(from: theme).background
+            SignalFeedOverlayView(center: center, onDismiss: {})
+        }
+            .frame(width: 780, height: 620)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 780, height: 620))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-feed-overlay.png"))
     }
 
     @Test("render the toast stack")
@@ -138,6 +209,7 @@ struct SignalSnapshotTests {
         }
             .frame(width: 420, height: 320)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, .default)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -180,6 +252,7 @@ struct SignalSnapshotTests {
             .frame(maxHeight: .infinity, alignment: .top)
             .background(HostThemeTokens(from: theme).background)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, .default)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -220,4 +293,13 @@ struct SignalSnapshotTests {
         return try #require(rep.representation(using: .png, properties: [:]),
                             "could not encode PNG")
     }
+}
+
+@MainActor
+private final class SnapshotDeliverer: SignalDeliverer {
+    func deliver(_ event: SignalEvent, to channels: Set<DeliveryChannel>) {}
+}
+private struct SnapshotContext: SignalContextProviding {
+    var deliveryContext = DeliveryContext(hostIsFrontmost: true, visibleAppIDs: [],
+                                          systemDoNotDisturb: false, hostFocusMode: false)
 }

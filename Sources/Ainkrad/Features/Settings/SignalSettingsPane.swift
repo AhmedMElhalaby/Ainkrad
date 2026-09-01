@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 /// Ainkrad → Notifications. Every change writes straight through to
@@ -50,14 +51,14 @@ struct SignalSettingsPane: View {
                             set: { center.retention.maxEvents = $0 }), in: 100...100_000, step: 100)
                     }
                     HStack {
+                        // A count is a readout, so mono.
                         Text("\(center.eventCount) events stored")
-                            .font(.system(size: 11))
+                            .font(AinkradFont.mono(10.5))
                             .foregroundStyle(theme.foreground.opacity(0.5))
                         Spacer()
-                        Button("Clear feed") { confirmingClear = true }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(theme.accentTertiary)
+                        AinkradButton(title: "Clear feed", style: .danger) {
+                            confirmingClear = true
+                        }
                     }
                 }
             }
@@ -69,9 +70,9 @@ struct SignalSettingsPane: View {
                     + "This goes away when runs move fully onto the feed."
             ) {
                 AinkradCaptionedRow("Run banners") {
-                    Text(center.rules.suppressBannerForHostRuns ? "Legacy notifier" : "Feed")
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.foreground.opacity(0.55))
+                    AinkradBadge(
+                        text: center.rules.suppressBannerForHostRuns ? "Legacy notifier" : "Feed",
+                        status: center.rules.suppressBannerForHostRuns ? .warning : .success)
                 }
             }
         }

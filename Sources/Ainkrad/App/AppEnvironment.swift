@@ -242,10 +242,11 @@ final class AppEnvironment {
     /// The Signal feed. Built in `finalizeBootstrap` (it needs the sound engine
     /// and the window state), so `var`/optional like `menuBarController`.
     var signalCenter: SignalCenter?
-    /// The bell's status item, installed and torn down alongside Sage's.
-    var signalBellController: SignalBellController?
     /// Shared toast stack, presented over the window by `RootView`.
     let signalToasts = SignalToastModel()
+    /// True while the bell's dropdown is open. Separate from the overlay flag:
+    /// the dropdown is a glance, the overlay is the feed.
+    var isSignalDropdownPresented = false
     /// True while the in-window feed island is open.
     var isSignalFeedPresented = false
     /// Skill `/name` command names currently registered into `commandRegistry`

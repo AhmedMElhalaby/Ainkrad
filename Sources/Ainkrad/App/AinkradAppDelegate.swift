@@ -16,10 +16,6 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     /// `NSStatusItem`/popover for the app's lifetime — installed here on
     /// launch, torn down on quit (M7 Slice 7).
     var menuBarController: MenuBarController?
-    /// The Signal bell's status item. Installed and torn down in lockstep with
-    /// `menuBarController`: both live on `NSStatusBar.system` for the app's
-    /// lifetime, and both are suppressed while the first-run gate is up.
-    var signalBellController: SignalBellController?
     /// Wired alongside the above. Chat-history writes are coalesced (see
     /// `SageSessionStore.syncActive`), so the last few hundred
     /// milliseconds of a transcript may still be pending when the user quits —
@@ -37,12 +33,10 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
         menuBarController?.install()
-        signalBellController?.install()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         assistantSessionStore?.flush()
         menuBarController?.teardown()
-        signalBellController?.teardown()
     }
 }
