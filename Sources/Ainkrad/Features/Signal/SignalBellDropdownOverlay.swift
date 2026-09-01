@@ -13,6 +13,8 @@ struct SignalBellDropdownOverlay: View {
     let onDismiss: () -> Void
     let onViewAll: () -> Void
 
+    @Environment(AppEnvironment.self) private var environment
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color.clear
@@ -26,6 +28,13 @@ struct SignalBellDropdownOverlay: View {
                 readIDs: center.readIDs,
                 onActivate: { event in
                     center.markRead(ids: [event.id])
+                },
+                onAction: { event, action in
+                    // The dropdown has no room for a confirmation dialog, so a
+                    // destructive action hands off to the overlay rather than
+                    // firing unconfirmed.
+                    let router = SignalActionRouter(hub: environment.signalEmitterHub)
+                    if router.invoke(event, action) != nil { onViewAll() }
                 },
                 onMarkAllRead: { center.markAllRead(filter: .all) },
                 onViewAll: onViewAll)

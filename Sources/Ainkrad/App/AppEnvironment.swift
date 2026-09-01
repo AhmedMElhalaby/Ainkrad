@@ -85,6 +85,8 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentActionHub: AgentActionRegistryHub
+    /// Routes a tapped feed action back to the app that published it.
+    let signalEmitterHub: SignalEmitterHub
     /// M7 Slice 6 (Security & Sandboxing): the persisted store of built-in +
     /// user-defined `SandboxProfile`s the router resolves against.
     let sandboxProfileStore: SandboxProfileStore
@@ -324,6 +326,7 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        signalHub: SignalEmitterHub,
         sandboxProfileStore: SandboxProfileStore,
         executionRouter: ExecutionRouter,
         cloudCredentialsStore: CloudCredentialsStore,
@@ -404,6 +407,7 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentActionHub = agentActionHub
+        self.signalEmitterHub = signalHub
         self.sandboxProfileStore = sandboxProfileStore
         self.executionRouter = executionRouter
         self.cloudCredentialsStore = cloudCredentialsStore
@@ -576,7 +580,7 @@ final class AppEnvironment {
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,
-            agentActionHub: agentActionHub,
+            agentActionHub: agentActionHub, signalHub: signalHub,
             sandboxProfileStore: sandboxProfileStore,
             executionRouter: executionRouter,
             cloudCredentialsStore: cloudCredentialsStore,

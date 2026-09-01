@@ -8,8 +8,10 @@ struct SignalFeedOverlayView: View {
     let center: SignalCenter
     let onDismiss: () -> Void
 
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradTheme) private var theme
     @State private var searchResults: [SignalEvent]?
+    @State private var pendingDestructive: (SignalEvent, SignalAction)?
 
     private var events: [SignalEvent] { searchResults ?? center.recent }
 
@@ -34,9 +36,31 @@ struct SignalFeedOverlayView: View {
                         searchResults = query.isEmpty ? nil : center.search(query)
                     },
                     onActivate: { event in center.markRead(ids: [event.id]) },
+                    onAction: { event, action in
+                        let router = SignalActionRouter(hub: environment.signalEmitterHub)
+                        if let needsConfirmation = router.invoke(event, action) {
+                            pendingDestructive = (event, needsConfirmation)
+                        }
+                    },
                     onMarkAllRead: { center.markAllRead(filter: .all) })
                     .frame(width: 660, height: 520)
             }
+        }
+        .confirmationDialog(
+            pendingDestructive.map { "\($0.1.label)?" } ?? "",
+            isPresented: Binding(get: { pendingDestructive != nil },
+                                 set: { if !$0 { pendingDestructive = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let (event, action) = pendingDestructive {
+                Button(action.label, role: .destructive) {
+                    SignalActionRouter(hub: environment.signalEmitterHub).dispatch(event, action)
+                    pendingDestructive = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingDestructive = nil }
+        } message: {
+            Text("This action was published by the app and cannot be undone from here.")
         }
     }
 
