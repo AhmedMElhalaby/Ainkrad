@@ -262,6 +262,31 @@ struct SignalSnapshotTests {
         try png.write(to: outputDirectory.appendingPathComponent("signal-settings.png"))
     }
 
+    @Test("render the launcher tiles with unread badges")
+    func renderLauncherBadges() throws {
+        let theme = Theme.neonBlue
+        let tokens = theme.tokens
+
+        // Tiles at both sizes the launcher uses (32 list, 46 grid), badged and
+        // unbadged side by side, so the badge's effect on the footprint is
+        // visible — it must not nudge its neighbours.
+        let view = HStack(spacing: 22) {
+            NeonAppTile(symbol: "terminal", tokens: tokens, size: 46, badge: "3")
+            NeonAppTile(symbol: "sparkles", tokens: tokens, size: 46)
+            NeonAppTile(symbol: "hammer", tokens: tokens, size: 46, badge: "99+")
+            NeonAppTile(symbol: "book", tokens: tokens, size: 32, badge: "1")
+            NeonAppTile(symbol: "arrow.triangle.branch", tokens: tokens, size: 32)
+        }
+            .padding(26)
+            .frame(width: 420, height: 100)
+            .background(HostThemeTokens(from: theme).background)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, Self.hostTypography)
+
+        let png = try Self.render(view, size: CGSize(width: 420, height: 100))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-launcher-badges.png"))
+    }
+
     /// The typography the running app injects (`AinkradApp` sets
     /// `fontFamilyName` from `themeManager.uiFontFamily`), not
     /// `AinkradTypography.default` — whose `fontFamilyName` is nil, which falls

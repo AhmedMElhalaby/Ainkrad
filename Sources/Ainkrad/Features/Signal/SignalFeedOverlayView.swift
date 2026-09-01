@@ -1,14 +1,20 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 /// Hosts `SignalFeedIsland` as a dismissible overlay, matching the other HUD
 /// overlays (scrim tap to dismiss, fade transition, no separator chrome).
 struct SignalFeedOverlayView: View {
     let center: SignalCenter
+    /// Passed in rather than read from `AppEnvironment`: a view that reaches for
+    /// the whole environment cannot be rendered without one, which broke the
+    /// snapshot suite the moment action routing was added — and broke it by
+    /// CRASHING the test runner, so the run reported "passed" for the handful of
+    /// tests that had already finished.
+    var hub: SignalEmitterHub?
     let onDismiss: () -> Void
 
-    @Environment(AppEnvironment.self) private var environment
     @Environment(\.ainkradTheme) private var theme
     @State private var searchResults: [SignalEvent]?
     @State private var pendingDestructive: (SignalEvent, SignalAction)?
@@ -37,8 +43,8 @@ struct SignalFeedOverlayView: View {
                     },
                     onActivate: { event in center.markRead(ids: [event.id]) },
                     onAction: { event, action in
-                        let router = SignalActionRouter(hub: environment.signalEmitterHub)
-                        if let needsConfirmation = router.invoke(event, action) {
+                        guard let hub else { return }
+                        if let needsConfirmation = SignalActionRouter(hub: hub).invoke(event, action) {
                             pendingDestructive = (event, needsConfirmation)
                         }
                     },
@@ -54,7 +60,7 @@ struct SignalFeedOverlayView: View {
         ) {
             if let (event, action) = pendingDestructive {
                 Button(action.label, role: .destructive) {
-                    SignalActionRouter(hub: environment.signalEmitterHub).dispatch(event, action)
+                    if let hub { SignalActionRouter(hub: hub).dispatch(event, action) }
                     pendingDestructive = nil
                 }
             }

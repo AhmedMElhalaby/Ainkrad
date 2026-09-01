@@ -1,5 +1,6 @@
 import SwiftUI
 import AinkradAppKit
+import AinkradHostRuntime
 import AinkradSignal
 
 /// Positions `SignalBellDropdown` under the bell and dismisses it on an
@@ -10,10 +11,9 @@ import AinkradSignal
 /// only to take the outside click.
 struct SignalBellDropdownOverlay: View {
     let center: SignalCenter
+    var hub: SignalEmitterHub?
     let onDismiss: () -> Void
     let onViewAll: () -> Void
-
-    @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -33,8 +33,8 @@ struct SignalBellDropdownOverlay: View {
                     // The dropdown has no room for a confirmation dialog, so a
                     // destructive action hands off to the overlay rather than
                     // firing unconfirmed.
-                    let router = SignalActionRouter(hub: environment.signalEmitterHub)
-                    if router.invoke(event, action) != nil { onViewAll() }
+                    guard let hub else { return }
+                    if SignalActionRouter(hub: hub).invoke(event, action) != nil { onViewAll() }
                 },
                 onMarkAllRead: { center.markAllRead(filter: .all) },
                 onViewAll: onViewAll)
