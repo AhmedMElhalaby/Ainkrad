@@ -97,6 +97,56 @@ struct SignalSnapshotTests {
         try png.write(to: outputDirectory.appendingPathComponent("signal-bell-popover.png"))
     }
 
+    @Test("render the in-window feed island")
+    func renderFeedIsland() throws {
+        let now = Date()
+        let events = sampleEvents(now: now)
+        let theme = Theme.neonBlue
+
+        let view = SignalFeedIsland(
+            events: events,
+            unread: 3,
+            repeatCounts: [events[0].id: 4],
+            readIDs: [events[3].id, events[4].id],
+            knownSources: [.app(appID: "com.ainkrad.raven"), .app(appID: "com.ainkrad.quest"), .host],
+            now: now)
+            .frame(width: 620, height: 480)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 620, height: 480))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-feed-island.png"))
+    }
+
+    @Test("render the toast stack")
+    func renderToastStack() throws {
+        let now = Date()
+        let events = sampleEvents(now: now)
+        let theme = Theme.neonBlue
+        let model = SignalToastModel()
+        // Five arrivals against a cap of three, so the overflow chip renders.
+        // Presented oldest-first, the order they would actually arrive in, so
+        // the newest ends up on top as it would at runtime.
+        for event in events.prefix(5).reversed() { model.present(event) }
+
+        let view = ZStack(alignment: .bottomTrailing) {
+            HostThemeTokens(from: theme).background
+            SignalToastStack(model: model, now: now)
+        }
+            .frame(width: 420, height: 320)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 420, height: 320))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-toasts.png"))
+    }
+
     /// Renders through a real `NSHostingView` in an offscreen window.
     ///
     /// `ImageRenderer` was the first choice and produced a blank image: it does
