@@ -28,12 +28,59 @@ extension AppEnvironment {
         loader: PluginLoader,
         registry: BuiltInAppRegistry,
         workspaceManager: WorkspaceManager,
+        home: Home,
         defaults: UserDefaults
     ) {
         // Built after `environment` exists so the content closure can inject
         // `self` for `MenuBarPopoverView`'s `.environment(_:)` — mirrors how
         // `launcherStore.presentOverlay`/`pluginLaunchHub` below capture
         // `[weak environment]` rather than being wired inside the initializer.
+        // MARK: Signal (notification feed)
+        //
+        // Built here rather than in `bootstrapCoreStores` because it needs the
+        // sound engine, the window state, and `environment` itself for the
+        // popover's content closure — the same reasons `menuBarController` is
+        // built here.
+        let signalPreferencesStore = SignalPreferencesStore(
+            url: home.cacheRoot.deletingLastPathComponent()
+                .appendingPathComponent("signal-preferences.json"))
+        let signalContextProvider = HostDeliveryContextProvider()
+        let signalCenter = AppEnvironment.makeSignalCenter(
+            storeURL: AppEnvironment.signalStoreURL(
+                applicationSupport: home.cacheRoot.deletingLastPathComponent()),
+            preferences: signalPreferencesStore.load(),
+            sound: environment.sounds,
+            toast: environment.signalToasts,
+            contextProvider: signalContextProvider,
+            badge: { _ in
+                // Per-app badges are M2's `SignalBadgeModel`; the menu-bar
+                // badge is driven by `onUnreadChanged` below, which covers
+                // every path that changes the count rather than only delivery.
+            })
+        // "Visible" means the app has a surface the user can actually see, so
+        // routing can tell "you are looking at Raven" from "Raven is installed".
+        // `isAppOpen` is the host's own answer to that question and covers both
+        // tiled panes and overlay presentation.
+        signalContextProvider.visibleAppIDs = { [weak environment] in
+            guard let environment else { return [] }
+            return Set(environment.registry.enabledApps.map(\.id)
+                .filter { environment.isAppOpen($0) })
+        }
+        signalCenter.onRulesChanged = { [weak signalCenter] rules in
+            guard let signalCenter else { return }
+            signalPreferencesStore.save(
+                SignalPreferences(rules: rules, retention: signalCenter.retention))
+        }
+        signalCenter.onRetentionChanged = { [weak signalCenter] retention in
+            guard let signalCenter else { return }
+            signalPreferencesStore.save(
+                SignalPreferences(rules: signalCenter.rules, retention: retention))
+        }
+        environment.signalCenter = signalCenter
+        // `RunManager` is built in `bootstrapSession`, before this runs, so the
+        // center is attached rather than injected.
+        environment.runManager.attachSignalCenter(signalCenter)
+
         environment.menuBarController = MenuBarController(presence: environment.menuBarPresence) { [weak environment] in
             guard let environment else { return AnyView(EmptyView()) }
             return AnyView(MenuBarPopoverView(presence: environment.menuBarPresence).environment(environment))

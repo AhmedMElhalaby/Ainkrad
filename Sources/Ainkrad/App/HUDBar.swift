@@ -43,6 +43,12 @@ struct HUDBar: View {
             // this region of the fused title bar in windowed mode.
             Spacer()
 
+            if let center = environment.signalCenter {
+                SignalBellButton(unread: center.totalUnread, tokens: tokens) {
+                    environment.isSignalDropdownPresented.toggle()
+                }
+            }
+
             workspaceDots(tokens: tokens)
         }
         .padding(.horizontal, 14)

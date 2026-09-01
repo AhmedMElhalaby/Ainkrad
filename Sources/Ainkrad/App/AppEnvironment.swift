@@ -239,6 +239,16 @@ final class AppEnvironment {
     /// it's built in `bootstrap()` right after `environment` itself exists,
     /// then installed/torn down by `AinkradAppDelegate`.
     var menuBarController: MenuBarController?
+    /// The Signal feed. Built in `finalizeBootstrap` (it needs the sound engine
+    /// and the window state), so `var`/optional like `menuBarController`.
+    var signalCenter: SignalCenter?
+    /// Shared toast stack, presented over the window by `RootView`.
+    let signalToasts = SignalToastModel()
+    /// True while the bell's dropdown is open. Separate from the overlay flag:
+    /// the dropdown is a glance, the overlay is the feed.
+    var isSignalDropdownPresented = false
+    /// True while the in-window feed island is open.
+    var isSignalFeedPresented = false
     /// Skill `/name` command names currently registered into `commandRegistry`
     /// — tracked so `resyncSkillCommands()` (Task 13) knows exactly which
     /// entries to drop before re-registering the current binding set, without
@@ -622,7 +632,7 @@ final class AppEnvironment {
             themeManager: themeManager, agentContextHub: agentContextHub, agentActionHub: agentActionHub,
             pluginLaunchHub: pluginLaunchHub, appAppearanceStore: appAppearanceStore,
             pluginDataRoot: pluginDataRoot, pluginDirs: pluginDirs, loader: loader, registry: registry,
-            workspaceManager: workspaceManager, defaults: defaults
+            workspaceManager: workspaceManager, home: home, defaults: defaults
         )
 
         return environment

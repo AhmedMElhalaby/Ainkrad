@@ -65,7 +65,12 @@ packages:
     # AinkradPanel gaining a `blending` parameter so a panel hosted in its own
     # NSPanel can sample .behindWindow instead of rendering as a flat slab
     # (PR #27). Default unchanged, so no existing surface moves.
-    revision: 60036ad9abe5d0ca4e84109bcc78a51f7b8578f0
+    # AinkradSignal target: the event envelope, kind validation, the pure
+    # routing function and the SQLite+FTS5 event store (Signal M1 Tasks 1-6),
+    # plus the umbrella re-export that makes the module reachable by
+    # consumers at all. A new TARGET, not a renamed symbol - the API
+    # generation stays 8 and every existing plugin pin remains loadable.
+    revision: 170c742c406adb73218e12a3b4ac1e67e79c80db
 
 targets:
   AinkradHostRuntime:
