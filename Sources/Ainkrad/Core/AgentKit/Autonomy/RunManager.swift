@@ -14,14 +14,20 @@ final class RunManager {
     private let persistence: PersistenceStore
     private let runner: AgentRunRunner
     private let notifier: RunNotifier?
+    /// Signal feed. **Additive in M1**: `notifier` still owns the macOS banner
+    /// for runs, and `RoutingRules.suppressBannerForHostRuns` keeps Signal from
+    /// posting a second one. M2 deletes `notifier` and lifts the exemption.
+    private weak var signalCenter: SignalCenter?
     private let maxConcurrent: Int
     private var tasks: [UUID: Task<Void, Never>] = [:]
 
     init(persistence: PersistenceStore, runner: AgentRunRunner,
-         notifier: RunNotifier? = nil, maxConcurrent: Int = 2) {
+         notifier: RunNotifier? = nil, signalCenter: SignalCenter? = nil,
+         maxConcurrent: Int = 2) {
         self.persistence = persistence
         self.runner = runner
         self.notifier = notifier
+        self.signalCenter = signalCenter
         self.maxConcurrent = max(1, maxConcurrent)
         self.document = persistence.load(AgentRunsDocument.self) ?? AgentRunsDocument()
 
@@ -127,6 +133,7 @@ final class RunManager {
         tasks[id] = nil
         save()
         notifier?.notifyCompleted(document.runs[i])
+        signalCenter?.emit(.runCompleted(document.runs[i]), from: .host)
         pump()
     }
 
