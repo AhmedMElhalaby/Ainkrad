@@ -247,6 +247,12 @@ final class AppEnvironment {
     /// Token → source for external emitters. Held here because Settings needs
     /// it to mint and revoke, not only bootstrap.
     var signalTokens: SignalTokenRegistry?
+    /// What each open pane reports it is showing. Not optional: an empty
+    /// registry is meaningful (no app reports locators) and a nil one would
+    /// make every call site check for something that is always there.
+    let paneLocators = PaneLocatorRegistry()
+    /// Declared and approved cross-app subscriptions (generation 10).
+    var signalSubscriptions: SignalSubscriptionRegistry?
     /// External ingress. Optional because a socket that cannot bind must
     /// degrade to "no external ingress", never to a failed launch.
     var signalSocketServer: SignalSocketServer?

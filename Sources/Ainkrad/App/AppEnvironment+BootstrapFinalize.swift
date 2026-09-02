@@ -93,10 +93,17 @@ extension AppEnvironment {
                     SignalRevealWorkspace(
                         id: workspace.id,
                         panes: workspace.tileLayout.blocks.map {
-                            SignalRevealWorkspace.Pane(appID: $0.appID, blockID: $0.id)
+                            SignalRevealWorkspace.Pane(
+                                appID: $0.appID, blockID: $0.id,
+                                locator: environment.paneLocators.locator(forBlock: $0.id))
                         })
                 },
-                activeWorkspaceID: environment.workspaceManager.activeWorkspaceID)
+                activeWorkspaceID: environment.workspaceManager.activeWorkspaceID,
+                // Generation 10: the app's own name for what the notification
+                // is about. With three Rune panes open this is what makes the
+                // click land on the session that called, instead of the first
+                // pane of that app.
+                locator: link.locator)
 
             // Enqueue only where something will actually collect it. The hub
             // holds ONE pending payload per app, so enqueuing on the `.focus`
@@ -130,6 +137,18 @@ extension AppEnvironment {
         // emission is already wired above and is untouched by any failure here.
         let signalTokens = SignalTokenRegistry(secrets: environment.secrets)
         environment.signalTokens = signalTokens
+        // Declared cross-app subscriptions (generation 10). Fan-out runs
+        // AFTER the center's own delivery, so a subscribing app can never see
+        // an event before the user's own surfaces do.
+        let subscriptions = SignalSubscriptionRegistry(
+            store: SignalSubscriptionStore(
+                url: home.cacheRoot.deletingLastPathComponent()
+                    .appendingPathComponent("signal-subscriptions.json")))
+        environment.signalSubscriptions = subscriptions
+        signalCenter.onEventRecorded = { [weak subscriptions] event in
+            subscriptions?.fanOut(event)
+        }
+
         // Pair the CLI if it is not already paired, so `ainkrad notify` works
         // out of the box rather than needing a visit to Settings first. Minted
         // once — see `ensurePaired`, which refuses to rotate a token that is

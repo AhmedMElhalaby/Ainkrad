@@ -95,4 +95,88 @@ struct SignalRevealTests {
     func overlayDeliversPayload() {
         #expect(SignalRevealAction.presentOverlay.deliversPayload)
     }
+    // MARK: - Locator matching (generation 10)
+
+    private func workspace(_ id: UUID, panes: [(String, UUID, String?)]) -> SignalRevealWorkspace {
+        SignalRevealWorkspace(id: id, panes: panes.map {
+            SignalRevealWorkspace.Pane(appID: $0.0, blockID: $0.1, locator: $0.2)
+        })
+    }
+
+    @Test("a locator picks the pane holding that session, not the first pane")
+    func locatorPicksTheRightPane() {
+        // The whole point: three Rune panes, and the notification came from
+        // the third. Without a locator this focuses the first and looks like
+        // it worked.
+        let first = UUID(), second = UUID(), third = UUID()
+        let action = SignalReveal.action(
+            appID: "rune", presentsAsOverlay: false,
+            workspaces: [workspace(activeID, panes: [
+                ("rune", first, "session-a"),
+                ("rune", second, "session-b"),
+                ("rune", third, "session-c"),
+            ])],
+            activeWorkspaceID: activeID,
+            locator: "session-c")
+        #expect(action == .focus(workspaceID: activeID, blockID: third))
+    }
+
+    @Test("an unmatched locator falls back to the app, never to nowhere")
+    func unmatchedLocatorFallsBack() {
+        // The pane that held the session has closed. Being taken to the app is
+        // a good outcome; being taken nowhere is not.
+        let only = UUID()
+        let action = SignalReveal.action(
+            appID: "rune", presentsAsOverlay: false,
+            workspaces: [workspace(activeID, panes: [("rune", only, "session-a")])],
+            activeWorkspaceID: activeID,
+            locator: "session-gone")
+        #expect(action == .focus(workspaceID: activeID, blockID: only))
+    }
+
+    @Test("a nil or empty locator behaves exactly as generation 9 did")
+    func noLocatorIsUnchanged() {
+        let first = UUID()
+        let panes = [("rune", first, Optional("session-a")), ("rune", UUID(), Optional("session-b"))]
+        for locator in [nil, ""] as [String?] {
+            let action = SignalReveal.action(
+                appID: "rune", presentsAsOverlay: false,
+                workspaces: [workspace(activeID, panes: panes)],
+                activeWorkspaceID: activeID,
+                locator: locator)
+            #expect(action == .focus(workspaceID: activeID, blockID: first))
+        }
+    }
+
+    @Test("a locator match on another workspace beats a bare app match here")
+    func locatorMatchBeatsLocalAppMatch() {
+        // A locator says one specific pane is the right answer, so it outranks
+        // the usual preference for not switching workspaces.
+        let localPane = UUID(), remotePane = UUID()
+        let action = SignalReveal.action(
+            appID: "rune", presentsAsOverlay: false,
+            workspaces: [
+                workspace(activeID, panes: [("rune", localPane, "session-a")]),
+                workspace(otherID, panes: [("rune", remotePane, "session-b")]),
+            ],
+            activeWorkspaceID: activeID,
+            locator: "session-b")
+        #expect(action == .focus(workspaceID: otherID, blockID: remotePane))
+    }
+
+    @Test("a locator belonging to a DIFFERENT app is not matched")
+    func locatorIsScopedToItsApp() {
+        // Locators are app-chosen strings, so two apps can use the same one by
+        // coincidence. The appID check must come first.
+        let lorePane = UUID(), runePane = UUID()
+        let action = SignalReveal.action(
+            appID: "rune", presentsAsOverlay: false,
+            workspaces: [workspace(activeID, panes: [
+                ("lore", lorePane, "doc-1"),
+                ("rune", runePane, "session-a"),
+            ])],
+            activeWorkspaceID: activeID,
+            locator: "doc-1")
+        #expect(action == .focus(workspaceID: activeID, blockID: runePane))
+    }
 }
