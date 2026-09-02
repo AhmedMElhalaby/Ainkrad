@@ -80,10 +80,41 @@ extension AppEnvironment {
         // Tapping a feed row opens the app that published it, with the event's
         // payload — the same cross-app launch path `HostServices.apps` uses, so
         // a deep link behaves exactly like an app opening another app.
-        signalCenter.onActivateDeepLink = { link in
+        signalCenter.onActivateDeepLink = { [weak environment] link in
+            guard let environment else { return }
             pluginLaunchHub.enqueue(target: link.appID,
                                     payload: String(decoding: link.payload, as: UTF8.self))
-            pluginLaunchHub.requestOpen(link.appID)
+
+            let declared = environment.registry.allApps
+                .first { $0.id == link.appID }?.presentation ?? .pane
+            let effective = environment.appAppearanceStore
+                .presentationOverride(link.appID) ?? declared
+            let action = SignalReveal.action(
+                appID: link.appID,
+                presentsAsOverlay: effective == .overlay,
+                workspaces: environment.workspaceManager.workspaces.map { workspace in
+                    SignalRevealWorkspace(
+                        id: workspace.id,
+                        panes: workspace.tileLayout.blocks.map {
+                            SignalRevealWorkspace.Pane(appID: $0.appID, blockID: $0.id)
+                        })
+                },
+                activeWorkspaceID: environment.workspaceManager.activeWorkspaceID)
+
+            switch action {
+            case .presentOverlay:
+                environment.presentedOverlayAppID = link.appID
+            case .focus(let workspaceID, let blockID):
+                // Focus what is already there. Going through `requestOpen`
+                // appended a SECOND pane, so following a notification took the
+                // user further from the session that called them.
+                if workspaceID != environment.workspaceManager.activeWorkspaceID {
+                    environment.workspaceManager.switchTo(workspaceID)
+                }
+                environment.workspaceManager.activeWorkspace.tileLayout.focus(blockID)
+            case .openNewPane:
+                pluginLaunchHub.requestOpen(link.appID)
+            }
         }
         environment.signalCenter = signalCenter
         // The hub was built in `bootstrapCoreStores`, before the feed existed;
