@@ -82,7 +82,15 @@ packages:
     # and the connect-write-close, shared with `ainkrad notify` so the CLI
     # cannot drift from what the host's listener accepts (merge of
     # feat/signal-socket-client).
-    revision: 30ccbe6a35255d5dcda3c05c561a88465a0d0577
+    # Generation 10: SignalSubscription + PluginSignalObserver (declared
+    # cross-app read, user-approved at install), PluginInfoKey
+    # .signalSubscriptions, and SignalDeepLink.locator + the
+    # ainkradPaneLocator environment sink for pane-level deep-link focus.
+    #
+    # minSupportedAPIVersion is apiVersion - 2 here, NOT - 1: every plugin
+    # bundle installed in the field is still generation 8, so a floor of 9
+    # would have launched this host with none of the user's apps.
+    revision: 628294d9ef3bd5ec239c147f6923d70f6eb8cb0e
 
 targets:
   AinkradHostRuntime:
