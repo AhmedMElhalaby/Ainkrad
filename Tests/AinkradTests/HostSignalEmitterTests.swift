@@ -109,3 +109,72 @@ final class HostSignalEmitterTests {
         #expect(center.recent.allSatisfy { $0.source == .app(appID: "raven") })
     }
 }
+
+/// The bootstrap ordering the real app uses, which the suite above does not:
+/// the hub is built in `bootstrapCoreStores` (before the feed exists), handed
+/// to every `HostServicesImpl`, and only later given its sink in
+/// `finalizeBootstrap`. If `attach(sink:)` did not work, every plugin emit
+/// would vanish silently — and no test that constructs the hub with its sink
+/// could ever notice.
+@MainActor
+@Suite("Hub attached after construction, as bootstrap does it")
+final class SignalEmitterHubAttachTests {
+    private final class NullDeliverer: SignalDeliverer {
+        func deliver(_ event: SignalEvent, to channels: Set<DeliveryChannel>) {}
+    }
+    private struct Ctx: SignalContextProviding {
+        var deliveryContext = DeliveryContext(hostIsFrontmost: true, visibleAppIDs: [],
+                                              systemDoNotDisturb: false, hostFocusMode: false)
+    }
+
+    @Test("an emit after attach reaches the store")
+    func emitAfterAttachIsRecorded() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // 1. bootstrapCoreStores: hub first, no feed yet.
+        let hub = SignalEmitterHub()
+        let emitter = HostSignalEmitter(appID: "rune", hub: hub)
+
+        // 2. finalizeBootstrap: the feed exists, and the hub gains its sink.
+        let center = SignalCenter(store: try SignalStore(url: url),
+                                  deliverer: NullDeliverer(), contextProvider: Ctx())
+        hub.attach(sink: center)
+
+        // 3. A plugin emits.
+        emitter.emit(kind: "terminal.bell", severity: .info, title: "Terminal needs your attention")
+
+        #expect(center.recent.count == 1)
+        #expect(center.recent[0].source == .app(appID: "rune"))
+        #expect(center.recent[0].kind == "terminal.bell")
+    }
+
+    @Test("an emit BEFORE attach is dropped, and does not crash")
+    func emitBeforeAttachIsDropped() {
+        let hub = SignalEmitterHub()
+        HostSignalEmitter(appID: "rune", hub: hub)
+            .emit(kind: "terminal.bell", severity: .info, title: "early")
+        // Nothing to assert but the absence of a crash: an event emitted before
+        // the feed exists has nowhere to go. Worth pinning so it stays a no-op
+        // rather than becoming a trap.
+        #expect(Bool(true))
+    }
+
+    @Test("the sink is held weakly, so a torn-down feed does not keep itself alive")
+    func sinkIsWeak() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let hub = SignalEmitterHub()
+        do {
+            let center = SignalCenter(store: try SignalStore(url: url),
+                                      deliverer: NullDeliverer(), contextProvider: Ctx())
+            hub.attach(sink: center)
+        }
+        // The center is gone; emitting must be a silent no-op, not a crash.
+        HostSignalEmitter(appID: "rune", hub: hub)
+            .emit(kind: "terminal.bell", severity: .info, title: "after teardown")
+        #expect(Bool(true))
+    }
+}

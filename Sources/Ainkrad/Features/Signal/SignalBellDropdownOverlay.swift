@@ -27,7 +27,8 @@ struct SignalBellDropdownOverlay: View {
                 repeatCounts: center.repeatCounts,
                 readIDs: center.readIDs,
                 onActivate: { event in
-                    center.markRead(ids: [event.id])
+                    center.activate(event)
+                    onDismiss()
                 },
                 onAction: { event, action in
                     // The dropdown has no room for a confirmation dialog, so a

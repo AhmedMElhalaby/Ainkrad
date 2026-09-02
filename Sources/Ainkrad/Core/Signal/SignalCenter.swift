@@ -175,6 +175,20 @@ final class SignalCenter {
 
     func unreadCount(for source: SignalSource) -> Int { unreadCounts[source] ?? 0 }
 
+    /// Set by the bootstrap: opens the deep link's target app with its payload.
+    var onActivateDeepLink: ((SignalDeepLink) -> Void)?
+
+    /// The user tapped a row. Marks it read and follows its deep link, if it
+    /// has one.
+    ///
+    /// One method rather than a closure per surface: the dropdown and the
+    /// overlay must behave identically, and two call sites drift.
+    func activate(_ event: SignalEvent) {
+        markRead(ids: [event.id])
+        guard let deepLink = event.deepLink else { return }
+        onActivateDeepLink?(deepLink)
+    }
+
     /// Takes ownership of the dispatcher. Used by the bootstrap factory, where
     /// the dispatcher exists only to serve this center.
     func retainDeliverer(_ deliverer: any SignalDeliverer) {

@@ -77,6 +77,14 @@ extension AppEnvironment {
             signalPreferencesStore.save(
                 SignalPreferences(rules: signalCenter.rules, retention: retention))
         }
+        // Tapping a feed row opens the app that published it, with the event's
+        // payload — the same cross-app launch path `HostServices.apps` uses, so
+        // a deep link behaves exactly like an app opening another app.
+        signalCenter.onActivateDeepLink = { link in
+            pluginLaunchHub.enqueue(target: link.appID,
+                                    payload: String(decoding: link.payload, as: UTF8.self))
+            pluginLaunchHub.requestOpen(link.appID)
+        }
         environment.signalCenter = signalCenter
         // The hub was built in `bootstrapCoreStores`, before the feed existed;
         // this is where it gains something to record into.

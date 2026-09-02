@@ -41,7 +41,7 @@ struct SignalFeedOverlayView: View {
                     onSearch: { query in
                         searchResults = query.isEmpty ? nil : center.search(query)
                     },
-                    onActivate: { event in center.markRead(ids: [event.id]) },
+                    onActivate: { event in center.activate(event) },
                     onAction: { event, action in
                         guard let hub else { return }
                         if let needsConfirmation = SignalActionRouter(hub: hub).invoke(event, action) {
