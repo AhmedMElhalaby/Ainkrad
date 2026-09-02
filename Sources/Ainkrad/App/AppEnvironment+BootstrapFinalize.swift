@@ -130,6 +130,12 @@ extension AppEnvironment {
         // emission is already wired above and is untouched by any failure here.
         let signalTokens = SignalTokenRegistry(secrets: environment.secrets)
         environment.signalTokens = signalTokens
+        // Pair the CLI if it is not already paired, so `ainkrad notify` works
+        // out of the box rather than needing a visit to Settings first. Minted
+        // once — see `ensurePaired`, which refuses to rotate a token that is
+        // still good and would otherwise break every installed hook on launch.
+        SignalCLIPairing.ensurePaired(registry: signalTokens)
+
         let ingress = SignalIngressCoordinator(
             center: signalCenter,
             tokens: signalTokens,
