@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AinkradSignal
 @testable import Ainkrad
 
 @MainActor

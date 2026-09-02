@@ -78,7 +78,11 @@ packages:
     # partial action object from sinking a whole notification as "malformed"
     # (merge of feat/signal-wire-format). Still generation 9: additive only,
     # abi-check clean on both AinkradAppKitContract and AinkradSignal.
-    revision: 6ad74b55f31d9ac0d673be020ccc92fa9d0a8e7d
+    # M3: SignalSocketPath + SignalSocketClient — the socket path convention
+    # and the connect-write-close, shared with `ainkrad notify` so the CLI
+    # cannot drift from what the host's listener accepts (merge of
+    # feat/signal-socket-client).
+    revision: 30ccbe6a35255d5dcda3c05c561a88465a0d0577
 
 targets:
   AinkradHostRuntime:

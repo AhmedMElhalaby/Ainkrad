@@ -165,69 +165,7 @@ final class SignalSocketServer {
     }
 }
 
-/// Connect, write, close. Shared by the socket tests and, in Task 4, by
-/// `ainkrad notify` — one implementation, so the CLI cannot drift from what
-/// the server actually accepts.
-enum SignalSocketClient {
-    enum SendFailure: Error, Equatable {
-        case socketUnavailable(errno: Int32)
-        case notListening(errno: Int32)
-        case writeFailed(errno: Int32)
-        case pathTooLong(length: Int)
-    }
-
-    static func send(_ payload: Data, to url: URL) throws {
-        let path = url.path
-        let capacity = MemoryLayout.size(ofValue: sockaddr_un().sun_path)
-        guard path.utf8.count < capacity else {
-            throw SendFailure.pathTooLong(length: path.utf8.count)
-        }
-
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw SendFailure.socketUnavailable(errno: errno) }
-        defer { close(fd) }
-
-        // Writing to a socket the peer has already closed raises SIGPIPE,
-        // whose default disposition TERMINATES the process. That is not
-        // hypothetical here: the server closes the connection as soon as it
-        // knows a payload is oversized, so an over-cap `ainkrad notify` would
-        // be killed by a signal mid-write — a notification tool taking down
-        // the script that called it, which is precisely the outcome this
-        // milestone's constraints forbid.
-        //
-        // SO_NOSIGPIPE turns it into an ordinary EPIPE from `write`, which the
-        // loop below reports as `.writeFailed` and the CLI turns into exit 0
-        // with a warning.
-        var on: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
-
-        var address = sockaddr_un()
-        address.sun_family = sa_family_t(AF_UNIX)
-        _ = withUnsafeMutablePointer(to: &address.sun_path) { destination in
-            path.withCString { source in
-                strncpy(UnsafeMutableRawPointer(destination).assumingMemoryBound(to: CChar.self),
-                        source, capacity - 1)
-            }
-        }
-
-        let size = socklen_t(MemoryLayout<sockaddr_un>.size)
-        let connected = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, size) }
-        }
-        // The host not running is the ordinary case, not an exceptional one:
-        // `ainkrad notify` turns this into exit 0 with a warning, because a
-        // notification tool that can fail somebody's build is worse than no
-        // notification tool.
-        guard connected == 0 else { throw SendFailure.notListening(errno: errno) }
-
-        guard !payload.isEmpty else { return }
-        try payload.withUnsafeBytes { raw in
-            var sent = 0
-            while sent < raw.count {
-                let wrote = write(fd, raw.baseAddress!.advanced(by: sent), raw.count - sent)
-                if wrote <= 0 { throw SendFailure.writeFailed(errno: errno) }
-                sent += wrote
-            }
-        }
-    }
-}
+// `SignalSocketClient` used to live here. It now lives in `AinkradSignal`
+// alongside `SignalSocketPath`, because `ainkrad notify` needs the identical
+// connect-write-close and the identical path — and a second copy in the CLI
+// would be free to drift from what this server actually accepts.

@@ -134,8 +134,7 @@ extension AppEnvironment {
             center: signalCenter,
             tokens: signalTokens,
             limiter: SignalRateLimiter())
-        let socketURL = AppEnvironment.signalSocketURL(
-            applicationSupport: home.cacheRoot.deletingLastPathComponent())
+        let socketURL = AppEnvironment.signalSocketURL()
         let socketServer = SignalSocketServer(url: socketURL) { data in
             ingress.accept(data)
         }
