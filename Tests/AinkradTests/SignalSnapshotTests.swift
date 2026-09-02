@@ -340,6 +340,88 @@ struct SignalSnapshotTests {
         return try #require(rep.representation(using: .png, properties: [:]),
                             "could not encode PNG")
     }
+    // MARK: - Generation 10: subscription approval
+
+    /// What the host's registry would answer.
+    private static let sampleDisplayNames: (String) -> String = { appID in
+        ["raven": "Raven", "quest": "Quest", "lore": "Lore",
+         "gitmage": "Git Mage", "leyline": "Leyline"][appID] ?? appID
+    }
+
+    /// Shared chrome for the three generation-10 snapshots.
+    private func themed<V: View>(_ view: V, width: CGFloat) -> some View {
+        let theme = Theme.neonBlue
+        return view
+            .frame(width: width)
+            .padding(28)
+            // Fill whatever canvas the caller asked for BEFORE painting the
+            // background. Without this the background only covers the
+            // content's intrinsic size, and any canvas taller than the content
+            // came back with an unpainted white band across the top — which
+            // reads as a rendering bug in the panel rather than as a snapshot
+            // that was sized wrong.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .background(HostThemeTokens(from: theme).background)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, Self.hostTypography)
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+    }
+
+    private func writeSnapshot<V: View>(_ view: V, size: CGSize, named name: String) throws {
+        let png = try Self.render(view, size: size)
+        let url = outputDirectory.appendingPathComponent(name)
+        try png.write(to: url)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test("render the subscription approval prompt")
+    func renderApprovalPrompt() throws {
+        let view = themed(SubscriptionApprovalView(
+            appName: "Git Mage",
+            subscriptions: SignalSubscription.parse([
+                "app:raven/build.*",
+                "host/run.finished",
+                "sage/*",
+            ]),
+            displayName: Self.sampleDisplayNames), width: 420)
+        try writeSnapshot(view, size: CGSize(width: 476, height: 440),
+                          named: "subscription-approval.png")
+    }
+
+    @Test("render the re-approval prompt, which must explain itself")
+    func renderReapprovalPrompt() throws {
+        let view = themed(SubscriptionApprovalView(
+            appName: "Git Mage",
+            subscriptions: SignalSubscription.parse([
+                "app:raven/build.*",
+                "app:quest/work.*",
+                "host/run.finished",
+                "sage/*",
+            ]),
+            displayName: Self.sampleDisplayNames,
+            isReapproval: true), width: 420)
+        try writeSnapshot(view, size: CGSize(width: 476, height: 500),
+                          named: "subscription-reapproval.png")
+    }
+
+    @Test("render the settings section, showing an allowed and a refused app")
+    func renderSettingsSection() throws {
+        let view = themed(SubscriptionSettingsSection(rows: [
+            .init(id: "gitmage", appName: "Git Mage",
+                  subscriptions: SignalSubscription.parse(["app:raven/build.*",
+                                                           "host/run.finished"]),
+                  isApproved: true),
+            .init(id: "leyline", appName: "Leyline",
+                  subscriptions: SignalSubscription.parse(["sage/*"]),
+                  isApproved: false),
+        ], displayName: Self.sampleDisplayNames), width: 420)
+        try writeSnapshot(view, size: CGSize(width: 476, height: 360),
+                          named: "subscription-settings.png")
+    }
+
 }
 
 @MainActor

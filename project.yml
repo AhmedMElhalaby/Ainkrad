@@ -90,7 +90,9 @@ packages:
     # minSupportedAPIVersion is apiVersion - 2 here, NOT - 1: every plugin
     # bundle installed in the field is still generation 8, so a floor of 9
     # would have launched this host with none of the user's apps.
-    revision: 628294d9ef3bd5ec239c147f6923d70f6eb8cb0e
+    # Plus SignalSubscription.kindDescription / builtInSourceName, so the
+    # consent prompt can say "Raven" rather than "raven".
+    revision: 4bb67ca6a22b9a76a2f3383a8b62298903924ced
 
 targets:
   AinkradHostRuntime:
