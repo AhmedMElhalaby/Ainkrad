@@ -1,4 +1,5 @@
 import SwiftUI
+import AinkradAppKit
 
 /// The single window's content: every workspace's tile layout stays
 /// mounted (hidden when inactive) so running sessions survive switching;
@@ -77,26 +78,7 @@ struct RootView: View {
                 .transition(.opacity)
             }
 
-            // The bell's dropdown. Anchored below the top bar on the trailing
-            // edge, under the bell that opened it. Presented here rather than
-            // as an overlay on `HUDBar` because that strip is 30pt tall and
-            // would clip it.
-            if environment.isSignalDropdownPresented, let center = environment.signalCenter {
-                SignalBellDropdownOverlay(center: center) {
-                    environment.isSignalDropdownPresented = false
-                } onViewAll: {
-                    environment.isSignalDropdownPresented = false
-                    environment.isSignalFeedPresented = true
-                }
-                .zIndex(60)
-            }
-
-            if environment.isSignalFeedPresented, let center = environment.signalCenter {
-                SignalFeedOverlayView(center: center) {
-                    environment.isSignalFeedPresented = false
-                }
-                .transition(.opacity)
-            }
+            signalOverlays
 
             if environment.isQuickAskPresented {
                 QuickAskOverlayView {
@@ -136,14 +118,7 @@ struct RootView: View {
             // confirmation (200): a toast is not interactive enough to matter,
             // and one floating over the gate would be another surface the
             // scrim cannot cover.
-            SignalToastStack(model: environment.signalToasts) { event in
-                guard let center = environment.signalCenter else { return }
-                center.markRead(ids: [event.id])
-                environment.isSignalFeedPresented = true
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .allowsHitTesting(!environment.isSetupPresented)
-            .zIndex(50)
+            signalToasts
 
             // The first-run gate. Deliberately no `onDismiss` closure, no scrim
             // tap and no escape handler — that trio is exactly what makes every
@@ -192,6 +167,60 @@ struct RootView: View {
         }
     }
 
+    /// The feed's overlays: the bell dropdown and the full feed.
+    ///
+    /// Extracted from the main `ZStack` because that body outgrew the type
+    /// checker once these were added — SwiftUI's inference cost is
+    /// superlinear in a single builder, so a large ZStack must be split rather
+    /// than grown.
+    @ViewBuilder
+    private var signalOverlays: some View {
+        if environment.isSignalDropdownPresented, let center = environment.signalCenter {
+            // Anchored below the top bar on the trailing edge, under the bell
+            // that opened it. Presented here rather than as an overlay on
+            // `HUDBar`, because that strip is 30pt tall and would clip it.
+            SignalBellDropdownOverlay(center: center, hub: environment.signalEmitterHub) {
+                environment.isSignalDropdownPresented = false
+            } onViewAll: {
+                environment.isSignalDropdownPresented = false
+                environment.isSignalFeedPresented = true
+            }
+            .zIndex(60)
+        }
+
+        if environment.isSignalFeedPresented, let center = environment.signalCenter {
+            SignalFeedOverlayView(center: center, hub: environment.signalEmitterHub) {
+                environment.isSignalFeedPresented = false
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// Transient toasts, top-trailing under the bell that counts them.
+    ///
+    /// Above the workspace and every dismissible overlay, but deliberately
+    /// BELOW the first-run gate (zIndex 100) and the quit confirmation (200): a
+    /// toast floating over the gate would be another surface the scrim cannot
+    /// cover.
+    private var signalToasts: some View {
+        SignalToastStack(model: environment.signalToasts) { event in
+            guard let center = environment.signalCenter else { return }
+            // Go to the source, not to the feed. A toast names one specific
+            // thing; sending the user to a list of everything makes them find
+            // it again. Only an event with nowhere to go falls back to the feed.
+            center.activate(event)
+            if event.deepLink == nil { environment.isSignalFeedPresented = true }
+            // Acted on, so it goes: a toast still sitting there after it took
+            // you somewhere reads as though the tap did nothing.
+            environment.signalToasts.dismiss(id: event.id)
+        }
+        // Clear of the 30pt top bar, so a toast never covers the clock or the
+        // bell whose count it corresponds to.
+        .padding(.top, 34)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .allowsHitTesting(!environment.isSetupPresented)
+        .zIndex(50)
+    }
 }
 
 /// Everything an overlay sits in front of: the ambient sky, the HUD bar, the

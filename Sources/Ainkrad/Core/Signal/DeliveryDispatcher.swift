@@ -1,4 +1,5 @@
 import Foundation
+import AinkradAppKit
 import AinkradSignal
 
 @MainActor protocol ToastPresenting: AnyObject {
@@ -43,3 +44,8 @@ final class DeliveryDispatcher: SignalDeliverer {
         }
     }
 }
+
+/// The kit's `SignalToastModel` deliberately conforms to nothing — it must not
+/// know the host's delivery seam exists. `present(_:)` already matches, so the
+/// conformance is added here, where that seam is defined.
+extension SignalToastModel: ToastPresenting {}

@@ -4,14 +4,13 @@ import AinkradSignal
 import AinkradHostRuntime
 @testable import Ainkrad
 
-/// The M1 exemption, exercised through the REAL `RunManager` completion path
-/// rather than by calling `SignalCenter.emit` directly.
+/// Exactly one banner per completed run, exercised through the REAL
+/// `RunManager` completion path rather than by calling `SignalCenter.emit`.
 ///
-/// This is the milestone's highest-risk behaviour: `RunNotifier` and Signal both
-/// know when a run finishes, so the failure mode is two macOS banners for one
-/// run. Asserting it at the `emit` seam only proves routing; this drives
-/// `enqueue` → runner → `finish(_:outcome:)` and checks both notification paths
-/// at once.
+/// In M1 `RunNotifier` owned this banner and a routing exemption kept Signal
+/// from posting a second one. M2 deletes the notifier, so the banner must now
+/// arrive through Signal — and the risk inverts: instead of two banners, the
+/// failure mode is ZERO, silently.
 @MainActor
 @Suite("Exactly one banner per completed run")
 final class RunBannerIntegrationTests {
@@ -26,12 +25,6 @@ final class RunBannerIntegrationTests {
                      appendLog: @escaping (String) -> Void) async -> AgentRunOutcome {
             .failure("exploded")
         }
-    }
-    /// Stands in for `UserNotificationRunNotifier`, counting the banners it
-    /// would have posted.
-    private final class SpyRunNotifier: RunNotifier {
-        private(set) var notified: [AgentRun] = []
-        func notifyCompleted(_ run: AgentRun) { notified.append(run) }
     }
     private final class SpyDeliverer: SignalDeliverer {
         private(set) var delivered: [(SignalEvent, Set<DeliveryChannel>)] = []
@@ -69,22 +62,19 @@ final class RunBannerIntegrationTests {
         let deliverer = SpyDeliverer()
         let (center, url) = try makeCenter(deliverer)
         defer { try? FileManager.default.removeItem(at: url) }
-        let notifier = SpyRunNotifier()
         let manager = RunManager(persistence: InMemoryPersistenceStore(),
                                  runner: InstantRunner(),
-                                 notifier: notifier,
                                  signalCenter: center)
 
         let run = manager.enqueue(prompt: "do the thing", origin: .chat)
         await waitForCompletion(manager, id: run.id)
 
-        #expect(notifier.notified.count == 1, "RunNotifier owns the banner in M1")
-        #expect(center.recent.count == 1, "and the feed records it regardless")
+        #expect(center.recent.count == 1)
         #expect(center.recent.first?.kind == "run.finished")
         #expect(deliverer.delivered.count == 1)
         let channels = deliverer.delivered[0].1
-        #expect(!channels.contains(.banner),
-                "TWO banners for one run is the regression this milestone risks")
+        #expect(channels.contains(.banner),
+                "RunNotifier is gone; if Signal does not post it, the user gets nothing")
         #expect(channels.contains(.feed))
     }
 
@@ -93,55 +83,26 @@ final class RunBannerIntegrationTests {
         let deliverer = SpyDeliverer()
         let (center, url) = try makeCenter(deliverer)
         defer { try? FileManager.default.removeItem(at: url) }
-        let notifier = SpyRunNotifier()
         let manager = RunManager(persistence: InMemoryPersistenceStore(),
                                  runner: FailingRunner(),
-                                 notifier: notifier,
                                  signalCenter: center)
 
         let run = manager.enqueue(prompt: "break the thing", origin: .chat)
         await waitForCompletion(manager, id: run.id)
 
-        #expect(notifier.notified.count == 1)
         #expect(center.recent.first?.kind == "run.failed")
         #expect(center.recent.first?.severity == .failure)
-        #expect(!deliverer.delivered[0].1.contains(.banner))
+        #expect(deliverer.delivered[0].1.contains(.banner))
         #expect(deliverer.delivered[0].1.contains(.sound), "a failure still makes a sound")
     }
 
-    /// Proves the three assertions above are actually sensitive to the
-    /// exemption rather than passing for some unrelated reason — and pins M2's
-    /// target state, where `RunNotifier` is gone and this banner must arrive
-    /// through Signal instead. If this test ever fails, deleting `RunNotifier`
-    /// would silently cost the user a notification.
-    @Test("with the exemption lifted, the banner arrives through Signal instead")
-    func exemptionLiftedRoutesTheBanner() async throws {
-        let deliverer = SpyDeliverer()
-        let (center, url) = try makeCenter(deliverer)
-        defer { try? FileManager.default.removeItem(at: url) }
-        center.rules.suppressBannerForHostRuns = false   // M2's state
-
-        let manager = RunManager(persistence: InMemoryPersistenceStore(),
-                                 runner: InstantRunner(),
-                                 notifier: nil,
-                                 signalCenter: center)
-        let run = manager.enqueue(prompt: "do the thing", origin: .chat)
-        await waitForCompletion(manager, id: run.id)
-
-        #expect(deliverer.delivered.count == 1)
-        #expect(deliverer.delivered[0].1.contains(.banner),
-                "with no legacy notifier, Signal must be the one posting it")
-    }
-
-    @Test("two runs produce two feed rows and two legacy banners, not four")
+    @Test("two runs produce two feed rows and two banners, not four")
     func twoRuns() async throws {
         let deliverer = SpyDeliverer()
         let (center, url) = try makeCenter(deliverer)
         defer { try? FileManager.default.removeItem(at: url) }
-        let notifier = SpyRunNotifier()
         let manager = RunManager(persistence: InMemoryPersistenceStore(),
                                  runner: InstantRunner(),
-                                 notifier: notifier,
                                  signalCenter: center)
 
         let first = manager.enqueue(prompt: "one", origin: .chat)
@@ -149,8 +110,9 @@ final class RunBannerIntegrationTests {
         await waitForCompletion(manager, id: first.id)
         await waitForCompletion(manager, id: second.id)
 
-        #expect(notifier.notified.count == 2)
         #expect(center.recent.count == 2, "distinct runs must not coalesce into one row")
-        #expect(deliverer.delivered.allSatisfy { !$0.1.contains(.banner) })
+        #expect(deliverer.delivered.count == 2)
+        #expect(deliverer.delivered.allSatisfy { $0.1.contains(.banner) },
+                "one banner per run, from Signal")
     }
 }

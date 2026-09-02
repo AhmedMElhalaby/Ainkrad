@@ -80,6 +80,9 @@ final class DevHostModel {
             hub: contextHub,
             actionHub: actionHub,
             launchHub: launchHub,
+            // The dev host has no feed; a plugin's emissions go nowhere, which
+            // is the correct behaviour for a harness that only checks loading.
+            signalHub: SignalEmitterHub(),
             declaredPresentation: presentation,
             appAppearanceStore: AppAppearanceStore(persistence: InMemoryPersistenceStore())
         )

@@ -21,6 +21,7 @@ extension AppEnvironment {
         themeManager: ThemeManager,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        signalHub: SignalEmitterHub,
         pluginLaunchHub: PluginLaunchHub,
         appAppearanceStore: AppAppearanceStore,
         pluginDataRoot: URL,
@@ -76,10 +77,74 @@ extension AppEnvironment {
             signalPreferencesStore.save(
                 SignalPreferences(rules: signalCenter.rules, retention: retention))
         }
+        // Tapping a feed row opens the app that published it, with the event's
+        // payload — the same cross-app launch path `HostServices.apps` uses, so
+        // a deep link behaves exactly like an app opening another app.
+        signalCenter.onActivateDeepLink = { [weak environment] link in
+            guard let environment else { return }
+            pluginLaunchHub.enqueue(target: link.appID,
+                                    payload: String(decoding: link.payload, as: UTF8.self))
+
+            let declared = environment.registry.allApps
+                .first { $0.id == link.appID }?.presentation ?? .pane
+            let effective = environment.appAppearanceStore
+                .presentationOverride(link.appID) ?? declared
+            let action = SignalReveal.action(
+                appID: link.appID,
+                presentsAsOverlay: effective == .overlay,
+                workspaces: environment.workspaceManager.workspaces.map { workspace in
+                    SignalRevealWorkspace(
+                        id: workspace.id,
+                        panes: workspace.tileLayout.blocks.map {
+                            SignalRevealWorkspace.Pane(appID: $0.appID, blockID: $0.id)
+                        })
+                },
+                activeWorkspaceID: environment.workspaceManager.activeWorkspaceID)
+
+            switch action {
+            case .presentOverlay:
+                environment.presentedOverlayAppID = link.appID
+            case .focus(let workspaceID, let blockID):
+                // Focus what is already there. Going through `requestOpen`
+                // appended a SECOND pane, so following a notification took the
+                // user further from the session that called them.
+                if workspaceID != environment.workspaceManager.activeWorkspaceID {
+                    environment.workspaceManager.switchTo(workspaceID)
+                }
+                environment.workspaceManager.activeWorkspace.tileLayout.focus(blockID)
+            case .openNewPane:
+                pluginLaunchHub.requestOpen(link.appID)
+            }
+        }
         environment.signalCenter = signalCenter
+        // The hub was built in `bootstrapCoreStores`, before the feed existed;
+        // this is where it gains something to record into.
+        signalHub.attach(sink: signalCenter)
         // `RunManager` is built in `bootstrapSession`, before this runs, so the
         // center is attached rather than injected.
         environment.runManager.attachSignalCenter(signalCenter)
+
+        // App-store outcomes into the feed. An install or update is exactly the
+        // kind of thing the user starts and then looks away from, which is what
+        // the feed is for.
+        environment.appStoreStore.onOperationFinished = { [weak environment] operation, appID, error in
+            guard let environment, let center = environment.signalCenter else { return }
+            // Prefer the registry's display name; fall back to the id, which is
+            // all there is for an app that failed before it registered.
+            let name = environment.registry.allApps.first { $0.id == appID }?.displayName ?? appID
+            switch (operation, error) {
+            case (.install, nil):
+                center.emit(.appInstalled(displayName: name), from: .host)
+            case (.install, let error?):
+                center.emit(.appInstallFailed(displayName: name,
+                                              reason: Self.describe(error)), from: .host)
+            case (.update, nil):
+                center.emit(.appUpdated(displayName: name), from: .host)
+            case (.update, let error?):
+                center.emit(.appUpdateFailed(displayName: name,
+                                             reason: Self.describe(error)), from: .host)
+            }
+        }
 
         environment.menuBarController = MenuBarController(presence: environment.menuBarPresence) { [weak environment] in
             guard let environment else { return AnyView(EmptyView()) }
@@ -130,7 +195,7 @@ extension AppEnvironment {
         // in a directory the plugin no longer reads.
         let runeHost = HostServicesImpl(appID: "rune", dataRootURL: pluginDataRoot,
                                             secretStore: secrets, themeManager: themeManager,
-                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                            hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                             declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
         TerminalSettingsMigration.runIfNeeded(
             legacyRawPayload: { (persistence as? FileDocumentStore)?.rawPayloadData(forID: $0) },
@@ -140,14 +205,14 @@ extension AppEnvironment {
         // directly), scoped like any other app for its documents/secrets/theme/context.
         let sageHost = HostServicesImpl(appID: "sage", dataRootURL: pluginDataRoot,
                                              secretStore: secrets, themeManager: themeManager,
-                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                              declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Live Scry (M7 Slice 7) is likewise a host-embedded built-in — its
         // pane reads `AppEnvironment.canvasStore` directly (see `ScryApp`).
         let scryHost = HostServicesImpl(appID: "scry", dataRootURL: pluginDataRoot,
                                           secretStore: secrets, themeManager: themeManager,
-                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                          hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                           declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Hoard (M1) — a host-embedded built-in like Sage and Scry. It
@@ -155,7 +220,7 @@ extension AppEnvironment {
         // `AppEnvironment` directly.
         let hoardHost = HostServicesImpl(appID: "hoard", dataRootURL: pluginDataRoot,
                                          secretStore: secrets, themeManager: themeManager,
-                                         hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                                         hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                                          declaredPresentation: .pane, appAppearanceStore: appAppearanceStore)
 
         // Hoard' MCP server and agent context are built HERE, not in
@@ -188,6 +253,14 @@ extension AppEnvironment {
         }
 
         let loaded = loader.loadAll(from: pluginDirs)
+        // A bundle that fails to load is the most confusing failure in the
+        // product: the app is simply absent, with nothing on screen saying why.
+        // It was already recorded in `registry.loadFailures` and read by the
+        // App Store overlay only — so a user who never opens that overlay had
+        // no way to find out.
+        for failure in loaded.failures {
+            signalCenter.emit(.pluginLoadFailed(failure), from: .host)
+        }
         registry.install(
             builtIn: [
                 RegisteredApp.builtIn(
@@ -292,5 +365,16 @@ extension AppEnvironment {
         }
 
         Log.app.info("AppEnvironment bootstrapped with \(registry.allApps.count) registered app(s)")
+    }
+
+    /// A user-facing reason string. `AppStoreError` already writes for humans;
+    /// anything else falls back to its description rather than being dropped,
+    /// because "failed to install" with no reason is the least useful
+    /// notification the feed could carry.
+    private static func describe(_ error: Error) -> String {
+        if let storeError = error as? AppStoreError {
+            return String(describing: storeError)
+        }
+        return String(describing: error)
     }
 }

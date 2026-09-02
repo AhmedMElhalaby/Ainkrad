@@ -17,7 +17,7 @@ final class RunManagerSignalTests {
                                               systemDoNotDisturb: false, hostFocusMode: false)
     }
 
-    @Test("a completed run produces exactly one feed event and zero Signal banners")
+    @Test("a completed run produces exactly one feed event and one banner")
     func oneBannerPerRun() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("signal-\(UUID().uuidString).sqlite")
@@ -34,8 +34,8 @@ final class RunManagerSignalTests {
         #expect(center.recent[0].kind == "run.finished")
         #expect(center.recent[0].severity == .success)
         #expect(deliverer.delivered.count == 1)
-        #expect(!deliverer.delivered[0].1.contains(.banner),
-                "RunNotifier posts this banner in M1 - a second one is the regression this guards")
+        #expect(deliverer.delivered[0].1.contains(.banner),
+                "Signal is the only banner path now; without it the run finishes silently")
     }
 
     @Test("a failed run maps to failure severity and run.failed")

@@ -26,6 +26,7 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
         pluginLaunchHub: PluginLaunchHub,
+        signalHub: SignalEmitterHub,
         appAppearanceStore: AppAppearanceStore,
         webSearchSettingsStore: WebSearchSettingsStore,
         mediaSettingsStore: MediaSettingsStore,
@@ -105,6 +106,12 @@ extension AppEnvironment {
         // before the move points at a fresh empty directory and silently
         // orphans the user's documents instead of reporting anything.
         AppDataDirectoryRename.run(root: pluginDataRoot)
+
+        // The Signal emitter hub is built here, with the other plugin hubs, and
+        // attached to the feed later in `finalizeBootstrap` — the feed needs the
+        // sound engine and window state, which do not exist yet, while the
+        // plugin host services need the hub now.
+        let signalHub = SignalEmitterHub()
         let retainedDataRoot = home.vaultRoot
             .appendingPathComponent("Apps", isDirectory: true)
             .appendingPathComponent(".retained", isDirectory: true)
@@ -123,7 +130,7 @@ extension AppEnvironment {
         let loader = PluginLoader(signaturePolicy: PluginTrust.policyForCurrentBuild(), minSupportedAPIVersion: GenerationSupport.minSupported) { appID, declaredPresentation in
             HostServicesImpl(appID: appID, dataRootURL: pluginDataRoot,
                              secretStore: secrets, themeManager: themeManager,
-                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub,
+                             hub: agentContextHub, actionHub: agentActionHub, launchHub: pluginLaunchHub, signalHub: signalHub,
                              declaredPresentation: declaredPresentation, appAppearanceStore: appAppearanceStore)
         }
 
@@ -192,6 +199,7 @@ extension AppEnvironment {
         return (
             persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
+            signalHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
             assistantDocuments

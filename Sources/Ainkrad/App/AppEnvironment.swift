@@ -85,6 +85,8 @@ final class AppEnvironment {
     let sounds: SoundPlaying
     let agentContextHub: AgentContextRegistryHub
     let agentActionHub: AgentActionRegistryHub
+    /// Routes a tapped feed action back to the app that published it.
+    let signalEmitterHub: SignalEmitterHub
     /// M7 Slice 6 (Security & Sandboxing): the persisted store of built-in +
     /// user-defined `SandboxProfile`s the router resolves against.
     let sandboxProfileStore: SandboxProfileStore
@@ -324,6 +326,7 @@ final class AppEnvironment {
         sounds: SoundPlaying,
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
+        signalHub: SignalEmitterHub,
         sandboxProfileStore: SandboxProfileStore,
         executionRouter: ExecutionRouter,
         cloudCredentialsStore: CloudCredentialsStore,
@@ -404,6 +407,7 @@ final class AppEnvironment {
         self.sounds = sounds
         self.agentContextHub = agentContextHub
         self.agentActionHub = agentActionHub
+        self.signalEmitterHub = signalHub
         self.sandboxProfileStore = sandboxProfileStore
         self.executionRouter = executionRouter
         self.cloudCredentialsStore = cloudCredentialsStore
@@ -502,6 +506,7 @@ final class AppEnvironment {
         let (
             persistence, secrets, registry, themeManager, workspaceManager, pluginDirs,
             pluginDataRoot, retainedDataRoot, agentContextHub, agentActionHub, pluginLaunchHub,
+            signalHub,
             appAppearanceStore, webSearchSettingsStore, mediaSettingsStore, sessionShareStore, loader, mcpConfigStore, skillsRoot, appStore, appStoreStore, appIconStore,
             generalSettingsStore, skySettingsStore, sounds, connectionStore, discoveredModelsStore,
             assistantDocuments
@@ -575,7 +580,7 @@ final class AppEnvironment {
             skySettingsStore: skySettingsStore,
             sounds: sounds,
             agentContextHub: agentContextHub,
-            agentActionHub: agentActionHub,
+            agentActionHub: agentActionHub, signalHub: signalHub,
             sandboxProfileStore: sandboxProfileStore,
             executionRouter: executionRouter,
             cloudCredentialsStore: cloudCredentialsStore,
@@ -630,6 +635,7 @@ final class AppEnvironment {
             localModelAvailability: localModelAvailability, mcpServerRegistry: mcpServerRegistry,
             lspServerRegistry: lspServerRegistry, persistence: persistence, secrets: secrets,
             themeManager: themeManager, agentContextHub: agentContextHub, agentActionHub: agentActionHub,
+            signalHub: signalHub,
             pluginLaunchHub: pluginLaunchHub, appAppearanceStore: appAppearanceStore,
             pluginDataRoot: pluginDataRoot, pluginDirs: pluginDirs, loader: loader, registry: registry,
             workspaceManager: workspaceManager, home: home, defaults: defaults

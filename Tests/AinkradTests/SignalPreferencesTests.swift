@@ -18,7 +18,6 @@ struct SignalPreferencesTests {
         let prefs = store.load()
         #expect(prefs.rules == .default)
         #expect(prefs.retention == .default)
-        #expect(prefs.rules.suppressBannerForHostRuns, "M1 ships with the run exemption on")
     }
 
     @Test("saved rules survive a round trip, including muted sources and overrides")
@@ -42,5 +41,28 @@ struct SignalPreferencesTests {
         defer { try? FileManager.default.removeItem(at: url) }
         try Data("not json".utf8).write(to: url)
         #expect(store.load().rules == .default)
+    }
+
+    @Test("preferences written before the exemption was removed still load")
+    func decodesPreExemptionPreferences() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-prefs-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        // Exactly what M1 wrote, including the flag that no longer exists.
+        // `RoutingRules` is Codable with synthesized conformance, so an unknown
+        // key is ignored on decode — asserted rather than assumed, because if it
+        // were not, every user who changed a notification setting in M1 would
+        // silently lose all of them on upgrade.
+        let legacy = """
+        {"rules":{"mutedSources":[],"sourceOverrides":[],"sourceKindOverrides":[],
+        "suppressBannerForHostRuns":true},
+        "retention":{"maxAgeDays":7,"maxEvents":500}}
+        """
+        try Data(legacy.utf8).write(to: url)
+
+        let loaded = SignalPreferencesStore(url: url).load()
+        #expect(loaded.retention.maxAgeDays == 7, "the user's retention choice survives")
+        #expect(loaded.retention.maxEvents == 500)
+        #expect(loaded.rules == .default)
     }
 }

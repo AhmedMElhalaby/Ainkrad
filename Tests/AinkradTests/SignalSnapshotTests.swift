@@ -64,7 +64,7 @@ struct SignalSnapshotTests {
             .frame(width: 380, height: 420)
             .background(HostThemeTokens(from: theme).surface)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -141,7 +141,7 @@ struct SignalSnapshotTests {
         }
             .frame(width: 560, height: 470)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -182,7 +182,7 @@ struct SignalSnapshotTests {
         }
             .frame(width: 780, height: 620)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -203,19 +203,27 @@ struct SignalSnapshotTests {
         // the newest ends up on top as it would at runtime.
         for event in events.prefix(5).reversed() { model.present(event) }
 
-        let view = ZStack(alignment: .bottomTrailing) {
+        let view = ZStack(alignment: .topTrailing) {
             HostThemeTokens(from: theme).background
+            HStack {
+                Spacer()
+                SignalBellButton(unread: 3, tokens: theme.tokens) {}
+                    .padding(.trailing, 14)
+            }
+            .frame(height: 30)
+            .frame(maxHeight: .infinity, alignment: .top)
             SignalToastStack(model: model, now: now)
+                .padding(.top, 34)
         }
-            .frame(width: 420, height: 320)
+            .frame(width: 420, height: 340)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
                 danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 420, height: 320))
+        let png = try Self.render(view, size: CGSize(width: 420, height: 340))
         try png.write(to: outputDirectory.appendingPathComponent("signal-toasts.png"))
     }
 
@@ -252,7 +260,7 @@ struct SignalSnapshotTests {
             .frame(maxHeight: .infinity, alignment: .top)
             .background(HostThemeTokens(from: theme).background)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, .default)
+            .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
                 success: theme.tokens.success,
                 warning: theme.tokens.warning,
@@ -261,6 +269,45 @@ struct SignalSnapshotTests {
         let png = try Self.render(view, size: CGSize(width: 560, height: 660))
         try png.write(to: outputDirectory.appendingPathComponent("signal-settings.png"))
     }
+
+    @Test("render the launcher tiles with unread badges")
+    func renderLauncherBadges() throws {
+        let theme = Theme.neonBlue
+        let tokens = theme.tokens
+
+        // Tiles at both sizes the launcher uses (32 list, 46 grid), badged and
+        // unbadged side by side, so the badge's effect on the footprint is
+        // visible — it must not nudge its neighbours.
+        let view = HStack(spacing: 22) {
+            NeonAppTile(symbol: "terminal", tokens: tokens, size: 46, badge: "3")
+            NeonAppTile(symbol: "sparkles", tokens: tokens, size: 46)
+            NeonAppTile(symbol: "hammer", tokens: tokens, size: 46, badge: "99+")
+            NeonAppTile(symbol: "book", tokens: tokens, size: 32, badge: "1")
+            NeonAppTile(symbol: "arrow.triangle.branch", tokens: tokens, size: 32)
+        }
+            .padding(26)
+            .frame(width: 420, height: 100)
+            .background(HostThemeTokens(from: theme).background)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, Self.hostTypography)
+
+        let png = try Self.render(view, size: CGSize(width: 420, height: 100))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-launcher-badges.png"))
+    }
+
+    /// The typography the running app injects (`AinkradApp` sets
+    /// `fontFamilyName` from `themeManager.uiFontFamily`), not
+    /// `AinkradTypography.default` — whose `fontFamilyName` is nil, which falls
+    /// back to the SYSTEM face.
+    ///
+    /// This mattered: after the feed components moved into the kit they resolve
+    /// type through `AinkradFontResolver`, which reads this environment value,
+    /// where before they used the host's `AinkradFont` and its statically
+    /// configured family. A harness passing `.default` therefore rendered the
+    /// brand face before the move and the system face after it, and the
+    /// snapshot diff blamed the move for a defect in the harness.
+    static let hostTypography = AinkradTypography(
+        fontFamilyName: UIFontFamily.exo2.fontName, scale: 1.0)
 
     /// Renders through a real `NSHostingView` in an offscreen window.
     ///
