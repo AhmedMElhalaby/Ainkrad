@@ -169,6 +169,7 @@ struct AinkradHostApp: App {
         appDelegate.quitCoordinator = environment.quitCoordinator
         appDelegate.menuBarController = environment.menuBarController
         appDelegate.assistantSessionStore = environment.assistantSessionStore
+        appDelegate.signalSocketServer = environment.signalSocketServer
     }
 
     var body: some Scene {

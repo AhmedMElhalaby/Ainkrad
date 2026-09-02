@@ -244,6 +244,12 @@ final class AppEnvironment {
     /// The Signal feed. Built in `finalizeBootstrap` (it needs the sound engine
     /// and the window state), so `var`/optional like `menuBarController`.
     var signalCenter: SignalCenter?
+    /// Token → source for external emitters. Held here because Settings needs
+    /// it to mint and revoke, not only bootstrap.
+    var signalTokens: SignalTokenRegistry?
+    /// External ingress. Optional because a socket that cannot bind must
+    /// degrade to "no external ingress", never to a failed launch.
+    var signalSocketServer: SignalSocketServer?
     /// Shared toast stack, presented over the window by `RootView`.
     let signalToasts = SignalToastModel()
     /// True while the bell's dropdown is open. Separate from the overlay flag:

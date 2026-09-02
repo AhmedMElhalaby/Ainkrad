@@ -45,6 +45,17 @@ extension AppEnvironment {
         applicationSupport.appendingPathComponent("signal.sqlite")
     }
 
+    /// The external-ingress socket. Beside the store rather than in `/tmp`,
+    /// which is world-writable and where another local user could pre-create
+    /// the path. Mode 0600 is applied at bind time by `SignalSocketServer`.
+    ///
+    /// `ainkrad notify` derives the same path independently, so this is a
+    /// contract with the CLI and not an implementation detail: changing it
+    /// silently breaks every hook and script already installed.
+    static func signalSocketURL(applicationSupport: URL) -> URL {
+        applicationSupport.appendingPathComponent("signal.sock")
+    }
+
     /// Builds the center, degrading to memory if the store cannot be opened.
     /// A notification subsystem that prevents the app from launching is worse
     /// than no notification subsystem.

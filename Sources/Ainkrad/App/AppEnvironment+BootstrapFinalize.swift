@@ -125,6 +125,36 @@ extension AppEnvironment {
             }
         }
         environment.signalCenter = signalCenter
+
+        // External ingress (M3). Everything below is supplementary: in-process
+        // emission is already wired above and is untouched by any failure here.
+        let signalTokens = SignalTokenRegistry(secrets: environment.secrets)
+        environment.signalTokens = signalTokens
+        let ingress = SignalIngressCoordinator(
+            center: signalCenter,
+            tokens: signalTokens,
+            limiter: SignalRateLimiter())
+        let socketURL = AppEnvironment.signalSocketURL(
+            applicationSupport: home.cacheRoot.deletingLastPathComponent())
+        let socketServer = SignalSocketServer(url: socketURL) { data in
+            ingress.accept(data)
+        }
+        do {
+            try socketServer.start()
+            environment.signalSocketServer = socketServer
+        } catch {
+            // One warning into the feed, then carry on. A notification
+            // subsystem that stops the app launching is worse than no
+            // notification subsystem — the same rule `makeSignalCenter`
+            // follows when the store cannot be opened.
+            //
+            // Recorded rather than only logged because the consequence is
+            // invisible otherwise: hooks and scripts would post into nothing
+            // and no one would know why.
+            signalCenter.emit(.externalIngressUnavailable(reason: String(describing: error)),
+                              from: .host)
+        }
+
         // The hub was built in `bootstrapCoreStores`, before the feed existed;
         // this is where it gains something to record into.
         signalHub.attach(sink: signalCenter)

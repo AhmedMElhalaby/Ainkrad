@@ -73,7 +73,12 @@ packages:
     # Generation 9: HostServices.signals + PluginSignalEmitter, and the Signal
     # feed components moved into the UI kit. minSupportedAPIVersion is 8, so
     # every installed generation-8 bundle keeps loading.
-    revision: 9b10f58b3f4fb2845ebdf0ecb10e579c8dfca4bb
+    # M3: SignalWire — the external wire payload, which carries a token and
+    # deliberately no source, plus the SignalAction decoder fix that stops a
+    # partial action object from sinking a whole notification as "malformed"
+    # (merge of feat/signal-wire-format). Still generation 9: additive only,
+    # abi-check clean on both AinkradAppKitContract and AinkradSignal.
+    revision: 6ad74b55f31d9ac0d673be020ccc92fa9d0a8e7d
 
 targets:
   AinkradHostRuntime:
