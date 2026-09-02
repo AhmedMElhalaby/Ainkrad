@@ -75,4 +75,24 @@ struct SignalRevealTests {
             activeWorkspaceID: activeID)
         #expect(action == .focus(workspaceID: activeID, blockID: first))
     }
+    // MARK: - Payload delivery
+
+    @Test("focusing an existing pane does NOT deliver the payload")
+    func focusWithholdsPayload() {
+        // The hub holds one pending payload per app and only a NEW pane pulls
+        // it. Enqueuing here left it for the next unrelated pane to collect and
+        // clobbered any legitimate pending launch in the meantime.
+        let action = SignalRevealAction.focus(workspaceID: activeID, blockID: UUID())
+        #expect(action.deliversPayload == false)
+    }
+
+    @Test("opening a new pane delivers the payload")
+    func openDeliversPayload() {
+        #expect(SignalRevealAction.openNewPane.deliversPayload)
+    }
+
+    @Test("presenting an overlay delivers the payload")
+    func overlayDeliversPayload() {
+        #expect(SignalRevealAction.presentOverlay.deliversPayload)
+    }
 }
