@@ -206,6 +206,22 @@ struct SubscriptionSettingsSection: View {
         }
     }
 
+    /// Neutral at rest, `danger` on hover.
+    ///
+    /// Full red at rest was tried and rejected on the rendered page: it was
+    /// the loudest thing on an otherwise calm surface, and a control shouting
+    /// before you have reached for it reads as a warning about the page rather
+    /// than a description of the action. Hover is also what the design
+    /// language asks for everywhere.
+    private func revokeButton(_ row: Row) -> some View {
+        RevokeButton(isApproved: row.isApproved,
+                     danger: statusColors.danger,
+                     accent: theme.accentPrimary,
+                     resting: theme.foreground.opacity(0.7)) {
+            row.isApproved ? onRevoke(row.id) : onApprove(row.id)
+        }
+    }
+
     private func settingsLabel(for subscription: SignalSubscription) -> String {
         let name: String
         if let builtIn = subscription.builtInSourceName {
@@ -228,13 +244,7 @@ struct SubscriptionSettingsSection: View {
                              tint: row.isApproved ? theme.accentSecondary
                                                   : theme.foreground.opacity(0.35))
                 Spacer()
-                Button(action: { row.isApproved ? onRevoke(row.id) : onApprove(row.id) }) {
-                    Text(row.isApproved ? "Revoke" : "Allow")
-                        .font(AinkradFont.display(10.5, weight: .medium))
-                        .foregroundStyle(row.isApproved ? statusColors.danger
-                                                        : theme.accentPrimary)
-                }
-                .buttonStyle(.plain)
+                revokeButton(row)
             }
             ForEach(Array(row.subscriptions.enumerated()), id: \.offset) { _, subscription in
                 Text(settingsLabel(for: subscription))
@@ -246,5 +256,32 @@ struct SubscriptionSettingsSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChamferShape(cut: AinkradRadius.md)
             .fill(theme.surfaceElevated.opacity(0.4)))
+    }
+}
+
+/// Split out so the hover state has somewhere to live.
+private struct RevokeButton: View {
+    let isApproved: Bool
+    let danger: Color
+    let accent: Color
+    let resting: Color
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(isApproved ? "Revoke" : "Allow")
+                .font(AinkradFont.display(10.5, weight: .medium))
+                .foregroundStyle(tint)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+    }
+
+    private var tint: Color {
+        guard isApproved else { return accent }
+        return isHovering ? danger : resting
     }
 }

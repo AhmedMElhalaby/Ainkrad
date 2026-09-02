@@ -62,6 +62,21 @@ extension SignalDraft {
                     importance: .urgent, dedupeKey: "updatefail:\(displayName)")
     }
 
+    /// An app declared subscription patterns the host could not parse.
+    ///
+    /// Reported because the alternative is silence: a typo'd pattern is
+    /// dropped so the app still loads, and without this the developer's
+    /// subscription simply never fires with nothing to explain it. Named
+    /// patterns verbatim — the point is to show the author their own string.
+    static func subscriptionsDropped(displayName: String, patterns: [String]) -> SignalDraft {
+        SignalDraft(kind: "plugin.subscriptions-dropped", severity: .warning,
+                    title: "\(displayName) declared notification access Ainkrad could not read",
+                    body: "These entries were ignored: " + patterns.joined(separator: ", ")
+                        + ". The app still works; it just will not receive those notifications.",
+                    importance: .background,
+                    dedupeKey: "subsdropped:\(displayName)")
+    }
+
     /// External ingress could not start.
     ///
     /// Recorded rather than only logged, because the consequence is otherwise

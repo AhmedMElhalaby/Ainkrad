@@ -188,6 +188,49 @@ struct RootView: View {
             .zIndex(60)
         }
 
+        // The consent prompt. Raised as a HUD overlay rather than inline in the
+        // App Store's install flow, because an install is not the only way an
+        // app arrives — `ainkrad dev`, a sideload and a catalog update all end
+        // with a declared subscription nobody has answered, and a prompt that
+        // only existed in the store flow would silently skip all three.
+        //
+        // Below the first-run gate and the quit confirmation, like every other
+        // dismissible overlay: a permission prompt floating over the gate
+        // would be the one surface the scrim cannot cover.
+        if let appID = environment.pendingSubscriptionApprovals.first,
+           let subscriptions = environment.signalSubscriptions,
+           let app = environment.registry.allApps.first(where: { $0.id == appID }) {
+            SubscriptionApprovalView(
+                appName: app.displayName,
+                subscriptions: subscriptions.declared(for: appID),
+                displayName: { id in
+                    environment.registry.allApps.first { $0.id == id }?.displayName ?? id
+                },
+                // True when this app was approved before and has widened its
+                // list. `isApproved` is false either way, so the flag comes
+                // from whether anything was ever approved for it.
+                isReapproval: subscriptions.hasEverBeenApproved(appID: appID),
+                onAllow: {
+                    subscriptions.approve(appID: appID)
+                    if let factory = app.signalObserverFactory {
+                        subscriptions.register(observer: factory(), appID: appID)
+                    }
+                    environment.pendingSubscriptionApprovals.removeFirst()
+                },
+                onDeny: {
+                    // Nothing is recorded as denied: the app simply stays
+                    // unapproved, which is the same state it was in before
+                    // asking. Storing a "denied" verdict would mean deciding
+                    // when to ask again, and the honest answer — when the app
+                    // changes what it wants — is exactly what an absent
+                    // approval already expresses.
+                    subscriptions.revoke(appID: appID)
+                    environment.pendingSubscriptionApprovals.removeFirst()
+                })
+                .transition(.opacity)
+                .zIndex(70)
+        }
+
         if environment.isSignalFeedPresented, let center = environment.signalCenter {
             SignalFeedOverlayView(center: center, hub: environment.signalEmitterHub) {
                 environment.isSignalFeedPresented = false

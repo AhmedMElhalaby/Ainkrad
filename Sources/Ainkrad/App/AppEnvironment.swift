@@ -253,6 +253,9 @@ final class AppEnvironment {
     let paneLocators = PaneLocatorRegistry()
     /// Declared and approved cross-app subscriptions (generation 10).
     var signalSubscriptions: SignalSubscriptionRegistry?
+    /// App ids whose declared subscriptions the user has not answered yet.
+    /// Drives the consent prompt; empty is the normal state.
+    var pendingSubscriptionApprovals: [String] = []
     /// External ingress. Optional because a socket that cannot bind must
     /// degrade to "no external ingress", never to a failed launch.
     var signalSocketServer: SignalSocketServer?

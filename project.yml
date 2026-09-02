@@ -92,7 +92,9 @@ packages:
     # would have launched this host with none of the user's apps.
     # Plus SignalSubscription.kindDescription / builtInSourceName, so the
     # consent prompt can say "Raven" rather than "raven".
-    revision: 4bb67ca6a22b9a76a2f3383a8b62298903924ced
+    # Plus AinkradAppSignalObserving — the static factory the host casts to,
+    # without which PluginSignalObserver was unreachable.
+    revision: 8944e959ddeaae2475709ae5e6ef0afd83bb0623
 
 targets:
   AinkradHostRuntime:

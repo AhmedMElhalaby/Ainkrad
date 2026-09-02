@@ -105,6 +105,14 @@ final class SignalSubscriptionRegistry {
         store?.save(approved)
     }
 
+    /// Whether this app has ever had an approval recorded, regardless of
+    /// whether it still covers what the app now declares.
+    ///
+    /// Distinguishes "asking for the first time" from "asking again after
+    /// widening", which is the difference between a prompt that introduces
+    /// itself and one that explains why it is back.
+    func hasEverBeenApproved(appID: String) -> Bool { approved[appID] != nil }
+
     /// Apps that declared something the user has not approved — what the
     /// approval UI asks about.
     func appsAwaitingApproval() -> [String] {
