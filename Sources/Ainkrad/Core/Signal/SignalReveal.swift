@@ -25,6 +25,33 @@ enum SignalRevealAction: Equatable {
     case presentOverlay
     /// Not open anywhere — open it.
     case openNewPane
+
+    /// Whether the host should hand the deep link's payload to the app.
+    ///
+    /// **False for `.focus`, and that is the point.** `PluginLaunchHub` holds
+    /// one pending payload per app and `takePendingLaunch()` is a pull consumed
+    /// once, at pane creation — so a pane that already exists never collects
+    /// it. Enqueuing anyway left the payload sitting in the mailbox until the
+    /// next pane of that app was created, where it arrived as the launch
+    /// payload for a session it had nothing to do with, and in the meantime
+    /// overwrote any legitimate pending launch (the hub is one slot, not a
+    /// queue).
+    ///
+    /// Not a security hole — Rune's `SSHLaunchPayload.pending(from:)`
+    /// JSON-decodes and returns nil for a Signal payload, so the pane opens a
+    /// plain terminal — but it is a payload delivered to the wrong place at the
+    /// wrong time, which is worse than one not delivered at all.
+    ///
+    /// Delivering it to the RIGHT pane is a separate, larger problem: the host
+    /// cannot know which pane holds which session without a per-pane locator on
+    /// the plugin contract. Until that exists, declining to deliver is the
+    /// honest behaviour.
+    var deliversPayload: Bool {
+        switch self {
+        case .focus: return false
+        case .presentOverlay, .openNewPane: return true
+        }
+    }
 }
 
 enum SignalReveal {

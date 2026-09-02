@@ -82,9 +82,6 @@ extension AppEnvironment {
         // a deep link behaves exactly like an app opening another app.
         signalCenter.onActivateDeepLink = { [weak environment] link in
             guard let environment else { return }
-            pluginLaunchHub.enqueue(target: link.appID,
-                                    payload: String(decoding: link.payload, as: UTF8.self))
-
             let declared = environment.registry.allApps
                 .first { $0.id == link.appID }?.presentation ?? .pane
             let effective = environment.appAppearanceStore
@@ -100,6 +97,17 @@ extension AppEnvironment {
                         })
                 },
                 activeWorkspaceID: environment.workspaceManager.activeWorkspaceID)
+
+            // Enqueue only where something will actually collect it. The hub
+            // holds ONE pending payload per app, so enqueuing on the `.focus`
+            // path — where no pane is created and nothing pulls — left the
+            // payload to be picked up by the next unrelated pane and clobbered
+            // any legitimate pending launch on the way. See
+            // `SignalRevealAction.deliversPayload`.
+            if action.deliversPayload {
+                pluginLaunchHub.enqueue(target: link.appID,
+                                        payload: String(decoding: link.payload, as: UTF8.self))
+            }
 
             switch action {
             case .presentOverlay:
