@@ -203,11 +203,19 @@ struct SignalSnapshotTests {
         // the newest ends up on top as it would at runtime.
         for event in events.prefix(5).reversed() { model.present(event) }
 
-        let view = ZStack(alignment: .bottomTrailing) {
+        let view = ZStack(alignment: .topTrailing) {
             HostThemeTokens(from: theme).background
+            HStack {
+                Spacer()
+                SignalBellButton(unread: 3, tokens: theme.tokens) {}
+                    .padding(.trailing, 14)
+            }
+            .frame(height: 30)
+            .frame(maxHeight: .infinity, alignment: .top)
             SignalToastStack(model: model, now: now)
+                .padding(.top, 34)
         }
-            .frame(width: 420, height: 320)
+            .frame(width: 420, height: 340)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
             .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
@@ -215,7 +223,7 @@ struct SignalSnapshotTests {
                 warning: theme.tokens.warning,
                 danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 420, height: 320))
+        let png = try Self.render(view, size: CGSize(width: 420, height: 340))
         try png.write(to: outputDirectory.appendingPathComponent("signal-toasts.png"))
     }
 

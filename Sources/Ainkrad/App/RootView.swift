@@ -196,16 +196,28 @@ struct RootView: View {
         }
     }
 
-    /// Transient toasts. Above the workspace and every dismissible overlay, but
-    /// deliberately BELOW the first-run gate (zIndex 100) and the quit
-    /// confirmation (200): a toast floating over the gate would be another
-    /// surface the scrim cannot cover.
+    /// Transient toasts, top-trailing under the bell that counts them.
+    ///
+    /// Above the workspace and every dismissible overlay, but deliberately
+    /// BELOW the first-run gate (zIndex 100) and the quit confirmation (200): a
+    /// toast floating over the gate would be another surface the scrim cannot
+    /// cover.
     private var signalToasts: some View {
         SignalToastStack(model: environment.signalToasts) { event in
-            environment.signalCenter?.markRead(ids: [event.id])
-            environment.isSignalFeedPresented = true
+            guard let center = environment.signalCenter else { return }
+            // Go to the source, not to the feed. A toast names one specific
+            // thing; sending the user to a list of everything makes them find
+            // it again. Only an event with nowhere to go falls back to the feed.
+            center.activate(event)
+            if event.deepLink == nil { environment.isSignalFeedPresented = true }
+            // Acted on, so it goes: a toast still sitting there after it took
+            // you somewhere reads as though the tap did nothing.
+            environment.signalToasts.dismiss(id: event.id)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        // Clear of the 30pt top bar, so a toast never covers the clock or the
+        // bell whose count it corresponds to.
+        .padding(.top, 34)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .allowsHitTesting(!environment.isSetupPresented)
         .zIndex(50)
     }
