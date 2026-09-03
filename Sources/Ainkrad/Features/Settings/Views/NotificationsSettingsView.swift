@@ -17,6 +17,7 @@ struct NotificationsSettingsView: View {
             center: center,
             sources: sources,
             subscriptionRows: rows,
+            notificationSounds: environment.notificationSounds,
             displayName: { id in
                 environment.registry.allApps.first { $0.id == id }?.displayName ?? id
             },

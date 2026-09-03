@@ -13,6 +13,10 @@ struct SignalSettingsPane: View {
     /// rather than read from the environment so the pane stays renderable in a
     /// snapshot.
     var subscriptionRows: [SubscriptionSettingsSection.Row] = []
+    /// Nil in a snapshot, where there is no bootstrap and so no engine — the
+    /// panel is then simply absent rather than bound to a stand-in that lies
+    /// about what the app will do.
+    var notificationSounds: NotificationSoundStore?
     var displayName: (String) -> String = { $0 }
 
     /// An app's real display name where the host knows it, falling back to the
@@ -48,6 +52,27 @@ struct SignalSettingsPane: View {
                                     get: { SignalDeliveryMode(rules: center.rules, source: source) },
                                     set: { $0.apply(to: &center.rules, source: source) }),
                                 label: \.label)
+                        }
+                    }
+                }
+            }
+
+            if let sounds = notificationSounds {
+                AinkradSettingsPanel(
+                    title: "Sound",
+                    hint: "Separate from interface sounds — turning those off in General "
+                        + "will not silence a failure."
+                ) {
+                    VStack(alignment: .leading, spacing: 9) {
+                        AinkradCaptionedRow("Play a sound") {
+                            AinkradToggle(isOn: Binding(
+                                get: { sounds.settings.isEnabled },
+                                set: { sounds.settings.isEnabled = $0 }))
+                        }
+                        AinkradCaptionedRow("Volume") {
+                            AinkradSlider(value: Binding(
+                                get: { sounds.settings.volume },
+                                set: { sounds.settings.volume = $0 }), in: 0...1)
                         }
                     }
                 }

@@ -47,11 +47,19 @@ extension AppEnvironment {
             url: home.cacheRoot.deletingLastPathComponent()
                 .appendingPathComponent("signal-preferences.json"))
         let signalContextProvider = HostDeliveryContextProvider()
+        let loadedSignalPreferences = signalPreferencesStore.load()
+        // Its OWN engine, on its own settings. Sharing `environment.sounds`
+        // meant General → Sound's chrome master silenced failure alerts, and
+        // the Notifications pane never said so.
+        let notificationSoundStore = NotificationSoundStore(
+            settings: loadedSignalPreferences.sound)
+        let notificationSounds = SoundEngine(settings: notificationSoundStore,
+                                             overrideDirectory: home.shared(.sounds))
         let signalCenter = AppEnvironment.makeSignalCenter(
             storeURL: AppEnvironment.signalStoreURL(
                 applicationSupport: home.cacheRoot.deletingLastPathComponent()),
-            preferences: signalPreferencesStore.load(),
-            sound: environment.sounds,
+            preferences: loadedSignalPreferences,
+            sound: notificationSounds,
             toast: environment.signalToasts,
             contextProvider: signalContextProvider,
             badge: { _ in
@@ -68,16 +76,18 @@ extension AppEnvironment {
             return Set(environment.registry.enabledApps.map(\.id)
                 .filter { environment.isAppOpen($0) })
         }
-        signalCenter.onRulesChanged = { [weak signalCenter] rules in
+        // One writer for all three fields: a callback that rebuilt
+        // SignalPreferences from two of them would drop whichever it forgot.
+        let saveSignalPreferences = { [weak signalCenter, weak notificationSoundStore] in
             guard let signalCenter else { return }
-            signalPreferencesStore.save(
-                SignalPreferences(rules: rules, retention: signalCenter.retention))
+            signalPreferencesStore.save(SignalPreferences(
+                rules: signalCenter.rules,
+                retention: signalCenter.retention,
+                sound: notificationSoundStore?.settings ?? NotificationSoundSettings()))
         }
-        signalCenter.onRetentionChanged = { [weak signalCenter] retention in
-            guard let signalCenter else { return }
-            signalPreferencesStore.save(
-                SignalPreferences(rules: signalCenter.rules, retention: retention))
-        }
+        signalCenter.onRulesChanged = { _ in saveSignalPreferences() }
+        signalCenter.onRetentionChanged = { _ in saveSignalPreferences() }
+        notificationSoundStore.onChange = { _ in saveSignalPreferences() }
         // Tapping a feed row opens the app that published it, with the event's
         // payload — the same cross-app launch path `HostServices.apps` uses, so
         // a deep link behaves exactly like an app opening another app.
@@ -133,6 +143,7 @@ extension AppEnvironment {
             }
         }
         environment.signalCenter = signalCenter
+        environment.notificationSounds = notificationSoundStore
         // The read side gains its feed, mirroring `signalHub.attach(sink:)`
         // below. `signal_search` was registered at tool-assembly time, before
         // this center existed, and has been reporting the feed as unavailable
