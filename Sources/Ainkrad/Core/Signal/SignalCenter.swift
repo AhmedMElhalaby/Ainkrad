@@ -183,6 +183,29 @@ final class SignalCenter {
         if store == nil { recent = []; unreadCounts = [:] }
     }
 
+    /// Sources that have actually recorded something, host and Sage aside.
+    ///
+    /// Settings lists a delivery control per source, and a control for an app
+    /// that has never said anything is a dead row — the same reasoning the
+    /// feed's source chips already use. Memoized because it is read during view
+    /// updates and each miss is a query; invalidated whenever the store changes.
+    private var emittingSourceCache: Set<SignalSource>?
+
+    func hasEverEmitted(_ source: SignalSource) -> Bool {
+        if let cache = emittingSourceCache { return cache.contains(source) }
+        guard let store else {
+            let live = Set(degradedBuffer.map(\.source))
+            emittingSourceCache = live
+            return live.contains(source)
+        }
+        // One page, not one query per source: the caller is enumerating every
+        // installed app, so N queries would be N round trips per view update.
+        let recentEnough = store.page(filter: .all, before: nil, limit: 5000)
+        let live = Set(recentEnough.map(\.source))
+        emittingSourceCache = live
+        return live.contains(source)
+    }
+
     func unreadCount(for source: SignalSource) -> Int { unreadCounts[source] ?? 0 }
 
     /// Set by the bootstrap: opens the deep link's target app with its payload.
@@ -206,6 +229,7 @@ final class SignalCenter {
     }
 
     private func refreshFromStore() {
+        emittingSourceCache = nil
         guard let store else { return }
         recent = store.page(filter: .all, before: nil, limit: 200)
         rowStates = store.rowStates(limit: 200)

@@ -14,6 +14,14 @@ struct SignalSettingsPane: View {
     /// snapshot.
     var subscriptionRows: [SubscriptionSettingsSection.Row] = []
     var displayName: (String) -> String = { $0 }
+
+    /// An app's real display name where the host knows it, falling back to the
+    /// kit's label. `SignalPresentation.sourceLabel` only capitalises the bundle
+    /// id's last component, which turns "gitmage" into "Gitmage".
+    private func displayName(for source: SignalSource) -> String {
+        if case .app(let id) = source { return displayName(id) }
+        return SignalPresentation.sourceLabel(source)
+    }
     var onApproveSubscriptions: (String) -> Void = { _ in }
     var onRevokeSubscriptions: (String) -> Void = { _ in }
 
@@ -24,18 +32,22 @@ struct SignalSettingsPane: View {
         VStack(alignment: .leading, spacing: 14) {
             AinkradSettingsPanel(
                 title: "Delivery",
-                hint: "What each source is allowed to interrupt you with. A muted source "
-                    + "still lands in the feed — it just never surfaces."
+                hint: "What each source is allowed to interrupt you with. Every source "
+                    + "still lands in the feed, whatever you choose here — the log is "
+                    + "not optional."
             ) {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                        AinkradCaptionedRow(SignalPresentation.sourceLabel(source)) {
-                            AinkradToggle(isOn: Binding(
-                                get: { !center.rules.mutedSources.contains(source) },
-                                set: { allowed in
-                                    if allowed { center.rules.mutedSources.remove(source) }
-                                    else { center.rules.mutedSources.insert(source) }
-                                }))
+                        AinkradCaptionedRow(displayName(for: source)) {
+                            // Three states, not a toggle: "off" and "recorded
+                            // but never surfaced" are different answers, and a
+                            // toggle can only offer one of them.
+                            AinkradSegmentedPicker(
+                                items: SignalDeliveryMode.allCases,
+                                selection: Binding(
+                                    get: { SignalDeliveryMode(rules: center.rules, source: source) },
+                                    set: { $0.apply(to: &center.rules, source: source) }),
+                                label: \.label)
                         }
                     }
                 }

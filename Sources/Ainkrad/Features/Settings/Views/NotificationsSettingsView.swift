@@ -15,6 +15,7 @@ struct NotificationsSettingsView: View {
     var body: some View {
         SignalSettingsPane(
             center: center,
+            sources: sources,
             subscriptionRows: rows,
             displayName: { id in
                 environment.registry.allApps.first { $0.id == id }?.displayName ?? id
@@ -36,6 +37,20 @@ struct NotificationsSettingsView: View {
                 // immediate, and unregistering would mean re-creating the
                 // observer to approve again.
             })
+    }
+
+    /// Host and Sage always — they are always present and always able to speak
+    /// — then every installed app that has actually emitted something.
+    ///
+    /// Not every installed app: a delivery control for a source that has never
+    /// said a word teaches the user this list is furniture, and then they stop
+    /// reading it on the day it matters.
+    private var sources: [SignalSource] {
+        let apps = environment.registry.allApps
+            .map { (id: $0.id, name: $0.displayName) }
+            .filter { center.hasEverEmitted(.app(appID: $0.id)) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return [.host, .sage] + apps.map { SignalSource.app(appID: $0.id) }
     }
 
     /// Every app that has declared subscriptions, approved or not.
