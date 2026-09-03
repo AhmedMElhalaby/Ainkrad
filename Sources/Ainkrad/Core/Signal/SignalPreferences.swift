@@ -45,6 +45,19 @@ extension AppEnvironment {
         applicationSupport.appendingPathComponent("signal.sqlite")
     }
 
+    /// The external-ingress socket.
+    ///
+    /// Delegates to `SignalSocketPath` in `AinkradSignal` rather than building
+    /// the path here: `ainkrad notify` derives the same path from that same
+    /// definition, and two independent constructions of a path with no
+    /// discovery step between them is exactly how a socket ends up bound
+    /// somewhere the CLI never looks.
+    static func signalSocketURL(bundleID: String? = nil) -> URL {
+        SignalSocketPath.default(bundleID: bundleID
+            ?? Bundle.main.bundleIdentifier
+            ?? "com.ainkrad.app")
+    }
+
     /// Builds the center, degrading to memory if the store cannot be opened.
     /// A notification subsystem that prevents the app from launching is worse
     /// than no notification subsystem.

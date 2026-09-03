@@ -62,6 +62,26 @@ extension SignalDraft {
                     importance: .urgent, dedupeKey: "updatefail:\(displayName)")
     }
 
+    /// External ingress could not start.
+    ///
+    /// Recorded rather than only logged, because the consequence is otherwise
+    /// invisible: `ainkrad notify`, Claude Code's hook and any CI script would
+    /// post into a socket that is not there, succeed quietly (they exit 0 by
+    /// design), and the user would conclude notifications are broken with
+    /// nothing anywhere to say why.
+    ///
+    /// `.warning`, not `.failure`: in-process notifications from the host and
+    /// every installed app are unaffected. This is one path being unavailable,
+    /// not the feature being down.
+    static func externalIngressUnavailable(reason: String) -> SignalDraft {
+        SignalDraft(kind: "signal.ingress-unavailable", severity: .warning,
+                    title: "Notifications from scripts and hooks are unavailable",
+                    body: "The local notification socket could not be opened, so "
+                        + "`ainkrad notify` and anything using it cannot reach the feed. "
+                        + "Notifications from Ainkrad and its apps still work. \(reason)",
+                    importance: .normal, dedupeKey: "ingress-unavailable")
+    }
+
     /// A plugin bundle failed to load at launch.
     ///
     /// Named by BUNDLE, not display name: a bundle that failed to load never

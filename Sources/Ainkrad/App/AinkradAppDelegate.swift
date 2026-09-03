@@ -21,6 +21,9 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     /// milliseconds of a transcript may still be pending when the user quits —
     /// this is where that gets forced to disk.
     var assistantSessionStore: SageSessionStore?
+    /// Wired alongside the above. Owns the external-ingress socket's lifetime
+    /// from the AppKit side: nothing else gets a `willTerminate` callback.
+    var signalSocketServer: SignalSocketServer?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         quitCoordinator?.requestTerminate() ?? .terminateNow
@@ -37,6 +40,11 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         assistantSessionStore?.flush()
+        // Unlink the ingress socket on the way out. `start()` also unlinks a
+        // stale path, so a crash is survivable either way — but leaving a live
+        // socket file behind means anything that connects between quit and the
+        // next launch writes into nothing and is told it succeeded.
+        signalSocketServer?.stop()
         menuBarController?.teardown()
     }
 }
