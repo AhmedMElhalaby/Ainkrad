@@ -22,6 +22,7 @@ extension AppEnvironment {
         agentContextHub: AgentContextRegistryHub,
         agentActionHub: AgentActionRegistryHub,
         signalHub: SignalEmitterHub,
+        signalReadAccess: SignalReadAccess,
         pluginLaunchHub: PluginLaunchHub,
         appAppearanceStore: AppAppearanceStore,
         pluginDataRoot: URL,
@@ -132,6 +133,27 @@ extension AppEnvironment {
             }
         }
         environment.signalCenter = signalCenter
+        // The read side gains its feed, mirroring `signalHub.attach(sink:)`
+        // below. `signal_search` was registered at tool-assembly time, before
+        // this center existed, and has been reporting the feed as unavailable
+        // until now.
+        signalReadAccess.attach(signalCenter)
+        // Recent notable events as assistant context, alongside `host.memory`.
+        // A closure, so every turn reads the feed as it is rather than a
+        // snapshot taken at launch — and read-only: `SageSignalContext` calls
+        // only `page` and `search`, so Sage answering "what failed today?"
+        // cannot change the answer.
+        _ = agentContextHub.register(appID: "host.signal") { [weak signalCenter] in
+            guard let signalCenter else { return nil }
+            let summary = SageSignalContext(center: signalCenter).summary()
+            // An empty feed contributes NOTHING rather than a snapshot saying
+            // so: a sentence asserting an absence spends context the user's
+            // actual question does not get.
+            guard !summary.isEmpty else { return nil }
+            return AgentContextSnapshot(kind: "notifications",
+                                        title: "Recent notifications",
+                                        text: summary)
+        }
 
         // External ingress (M3). Everything below is supplementary: in-process
         // emission is already wired above and is untouched by any failure here.

@@ -537,7 +537,7 @@ final class AppEnvironment {
 
         let (
             sandboxProfileStore, cloudCredentialsStore, executionRouter, agentTools, mcpServerRegistry, canvasStore,
-            toolStreamStore, terminalController
+            signalReadAccess, toolStreamStore, terminalController
         ) = bootstrapExecutionAndTools(
             home: home,
             persistence: persistence, secrets: secrets, lspServerRegistry: lspServerRegistry,
@@ -650,7 +650,7 @@ final class AppEnvironment {
             localModelAvailability: localModelAvailability, mcpServerRegistry: mcpServerRegistry,
             lspServerRegistry: lspServerRegistry, persistence: persistence, secrets: secrets,
             themeManager: themeManager, agentContextHub: agentContextHub, agentActionHub: agentActionHub,
-            signalHub: signalHub,
+            signalHub: signalHub, signalReadAccess: signalReadAccess,
             pluginLaunchHub: pluginLaunchHub, appAppearanceStore: appAppearanceStore,
             pluginDataRoot: pluginDataRoot, pluginDirs: pluginDirs, loader: loader, registry: registry,
             workspaceManager: workspaceManager, home: home, defaults: defaults
