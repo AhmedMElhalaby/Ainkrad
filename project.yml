@@ -94,7 +94,12 @@ packages:
     # consent prompt can say "Raven" rather than "raven".
     # Plus AinkradAppSignalObserving — the static factory the host casts to,
     # without which PluginSignalObserver was unreachable.
-    revision: 8944e959ddeaae2475709ae5e6ef0afd83bb0623
+    # M4 Phase 1: SignalStore.event(id:) — the single-row lookup a clicked
+    # macOS banner needs, since its userInfo carries an id and nothing else —
+    # and RoutingRules.urgentBypass, with Focus now suppressing toast and sound
+    # rather than only the banner. Both additive; abi-check clean. Generation
+    # unchanged at 10: nothing here is plugin-facing.
+    revision: 51c8959259e6260d35e06cc65cff4d4128b7fbf0
 
 targets:
   AinkradHostRuntime:

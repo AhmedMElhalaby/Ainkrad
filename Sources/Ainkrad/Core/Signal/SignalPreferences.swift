@@ -5,10 +5,27 @@ import AinkradSignal
 struct SignalPreferences: Codable, Equatable {
     var rules: RoutingRules
     var retention: RetentionPolicy
+    var sound: NotificationSoundSettings
 
-    init(rules: RoutingRules = .default, retention: RetentionPolicy = .default) {
+    init(rules: RoutingRules = .default,
+         retention: RetentionPolicy = .default,
+         sound: NotificationSoundSettings = NotificationSoundSettings()) {
         self.rules = rules
         self.retention = retention
+        self.sound = sound
+    }
+
+    /// Hand-written for the same reason `RoutingRules`' is: the synthesized
+    /// decoder requires every key, so a file written before `sound` existed
+    /// would be rejected, `load()`'s `try?` would swallow the error, and every
+    /// notification preference the user had set would silently reset.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decodeIfPresent(RoutingRules.self, forKey: .rules) ?? .default
+        retention = try container.decodeIfPresent(
+            RetentionPolicy.self, forKey: .retention) ?? .default
+        sound = try container.decodeIfPresent(
+            NotificationSoundSettings.self, forKey: .sound) ?? NotificationSoundSettings()
     }
 }
 

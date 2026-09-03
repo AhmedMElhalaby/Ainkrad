@@ -36,6 +36,15 @@ final class SignalCenterTests {
 
     deinit { try? FileManager.default.removeItem(at: url) }
 
+    @Test("event(id:) resolves a recorded event, and nil for an unknown id")
+    func eventByID() throws {
+        center.emit(draft(), from: .app(appID: "raven"))
+        let emitted = try #require(center.recent.first)
+
+        #expect(center.event(id: emitted.id)?.id == emitted.id)
+        #expect(center.event(id: UUID()) == nil)
+    }
+
     private func draft(_ kind: String = "install.completed",
                        _ severity: SignalSeverity = .success) -> SignalDraft {
         SignalDraft(kind: kind, severity: severity, title: "Something happened")
