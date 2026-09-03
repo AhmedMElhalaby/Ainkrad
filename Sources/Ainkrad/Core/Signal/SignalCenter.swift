@@ -192,6 +192,12 @@ final class SignalCenter {
     /// updates and each miss is a query; invalidated whenever the store changes.
     private var emittingSourceCache: Set<SignalSource>?
 
+    /// What a source has been emitting, for its per-kind control rows. Empty
+    /// with no store: a degraded session has no history to describe.
+    func kindActivity(for source: SignalSource) -> [SignalKindActivity] {
+        store?.kindActivity(for: source, since: nil) ?? []
+    }
+
     func hasEverEmitted(_ source: SignalSource) -> Bool {
         if let cache = emittingSourceCache { return cache.contains(source) }
         guard let store else {

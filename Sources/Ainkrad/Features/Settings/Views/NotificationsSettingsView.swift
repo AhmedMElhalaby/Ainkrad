@@ -21,6 +21,7 @@ struct NotificationsSettingsView: View {
             displayName: { id in
                 environment.registry.allApps.first { $0.id == id }?.displayName ?? id
             },
+            kindActivity: { center.kindActivity(for: $0) },
             onApproveSubscriptions: { appID in
                 guard let subscriptions = environment.signalSubscriptions else { return }
                 subscriptions.approve(appID: appID)
