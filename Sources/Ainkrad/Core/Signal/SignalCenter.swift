@@ -158,6 +158,7 @@ final class SignalCenter {
     func markRead(ids: [UUID]) {
         store?.markRead(ids: ids)
         refreshFromStore()
+        onRead?(ids)
     }
 
     func markAllRead(filter: SignalFilter) {
@@ -206,7 +207,37 @@ final class SignalCenter {
         return live.contains(source)
     }
 
+    /// Resolves an event by id, for a surface that has only the id — a clicked
+    /// macOS banner carries `signalEventID` in its `userInfo` and nothing else.
+    ///
+    /// `recent` first: it is in memory and is the overwhelmingly common case,
+    /// since a banner is usually clicked within seconds. Falls through to the
+    /// store for anything older than the in-memory window, and to the degraded
+    /// buffer when there is no store at all. `nil` means genuinely gone —
+    /// evicted by retention, or the feed was cleared.
+    func event(id: UUID) -> SignalEvent? {
+        recent.first { $0.id == id }
+            ?? store?.event(id: id)
+            ?? degradedBuffer.first { $0.id == id }    }
+
     func unreadCount(for source: SignalSource) -> Int { unreadCounts[source] ?? 0 }
+
+    /// Set by the bootstrap: runs an action the user chose from a BANNER.
+    ///
+    /// The feed routes its own actions through `SignalActionRouter`, which is a
+    /// view-layer type holding the emitter hub. A banner has no view to route
+    /// through, so it needs this seam — the same shape `onActivateDeepLink`
+    /// already uses for the same reason.
+    var onInvokeAction: ((SignalEvent, SignalAction) -> Void)?
+
+    /// Set by the bootstrap: called with events that have just been read, so a
+    /// banner already sitting in Notification Center can be withdrawn. Reading
+    /// a row in-app should not leave an unread-looking banner behind.
+    var onRead: (([UUID]) -> Void)?
+
+    func invokeBannerAction(_ action: SignalAction, on event: SignalEvent) {
+        onInvokeAction?(event, action)
+    }
 
     /// Set by the bootstrap: opens the deep link's target app with its payload.
     var onActivateDeepLink: ((SignalDeepLink) -> Void)?

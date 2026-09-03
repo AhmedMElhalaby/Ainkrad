@@ -248,6 +248,10 @@ final class AppEnvironment {
     /// Settings binds to it, and built in `finalizeBootstrap` alongside the
     /// second sound engine it drives.
     var notificationSounds: NotificationSoundStore?
+    /// Routes a clicked macOS banner back to its event. Held here so
+    /// `AinkradApp.install(_:into:)` can hand it to the app delegate on both
+    /// boot and environment swap, exactly as it does the socket server.
+    var signalBannerResponder: SignalBannerResponder?
     /// Token → source for external emitters. Held here because Settings needs
     /// it to mint and revoke, not only bootstrap.
     var signalTokens: SignalTokenRegistry?

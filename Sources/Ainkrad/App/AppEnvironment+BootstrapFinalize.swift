@@ -144,6 +144,33 @@ extension AppEnvironment {
         }
         environment.signalCenter = signalCenter
         environment.notificationSounds = notificationSoundStore
+
+        // The banner's way back in. `onOpenFeed` covers both "the event is
+        // gone" and "the event had nowhere to go" — in either case showing the
+        // record beats appearing to ignore the click.
+        let bannerResponder = SignalBannerResponder(center: signalCenter)
+        bannerResponder.onOpenFeed = { [weak environment] in
+            environment?.isSignalFeedPresented = true
+        }
+        environment.signalBannerResponder = bannerResponder
+        signalCenter.onInvokeAction = { [weak environment] event, action in
+            guard let environment else { return }
+            let hub = environment.signalEmitterHub
+            if action.isDestructive {
+                // Never fire a destructive action straight off a banner: the
+                // user clicked a notification, not a confirmation. The feed
+                // owns the confirmation dialog, so hand off to it.
+                environment.isSignalFeedPresented = true
+                return
+            }
+            SignalActionRouter(hub: hub).dispatch(event, action)
+        }
+        // Reading a row in-app pulls its banner out of Notification Center, so
+        // the two surfaces agree about what is still outstanding.
+        // Static because withdrawal touches no instance state — it asks
+        // UNUserNotificationCenter directly — so there is nothing to be gained
+        // from threading `makeSignalCenter`'s private channel out to here.
+        signalCenter.onRead = { UserNotificationBannerChannel.withdraw(ids: $0) }
         // The read side gains its feed, mirroring `signalHub.attach(sink:)`
         // below. `signal_search` was registered at tool-assembly time, before
         // this center existed, and has been reporting the feed as unavailable

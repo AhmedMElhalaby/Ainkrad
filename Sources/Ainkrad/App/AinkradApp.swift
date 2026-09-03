@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import AinkradAppKit
 import AinkradHostRuntime
 
@@ -170,6 +171,14 @@ struct AinkradHostApp: App {
         appDelegate.menuBarController = environment.menuBarController
         appDelegate.assistantSessionStore = environment.assistantSessionStore
         appDelegate.signalSocketServer = environment.signalSocketServer
+        appDelegate.signalBannerResponder = environment.signalBannerResponder
+        // Registered here as well as in `applicationDidFinishLaunching`,
+        // because by swap time that has long since fired and a swapped
+        // environment would otherwise leave the delegate pointing at the
+        // previous center. Assigning the same object twice is free.
+        if let responder = environment.signalBannerResponder {
+            UNUserNotificationCenter.current().delegate = responder
+        }
     }
 
     var body: some Scene {

@@ -119,7 +119,7 @@ final class UserNotificationBannerChannel: BannerPosting {
     /// Pulls delivered banners for events the user has already dealt with
     /// in-app. Without it, reading a row in the feed leaves its banner sitting
     /// in Notification Center as an unread thing that is not unread.
-    func withdraw(ids: [UUID]) {
+    nonisolated static func withdraw(ids: [UUID]) {
         UNUserNotificationCenter.current()
             .removeDeliveredNotifications(withIdentifiers: ids.map(\.uuidString))
     }

@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 
 /// The app is otherwise pure SwiftUI (no other `NSApplicationDelegate`
 /// responsibilities) — this exists solely to intercept termination. ⌘Q, the
@@ -24,6 +25,11 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     /// Wired alongside the above. Owns the external-ingress socket's lifetime
     /// from the AppKit side: nothing else gets a `willTerminate` callback.
     var signalSocketServer: SignalSocketServer?
+    /// Wired alongside the above. MUST outlive every banner:
+    /// `UNUserNotificationCenter.delegate` is a WEAK reference, so with nothing
+    /// else holding the responder, banner clicks would silently stop working
+    /// the moment it was deallocated.
+    var signalBannerResponder: SignalBannerResponder?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         quitCoordinator?.requestTerminate() ?? .terminateNow
@@ -35,6 +41,12 @@ final class AinkradAppDelegate: NSObject, NSApplicationDelegate {
     // always render dark.
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
+        // Before anything can post. macOS delivers a response to whatever
+        // delegate is registered at the time, so a delegate installed later
+        // means the first click of the session goes nowhere and reports nothing.
+        if let signalBannerResponder {
+            UNUserNotificationCenter.current().delegate = signalBannerResponder
+        }
         menuBarController?.install()
     }
 
