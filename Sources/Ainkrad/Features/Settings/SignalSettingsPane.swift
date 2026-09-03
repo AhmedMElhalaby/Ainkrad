@@ -9,6 +9,13 @@ import AinkradSignal
 struct SignalSettingsPane: View {
     let center: SignalCenter
     var sources: [SignalSource] = [.host, .sage]
+    /// Cross-app access rows, or empty when no app has ever asked. Passed in
+    /// rather than read from the environment so the pane stays renderable in a
+    /// snapshot.
+    var subscriptionRows: [SubscriptionSettingsSection.Row] = []
+    var displayName: (String) -> String = { $0 }
+    var onApproveSubscriptions: (String) -> Void = { _ in }
+    var onRevokeSubscriptions: (String) -> Void = { _ in }
 
     @Environment(\.ainkradTheme) private var theme
     @State private var confirmingClear = false
@@ -63,6 +70,22 @@ struct SignalSettingsPane: View {
                 }
             }
 
+
+            // Only when something has asked. An empty permissions panel on
+            // every install teaches the user that this section is furniture,
+            // and then they stop reading it on the day it matters.
+            if !subscriptionRows.isEmpty {
+                AinkradSettingsPanel(
+                    title: "Cross-app access",
+                    hint: "Apps that asked to read another app's notifications. "
+                        + "Revoking takes effect immediately; the app keeps working."
+                ) {
+                    SubscriptionSettingsSection(rows: subscriptionRows,
+                                                displayName: displayName,
+                                                onApprove: onApproveSubscriptions,
+                                                onRevoke: onRevokeSubscriptions)
+                }
+            }
         }
         .confirmationDialog("Clear the notification feed?",
                             isPresented: $confirmingClear, titleVisibility: .visible) {

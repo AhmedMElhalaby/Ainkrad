@@ -93,10 +93,17 @@ extension AppEnvironment {
                     SignalRevealWorkspace(
                         id: workspace.id,
                         panes: workspace.tileLayout.blocks.map {
-                            SignalRevealWorkspace.Pane(appID: $0.appID, blockID: $0.id)
+                            SignalRevealWorkspace.Pane(
+                                appID: $0.appID, blockID: $0.id,
+                                locator: environment.paneLocators.locator(forBlock: $0.id))
                         })
                 },
-                activeWorkspaceID: environment.workspaceManager.activeWorkspaceID)
+                activeWorkspaceID: environment.workspaceManager.activeWorkspaceID,
+                // Generation 10: the app's own name for what the notification
+                // is about. With three Rune panes open this is what makes the
+                // click land on the session that called, instead of the first
+                // pane of that app.
+                locator: link.locator)
 
             // Enqueue only where something will actually collect it. The hub
             // holds ONE pending payload per app, so enqueuing on the `.focus`
@@ -130,6 +137,50 @@ extension AppEnvironment {
         // emission is already wired above and is untouched by any failure here.
         let signalTokens = SignalTokenRegistry(secrets: environment.secrets)
         environment.signalTokens = signalTokens
+        // Declared cross-app subscriptions (generation 10). Fan-out runs
+        // AFTER the center's own delivery, so a subscribing app can never see
+        // an event before the user's own surfaces do.
+        let subscriptions = SignalSubscriptionRegistry(
+            store: SignalSubscriptionStore(
+                url: home.cacheRoot.deletingLastPathComponent()
+                    .appendingPathComponent("signal-subscriptions.json")))
+        environment.signalSubscriptions = subscriptions
+        signalCenter.onEventRecorded = { [weak subscriptions] event in
+            subscriptions?.fanOut(event)
+        }
+
+        // Load every enabled app's declared subscriptions, and register an
+        // observer for the ones the user already approved.
+        //
+        // Approval is consulted per event inside `fanOut`, so registering an
+        // observer here is not itself a grant — but the FACTORY is only called
+        // for an approved app, so a refused app never even constructs one.
+        for app in environment.registry.allApps where !app.declaredSignalSubscriptions.isEmpty {
+            let parsed = SignalSubscription.parseReportingInvalid(
+                app.declaredSignalSubscriptions, excluding: app.id)
+            subscriptions.setDeclared(parsed.subscriptions, for: app.id)
+
+            // A dropped pattern is a developer's typo, and silence would turn
+            // it into a subscription that simply never fires with nothing
+            // anywhere to say why.
+            if !parsed.invalid.isEmpty {
+                signalCenter.emit(
+                    .subscriptionsDropped(displayName: app.displayName,
+                                          patterns: parsed.invalid),
+                    from: .host)
+            }
+
+            if subscriptions.isApproved(appID: app.id), let factory = app.signalObserverFactory {
+                subscriptions.register(observer: factory(), appID: app.id)
+            }
+        }
+
+        // Anything left unapproved becomes the prompt. Raised after bootstrap
+        // rather than during it: the window has to exist before an overlay can
+        // be shown in it, and an app whose approval is pending is simply not
+        // observing in the meantime — a safe state to sit in indefinitely.
+        environment.pendingSubscriptionApprovals = subscriptions.appsAwaitingApproval()
+
         // Pair the CLI if it is not already paired, so `ainkrad notify` works
         // out of the box rather than needing a visit to Settings first. Minted
         // once — see `ensurePaired`, which refuses to rotate a token that is

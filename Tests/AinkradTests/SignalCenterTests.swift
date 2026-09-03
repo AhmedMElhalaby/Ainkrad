@@ -108,4 +108,60 @@ final class SignalCenterTests {
         #expect(degraded.recent.count == SignalCenter.degradedBufferLimit)
         #expect(degraded.recent.first?.title == "e249", "newest first")
     }
+
+    // MARK: - onEventRecorded
+
+    /// Shared log so the ordering test can compare the SEQUENCE rather than
+    /// only the contents.
+    private final class OrderLog {
+        var events: [String] = []
+    }
+
+    private final class LoggingDeliverer: SignalDeliverer {
+        let log: OrderLog
+        init(log: OrderLog) { self.log = log }
+        func deliver(_ event: SignalEvent, to channels: Set<DeliveryChannel>) {
+            log.events.append("delivered")
+        }
+    }
+
+    @Test("onEventRecorded fires AFTER delivery, never before")
+    func recordedFiresAfterDelivery() throws {
+        // The ordering cross-app subscriptions depend on: a subscribing app
+        // must not be able to react to an event the user has not been shown
+        // yet. Asserted rather than left as a comment, because moving one line
+        // in `emit` would silently invert it.
+        let log = OrderLog()
+        // Held in a local, not passed inline: `SignalCenter.deliverer` is a
+        // weak reference (a deliverer outliving the center it feeds is the
+        // leak that seam exists to prevent), so an inline instance is gone
+        // before the first emit and nothing is delivered at all.
+        let logging = LoggingDeliverer(log: log)
+        let observed = SignalCenter(
+            store: try SignalStore(url: FileManager.default.temporaryDirectory
+                .appendingPathComponent("order-\(UUID().uuidString).sqlite")),
+            deliverer: logging,
+            contextProvider: StubContext(deliveryContext: DeliveryContext(
+                hostIsFrontmost: false, visibleAppIDs: [],
+                systemDoNotDisturb: false, hostFocusMode: false)))
+        observed.onEventRecorded = { _ in log.events.append("recorded") }
+
+        observed.emit(draft("order.check"), from: .host)
+        #expect(log.events == ["delivered", "recorded"])
+        _ = logging
+    }
+
+    @Test("onEventRecorded fires for a coalesced repeat too")
+    func recordedFiresOnCoalesce() {
+        // A repeat is still something that happened. A subscriber told only
+        // about the first of five identical failures is misinformed, not
+        // merely under-informed.
+        var count = 0
+        center.onEventRecorded = { _ in count += 1 }
+        var repeated = draft("repeat.check")
+        repeated.dedupeKey = "same"
+        center.emit(repeated, from: .host)
+        center.emit(repeated, from: .host)
+        #expect(count == 2)
+    }
 }

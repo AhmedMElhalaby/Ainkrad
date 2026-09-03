@@ -56,6 +56,14 @@ final class SignalCenter {
     /// Fired whenever the unread total moves, so the menu-bar badge does not
     /// have to poll or set up its own observation.
     var onUnreadChanged: ((Int) -> Void)?
+    /// Fired once per recorded event, AFTER this center's own delivery.
+    ///
+    /// The order is the point: cross-app subscribers must never see an event
+    /// before the user's own surfaces do. Fired for coalesced events too — a
+    /// repeat is still a thing that happened, and a subscriber that only heard
+    /// about the first of five identical failures would be misinformed rather
+    /// than merely under-informed.
+    var onEventRecorded: ((SignalEvent) -> Void)?
     var totalUnread: Int { unreadCounts.values.reduce(0, +) }
     /// True when the store could not be opened; the feed is memory-only.
     let isDegraded: Bool
@@ -129,6 +137,8 @@ final class SignalCenter {
 
         let channels = route(event, rules: rules, context: contextProvider.deliveryContext)
         deliverer?.deliver(event, to: channels)
+        // Last, deliberately: see `onEventRecorded`.
+        onEventRecorded?(event)
     }
 
     func page(filter: SignalFilter, before: Date?, limit: Int) -> [SignalEvent] {
