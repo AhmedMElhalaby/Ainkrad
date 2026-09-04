@@ -34,7 +34,7 @@ final class DeliveryDispatcherTests {
         dispatcher.deliver(event(), to: [.feed, .banner, .toast, .sound, .badge])
         #expect(banner.posted.count == 1)
         #expect(toast.shown.count == 1)
-        #expect(sound.played == [.toggle])
+        #expect(sound.played == [.signalArrive])
         #expect(badged == [.host])
     }
 
@@ -55,6 +55,20 @@ final class DeliveryDispatcherTests {
                                             sound: sound, badge: { _ in })
         dispatcher.deliver(event(.failure), to: [.sound])
         dispatcher.deliver(event(.success), to: [.sound])
-        #expect(sound.played == [.error, .confirm])
+        // One sound, not two: the success lands inside the burst window and is
+        // less severe than the failure just heard, so it is collapsed into it.
+        #expect(sound.played == [.signalFail])
+    }
+
+    @Test("a failure is still heard when it follows chatter")
+    func failureBreaksThroughABurst() {
+        let sound = SpySound()
+        let dispatcher = DeliveryDispatcher(banner: SpyBanner(), toast: SpyToast(),
+                                            sound: sound, badge: { _ in })
+        dispatcher.deliver(event(.info), to: [.sound])
+        dispatcher.deliver(event(.failure), to: [.sound])
+        // The direction that matters: burst suppression must never mute the
+        // important event because an unimportant one arrived first.
+        #expect(sound.played == [.signalArrive, .signalFail])
     }
 }

@@ -50,14 +50,24 @@ struct SignalBellDropdownOverlay: View {
                             Date().addingTimeInterval(3600)
                     }
                 })
-                // Clear of the 30pt top bar, and inset from the trailing edge
-                // so it hangs under the bell rather than the workspace dots.
-                .padding(.top, 34)
+                // Derived from the bar's own height rather than a copy of it.
+                //
+                // Deliberately NOT an NSPopover, despite reading like one.
+                // `SignalBellButton`'s note explains why the bell lives
+                // in-window: the first-run setup gate is a full-screen scrim
+                // INSIDE the window, so anything in-window is covered for
+                // free. A popover is a separate window and would escape it,
+                // reintroducing exactly the problem `MenuBarController` has to
+                // suppress by hand.
+                .padding(.top, HUDBar.height + 4)
                 .padding(.trailing, 10)
                 .transition(.asymmetric(
                     insertion: .move(edge: .top).combined(with: .opacity),
                     removal: .opacity))
         }
         .ignoresSafeArea()
+        // Escape closes it. Outside-click alone meant a keyboard user could
+        // open the dropdown and have no way to put it away.
+        .onExitCommand(perform: onDismiss)
     }
 }

@@ -112,7 +112,9 @@ packages:
     # component, and SignalPresentation.sourceGroups for group-by-app.
     # Phase 3 close-out: SignalRowState.isPinned (writable since M1, readable
     # only now) and SignalFeedRow's pin glyph plus full-body expansion.
-    revision: bff07247795be270290b528bfbeae14552ea1ec2
+    # Phase 4: toast actions, hover-to-pause with a remaining-time hairline,
+    # a dismissal that drifts toward the bell, and reduce-motion throughout.
+    revision: a7015ee8b78808f7cc279578c9ad515982696df6
 
 targets:
   AinkradHostRuntime:

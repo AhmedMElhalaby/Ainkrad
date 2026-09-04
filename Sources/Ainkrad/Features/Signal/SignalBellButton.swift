@@ -19,10 +19,15 @@ struct SignalBellButton: View {
     /// the user cannot see is indistinguishable from breakage — and the support
     /// question it produces is "notifications stopped working".
     var isMuted: Bool = false
+    /// Changes when something arrives. The bell reacts to the CHANGE, not the
+    /// value, so any increment pulses once.
+    var arrivalToken: Int = 0
     let tokens: DesignTokens
     let action: () -> Void
 
     @State private var isHovered = false
+    @State private var pulse = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     /// Capped so a busy session cannot widen the bar and shove the workspace
     /// diamonds along.
@@ -61,9 +66,13 @@ struct SignalBellButton: View {
                                      : tokens.foreground.opacity(isHovered ? 0.75 : 0.4))
                     // The glyph is its own layer: it lifts on hover rather than
                     // the whole control moving.
-                    .scaleEffect(isHovered ? 1.14 : 1)
-                    .shadow(color: hasUnread ? tokens.accentSecondary.opacity(0.8) : .clear,
-                            radius: 4)
+                    // Hover and arrival multiply rather than fight: a pulse
+                    // while hovered should still read as a pulse.
+                    .scaleEffect((isHovered ? 1.14 : 1) * (pulse && !reduceMotion ? 1.18 : 1))
+                    .opacity(pulse && reduceMotion ? 0.55 : 1)
+                    .shadow(color: hasUnread || pulse
+                            ? tokens.accentSecondary.opacity(pulse ? 1 : 0.8) : .clear,
+                            radius: pulse ? 8 : 4)
 
                 if let badge = Self.badgeText(unread) {
                     Text(badge)
@@ -76,6 +85,21 @@ struct SignalBellButton: View {
         }
         .buttonStyle(.plain)
         .help(helpText)
+        .onChange(of: arrivalToken) { _, _ in
+            guard arrivalToken > 0 else { return }
+            // Out fast, back at the base duration — an arrival should catch
+            // the eye and then stop asking for it.
+            withAnimation(reduceMotion ? nil : .easeOut(duration: AinkradMotion.durationFast)) {
+                pulse = true
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(AinkradMotion.durationFast))
+                withAnimation(reduceMotion ? nil
+                              : .easeInOut(duration: AinkradMotion.durationBase)) {
+                    pulse = false
+                }
+            }
+        }
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.16)) { isHovered = hovering }
         }

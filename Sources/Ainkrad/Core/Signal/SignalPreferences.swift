@@ -100,6 +100,10 @@ extension AppEnvironment {
                                   retention: preferences.retention)
         // SignalCenter's reference to its deliverer is weak; nothing else owns
         // the dispatcher, so the center must.
+        // Read through the center rather than captured: the user can change a
+        // source's cue while the app runs, and a snapshot taken here would
+        // keep playing the old one until relaunch.
+        dispatcher.rules = { [weak center] in center?.rules ?? .default }
         center.retainDeliverer(dispatcher)
 
         if store == nil {

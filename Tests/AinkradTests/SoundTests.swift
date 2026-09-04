@@ -27,6 +27,10 @@ struct UISoundTests {
             .appLaunch, .appQuit, .overlayOpen, .overlayClose,
             .appOpen, .appClose, .workspaceSwitch, .focusMode,
             .install, .uninstall, .toggle, .confirm, .error,
+            // The notification family. Deliberately separate from the chrome
+            // cues above: a notification has to say WHICH kind of thing
+            // happened before the user has read a word.
+            .signalArrive, .signalWarn, .signalFail, .signalUrgent, .signalResolve,
         ]
         #expect(Set(UISound.allCases) == expected)
     }
