@@ -252,6 +252,9 @@ final class AppEnvironment {
     /// `AinkradApp.install(_:into:)` can hand it to the app delegate on both
     /// boot and environment swap, exactly as it does the socket server.
     var signalBannerResponder: SignalBannerResponder?
+    /// Where the user last left the feed. Built in the bootstrap beside the
+    /// preferences store it sits next to on disk.
+    var signalViewStateStore: SignalViewStateStore?
     /// Token → source for external emitters. Held here because Settings needs
     /// it to mint and revoke, not only bootstrap.
     var signalTokens: SignalTokenRegistry?

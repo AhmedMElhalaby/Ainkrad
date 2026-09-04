@@ -108,7 +108,9 @@ packages:
     # v2 — `kind` is indexed in the FTS table, which requires DROPping and
     # rebuilding it. Migration runs on open and is idempotent; verified against
     # a copy of a real 62-event database.
-    revision: 94fca948a7f3f0f1b91991db4c45becdb79ff155
+    # Phase 3: SignalStore.markUnread / .delete, the SignalSourceRail
+    # component, and SignalPresentation.sourceGroups for group-by-app.
+    revision: ee6ce153ce347d75e36360bdbfeaa3e52a7d7691
 
 targets:
   AinkradHostRuntime:

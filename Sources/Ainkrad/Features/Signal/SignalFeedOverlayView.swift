@@ -19,6 +19,15 @@ struct SignalFeedOverlayView: View {
     @Environment(\.ainkradTheme) private var theme
     @State private var searchResults: [SignalEvent]?
     @State private var pendingDestructive: (SignalEvent, SignalAction)?
+    @State private var viewState = SignalViewState()
+    @State private var query = ""
+
+    /// Set by the bootstrap so the view the user built survives dismissal.
+    var viewStateStore: SignalViewStateStore?
+    /// Opens this source's notification settings. Passed in rather than read
+    /// from the environment, so the overlay stays renderable in a snapshot —
+    /// the reason recorded on `hub` above.
+    var onConfigureSource: (SignalSource) -> Void = { _ in }
 
     private var events: [SignalEvent] { searchResults ?? center.recent }
 
@@ -37,11 +46,10 @@ struct SignalFeedOverlayView: View {
                     unread: center.totalUnread,
                     repeatCounts: center.repeatCounts,
                     readIDs: center.readIDs,
-                    knownSources: knownSources,
                     isDegraded: center.isDegraded,
-                    onSearch: { query in
-                        searchResults = query.isEmpty ? nil : center.search(query)
-                    },
+                    viewState: $viewState,
+                    searchText: $query,
+                    searchResultCount: searchResults?.count,
                     onActivate: { event in center.activate(event) },
                     onAction: { event, action in
                         guard let hub else { return }
@@ -49,10 +57,24 @@ struct SignalFeedOverlayView: View {
                             pendingDestructive = (event, needsConfirmation)
                         }
                     },
-                    onMarkAllRead: { center.markAllRead(filter: .all) },
+                    onMarkAllRead: {
+                        // Scoped to what is on screen. "Mark all read" while a
+                        // filter is up used to clear rows the user could not
+                        // see, which is unrecoverable without markUnread.
+                        center.markAllRead(filter: viewState.filter)
+                    },
+                    onConfigureSource: onConfigureSource,
                     menuItems: { menuItems(for: $0) })
-                    .frame(width: 660, height: 520)
+                    .frame(width: 820, height: 560)
             }
+        }
+        .onAppear { if let stored = viewStateStore?.load() { viewState = stored } }
+        .onChange(of: viewState) { _, new in viewStateStore?.save(new) }
+        .onChange(of: query) { _, new in
+            // Live rather than submit-only: a search you have to press Return
+            // for reads as broken when the list does not move.
+            let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+            searchResults = trimmed.isEmpty ? nil : center.search(trimmed)
         }
         .confirmationDialog(
             pendingDestructive.map { "\($0.1.label)?" } ?? "",
@@ -108,13 +130,4 @@ struct SignalFeedOverlayView: View {
         return f
     }()
 
-    /// Only sources that have actually produced something: a filter chip for a
-    /// source with no events is a dead control.
-    private var knownSources: [SignalSource] {
-        var seen: [SignalSource] = []
-        for event in center.recent where !seen.contains(event.source) {
-            seen.append(event.source)
-        }
-        return seen
-    }
 }

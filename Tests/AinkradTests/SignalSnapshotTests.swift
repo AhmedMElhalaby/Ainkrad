@@ -180,7 +180,10 @@ struct SignalSnapshotTests {
             HostThemeTokens(from: theme).background
             SignalFeedOverlayView(center: center, onDismiss: {})
         }
-            .frame(width: 780, height: 620)
+            // Wider than the island's own 820, so the source rail is inside
+            // the frame. A snapshot that clips the thing it was taken to show
+            // still passes and still tells you nothing.
+            .frame(width: 940, height: 660)
             .environment(\.ainkradTheme, HostThemeTokens(from: theme))
             .environment(\.ainkradTypography, Self.hostTypography)
             .environment(\.ainkradStatusColors, AinkradStatusColors(
@@ -188,8 +191,48 @@ struct SignalSnapshotTests {
                 warning: theme.tokens.warning,
                 danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 780, height: 620))
+        let png = try Self.render(view, size: CGSize(width: 940, height: 660))
         try png.write(to: outputDirectory.appendingPathComponent("signal-feed-overlay.png"))
+    }
+
+    @Test("render the feed grouped by app, with a burst collapsed")
+    func renderGroupedFeed() throws {
+        let now = Date()
+        let theme = Theme.neonBlue
+        let raven = SignalSource.app(appID: "com.ainkrad.raven")
+        // Nineteen identical warnings is the real shape this mode exists for —
+        // it is what a Raven sync loop actually produces, and reading it as
+        // nineteen rows is the problem grouping solves.
+        var events: [SignalEvent] = (1...19).map { i in
+            SignalEvent(timestamp: now.addingTimeInterval(-Double(i)), source: raven,
+                        kind: "sync.failed", severity: .warning,
+                        title: "Sync failed", body: "attempt \(i)")
+        }
+        events.append(SignalEvent(timestamp: now, source: .sage, kind: "index.rebuilt",
+                                  severity: .info, title: "Memory index rebuilt"))
+
+        let groups = SignalPresentation.sourceGroups(
+            events, readIDs: [], name: { SignalPresentation.sourceLabel($0) })
+        let collapsed = Binding.constant(Set([groups.first(where: {
+            $0.name == "Raven" })?.id ?? ""]))
+
+        let view = ZStack {
+            HostThemeTokens(from: theme).background
+            AinkradPanel(showsBrackets: true) {
+                SignalFeedGroupedList(groups: groups, collapsed: collapsed, now: now)
+                    .frame(width: 620, height: 380)
+            }
+        }
+            .frame(width: 700, height: 460)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, Self.hostTypography)
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success,
+                warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 700, height: 460))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-feed-grouped.png"))
     }
 
     @Test("render the toast stack")
