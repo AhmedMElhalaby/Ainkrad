@@ -21,6 +21,11 @@ struct SignalFeedGroupedList: View {
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradStatusColors) private var status
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
+    /// Eight, because a 25ms stagger across nineteen rows stops reading as
+    /// motion and starts reading as lag.
+    private static let staggerCap = 8
 
     var body: some View {
         ScrollView {
@@ -28,31 +33,51 @@ struct SignalFeedGroupedList: View {
                 ForEach(groups) { group in
                     header(group)
                     if !collapsed.contains(group.id) {
-                        ForEach(group.events) { event in
-                            SignalFeedRow(
-                                event: event,
-                                repeatCount: repeatCounts[event.id] ?? 1,
-                                isUnread: !readIDs.contains(event.id),
-                                now: now,
-                                onActivate: onActivate,
-                                onAction: onAction,
-                                menuItems: menuItems,
-                                isPinned: pinnedIDs.contains(event.id),
-                                isExpanded: expandedIDs.wrappedValue.contains(event.id),
-                                onToggleExpanded: {
-                                    if expandedIDs.wrappedValue.contains(event.id) {
-                                        expandedIDs.wrappedValue.remove(event.id)
-                                    } else {
-                                        expandedIDs.wrappedValue.insert(event.id)
-                                    }
-                                })
+                        // Enumerated so each child can carry its own delay:
+                        // the group opens as separated layers settling rather
+                        // than one block appearing, which is the host's motion
+                        // rule. Capped, because a stagger across nineteen rows
+                        // stops reading as motion and starts reading as lag.
+                        ForEach(Array(group.events.enumerated().prefix(Self.staggerCap)),
+                                id: \.element.id) { index, event in
+                            row(group: group, event: event)
+                                .transition(reduceMotion ? .opacity : .opacity.animation(
+                                    .easeOut(duration: AinkradMotion.durationFast)
+                                        .delay(Double(index) * 0.025)))
+                        }
+                        if group.events.count > Self.staggerCap {
+                            ForEach(group.events.dropFirst(Self.staggerCap)) { event in
+                                row(group: group, event: event)
+                            }
                         }
                     }
                 }
             }
+            .animation(reduceMotion ? nil : .easeOut(duration: AinkradMotion.durationBase),
+                       value: collapsed)
             .padding(.vertical, AinkradSpacing.xs + 2)
             .padding(.horizontal, AinkradSpacing.xs + 2)
         }
+    }
+
+    private func row(group: SignalSourceGroup, event: SignalEvent) -> some View {
+        SignalFeedRow(
+            event: event,
+            repeatCount: repeatCounts[event.id] ?? 1,
+            isUnread: !readIDs.contains(event.id),
+            now: now,
+            onActivate: onActivate,
+            onAction: onAction,
+            menuItems: menuItems,
+            isPinned: pinnedIDs.contains(event.id),
+            isExpanded: expandedIDs.wrappedValue.contains(event.id),
+            onToggleExpanded: {
+                if expandedIDs.wrappedValue.contains(event.id) {
+                    expandedIDs.wrappedValue.remove(event.id)
+                } else {
+                    expandedIDs.wrappedValue.insert(event.id)
+                }
+            })
     }
 
     private func header(_ group: SignalSourceGroup) -> some View {

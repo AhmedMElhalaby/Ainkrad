@@ -114,7 +114,7 @@ packages:
     # only now) and SignalFeedRow's pin glyph plus full-body expansion.
     # Phase 4: toast actions, hover-to-pause with a remaining-time hairline,
     # a dismissal that drifts toward the bell, and reduce-motion throughout.
-    revision: dbc0fb6d08e5fe07d160b67171cd8e10f6521b43
+    revision: a7015ee8b78808f7cc279578c9ad515982696df6
 
 targets:
   AinkradHostRuntime:
