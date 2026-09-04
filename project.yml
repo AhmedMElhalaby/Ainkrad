@@ -118,7 +118,9 @@ packages:
     # spoken first, time spoken in words, actions exposed as a11y actions.
     # Phase 5: arrow-key traversal of the feed, owned by the list, plus the
     # focus ring and Color.contrastRatio.
-    revision: e5efb1c8e6a9fd4e7722823400f19ec163d90926
+    # Phase 6: SignalHealth — read rate, median acknowledge, noisiest kinds,
+    # all derived from columns the store already had. Nothing leaves the machine.
+    revision: 7353375c7df65b75bb29674f7b8939fd7a023b67
 
 targets:
   AinkradHostRuntime:

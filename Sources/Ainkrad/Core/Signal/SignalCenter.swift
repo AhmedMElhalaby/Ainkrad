@@ -228,6 +228,12 @@ final class SignalCenter {
     /// updates and each miss is a query; invalidated whenever the store changes.
     private var emittingSourceCache: Set<SignalSource>?
 
+    /// How notifications have actually been going. Empty with no store — a
+    /// degraded session has no history to describe.
+    func health(since: Date, source: SignalSource? = nil) -> SignalHealth {
+        store?.health(since: since, source: source) ?? .empty
+    }
+
     /// What a source has been emitting, for its per-kind control rows. Empty
     /// with no store: a degraded session has no history to describe.
     func kindActivity(for source: SignalSource) -> [SignalKindActivity] {
