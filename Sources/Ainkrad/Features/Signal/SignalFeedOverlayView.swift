@@ -21,6 +21,9 @@ struct SignalFeedOverlayView: View {
     @State private var pendingDestructive: (SignalEvent, SignalAction)?
     @State private var viewState = SignalViewState()
     @State private var query = ""
+    /// Which rows are showing their body in full. Not persisted: an expansion
+    /// is a glance at one thing, not a view the user built.
+    @State private var expanded: Set<UUID> = []
 
     /// Set by the bootstrap so the view the user built survives dismissal.
     var viewStateStore: SignalViewStateStore?
@@ -64,7 +67,9 @@ struct SignalFeedOverlayView: View {
                         center.markAllRead(filter: viewState.filter)
                     },
                     onConfigureSource: onConfigureSource,
-                    menuItems: { menuItems(for: $0) })
+                    menuItems: { menuItems(for: $0) },
+                    pinnedIDs: center.pinnedIDs,
+                    expandedIDs: $expanded)
                     .frame(width: 820, height: 560)
             }
         }
@@ -102,6 +107,7 @@ struct SignalFeedOverlayView: View {
             rules: center.rules,
             sourceName: SignalPresentation.sourceLabel(event.source),
             isRead: center.readIDs.contains(event.id),
+            isPinned: center.pinnedIDs.contains(event.id),
             onMuteKind: {
                 SignalDeliveryMode.feedOnly.apply(to: &center.rules,
                                                   source: event.source, kind: event.kind)
@@ -113,7 +119,10 @@ struct SignalFeedOverlayView: View {
             onMuteSource: {
                 SignalDeliveryMode.off.apply(to: &center.rules, source: event.source)
             },
-            onToggleRead: { center.markRead(ids: [event.id]) },
+            onToggleRead: {
+                if center.readIDs.contains(event.id) { center.markUnread(ids: [event.id]) }
+                else { center.markRead(ids: [event.id]) }
+            },
             onCopy: {
                 let text = SignalRowMenu.clipboardText(
                     for: event,
@@ -121,6 +130,10 @@ struct SignalFeedOverlayView: View {
                     formatter: Self.clipboardFormatter)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
+            },
+            onDismiss: { center.dismiss(ids: [event.id]) },
+            onTogglePin: {
+                center.setPinned(!center.pinnedIDs.contains(event.id), id: event.id)
             })
     }
 

@@ -16,24 +16,31 @@ enum SignalRowMenu {
                       rules: RoutingRules,
                       sourceName: String,
                       isRead: Bool,
+                      isPinned: Bool,
                       onMuteKind: @escaping () -> Void,
                       onUnmuteKind: @escaping () -> Void,
                       onMuteSource: @escaping () -> Void,
                       onToggleRead: @escaping () -> Void,
-                      onCopy: @escaping () -> Void) -> [AinkradMenuItem] {
+                      onCopy: @escaping () -> Void,
+                      onDismiss: @escaping () -> Void,
+                      onTogglePin: @escaping () -> Void) -> [AinkradMenuItem] {
         var items: [AinkradMenuItem] = []
 
-        // Only one direction for now: `SignalStore` can set `read_at` but has
-        // no way to clear it, and adding that is Phase 3's triage task. An item
-        // that appears and does nothing would be worse than one that is absent,
-        // so an already-read row simply does not offer it.
-        if !isRead {
-            items.append(AinkradMenuItem(title: "Mark as read",
-                                         systemName: "envelope.open",
-                                         action: onToggleRead))
-        }
+        items.append(AinkradMenuItem(title: isRead ? "Mark as unread" : "Mark as read",
+                                     systemName: isRead ? "envelope.badge" : "envelope.open",
+                                     action: onToggleRead))
+        // Above Dismiss deliberately: they are opposites, and the destructive
+        // one should not be the first thing under the cursor.
+        items.append(AinkradMenuItem(title: isPinned ? "Unpin" : "Pin",
+                                     systemName: isPinned ? "pin.slash" : "pin",
+                                     action: onTogglePin))
         items.append(AinkradMenuItem(title: "Copy", systemName: "doc.on.doc",
                                      action: onCopy))
+        // Not confirmed. It is one row out of a log that already evicts by
+        // age and by count — a dialog here would treat the feed as a filing
+        // system rather than a record of what happened.
+        items.append(AinkradMenuItem(title: "Dismiss", systemName: "xmark",
+                                     action: onDismiss))
 
         // Named, not generic. "Mute this" tells the user nothing about what
         // will go quiet; naming the source and the kind is the difference

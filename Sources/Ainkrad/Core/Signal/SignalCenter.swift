@@ -48,6 +48,10 @@ final class SignalCenter {
     private(set) var rowStates: [UUID: SignalStore.SignalRowState] = [:]
     /// Ids in `recent` the user has already seen.
     var readIDs: Set<UUID> { Set(rowStates.filter { $0.value.isRead }.map(\.key)) }
+    /// Rows the user has kept. Exempt from retention and from clearing, which
+    /// the store has honoured since M1 — this is the first time anything can
+    /// display which rows those are.
+    var pinnedIDs: Set<UUID> { Set(rowStates.filter { $0.value.isPinned }.map(\.key)) }
     /// Coalesce counts, for the `xN` badge.
     var repeatCounts: [UUID: Int] { rowStates.mapValues(\.repeatCount) }
     private(set) var unreadCounts: [SignalSource: Int] = [:] {
@@ -164,6 +168,22 @@ final class SignalCenter {
     func markAllRead(filter: SignalFilter) {
         guard let store else { unreadCounts = [:]; return }
         store.markAllRead(filter: filter)
+        refreshFromStore()
+    }
+
+    /// Puts a row back on the pile. The counterpart `markRead` never had —
+    /// without it, a row read by accident is unrecoverable and the unread
+    /// count is a number the user can only push down.
+    func markUnread(ids: [UUID]) {
+        store?.markUnread(ids: ids)
+        refreshFromStore()
+    }
+
+    /// Removes rows for good, index included. Distinct from marking read: the
+    /// user is saying they are done with it, not that they have seen it.
+    func dismiss(ids: [UUID]) {
+        store?.delete(ids: ids)
+        degradedBuffer.removeAll { ids.contains($0.id) }
         refreshFromStore()
     }
 

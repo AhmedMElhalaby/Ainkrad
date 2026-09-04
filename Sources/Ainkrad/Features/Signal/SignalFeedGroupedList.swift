@@ -16,6 +16,8 @@ struct SignalFeedGroupedList: View {
     var onActivate: (SignalEvent) -> Void = { _ in }
     var onAction: (SignalEvent, SignalAction) -> Void = { _, _ in }
     var menuItems: (SignalEvent) -> [AinkradMenuItem] = { _ in [] }
+    var pinnedIDs: Set<UUID> = []
+    var expandedIDs: Binding<Set<UUID>> = .constant([])
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradStatusColors) private var status
@@ -27,13 +29,23 @@ struct SignalFeedGroupedList: View {
                     header(group)
                     if !collapsed.contains(group.id) {
                         ForEach(group.events) { event in
-                            SignalFeedRow(event: event,
-                                          repeatCount: repeatCounts[event.id] ?? 1,
-                                          isUnread: !readIDs.contains(event.id),
-                                          now: now,
-                                          onActivate: onActivate,
-                                          onAction: onAction,
-                                          menuItems: menuItems)
+                            SignalFeedRow(
+                                event: event,
+                                repeatCount: repeatCounts[event.id] ?? 1,
+                                isUnread: !readIDs.contains(event.id),
+                                now: now,
+                                onActivate: onActivate,
+                                onAction: onAction,
+                                menuItems: menuItems,
+                                isPinned: pinnedIDs.contains(event.id),
+                                isExpanded: expandedIDs.wrappedValue.contains(event.id),
+                                onToggleExpanded: {
+                                    if expandedIDs.wrappedValue.contains(event.id) {
+                                        expandedIDs.wrappedValue.remove(event.id)
+                                    } else {
+                                        expandedIDs.wrappedValue.insert(event.id)
+                                    }
+                                })
                         }
                     }
                 }

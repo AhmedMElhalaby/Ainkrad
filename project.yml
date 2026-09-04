@@ -110,7 +110,9 @@ packages:
     # a copy of a real 62-event database.
     # Phase 3: SignalStore.markUnread / .delete, the SignalSourceRail
     # component, and SignalPresentation.sourceGroups for group-by-app.
-    revision: ee6ce153ce347d75e36360bdbfeaa3e52a7d7691
+    # Phase 3 close-out: SignalRowState.isPinned (writable since M1, readable
+    # only now) and SignalFeedRow's pin glyph plus full-body expansion.
+    revision: bff07247795be270290b528bfbeae14552ea1ec2
 
 targets:
   AinkradHostRuntime:

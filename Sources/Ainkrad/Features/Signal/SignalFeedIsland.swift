@@ -25,6 +25,8 @@ struct SignalFeedIsland: View {
     var onMarkAllRead: () -> Void = {}
     var onConfigureSource: (SignalSource) -> Void = { _ in }
     var menuItems: (SignalEvent) -> [AinkradMenuItem] = { _ in [] }
+    var pinnedIDs: Set<UUID> = []
+    var expandedIDs: Binding<Set<UUID>> = .constant([])
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradStatusColors) private var status
@@ -68,11 +70,13 @@ struct SignalFeedIsland: View {
                                                         name: displayName),
                 collapsed: $viewState.collapsedSources,
                 repeatCounts: repeatCounts, readIDs: readIDs, now: now,
-                onActivate: onActivate, onAction: onAction, menuItems: menuItems)
+                onActivate: onActivate, onAction: onAction, menuItems: menuItems,
+                pinnedIDs: pinnedIDs, expandedIDs: expandedIDs)
         } else {
             SignalFeedList(events: filtered, repeatCounts: repeatCounts, readIDs: readIDs,
                            now: now, calendar: .current, onActivate: onActivate,
-                           onAction: onAction, menuItems: menuItems)
+                           onAction: onAction, menuItems: menuItems,
+                           pinnedIDs: pinnedIDs, expandedIDs: expandedIDs)
         }
     }
 
