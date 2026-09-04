@@ -265,6 +265,23 @@ struct AinkradHostApp: App {
                 }
                 .keyboardShortcut(.tab, modifiers: .option)
                 .disabled(isGated)
+
+                // ⌥⌘N and ⇧⌥⌘N, chosen after auditing every existing binding:
+                // ⌘K, ⌘⇧N, ⌥⇥ and ⌘F are all taken. ⌘⇧N in particular is New
+                // Workspace, which an earlier draft of the plan wanted for the
+                // feed.
+                Button("Notifications") {
+                    environment.isSignalDropdownPresented.toggle()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .option])
+                .disabled(isGated)
+
+                Button("All Notifications…") {
+                    environment.isSignalDropdownPresented = false
+                    environment.isSignalFeedPresented = true
+                }
+                .keyboardShortcut("n", modifiers: [.command, .option, .shift])
+                .disabled(isGated)
             }
         }
     }
