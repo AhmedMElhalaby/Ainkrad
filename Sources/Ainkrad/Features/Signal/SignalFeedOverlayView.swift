@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AinkradAppKit
 import AinkradHostRuntime
 import AinkradSignal
@@ -18,6 +19,18 @@ struct SignalFeedOverlayView: View {
     @Environment(\.ainkradTheme) private var theme
     @State private var searchResults: [SignalEvent]?
     @State private var pendingDestructive: (SignalEvent, SignalAction)?
+    @State private var viewState = SignalViewState()
+    @State private var query = ""
+    /// Which rows are showing their body in full. Not persisted: an expansion
+    /// is a glance at one thing, not a view the user built.
+    @State private var expanded: Set<UUID> = []
+
+    /// Set by the bootstrap so the view the user built survives dismissal.
+    var viewStateStore: SignalViewStateStore?
+    /// Opens this source's notification settings. Passed in rather than read
+    /// from the environment, so the overlay stays renderable in a snapshot —
+    /// the reason recorded on `hub` above.
+    var onConfigureSource: (SignalSource) -> Void = { _ in }
 
     private var events: [SignalEvent] { searchResults ?? center.recent }
 
@@ -36,11 +49,10 @@ struct SignalFeedOverlayView: View {
                     unread: center.totalUnread,
                     repeatCounts: center.repeatCounts,
                     readIDs: center.readIDs,
-                    knownSources: knownSources,
                     isDegraded: center.isDegraded,
-                    onSearch: { query in
-                        searchResults = query.isEmpty ? nil : center.search(query)
-                    },
+                    viewState: $viewState,
+                    searchText: $query,
+                    searchResultCount: searchResults?.count,
                     onActivate: { event in center.activate(event) },
                     onAction: { event, action in
                         guard let hub else { return }
@@ -48,9 +60,26 @@ struct SignalFeedOverlayView: View {
                             pendingDestructive = (event, needsConfirmation)
                         }
                     },
-                    onMarkAllRead: { center.markAllRead(filter: .all) })
-                    .frame(width: 660, height: 520)
+                    onMarkAllRead: {
+                        // Scoped to what is on screen. "Mark all read" while a
+                        // filter is up used to clear rows the user could not
+                        // see, which is unrecoverable without markUnread.
+                        center.markAllRead(filter: viewState.filter)
+                    },
+                    onConfigureSource: onConfigureSource,
+                    menuItems: { menuItems(for: $0) },
+                    pinnedIDs: center.pinnedIDs,
+                    expandedIDs: $expanded)
+                    .frame(width: 820, height: 560)
             }
+        }
+        .onAppear { if let stored = viewStateStore?.load() { viewState = stored } }
+        .onChange(of: viewState) { _, new in viewStateStore?.save(new) }
+        .onChange(of: query) { _, new in
+            // Live rather than submit-only: a search you have to press Return
+            // for reads as broken when the list does not move.
+            let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+            searchResults = trimmed.isEmpty ? nil : center.search(trimmed)
         }
         .confirmationDialog(
             pendingDestructive.map { "\($0.1.label)?" } ?? "",
@@ -70,13 +99,48 @@ struct SignalFeedOverlayView: View {
         }
     }
 
-    /// Only sources that have actually produced something: a filter chip for a
-    /// source with no events is a dead control.
-    private var knownSources: [SignalSource] {
-        var seen: [SignalSource] = []
-        for event in center.recent where !seen.contains(event.source) {
-            seen.append(event.source)
-        }
-        return seen
+    /// The row's right-click menu, built against live rules so the mute item
+    /// reads "Mute" or "Unmute" according to what is actually set.
+    private func menuItems(for event: SignalEvent) -> [AinkradMenuItem] {
+        SignalRowMenu.items(
+            for: event,
+            rules: center.rules,
+            sourceName: SignalPresentation.sourceLabel(event.source),
+            isRead: center.readIDs.contains(event.id),
+            isPinned: center.pinnedIDs.contains(event.id),
+            onMuteKind: {
+                SignalDeliveryMode.feedOnly.apply(to: &center.rules,
+                                                  source: event.source, kind: event.kind)
+            },
+            onUnmuteKind: {
+                SignalDeliveryMode.everything.apply(to: &center.rules,
+                                                    source: event.source, kind: event.kind)
+            },
+            onMuteSource: {
+                SignalDeliveryMode.off.apply(to: &center.rules, source: event.source)
+            },
+            onToggleRead: {
+                if center.readIDs.contains(event.id) { center.markUnread(ids: [event.id]) }
+                else { center.markRead(ids: [event.id]) }
+            },
+            onCopy: {
+                let text = SignalRowMenu.clipboardText(
+                    for: event,
+                    sourceName: SignalPresentation.sourceLabel(event.source),
+                    formatter: Self.clipboardFormatter)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            },
+            onDismiss: { center.dismiss(ids: [event.id]) },
+            onTogglePin: {
+                center.setPinned(!center.pinnedIDs.contains(event.id), id: event.id)
+            })
     }
+
+    private static let clipboardFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
+
 }

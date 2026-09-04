@@ -232,9 +232,18 @@ struct RootView: View {
         }
 
         if environment.isSignalFeedPresented, let center = environment.signalCenter {
-            SignalFeedOverlayView(center: center, hub: environment.signalEmitterHub) {
-                environment.isSignalFeedPresented = false
-            }
+            SignalFeedOverlayView(
+                center: center,
+                hub: environment.signalEmitterHub,
+                onDismiss: { environment.isSignalFeedPresented = false },
+                viewStateStore: environment.signalViewStateStore,
+                // The rail's "Notification settings…" lands in Settings, on the
+                // Notifications page, rather than opening a second control
+                // surface that would then disagree with the first.
+                onConfigureSource: { _ in
+                    environment.isSignalFeedPresented = false
+                    environment.isSettingsPresented = true
+                })
             .transition(.opacity)
         }
     }

@@ -144,6 +144,12 @@ extension AppEnvironment {
         }
         environment.signalCenter = signalCenter
         environment.notificationSounds = notificationSoundStore
+        // Beside the preferences, not inside them: this is where the user was
+        // LOOKING, not what they decided. Losing it is a minor annoyance, and
+        // it must never be able to corrupt a routing rule.
+        environment.signalViewStateStore = SignalViewStateStore(
+            url: home.cacheRoot.deletingLastPathComponent()
+                .appendingPathComponent("signal-view-state.json"))
 
         // The banner's way back in. `onOpenFeed` covers both "the event is
         // gone" and "the event had nowhere to go" — in either case showing the
