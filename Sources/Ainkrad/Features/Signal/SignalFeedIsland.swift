@@ -20,6 +20,7 @@ struct SignalFeedIsland: View {
     var onActivate: (SignalEvent) -> Void = { _ in }
     var onAction: (SignalEvent, SignalAction) -> Void = { _, _ in }
     var onMarkAllRead: () -> Void = {}
+    var menuItems: (SignalEvent) -> [AinkradMenuItem] = { _ in [] }
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradStatusColors) private var status
@@ -46,8 +47,10 @@ struct SignalFeedIsland: View {
                                repeatCounts: repeatCounts,
                                readIDs: readIDs,
                                now: now,
+                               calendar: .current,
                                onActivate: onActivate,
-                               onAction: onAction)
+                               onAction: onAction,
+                               menuItems: menuItems)
             }
         }
         // No background of its own: the hosting `AinkradPanel` supplies the

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AinkradAppKit
 import AinkradHostRuntime
 import AinkradSignal
@@ -48,7 +49,8 @@ struct SignalFeedOverlayView: View {
                             pendingDestructive = (event, needsConfirmation)
                         }
                     },
-                    onMarkAllRead: { center.markAllRead(filter: .all) })
+                    onMarkAllRead: { center.markAllRead(filter: .all) },
+                    menuItems: { menuItems(for: $0) })
                     .frame(width: 660, height: 520)
             }
         }
@@ -69,6 +71,42 @@ struct SignalFeedOverlayView: View {
             Text("This action was published by the app and cannot be undone from here.")
         }
     }
+
+    /// The row's right-click menu, built against live rules so the mute item
+    /// reads "Mute" or "Unmute" according to what is actually set.
+    private func menuItems(for event: SignalEvent) -> [AinkradMenuItem] {
+        SignalRowMenu.items(
+            for: event,
+            rules: center.rules,
+            sourceName: SignalPresentation.sourceLabel(event.source),
+            isRead: center.readIDs.contains(event.id),
+            onMuteKind: {
+                SignalDeliveryMode.feedOnly.apply(to: &center.rules,
+                                                  source: event.source, kind: event.kind)
+            },
+            onUnmuteKind: {
+                SignalDeliveryMode.everything.apply(to: &center.rules,
+                                                    source: event.source, kind: event.kind)
+            },
+            onMuteSource: {
+                SignalDeliveryMode.off.apply(to: &center.rules, source: event.source)
+            },
+            onToggleRead: { center.markRead(ids: [event.id]) },
+            onCopy: {
+                let text = SignalRowMenu.clipboardText(
+                    for: event,
+                    sourceName: SignalPresentation.sourceLabel(event.source),
+                    formatter: Self.clipboardFormatter)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            })
+    }
+
+    private static let clipboardFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
 
     /// Only sources that have actually produced something: a filter chip for a
     /// source with no events is a dead control.

@@ -103,7 +103,12 @@ packages:
     # .interruptFloor / .soundOverride / .suppression, route(_:rules:context:now:)
     # as an OVERLOAD keeping the old symbol, and SignalStore.kindActivity for the
     # per-kind control rows. All additive; abi-check clean; generation still 10.
-    revision: 48482b3b93bed0e4ebd511f575423245a6e571c0
+    # M4: SignalFeedRow/SignalFeedList gain a `menuItems` closure (separate
+    # initialisers, the old ones untouched), and SignalStore moves to schema
+    # v2 — `kind` is indexed in the FTS table, which requires DROPping and
+    # rebuilding it. Migration runs on open and is idempotent; verified against
+    # a copy of a real 62-event database.
+    revision: 94fca948a7f3f0f1b91991db4c45becdb79ff155
 
 targets:
   AinkradHostRuntime:
