@@ -21,6 +21,13 @@ struct SignalBellDropdown: View {
     var onAction: (SignalEvent, SignalAction) -> Void = { _, _ in }
     var onMarkAllRead: () -> Void = {}
     var onViewAll: () -> Void = {}
+    /// Quiet hours or a snooze is in force.
+    var isMuted: Bool = false
+    /// Mute for an hour, or lift it. Offered HERE because this is where the
+    /// user is when they notice the noise — sending them to Settings to stop
+    /// it is asking them to go somewhere else to solve the problem in front
+    /// of them.
+    var onToggleMute: () -> Void = {}
 
     @Environment(\.ainkradTheme) private var theme
 
@@ -67,6 +74,14 @@ struct SignalBellDropdown: View {
                 AinkradBadge(text: "\(unread)", tint: theme.accentSecondary)
             }
             Spacer()
+            Button(action: onToggleMute) {
+                Image(systemName: isMuted ? "bell.slash.fill" : "bell.slash")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isMuted ? theme.accentSecondary
+                                             : theme.foreground.opacity(0.45))
+            }
+            .buttonStyle(.plain)
+            .help(isMuted ? "Resume notifications" : "Mute for an hour")
             if unread > 0 {
                 Button(action: onMarkAllRead) {
                     Text("Mark all read")

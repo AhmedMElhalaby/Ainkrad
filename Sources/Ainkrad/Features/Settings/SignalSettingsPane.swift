@@ -22,6 +22,22 @@ struct SignalSettingsPane: View {
     /// An app's real display name where the host knows it, falling back to the
     /// kit's label. `SignalPresentation.sourceLabel` only capitalises the bundle
     /// id's last component, which turns "gitmage" into "Gitmage".
+    /// Kinds this source has emitted. Supplied by the binding view; empty is a
+    /// legitimate state and the sheet omits the section for it.
+    var kindActivity: (SignalSource) -> [SignalKindActivity] = { _ in [] }
+
+    private func clear(_ row: MutedKindsSummary.Row) -> Void {
+        for source in sources where displayName(for: source) == row.sourceName {
+            if let kind = row.kind {
+                center.rules.sourceKindOverrides[
+                    SourceKind(source: source, kind: kind)] = nil
+            } else {
+                center.rules.mutedSources.remove(source)
+                center.rules.sourceOverrides[source] = nil
+            }
+        }
+    }
+
     private func displayName(for source: SignalSource) -> String {
         if case .app(let id) = source { return displayName(id) }
         return SignalPresentation.sourceLabel(source)
@@ -31,52 +47,69 @@ struct SignalSettingsPane: View {
 
     @Environment(\.ainkradTheme) private var theme
     @State private var confirmingClear = false
+    /// Which source's detail is open. One at a time: several expanded at once
+    /// turns the list into a wall and loses the comparison it exists for.
+    @State private var expanded: SignalSource?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             AinkradSettingsPanel(
                 title: "Delivery",
-                hint: "What each source is allowed to interrupt you with. Every source "
-                    + "still lands in the feed, whatever you choose here — the log is "
-                    + "not optional."
+                hint: "What each source may interrupt you with. Every source still "
+                    + "lands in the feed whatever you choose — the log is not optional."
             ) {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
                         AinkradCaptionedRow(displayName(for: source)) {
-                            // Three states, not a toggle: "off" and "recorded
-                            // but never surfaced" are different answers, and a
-                            // toggle can only offer one of them.
-                            AinkradSegmentedPicker(
-                                items: SignalDeliveryMode.allCases,
-                                selection: Binding(
-                                    get: { SignalDeliveryMode(rules: center.rules, source: source) },
-                                    set: { $0.apply(to: &center.rules, source: source) }),
-                                label: \.label)
+                            HStack(spacing: AinkradSpacing.sm) {
+                                AinkradSegmentedPicker(
+                                    items: SignalDeliveryMode.allCases,
+                                    selection: Binding(
+                                        get: { SignalDeliveryMode(rules: center.rules,
+                                                                  source: source) },
+                                        set: { $0.apply(to: &center.rules, source: source) }),
+                                    label: \.label)
+                                // Expands in place rather than opening a modal:
+                                // the user is comparing sources, and a sheet
+                                // that covers the list they are comparing makes
+                                // that harder for no gain.
+                                AinkradButton(
+                                    title: expanded == source ? "Done" : "More…",
+                                    style: .ghost) {
+                                    expanded = expanded == source ? nil : source
+                                }
+                            }
+                        }
+                        if expanded == source {
+                            SourceNotificationSheet(
+                                source: source,
+                                sourceName: displayName(for: source),
+                                rules: Binding(get: { center.rules },
+                                               set: { center.rules = $0 }),
+                                activity: kindActivity(source))
+                            .padding(.leading, AinkradSpacing.md)
                         }
                     }
                 }
             }
 
-            if let sounds = notificationSounds {
-                AinkradSettingsPanel(
-                    title: "Sound",
-                    hint: "Separate from interface sounds — turning those off in General "
-                        + "will not silence a failure."
-                ) {
-                    VStack(alignment: .leading, spacing: 9) {
-                        AinkradCaptionedRow("Play a sound") {
-                            AinkradToggle(isOn: Binding(
-                                get: { sounds.settings.isEnabled },
-                                set: { sounds.settings.isEnabled = $0 }))
-                        }
-                        AinkradCaptionedRow("Volume") {
-                            AinkradSlider(value: Binding(
-                                get: { sounds.settings.volume },
-                                set: { sounds.settings.volume = $0 }), in: 0...1)
-                        }
-                    }
-                }
-            }
+            GlobalNotificationSettings(
+                rules: Binding(get: { center.rules }, set: { center.rules = $0 }),
+                sounds: notificationSounds)
+
+            MutedKindsSummary(
+                rows: MutedKindsSummary.rows(from: center.rules,
+                                             displayName: { displayName(for: $0) }),
+                onClear: { row in clear(row) },
+                onClearAll: {
+                    // Only the per-source and per-kind settings. Quiet hours and
+                    // the sound switch are not "mutes" and must survive: a user
+                    // clearing their app overrides has not asked to be woken at
+                    // 3am.
+                    center.rules.mutedSources.removeAll()
+                    center.rules.sourceOverrides.removeAll()
+                    center.rules.sourceKindOverrides.removeAll()
+                })
 
             AinkradSettingsPanel(
                 title: "History",

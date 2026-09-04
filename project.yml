@@ -99,7 +99,11 @@ packages:
     # and RoutingRules.urgentBypass, with Focus now suppressing toast and sound
     # rather than only the banner. Both additive; abi-check clean. Generation
     # unchanged at 10: nothing here is plugin-facing.
-    revision: 51c8959259e6260d35e06cc65cff4d4128b7fbf0
+    # M4 Phase 2: SuppressionWindow (quiet hours + snooze), RoutingRules
+    # .interruptFloor / .soundOverride / .suppression, route(_:rules:context:now:)
+    # as an OVERLOAD keeping the old symbol, and SignalStore.kindActivity for the
+    # per-kind control rows. All additive; abi-check clean; generation still 10.
+    revision: 48482b3b93bed0e4ebd511f575423245a6e571c0
 
 targets:
   AinkradHostRuntime:

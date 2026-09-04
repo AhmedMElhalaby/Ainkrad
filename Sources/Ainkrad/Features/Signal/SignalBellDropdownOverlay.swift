@@ -38,7 +38,18 @@ struct SignalBellDropdownOverlay: View {
                     if SignalActionRouter(hub: hub).invoke(event, action) != nil { onViewAll() }
                 },
                 onMarkAllRead: { center.markAllRead(filter: .all) },
-                onViewAll: onViewAll)
+                onViewAll: onViewAll,
+                isMuted: center.rules.suppression.isSuppressing(at: Date()),
+                onToggleMute: {
+                    // A snooze set here is the same field quiet hours use, so
+                    // the two cannot disagree about whether now is quiet.
+                    if center.rules.suppression.isSuppressing(at: Date()) {
+                        center.rules.suppression.snoozedUntil = nil
+                    } else {
+                        center.rules.suppression.snoozedUntil =
+                            Date().addingTimeInterval(3600)
+                    }
+                })
                 // Clear of the 30pt top bar, and inset from the trailing edge
                 // so it hangs under the bell rather than the workspace dots.
                 .padding(.top, 34)

@@ -60,4 +60,31 @@ enum SignalDeliveryMode: String, CaseIterable, Identifiable {
             rules.mutedSources.insert(source)
         }
     }
+
+    // MARK: - per kind
+
+    /// The states a single KIND can be in — two, not three.
+    ///
+    /// `mutedSources` is per SOURCE and has no per-kind equivalent, so the
+    /// strongest thing that can be said about one kind is "recorded, never
+    /// surfaced". `.off` would therefore be indistinguishable from `.feedOnly`
+    /// and the control would have an option it could never display — a dead
+    /// third segment. `kindOptions` is what the picker offers.
+    static let kindOptions: [SignalDeliveryMode] = [.everything, .feedOnly]
+
+    init(rules: RoutingRules, source: SignalSource, kind: String) {
+        let key = SourceKind(source: source, kind: kind)
+        self = rules.sourceKindOverrides[key] == [.feed] ? .feedOnly : .everything
+    }
+
+    /// Writes a per-kind setting. `.off` is accepted and stored as feed-only,
+    /// so a caller that passes it gets the strongest available behaviour rather
+    /// than an error — but the picker offers `kindOptions`, which excludes it.
+    func apply(to rules: inout RoutingRules, source: SignalSource, kind: String) {
+        let key = SourceKind(source: source, kind: kind)
+        switch self {
+        case .everything: rules.sourceKindOverrides[key] = nil
+        case .feedOnly, .off: rules.sourceKindOverrides[key] = [.feed]
+        }
+    }
 }

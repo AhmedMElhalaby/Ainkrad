@@ -44,7 +44,9 @@ struct HUDBar: View {
             Spacer()
 
             if let center = environment.signalCenter {
-                SignalBellButton(unread: center.totalUnread, tokens: tokens) {
+                SignalBellButton(unread: center.totalUnread,
+                                 isMuted: center.rules.suppression.isSuppressing(at: Date()),
+                                 tokens: tokens) {
                     environment.isSignalDropdownPresented.toggle()
                 }
             }
