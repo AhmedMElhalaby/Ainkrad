@@ -24,6 +24,10 @@ struct SourceNotificationSheet: View {
 
     @Environment(\.ainkradTheme) private var theme
 
+    /// Wide enough for the longer of the two segment labels at its heaviest
+    /// weight, so no row is clipped and none is ragged.
+    private static let kindPickerWidth: CGFloat = 190
+
     private var mode: SignalDeliveryMode {
         SignalDeliveryMode(rules: rules, source: source)
     }
@@ -132,6 +136,12 @@ struct SourceNotificationSheet: View {
                                                           source: source, kind: entry.kind) },
                                 set: { $0.apply(to: &rules, source: source, kind: entry.kind) }),
                             label: \.label)
+                        // Fixed, because the control sizes to its content and
+                        // the SELECTED segment is heavier — so an unconstrained
+                        // column of these is ragged at both edges, with each
+                        // row's width depending on what it happens to be set
+                        // to. It reads as a rendering fault rather than a list.
+                        .frame(width: Self.kindPickerWidth, alignment: .trailing)
                     }
                 }
             }

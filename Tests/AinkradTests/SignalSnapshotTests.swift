@@ -235,6 +235,79 @@ struct SignalSnapshotTests {
         try png.write(to: outputDirectory.appendingPathComponent("signal-feed-grouped.png"))
     }
 
+    @Test("render a source's notification sheet, with its kinds")
+    func renderSourceSheet() throws {
+        let theme = Theme.neonBlue
+        var rules = RoutingRules.default
+        let raven = SignalSource.app(appID: "com.ainkrad.raven")
+        rules.interruptFloor[raven] = .warning
+        SignalDeliveryMode.feedOnly.apply(to: &rules, source: raven, kind: "sync.failed")
+
+        let view = ZStack {
+            HostThemeTokens(from: theme).background
+            AinkradPanel(showsBrackets: true) {
+                SourceNotificationSheet(
+                    source: raven, sourceName: "Raven",
+                    rules: .constant(rules),
+                    // Noisiest first, which is the row the user came to find.
+                    activity: [
+                        SignalKindActivity(kind: "sync.failed", count: 19, lastSeen: Date()),
+                        SignalKindActivity(kind: "build.failed", count: 4, lastSeen: Date()),
+                        SignalKindActivity(kind: "index.rebuilt", count: 1, lastSeen: Date()),
+                    ])
+                .frame(width: 520)
+                .padding(AinkradSpacing.md)
+            }
+        }
+            .frame(width: 620, height: 640)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, Self.hostTypography)
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success, warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 620, height: 640))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-source-sheet.png"))
+    }
+
+    @Test("render the muted summary, which must show its empty state too")
+    func renderMutedSummary() throws {
+        let theme = Theme.neonBlue
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: .app(appID: "lore"))
+        SignalDeliveryMode.feedOnly.apply(to: &rules, source: .app(appID: "raven"),
+                                          kind: "sync.failed")
+        let name: (SignalSource) -> String = { source in
+            if case .app(let id) = source { return id.capitalized }
+            return SignalPresentation.sourceLabel(source)
+        }
+
+        let view = ZStack {
+            HostThemeTokens(from: theme).background
+            AinkradPanel(showsBrackets: true) {
+                VStack(spacing: AinkradSpacing.md) {
+                    MutedKindsSummary(
+                        rows: MutedKindsSummary.rows(from: rules, displayName: name))
+                    // The empty state is rendered too, because it is SHOWN
+                    // rather than hidden: the user has to be able to check
+                    // that nothing is muted.
+                    MutedKindsSummary(rows: [])
+                }
+                .frame(width: 520)
+                .padding(AinkradSpacing.md)
+            }
+        }
+            .frame(width: 620, height: 460)
+            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
+            .environment(\.ainkradTypography, Self.hostTypography)
+            .environment(\.ainkradStatusColors, AinkradStatusColors(
+                success: theme.tokens.success, warning: theme.tokens.warning,
+                danger: theme.tokens.danger))
+
+        let png = try Self.render(view, size: CGSize(width: 620, height: 460))
+        try png.write(to: outputDirectory.appendingPathComponent("signal-muted-summary.png"))
+    }
+
     @Test("render the toast stack")
     func renderToastStack() throws {
         let now = Date()
