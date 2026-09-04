@@ -67,6 +67,16 @@ final class SignalCenter {
     /// repeat is still a thing that happened, and a subscriber that only heard
     /// about the first of five identical failures would be misinformed rather
     /// than merely under-informed.
+    /// Bumped when an event arrives, at most once per burst window. The bell
+    /// watches it to pulse.
+    ///
+    /// A counter rather than the event itself: the bell does not care WHAT
+    /// arrived, only that something did, and a token cannot tempt a view into
+    /// rendering from it. Coalesced, because five events landing together is
+    /// one situation and five pulses is a twitch.
+    private(set) var arrivalToken = 0
+    @ObservationIgnored private var arrivalGate = SignalBurstGate()
+
     var onEventRecorded: ((SignalEvent) -> Void)?
     var totalUnread: Int { unreadCounts.values.reduce(0, +) }
     /// True when the store could not be opened; the feed is memory-only.
@@ -141,6 +151,12 @@ final class SignalCenter {
 
         let channels = route(event, rules: rules, context: contextProvider.deliveryContext)
         deliverer?.deliver(event, to: channels)
+        // Rank passed so a failure still pulses through a burst of chatter,
+        // for the same reason the sound gate lets it through.
+        if arrivalGate.admits(Date(), rank: SignalCue.rank(event.severity)) {
+            arrivalToken &+= 1
+        }
+
         // Last, deliberately: see `onEventRecorded`.
         onEventRecorded?(event)
     }
@@ -245,6 +261,18 @@ final class SignalCenter {
         recent.first { $0.id == id }
             ?? store?.event(id: id)
             ?? degradedBuffer.first { $0.id == id }    }
+
+    /// The worst severity among a source's UNREAD events, for its launcher
+    /// badge. Nil when nothing is outstanding.
+    ///
+    /// Unread specifically: a failure the user has already dealt with must
+    /// stop colouring the tile red, or the badge reports a problem that is
+    /// finished and becomes something they learn to ignore.
+    func worstUnreadSeverity(for source: SignalSource) -> SignalSeverity? {
+        recent.filter { $0.source == source && !readIDs.contains($0.id) }
+            .map(\.severity)
+            .max { SignalCue.rank($0) < SignalCue.rank($1) }
+    }
 
     func unreadCount(for source: SignalSource) -> Int { unreadCounts[source] ?? 0 }
 

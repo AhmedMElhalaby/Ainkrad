@@ -26,22 +26,27 @@ final class DeliveryDispatcher: SignalDeliverer {
         self.badge = badge
     }
 
+    /// Live routing rules, so cue selection can read a per-source choice. Set
+    /// by the bootstrap; without it the severity table applies, which is the
+    /// same answer an unconfigured source would get anyway.
+    var rules: () -> RoutingRules = { .default }
+    private var burstGate = SignalBurstGate()
+
     func deliver(_ event: SignalEvent, to channels: Set<DeliveryChannel>) {
         // `.feed` needs no work here: SignalCenter persisted the event before
         // routing, so the feed is already correct.
         if channels.contains(.banner) { banner.post(event) }
         if channels.contains(.toast) { toast.present(event) }
-        if channels.contains(.sound) { sound.play(Self.sound(for: event.severity)) }
+        if channels.contains(.sound) { playSound(for: event) }
         if channels.contains(.badge) { badge(event.source) }
     }
 
-    private static func sound(for severity: SignalSeverity) -> UISound {
-        switch severity {
-        case .failure, .warning: return .error
-        case .success: return .confirm
-        case .info: return .toggle
-        @unknown default: return .toggle
-        }
+    /// Cue choice is policy and lives in `SignalCue`; this only decides
+    /// whether a burst has already been heard.
+    private func playSound(for event: SignalEvent) {
+        guard let cue = SignalCue.cue(for: event, rules: rules()) else { return }
+        guard burstGate.admits(Date(), rank: SignalCue.rank(event.severity)) else { return }
+        sound.play(cue)
     }
 }
 
