@@ -50,6 +50,7 @@ struct SignalSettingsPane: View {
     /// Which source's detail is open. One at a time: several expanded at once
     /// turns the list into a wall and loses the comparison it exists for.
     @State private var expanded: SignalSource?
+    @State private var healthWindow: NotificationHealthPanel.Window = .week
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -96,6 +97,16 @@ struct SignalSettingsPane: View {
             GlobalNotificationSettings(
                 rules: Binding(get: { center.rules }, set: { center.rules = $0 }),
                 sounds: notificationSounds)
+
+            NotificationHealthPanel(
+                window: $healthWindow,
+                health: center.health(
+                    since: Date().addingTimeInterval(-healthWindow.seconds)),
+                displayName: displayName,
+                onMuteKind: { source, kind in
+                    SignalDeliveryMode.feedOnly.apply(to: &center.rules,
+                                                      source: source, kind: kind)
+                })
 
             MutedKindsSummary(
                 rows: MutedKindsSummary.rows(from: center.rules,

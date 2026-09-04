@@ -28,6 +28,31 @@ struct SageSignalContext {
     /// the whole store on every turn.
     static let scanLimit = 120
 
+    /// A one-line answer to "what has been noisy?".
+    ///
+    /// Deliberately a SINGLE line, and prepended rather than appended: it
+    /// costs about eighty characters out of three thousand, and the events
+    /// themselves are what the assistant needs — a health readout that pushed
+    /// two failures out of the context would be worse than no readout at all.
+    ///
+    /// Empty when there is too little history to describe, for the same reason
+    /// the panel says "not enough history yet": a read rate over four events
+    /// describes noise, not behaviour.
+    func healthLine(now: Date = Date()) -> String {
+        let health = center.health(since: now.addingTimeInterval(-7 * 86_400))
+        guard health.total >= Self.minimumHealthSample else { return "" }
+        var parts = ["Last 7 days: \(health.total) notifications",
+                     "\(Int((health.readRate * 100).rounded()))% read"]
+        if let loudest = health.noisiest.first {
+            parts.append("loudest \(loudest.kind) (\(loudest.count))")
+        }
+        return parts.joined(separator: ", ") + "."
+    }
+
+    /// Matches the readout's own floor, so the two never disagree about
+    /// whether there is enough history to talk about.
+    static let minimumHealthSample = 5
+
     /// Recent notable events as plain text, or an empty string when there is
     /// nothing.
     ///
@@ -54,6 +79,13 @@ struct SageSignalContext {
             guard line.count + 1 <= budget else { break }
             lines.append(line)
             budget -= line.count + 1
+        }
+        // The health line goes FIRST and is counted against the same budget:
+        // "what has been noisy this week" is context for everything below it,
+        // and an uncounted line is a budget that quietly is not one.
+        let health = healthLine()
+        if !health.isEmpty, health.count + 1 <= budget {
+            lines.insert(health, at: 0)
         }
         return lines.joined(separator: "\n")
     }
