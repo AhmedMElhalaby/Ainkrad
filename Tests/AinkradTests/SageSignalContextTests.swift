@@ -213,4 +213,85 @@ final class SageSignalContextTests {
             .split(separator: "\n").filter { $0.contains("Build failed") }
         #expect(lines.count == 1)
     }
+
+    @Test("too little history means no health line at all")
+    func healthLineNeedsASample() throws {
+        let (center, url) = try makeCenter()
+        defer { try? FileManager.default.removeItem(at: url) }
+        for i in 0..<4 {
+            center.emit(SignalDraft(kind: "k\(i)", severity: .info, title: "t\(i)"),
+                        from: .app(appID: "raven"))
+        }
+        // Same floor as the Settings readout, so the two never disagree about
+        // whether there is enough history to talk about.
+        #expect(SageSignalContext(center: center).healthLine().isEmpty)
+    }
+
+    @Test("the health line states volume, read rate and the loudest kind")
+    func healthLineContent() throws {
+        let (center, url) = try makeCenter()
+        defer { try? FileManager.default.removeItem(at: url) }
+        for i in 0..<6 {
+            center.emit(SignalDraft(kind: "sync.failed", severity: .warning,
+                                    title: "Sync failed \(i)"),
+                        from: .app(appID: "raven"))
+        }
+        let line = SageSignalContext(center: center).healthLine()
+        #expect(line.contains("Last 7 days"))
+        #expect(line.contains("notifications"))
+        #expect(line.contains("% read"))
+        #expect(line.contains("sync.failed"))
+        // One line, because it is context for the events below it rather than
+        // a report in its own right.
+        #expect(!line.contains("\n"))
+    }
+
+    @Test("the health line is short enough to be worth its budget")
+    func healthLineIsCheap() throws {
+        let (center, url) = try makeCenter()
+        defer { try? FileManager.default.removeItem(at: url) }
+        for i in 0..<20 {
+            center.emit(SignalDraft(kind: "some.rather.long.kind.name",
+                                    severity: .warning, title: "t\(i)"),
+                        from: .app(appID: "raven"))
+        }
+        let line = SageSignalContext(center: center).healthLine()
+        // Around eighty characters out of three thousand. If this ever grows
+        // into a paragraph it is displacing the events Sage actually needs.
+        #expect(line.count < 120, "health line is \(line.count) characters")
+    }
+
+    @Test("the summary still respects its budget with the health line in it")
+    func summaryStaysWithinBudget() throws {
+        let (center, url) = try makeCenter()
+        defer { try? FileManager.default.removeItem(at: url) }
+        for i in 0..<200 {
+            center.emit(SignalDraft(kind: "build.failed", severity: .failure,
+                                    title: String(repeating: "x", count: 60),
+                                    body: String(repeating: "y", count: 200),
+                                    dedupeKey: "d\(i)"),
+                        from: .app(appID: "raven"))
+        }
+        let summary = SageSignalContext(center: center).summary()
+        // The line is counted against the SAME budget, not added on top — an
+        // uncounted line is a budget that quietly is not one.
+        #expect(summary.count <= SageSignalContext.summaryBudget,
+                "summary is \(summary.count) characters")
+    }
+
+    @Test("events win the budget when it is tight")
+    func eventsOutrankTheHealthLine() throws {
+        let (center, url) = try makeCenter()
+        defer { try? FileManager.default.removeItem(at: url) }
+        for i in 0..<200 {
+            center.emit(SignalDraft(kind: "build.failed", severity: .failure,
+                                    title: String(repeating: "x", count: 60),
+                                    dedupeKey: "d\(i)"),
+                        from: .app(appID: "raven"))
+        }
+        let summary = SageSignalContext(center: center).summary()
+        // A readout that pushed two failures out of the context would be worse
+        // than no readout, so it is dropped rather than the events.
+        #expect(summary.contains("xxxxx"))
+    }
 }
