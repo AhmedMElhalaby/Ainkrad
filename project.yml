@@ -114,7 +114,11 @@ packages:
     # only now) and SignalFeedRow's pin glyph plus full-body expansion.
     # Phase 4: toast actions, hover-to-pause with a remaining-time hairline,
     # a dismissal that drifts toward the bell, and reduce-motion throughout.
-    revision: a7015ee8b78808f7cc279578c9ad515982696df6
+    # Phase 5: accessibility labels on the feed row, rail and toast — severity
+    # spoken first, time spoken in words, actions exposed as a11y actions.
+    # Phase 5: arrow-key traversal of the feed, owned by the list, plus the
+    # focus ring and Color.contrastRatio.
+    revision: e5efb1c8e6a9fd4e7722823400f19ec163d90926
 
 targets:
   AinkradHostRuntime:
