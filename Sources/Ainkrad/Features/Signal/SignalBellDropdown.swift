@@ -91,16 +91,17 @@ struct SignalBellDropdown: View {
                     // pointer affordance and a listener never receives it.
                     .accessibilityLabel("Resume now")
             } else {
-                Menu {
-                    ForEach(SignalSnooze.allCases) { snooze in
-                        Button(snooze.label) { onSnooze(snooze) }
+                // The kit's own menu, not SwiftUI's `Menu`: that renders a stock
+                // AppKit menu -- grey slab, system corner radius, system highlight
+                // -- which landed in the middle of the HUD looking like it belonged
+                // to another application.
+                AinkradMenuButton(items: SignalSnooze.allCases.map { snooze in
+                    AinkradMenuItem(title: snooze.label, systemName: "bell.slash") {
+                        onSnooze(snooze)
                     }
-                } label: {
+                }) {
                     quietGlyph
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
                 .help("Go quiet")
                 .accessibilityLabel("Go quiet")
             }
@@ -148,12 +149,32 @@ struct SignalBellDropdown: View {
                     // it shares with the header above it.
                     .offset(x: hoveringFooter && !reduceMotion ? 2 : 0)
             }
-            .foregroundStyle(theme.accentPrimary)
+            .foregroundStyle(theme.accentPrimary.opacity(hoveringFooter ? 1 : 0.82))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 9)
-            // A tint band, not a separator line: the design language forbids
-            // rules, and the footer still has to read as a distinct target.
-            .background(theme.surfaceElevated.opacity(hoveringFooter ? 0.8 : 0.5))
+            .padding(.vertical, 11)
+            // The tint ARRIVES rather than starting somewhere.
+            //
+            // This used to be a flat fill, under a comment insisting it was
+            // "a tint band, not a separator line". It was both: a rectangle's
+            // top edge is a hard horizontal rule across the full width of the
+            // panel, which is precisely what the design language forbids, and
+            // it was the one straight line in the whole surface. A gradient
+            // that starts at nothing has no edge to read as a rule, and the
+            // footer still separates itself from the last row.
+            .background {
+                LinearGradient(
+                    colors: [.clear,
+                             theme.surfaceElevated.opacity(hoveringFooter ? 0.85 : 0.55)],
+                    startPoint: .top, endPoint: .bottom)
+            }
+            // Hover lights the accent from below instead of brightening the
+            // slab, so the target answers without a second rectangle appearing.
+            .background(alignment: .bottom) {
+                LinearGradient(colors: [.clear, theme.accentPrimary.opacity(0.22)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 14)
+                    .opacity(hoveringFooter ? 1 : 0)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
