@@ -82,6 +82,9 @@ struct SignalBellDropdown: View {
             }
             .buttonStyle(.plain)
             .help(isMuted ? "Resume notifications" : "Mute for an hour")
+            // Icon-only, so `help` is not enough: a tooltip is a pointer
+            // affordance and a listener never receives it.
+            .accessibilityLabel(isMuted ? "Resume notifications" : "Mute for an hour")
             if unread > 0 {
                 Button(action: onMarkAllRead) {
                     Text("Mark all read")

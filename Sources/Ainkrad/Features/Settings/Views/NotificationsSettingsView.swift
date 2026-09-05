@@ -47,10 +47,21 @@ struct NotificationsSettingsView: View {
     /// Not every installed app: a delivery control for a source that has never
     /// said a word teaches the user this list is furniture, and then they stop
     /// reading it on the day it matters.
+    ///
+    /// An app the user has already CONFIGURED is the exception, and is included
+    /// however quiet it has been. Without it, a source muted from a feed row's
+    /// context menu — or one whose history has since been evicted by retention
+    /// — has no row here, so the mute is set, is doing its job, and cannot be
+    /// found. That is the "notifications stopped working" report this whole
+    /// section exists to prevent.
     private var sources: [SignalSource] {
+        let configured = SignalSettingsPane.configuredSources(in: center.rules)
         let apps = environment.registry.allApps
             .map { (id: $0.id, name: $0.displayName) }
-            .filter { center.hasEverEmitted(.app(appID: $0.id)) }
+            .filter {
+                center.hasEverEmitted(.app(appID: $0.id))
+                    || configured.contains(.app(appID: $0.id))
+            }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         return [.host, .sage] + apps.map { SignalSource.app(appID: $0.id) }
     }

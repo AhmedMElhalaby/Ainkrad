@@ -26,16 +26,24 @@ struct SignalSettingsPane: View {
     /// legitimate state and the sheet omits the section for it.
     var kindActivity: (SignalSource) -> [SignalKindActivity] = { _ in [] }
 
-    private func clear(_ row: MutedKindsSummary.Row) -> Void {
-        for source in sources where displayName(for: source) == row.sourceName {
-            if let kind = row.kind {
-                center.rules.sourceKindOverrides[
-                    SourceKind(source: source, kind: kind)] = nil
-            } else {
-                center.rules.mutedSources.remove(source)
-                center.rules.sourceOverrides[source] = nil
-            }
-        }
+    /// Every source the rules say something about, whether or not it has ever
+    /// emitted.
+    ///
+    /// The pane's source list is deliberately filtered by `hasEverEmitted` — a
+    /// delivery control for a source that has never spoken teaches the user the
+    /// list is furniture. But a source the user has already CONFIGURED is not
+    /// furniture: they made that setting and must be able to find it again.
+    /// Every rule that can name a source contributes here, so adding a new one
+    /// to `RoutingRules` and forgetting this is a compile-visible omission
+    /// rather than a setting that quietly becomes unreachable.
+    static func configuredSources(in rules: RoutingRules) -> Set<SignalSource> {
+        var out = rules.mutedSources
+        out.formUnion(rules.sourceOverrides.keys)
+        out.formUnion(rules.sourceKindOverrides.keys.map(\.source))
+        out.formUnion(rules.interruptFloor.keys)
+        out.formUnion(rules.soundOverride.keys)
+        out.formUnion(rules.urgentBypass)
+        return out
     }
 
     private func displayName(for source: SignalSource) -> String {
@@ -60,7 +68,12 @@ struct SignalSettingsPane: View {
                     + "lands in the feed whatever you choose — the log is not optional."
             ) {
                 VStack(alignment: .leading, spacing: 9) {
-                    ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                    // Keyed on the source, not its position. `sources` is
+                    // recomputed from live state, so the first time an app
+                    // emits the list re-orders — and with index identity
+                    // `expanded` then pointed at a different row and the
+                    // expansion cross-faded the wrong content.
+                    ForEach(sources, id: \.self) { source in
                         AinkradCaptionedRow(displayName(for: source)) {
                             HStack(spacing: AinkradSpacing.sm) {
                                 AinkradSegmentedPicker(
@@ -111,7 +124,7 @@ struct SignalSettingsPane: View {
             MutedKindsSummary(
                 rows: MutedKindsSummary.rows(from: center.rules,
                                              displayName: { displayName(for: $0) }),
-                onClear: { row in clear(row) },
+                onClear: { row in MutedKindsSummary.clear(row, from: &center.rules) },
                 onClearAll: {
                     // Only the per-source and per-kind settings. Quiet hours and
                     // the sound switch are not "mutes" and must survive: a user

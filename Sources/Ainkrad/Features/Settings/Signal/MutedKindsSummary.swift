@@ -12,6 +12,14 @@ import AinkradSignal
 struct MutedKindsSummary: View {
     struct Row: Identifiable, Equatable {
         let id: String
+        /// The source this row is ABOUT, carried so that clearing it never has
+        /// to resolve a display name back to a source. It used to, and two
+        /// consequences followed: two apps sharing a name cleared each other,
+        /// and a source absent from the pane's list — which is filtered by
+        /// `hasEverEmitted` — could not be cleared at all. That second one
+        /// turned this panel, whose whole job is making a mute findable, into
+        /// a Restore button that did nothing.
+        let source: SignalSource
         let sourceName: String
         /// Nil for a whole-source setting.
         let kind: String?
@@ -30,16 +38,17 @@ struct MutedKindsSummary: View {
                      displayName: (SignalSource) -> String) -> [Row] {
         var out: [Row] = []
         for source in rules.mutedSources.sorted(by: { displayName($0) < displayName($1) }) {
-            out.append(Row(id: "source:\(source)", sourceName: displayName(source),
-                           kind: nil, mode: .off))
+            out.append(Row(id: "source:\(source)", source: source,
+                           sourceName: displayName(source), kind: nil, mode: .off))
         }
         for (source, channels) in rules.sourceOverrides
             where channels == [.feed] && !rules.mutedSources.contains(source) {
-            out.append(Row(id: "source:\(source)", sourceName: displayName(source),
-                           kind: nil, mode: .feedOnly))
+            out.append(Row(id: "source:\(source)", source: source,
+                           sourceName: displayName(source), kind: nil, mode: .feedOnly))
         }
         for (key, channels) in rules.sourceKindOverrides where channels == [.feed] {
             out.append(Row(id: "kind:\(key.source):\(key.kind)",
+                           source: key.source,
                            sourceName: displayName(key.source),
                            kind: key.kind, mode: .feedOnly))
         }
@@ -48,6 +57,21 @@ struct MutedKindsSummary: View {
         return out.sorted {
             ($0.kind == nil ? 0 : 1, $0.sourceName, $0.kind ?? "")
                 < ($1.kind == nil ? 0 : 1, $1.sourceName, $1.kind ?? "")
+        }
+    }
+
+    /// Removes whatever a row describes, restoring the default.
+    ///
+    /// Pure and keyed on `row.source`, so it works for a source the settings
+    /// list has never shown — a source muted from a feed row's context menu
+    /// before it ever emitted is exactly the case the user cannot fix anywhere
+    /// else.
+    static func clear(_ row: Row, from rules: inout RoutingRules) {
+        if let kind = row.kind {
+            rules.sourceKindOverrides[SourceKind(source: row.source, kind: kind)] = nil
+        } else {
+            rules.mutedSources.remove(row.source)
+            rules.sourceOverrides[row.source] = nil
         }
     }
 

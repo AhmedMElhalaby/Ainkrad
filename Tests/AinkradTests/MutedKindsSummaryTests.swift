@@ -75,6 +75,30 @@ struct MutedKindsSummaryTests {
                 == [["Rune", "-"], ["Raven", "build.warning"], ["Rune", "session.failed"]])
     }
 
+    @Test("a row carries its source, so clearing does not go via the display name")
+    func rowCarriesSource() {
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: raven)
+        SignalDeliveryMode.feedOnly.apply(to: &rules, source: rune, kind: "session.failed")
+        let rows = MutedKindsSummary.rows(from: rules, displayName: name)
+        #expect(rows.first { $0.kind == nil }?.source == raven)
+        #expect(rows.first { $0.kind == "session.failed" }?.source == rune)
+    }
+
+    @Test("two sources sharing a display name stay distinct rows")
+    func duplicateDisplayNames() {
+        // The panel used to resolve a row back to its source by matching the
+        // display name, so two apps called the same thing cleared each other.
+        let one = SignalSource.app(appID: "a.raven")
+        let two = SignalSource.app(appID: "b.raven")
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: one)
+        SignalDeliveryMode.off.apply(to: &rules, source: two)
+        let rows = MutedKindsSummary.rows(from: rules, displayName: { _ in "Raven" })
+        #expect(rows.count == 2)
+        #expect(Set(rows.map(\.source)) == [one, two])
+    }
+
     @Test("every row has a distinct id, so the list does not collapse")
     func idsAreDistinct() {
         var rules = RoutingRules.default
@@ -83,6 +107,98 @@ struct MutedKindsSummaryTests {
         SignalDeliveryMode.off.apply(to: &rules, source: raven)
         let rows = MutedKindsSummary.rows(from: rules, displayName: name)
         #expect(Set(rows.map(\.id)).count == rows.count)
+    }
+}
+
+@MainActor
+@Suite("Clearing a muted entry")
+struct MutedKindsClearTests {
+    private let raven = SignalSource.app(appID: "raven")
+    private let rune = SignalSource.app(appID: "rune")
+
+    @Test("clearing a whole-source row lifts both the mute and the override")
+    func clearSource() {
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: raven)
+        let row = MutedKindsSummary.Row(id: "x", source: raven, sourceName: "Raven",
+                                        kind: nil, mode: .off)
+        MutedKindsSummary.clear(row, from: &rules)
+        #expect(!rules.mutedSources.contains(raven))
+        #expect(rules.sourceOverrides[raven] == nil)
+    }
+
+    @Test("clearing a kind row lifts only that kind")
+    func clearKind() {
+        var rules = RoutingRules.default
+        SignalDeliveryMode.feedOnly.apply(to: &rules, source: raven, kind: "build.warning")
+        SignalDeliveryMode.feedOnly.apply(to: &rules, source: raven, kind: "build.failed")
+        let row = MutedKindsSummary.Row(id: "x", source: raven, sourceName: "Raven",
+                                        kind: "build.warning", mode: .feedOnly)
+        MutedKindsSummary.clear(row, from: &rules)
+        #expect(rules.sourceKindOverrides[SourceKind(source: raven, kind: "build.warning")] == nil)
+        #expect(rules.sourceKindOverrides[SourceKind(source: raven, kind: "build.failed")] == [.feed])
+    }
+
+    @Test("a source the settings list has never seen can still be cleared")
+    func clearsUnlistedSource() {
+        // The regression this exists for: `clear` resolved the row through the
+        // pane's `sources`, which is filtered by `hasEverEmitted`. A source
+        // muted from a feed row's context menu was therefore listed with a
+        // Restore button that did nothing.
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: rune)
+        let row = MutedKindsSummary.rows(from: rules, displayName: { _ in "Rune" })[0]
+        MutedKindsSummary.clear(row, from: &rules)
+        #expect(rules.mutedSources.isEmpty)
+    }
+
+    @Test("clearing one of two identically named sources leaves the other muted")
+    func clearsOnlyTheNamedSource() {
+        let one = SignalSource.app(appID: "a.raven")
+        let two = SignalSource.app(appID: "b.raven")
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: one)
+        SignalDeliveryMode.off.apply(to: &rules, source: two)
+        let rows = MutedKindsSummary.rows(from: rules, displayName: { _ in "Raven" })
+        MutedKindsSummary.clear(rows.first { $0.source == one }!, from: &rules)
+        #expect(rules.mutedSources == [two])
+    }
+}
+
+@MainActor
+@Suite("Sources the settings pane lists")
+struct SignalSettingsSourcesTests {
+    private let raven = SignalSource.app(appID: "raven")
+    private let rune = SignalSource.app(appID: "rune")
+
+    @Test("nothing configured names nothing")
+    func empty() {
+        #expect(SignalSettingsPane.configuredSources(in: .default).isEmpty)
+    }
+
+    @Test("every rule that names a source contributes it")
+    func everyRuleContributes() {
+        var rules = RoutingRules.default
+        SignalDeliveryMode.off.apply(to: &rules, source: raven)
+        SignalDeliveryMode.feedOnly.apply(to: &rules, source: rune, kind: "session.failed")
+        #expect(SignalSettingsPane.configuredSources(in: rules) == [raven, rune])
+    }
+
+    @Test("a floor, a cue or a bypass alone is enough to be listed")
+    func quietConfiguration() {
+        // Each of these is a setting the user made and must be able to find
+        // again, even for a source that has never emitted.
+        var rules = RoutingRules.default
+        rules.interruptFloor[raven] = .warning
+        #expect(SignalSettingsPane.configuredSources(in: rules) == [raven])
+
+        var cue = RoutingRules.default
+        cue.soundOverride[rune] = .silent
+        #expect(SignalSettingsPane.configuredSources(in: cue) == [rune])
+
+        var bypass = RoutingRules.default
+        bypass.urgentBypass.insert(raven)
+        #expect(SignalSettingsPane.configuredSources(in: bypass) == [raven])
     }
 }
 
