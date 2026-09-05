@@ -120,7 +120,14 @@ packages:
     # focus ring and Color.contrastRatio.
     # Phase 6: SignalHealth — read rate, median acknowledge, noisiest kinds,
     # all derived from columns the store already had. Nothing leaves the machine.
-    revision: 7353375c7df65b75bb29674f7b8939fd7a023b67
+    # Phase 7: accessibility on the SETTINGS controls, which had none at all —
+    # captioned rows name their group, segments report selection, and the
+    # toggle, stepper and slider carry values. AinkradSlider was a bare
+    # DragGesture with no accessibility, so it was inoperable without a
+    # pointer: the notification volume could not be changed at all.
+    # Additive modifiers only; abi-check clean on Contract and Signal, and
+    # every plugin pin is an ancestor of this revision.
+    revision: 189d30f5ff2ef75451be7a2b82eb1443f042a9e7
 
 targets:
   AinkradHostRuntime:
