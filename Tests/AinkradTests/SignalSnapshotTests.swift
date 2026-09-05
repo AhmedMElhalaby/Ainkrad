@@ -382,7 +382,11 @@ struct SignalSnapshotTests {
                 warning: theme.tokens.warning,
                 danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 560, height: 660))
+        // Tall enough for the WHOLE pane. At 660 the content overflowed its
+        // frame and the capture began part-way down, so the snapshot silently
+        // omitted the first three panels — including the caption that defines
+        // the vocabulary every control below it uses.
+        let png = try Self.render(view, size: CGSize(width: 560, height: 1500))
         try png.write(to: outputDirectory.appendingPathComponent("signal-settings.png"))
     }
 

@@ -77,20 +77,20 @@ struct MutedKindsSummary: View {
 
     var body: some View {
         AinkradSettingsPanel(
-            title: "Muted",
+            title: "Quiet and off",
             hint: "Everything you have turned down, in one place. Removing an entry "
                 + "restores the default immediately."
         ) {
             if rows.isEmpty {
                 // Shown, not hidden. The user needs to be able to CHECK that
-                // nothing is muted; an absent panel cannot answer that.
-                AinkradCaption("Nothing is muted.")
+                // nothing is silenced; an absent panel cannot answer that.
+                AinkradCaption("Nothing is quiet or off.")
             } else {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(rows) { row in entry(row) }
                     HStack {
                         Spacer()
-                        AinkradButton(title: "Turn everything back on", style: .ghost,
+                        AinkradButton(title: "Reset all overrides", style: .ghost,
                                       action: onClearAll)
                     }
                 }

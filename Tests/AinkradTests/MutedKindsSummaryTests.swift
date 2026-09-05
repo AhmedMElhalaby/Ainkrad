@@ -203,8 +203,77 @@ struct SignalSettingsSourcesTests {
 }
 
 @MainActor
-@Suite("Quiet hours helpers")
-struct QuietHoursHelperTests {
+@Suite("Notification vocabulary")
+struct SignalVocabularyTests {
+    private let raven = SignalSource.app(appID: "raven")
+
+    @Test("the three delivery states read Alert, Quiet, Off")
+    func deliveryLabels() {
+        // One ladder, three words, used in every surface. "Feed only" described
+        // the mechanism; "Quiet" describes what the user gets, and stops the
+        // "it is still in the feed" hint having to be printed beside every
+        // control that can silence something.
+        #expect(SignalDeliveryMode.everything.label == "Alert")
+        #expect(SignalDeliveryMode.feedOnly.label == "Quiet")
+        #expect(SignalDeliveryMode.off.label == "Off")
+    }
+
+    @Test("the row menu speaks the same three words")
+    func rowMenuVocabulary() {
+        let event = SignalEvent(timestamp: Date(timeIntervalSince1970: 0), source: raven,
+                                kind: "build.failed", severity: .failure,
+                                title: "Build failed", body: nil)
+        func titles(_ rules: RoutingRules) -> [String] {
+            SignalRowMenu.items(for: event, rules: rules, sourceName: "Raven",
+                                isRead: false, isPinned: false,
+                                onMuteKind: {}, onUnmuteKind: {}, onMuteSource: {},
+                                onToggleRead: {}, onCopy: {}, onDismiss: {},
+                                onTogglePin: {}).map(\.title)
+        }
+        #expect(titles(.default).contains("Quiet Raven › build.failed"))
+        #expect(titles(.default).contains("Turn off everything from Raven"))
+
+        var quieted = RoutingRules.default
+        SignalDeliveryMode.feedOnly.apply(to: &quieted, source: raven, kind: "build.failed")
+        #expect(titles(quieted).contains("Alert me about Raven › build.failed"))
+    }
+
+    @Test("no surface reintroduces a fourth word for silence")
+    func noStrayVerbs() {
+        // The feature used to carry seven: mute, unmute, muted, silence, off,
+        // feed only, turn back on. A regression here is a user reading two
+        // words for one state and assuming they are two states.
+        let event = SignalEvent(timestamp: Date(timeIntervalSince1970: 0), source: raven,
+                                kind: "build.failed", severity: .failure,
+                                title: "Build failed", body: nil)
+        let titles = SignalRowMenu.items(
+            for: event, rules: .default, sourceName: "Raven",
+            isRead: false, isPinned: false,
+            onMuteKind: {}, onUnmuteKind: {}, onMuteSource: {},
+            onToggleRead: {}, onCopy: {}, onDismiss: {}, onTogglePin: {}).map(\.title)
+        #expect(!titles.contains { $0.lowercased().contains("mute") })
+        #expect(!titles.contains { $0.lowercased().contains("silence") })
+    }
+}
+
+@MainActor
+@Suite("Snooze")
+struct SignalSnoozeTests {
+    @Test("exactly two options, offered identically everywhere")
+    func twoOptions() {
+        // The dropdown offered one hour, Settings offered two choices and the
+        // overlay offered none. Same action, three surfaces, three answers.
+        #expect(SignalSnooze.allCases.count == 2)
+        #expect(SignalSnooze.allCases.map(\.label)
+                == ["Quiet for an hour", "Quiet until tomorrow"])
+    }
+
+    @Test("an hour is an hour")
+    func anHour() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(SignalSnooze.hour.until(after: now) == now.addingTimeInterval(3600))
+    }
+
     @Test("until tomorrow means the working morning, not midnight")
     func tomorrowMorning() {
         var calendar = Calendar(identifier: .gregorian)
@@ -212,12 +281,33 @@ struct QuietHoursHelperTests {
         let now = calendar.date(from: DateComponents(
             timeZone: TimeZone(identifier: "UTC"), year: 2026, month: 9, day: 3, hour: 23))!
 
-        let resume = GlobalNotificationSettings.tomorrowMorning(after: now, calendar: calendar)
+        let resume = SignalSnooze.tomorrow.until(after: now, calendar: calendar)
 
-        // Midnight would end the mute an hour later, in the middle of the
-        // night — which is not what anyone means by "until tomorrow".
+        // Midnight would end it an hour later, in the middle of the night —
+        // which is not what anyone means by "until tomorrow".
         let parts = calendar.dateComponents([.day, .hour], from: resume)
         #expect(parts.day == 4)
         #expect(parts.hour == 8)
+    }
+
+    @Test("applying a snooze writes the same field quiet hours reads")
+    func appliesToSuppression() {
+        var suppression = SuppressionWindow()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        SignalSnooze.hour.apply(to: &suppression, at: now)
+        #expect(suppression.isSuppressing(at: now))
+        #expect(!suppression.isSuppressing(at: now.addingTimeInterval(3601)))
+    }
+
+    @Test("lifting a snooze leaves the schedule alone")
+    func liftKeepsSchedule() {
+        // A user ending an ad-hoc quiet spell has not asked to be woken at 3am.
+        var suppression = SuppressionWindow(quietStartMinute: 22 * 60,
+                                            quietEndMinute: 7 * 60)
+        SignalSnooze.tomorrow.apply(to: &suppression, at: Date())
+        SignalSnooze.lift(&suppression)
+        #expect(suppression.snoozedUntil == nil)
+        #expect(suppression.quietStartMinute == 22 * 60)
+        #expect(suppression.quietEndMinute == 7 * 60)
     }
 }

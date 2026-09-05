@@ -3,6 +3,54 @@ import AinkradAppKit
 import AinkradHostRuntime
 import AinkradSignal
 
+/// An ad-hoc quiet spell, and the only place its durations are written down.
+///
+/// The dropdown used to offer one hour, Settings offered one hour or until
+/// tomorrow, and the overlay offered nothing — the same action with three
+/// different answers depending on where the user happened to be standing.
+/// Every surface now renders THIS, in whatever chrome suits it.
+enum SignalSnooze: String, CaseIterable, Identifiable {
+    case hour
+    case tomorrow
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .hour: return "Quiet for an hour"
+        case .tomorrow: return "Quiet until tomorrow"
+        }
+    }
+
+    /// When this snooze would end, starting now.
+    ///
+    /// `tomorrow` is 08:00 the next day — "until tomorrow" means until the
+    /// working day, not until midnight, which would end it in the middle of
+    /// the night.
+    func until(after now: Date, calendar: Calendar = .current) -> Date {
+        switch self {
+        case .hour:
+            return now.addingTimeInterval(3600)
+        case .tomorrow:
+            let next = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: next) ?? next
+        }
+    }
+
+    /// Writes into the SAME field quiet hours reads, so the two can never
+    /// disagree about whether now is quiet.
+    func apply(to suppression: inout SuppressionWindow,
+               at now: Date, calendar: Calendar = .current) {
+        suppression.snoozedUntil = until(after: now, calendar: calendar)
+    }
+
+    /// Ends the snooze and nothing else. A user ending an ad-hoc quiet spell
+    /// has not asked to be woken at 3am, so the schedule survives.
+    static func lift(_ suppression: inout SuppressionWindow) {
+        suppression.snoozedUntil = nil
+    }
+}
+
 /// The settings that are not per-source: the global off switch, quiet hours,
 /// and sound.
 struct GlobalNotificationSettings: View {
@@ -63,20 +111,19 @@ struct GlobalNotificationSettings: View {
     private var snoozeRow: some View {
         HStack(spacing: AinkradSpacing.sm) {
             if let until = rules.suppression.snoozedUntil, until > now {
-                Text("Muted until \(Self.timeFormatter.string(from: until))")
+                Text("Quiet until \(Self.timeFormatter.string(from: until))")
                     .font(AinkradFont.mono(10.5))
                     .foregroundStyle(theme.accentSecondary)
                 Spacer()
                 AinkradButton(title: "Resume now", style: .ghost) {
-                    rules.suppression.snoozedUntil = nil
+                    SignalSnooze.lift(&rules.suppression)
                 }
             } else {
                 Spacer()
-                AinkradButton(title: "Mute for 1 hour", style: .ghost) {
-                    rules.suppression.snoozedUntil = now.addingTimeInterval(3600)
-                }
-                AinkradButton(title: "Until tomorrow", style: .ghost) {
-                    rules.suppression.snoozedUntil = Self.tomorrowMorning(after: now)
+                ForEach(SignalSnooze.allCases) { snooze in
+                    AinkradButton(title: snooze.label, style: .ghost) {
+                        snooze.apply(to: &rules.suppression, at: now)
+                    }
                 }
             }
         }
@@ -111,13 +158,6 @@ struct GlobalNotificationSettings: View {
             label: { String(format: "%02d:00", $0) })
     }
 
-    /// 08:00 the next day — "until tomorrow" means until the working day, not
-    /// until midnight, which would end the mute in the middle of the night.
-    static func tomorrowMorning(after now: Date, calendar: Calendar = .current) -> Date {
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-        return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
-    }
-
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
@@ -128,11 +168,11 @@ struct GlobalNotificationSettings: View {
 private extension SuppressionWindow.Mode {
     var label: String {
         switch self {
-        case .everything: return "Silence everything"
-        case .soundOnly: return "Keep it visible, drop the sound"
+        case .everything: return "Nothing interrupts"
+        case .soundOnly: return "Silent, but still visible"
         // Resilient enum from a library-evolution module: a mode added to the
         // SDK later must render rather than fail to build.
-        @unknown default: return "Silence everything"
+        @unknown default: return "Nothing interrupts"
         }
     }
 }

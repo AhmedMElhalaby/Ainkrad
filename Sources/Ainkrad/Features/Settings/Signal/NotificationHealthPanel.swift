@@ -115,7 +115,7 @@ struct NotificationHealthPanel: View {
                         .foregroundStyle(theme.foreground.opacity(0.5))
                     Spacer(minLength: AinkradSpacing.sm)
                     if let source = entry.source {
-                        AinkradButton(title: "Mute", style: .ghost) {
+                        AinkradButton(title: "Quiet", style: .ghost) {
                             onMuteKind(source, entry.kind)
                         }
                     }

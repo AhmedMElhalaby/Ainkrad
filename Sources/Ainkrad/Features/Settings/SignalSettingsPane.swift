@@ -62,10 +62,17 @@ struct SignalSettingsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // The invariant, stated ONCE. It used to be repeated in the
+            // Delivery hint and again inside the per-source sheet, because
+            // "Feed only" and "Off" both needed explaining. "Quiet" carries it,
+            // so one line at the top is enough.
+            AinkradCaption("Alert interrupts you · Quiet is recorded only · Off silences "
+                           + "every channel. Everything reaches the feed either way — "
+                           + "the log is not optional.")
+
             AinkradSettingsPanel(
                 title: "Delivery",
-                hint: "What each source may interrupt you with. Every source still "
-                    + "lands in the feed whatever you choose — the log is not optional."
+                hint: "What each source may interrupt you with."
             ) {
                 VStack(alignment: .leading, spacing: 9) {
                     // Keyed on the source, not its position. `sources` is

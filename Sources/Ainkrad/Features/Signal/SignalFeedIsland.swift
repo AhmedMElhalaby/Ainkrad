@@ -27,6 +27,13 @@ struct SignalFeedIsland: View {
     var menuItems: (SignalEvent) -> [AinkradMenuItem] = { _ in [] }
     var pinnedIDs: Set<UUID> = []
     var expandedIDs: Binding<Set<UUID>> = .constant([])
+    /// Quiet hours or a snooze is in force.
+    var isMuted: Bool = false
+    /// The same two durations the bell dropdown and Settings offer. This
+    /// surface used to offer none, so a user who opened the full feed to deal
+    /// with a noisy session had to leave it again to quieten anything.
+    var onSnooze: (SignalSnooze) -> Void = { _ in }
+    var onResume: () -> Void = {}
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradStatusColors) private var status
@@ -91,6 +98,7 @@ struct SignalFeedIsland: View {
             Spacer()
             AinkradSearchField(text: searchText, placeholder: "Search")
                 .frame(width: 190)
+            quietControl
             if unread > 0 {
                 Button(action: onMarkAllRead) {
                     // Names what it will actually do. Under a filter, "Mark all
@@ -108,6 +116,35 @@ struct SignalFeedIsland: View {
         .padding(.horizontal, AinkradSpacing.lg)
         .padding(.top, AinkradSpacing.lg - 2)
         .padding(.bottom, AinkradSpacing.sm + 2)
+    }
+
+    /// The same shape the bell dropdown uses: a menu offering both durations,
+    /// collapsing to a single Resume once something is in force.
+    @ViewBuilder
+    private var quietControl: some View {
+        let glyph = Image(systemName: isMuted ? "bell.slash.fill" : "bell.slash")
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(isMuted ? theme.accentSecondary
+                                     : theme.foreground.opacity(0.45))
+        if isMuted {
+            Button(action: onResume) { glyph }
+                .buttonStyle(.plain)
+                .help("Resume now")
+                .accessibilityLabel("Resume now")
+        } else {
+            Menu {
+                ForEach(SignalSnooze.allCases) { snooze in
+                    Button(snooze.label) { onSnooze(snooze) }
+                }
+            } label: {
+                glyph
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Go quiet")
+            .accessibilityLabel("Go quiet")
+        }
     }
 
     private var filterBar: some View {

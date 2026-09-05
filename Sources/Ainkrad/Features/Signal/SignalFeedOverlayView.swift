@@ -69,7 +69,10 @@ struct SignalFeedOverlayView: View {
                     onConfigureSource: onConfigureSource,
                     menuItems: { menuItems(for: $0) },
                     pinnedIDs: center.pinnedIDs,
-                    expandedIDs: $expanded)
+                    expandedIDs: $expanded,
+                    isMuted: center.rules.suppression.isSuppressing(at: Date()),
+                    onSnooze: { $0.apply(to: &center.rules.suppression, at: Date()) },
+                    onResume: { SignalSnooze.lift(&center.rules.suppression) })
                     .frame(width: 820, height: 560)
             }
         }

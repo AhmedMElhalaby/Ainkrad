@@ -25,8 +25,10 @@ struct SourceNotificationSheet: View {
     @Environment(\.ainkradTheme) private var theme
 
     /// Wide enough for the longer of the two segment labels at its heaviest
-    /// weight, so no row is clipped and none is ragged.
-    private static let kindPickerWidth: CGFloat = 190
+    /// weight, so no row is clipped and none is ragged. Narrower since the
+    /// labels became "Alert" and "Quiet" — 190 was sized for "Everything" and
+    /// "Feed only", and left the column floating well clear of its rows.
+    private static let kindPickerWidth: CGFloat = 124
 
     private var mode: SignalDeliveryMode {
         SignalDeliveryMode(rules: rules, source: source)
@@ -46,11 +48,9 @@ struct SourceNotificationSheet: View {
     }
 
     private var delivery: some View {
-        AinkradSettingsPanel(
-            title: "\(sourceName) notifications",
-            hint: "Every source still lands in the feed whatever you choose — the log "
-                + "is not optional. This controls what may interrupt you."
-        ) {
+        // No hint here any more: it repeated the pane's own caption word for
+        // word, one panel below it.
+        AinkradSettingsPanel(title: "\(sourceName) notifications") {
             AinkradCaptionedRow("Delivery") {
                 AinkradSegmentedPicker(
                     items: SignalDeliveryMode.allCases,
@@ -64,7 +64,7 @@ struct SourceNotificationSheet: View {
     private var interruption: some View {
         AinkradSettingsPanel(
             title: "Interruptions",
-            hint: "Below the floor, events are recorded and nothing more."
+            hint: "Below the floor, events go quiet — recorded, never interrupting."
         ) {
             VStack(alignment: .leading, spacing: 9) {
                 AinkradCaptionedRow("Interrupt me at") {
@@ -115,7 +115,7 @@ struct SourceNotificationSheet: View {
     private var kinds: some View {
         AinkradSettingsPanel(
             title: "What \(sourceName) tells you",
-            hint: "Noisiest first. Turning a kind off leaves it in the feed."
+            hint: "Noisiest first. Quiet keeps a kind in the feed without interrupting."
         ) {
             VStack(alignment: .leading, spacing: 7) {
                 ForEach(activity) { entry in
