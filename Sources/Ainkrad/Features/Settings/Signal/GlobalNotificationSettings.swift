@@ -51,8 +51,12 @@ enum SignalSnooze: String, CaseIterable, Identifiable {
     }
 }
 
-/// The settings that are not per-source: the global off switch, quiet hours,
-/// and sound.
+/// Everything that is not per-source, in ONE panel: when you are willing to be
+/// interrupted, and how loudly.
+///
+/// Quiet hours and sound used to be two panels. They are one question — how
+/// loud, and when — and splitting them put a heading between a user and the
+/// volume slider they had come for.
 struct GlobalNotificationSettings: View {
     @Binding var rules: RoutingRules
     /// Nil in a snapshot, where there is no bootstrap and so no engine.
@@ -64,19 +68,20 @@ struct GlobalNotificationSettings: View {
     private static let hourOptions: [Int] = Array(0...23)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            quietHours
-            if let sounds { sound(sounds) }
+        AinkradSettingsPanel(
+            title: "When",
+            hint: "Quiet hours defer interruptions, they do not lose information — "
+                + "events are still recorded and unread counts still move."
+        ) {
+            VStack(alignment: .leading, spacing: 9) {
+                quietHours
+                if let sounds { sound(sounds) }
+            }
         }
     }
 
     private var quietHours: some View {
-        AinkradSettingsPanel(
-            title: "Quiet hours",
-            hint: "A window when nothing interrupts. Events are still recorded, and "
-                + "unread counts still move — quiet hours defer interruptions, they "
-                + "do not lose information."
-        ) {
+        Group {
             VStack(alignment: .leading, spacing: 9) {
                 AinkradCaptionedRow("Schedule") {
                     AinkradToggle(isOn: Binding(
@@ -130,12 +135,10 @@ struct GlobalNotificationSettings: View {
     }
 
     private func sound(_ sounds: NotificationSoundStore) -> some View {
-        AinkradSettingsPanel(
-            title: "Sound",
-            hint: "Separate from interface sounds — turning those off in General will "
-                + "not silence a failure."
-        ) {
+        Group {
             VStack(alignment: .leading, spacing: 9) {
+                AinkradCaption("Notification sound is separate from interface sounds — "
+                               + "turning those off in General will not silence a failure.")
                 AinkradCaptionedRow("Play a sound") {
                     AinkradToggle(isOn: Binding(get: { sounds.settings.isEnabled },
                                                 set: { sounds.settings.isEnabled = $0 }))
