@@ -18,6 +18,23 @@ struct RootView: View {
         return presented
     }
 
+    /// The notification overlays animate on their OWN flags, deliberately not
+    /// by joining `isOverlayPresented`.
+    ///
+    /// That value also drives `OverlayBackdrop(isBlurred:)`, which blurs the
+    /// whole workspace behind a summoned overlay. The bell dropdown is
+    /// explicitly not a modal (see `SignalBellDropdownOverlay`), so folding it
+    /// in there would dim the workspace behind a five-row glance.
+    ///
+    /// Until this existed, neither notification overlay animated at all: both
+    /// carried a `.transition`, but no animation transaction ever ran for the
+    /// flags that presented them, so a transition that looked correct in the
+    /// diff produced a hard pop on screen.
+    private var signalOverlayDepth: Int {
+        (environment.isSignalDropdownPresented ? 1 : 0)
+            + (environment.isSignalFeedPresented ? 2 : 0)
+    }
+
     /// The app of the focused pane in the active workspace, so Settings can
     /// open directly on that app's section (e.g. Terminal when one is focused).
     private var focusedAppID: String? {
@@ -132,6 +149,7 @@ struct RootView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isOverlayPresented)
+        .animation(reduceMotion ? nil : AinkradMotion.present, value: signalOverlayDepth)
         .background(KeyboardShortcutMonitor(environment: environment, pushToTalkController: environment.voiceService.pushToTalk))
         // Each HUD overlay plays `.overlayOpen`/`.overlayClose` as it's
         // summoned/dismissed (AIN-108) — centralized here rather than in each
@@ -244,7 +262,12 @@ struct RootView: View {
                     environment.isSignalFeedPresented = false
                     environment.isSettingsPresented = true
                 })
-            .transition(.opacity)
+            // Scale from just under, like every other summoned HUD panel,
+            // rather than the bare cross-fade it had: a fade alone reads as a
+            // web modal, and the feed is the largest surface in the family.
+            .transition(reduceMotion
+                        ? .opacity
+                        : .scale(scale: 0.97).combined(with: .opacity))
         }
     }
 

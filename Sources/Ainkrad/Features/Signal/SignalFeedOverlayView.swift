@@ -57,7 +57,10 @@ struct SignalFeedOverlayView: View {
     var body: some View {
         GeometryReader { proxy in
         ZStack {
-            Color.black.opacity(0.32)
+            // The shared backdrop value, not a private 0.32: the feed sat
+            // visibly lighter than the Launcher and Settings scrims for no
+            // reason anyone recorded.
+            Color.black.opacity(OverlayChrome.backdropOpacity)
                 .ignoresSafeArea()
                 .onTapGesture(perform: onDismiss)
 

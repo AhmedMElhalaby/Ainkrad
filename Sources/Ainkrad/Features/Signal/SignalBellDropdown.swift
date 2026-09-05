@@ -34,6 +34,11 @@ struct SignalBellDropdown: View {
     var onResume: () -> Void = {}
 
     @Environment(\.ainkradTheme) private var theme
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+    /// Tracked separately per control: one shared flag would light both the
+    /// footer and "Mark all read" whenever the pointer touched either.
+    @State private var hoveringFooter = false
+    @State private var hoveringMarkAll = false
 
     /// Five is the most that fits without the dropdown becoming a scroll view,
     /// which is the point at which it should have been the overlay instead.
@@ -103,9 +108,15 @@ struct SignalBellDropdown: View {
                 Button(action: onMarkAllRead) {
                     Text("Mark all read")
                         .font(AinkradFont.display(10, weight: .medium))
-                        .foregroundStyle(theme.accentPrimary)
+                        // Dimmed until pointed at, so the header reads as one
+                        // title rather than two competing accents, and the
+                        // control still answers when the pointer arrives.
+                        .foregroundStyle(theme.accentPrimary
+                            .opacity(hoveringMarkAll ? 1 : 0.72))
                 }
                 .buttonStyle(.plain)
+                .animation(reduceMotion ? nil : AinkradMotion.hover, value: hoveringMarkAll)
+                .onHover { hoveringMarkAll = $0 }
             }
         }
         .padding(.horizontal, 14)
@@ -132,16 +143,22 @@ struct SignalBellDropdown: View {
                     .font(AinkradFont.display(10.5, weight: .medium))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .bold))
+                    // The chevron alone leans the way it goes. Nudging the
+                    // whole row instead would shift the label off the centre
+                    // it shares with the header above it.
+                    .offset(x: hoveringFooter && !reduceMotion ? 2 : 0)
             }
             .foregroundStyle(theme.accentPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
             // A tint band, not a separator line: the design language forbids
             // rules, and the footer still has to read as a distinct target.
-            .background(theme.surfaceElevated.opacity(0.5))
+            .background(theme.surfaceElevated.opacity(hoveringFooter ? 0.8 : 0.5))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : AinkradMotion.hover, value: hoveringFooter)
+        .onHover { hoveringFooter = $0 }
     }
 
     private var empty: some View {

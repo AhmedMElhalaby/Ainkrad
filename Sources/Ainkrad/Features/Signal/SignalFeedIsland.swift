@@ -41,6 +41,7 @@ struct SignalFeedIsland: View {
     /// is shown regardless, so the only thing this remembers is whether an
     /// empty chip row is currently open, which is not a view the user built.
     @State private var showsFilters = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     /// Severity, source and unread are applied here rather than by re-querying:
     /// the caller may have handed us search results, and re-filtering in the
@@ -64,7 +65,15 @@ struct SignalFeedIsland: View {
                              onConfigure: onConfigureSource)
             VStack(alignment: .leading, spacing: 0) {
                 header
-                if showsFilters || viewState.chipFilterCount > 0 { filterBar }
+                if showsFilters || viewState.chipFilterCount > 0 {
+                    filterBar
+                        // Wipes down from the header it belongs to rather than
+                        // fading in place, so the rows below are seen to make
+                        // room instead of being covered.
+                        .transition(reduceMotion
+                                    ? .opacity
+                                    : .move(edge: .top).combined(with: .opacity))
+                }
                 if isDegraded { degradedNotice }
                 content
             }
@@ -143,7 +152,7 @@ struct SignalFeedIsland: View {
     private var filtersButton: some View {
         let count = viewState.chipFilterCount
         return Button {
-            withAnimation(.easeOut(duration: AinkradMotion.durationFast)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: AinkradMotion.durationFast)) {
                 showsFilters.toggle()
             }
         } label: {

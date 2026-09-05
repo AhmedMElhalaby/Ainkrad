@@ -127,7 +127,20 @@ packages:
     # pointer: the notification volume could not be changed at all.
     # Additive modifiers only; abi-check clean on Contract and Signal, and
     # every plugin pin is an ancestor of this revision.
-    revision: 189d30f5ff2ef75451be7a2b82eb1443f042a9e7
+    # Phase 8: ainkradSurfaceOpacity / ainkradSurfaceBlur -- the host injects
+    # Settings -> Appearance -> Overlays once at its root, and AinkradPanel
+    # reads it, so a HUD surface anywhere (host or plugin) follows those
+    # controls instead of a hardcoded 0.94. Both are new @Entry environment
+    # values, NOT defaulted init parameters, so no existing symbol is
+    # re-mangled -- the d5d994b failure. Plus hover and selection motion on
+    # SignalSourceRail.
+    #
+    # Pin safety, checked by hand because `make abi-check` covers only
+    # AinkradAppKitContract and AinkradSignal, NOT AinkradAppKitUI where this
+    # change lives: the public-declaration diff over AinkradAppKitUI between
+    # 189d30f and 1601f08 is EMPTY -- nothing removed, nothing re-mangled --
+    # so a plugin pinned behind this still loads.
+    revision: 1601f088b0e5a38a980a13c203ddfba27c0d7389
 
 targets:
   AinkradHostRuntime:
