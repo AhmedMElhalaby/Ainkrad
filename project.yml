@@ -135,12 +135,20 @@ packages:
     # re-mangled -- the d5d994b failure. Plus hover and selection motion on
     # SignalSourceRail.
     #
+    # Phase 9: AinkradMenuButton -- a left-click pull-down drawn in the app's
+    # own language. SwiftUI's `Menu` renders a stock AppKit menu, which sat
+    # inside the HUD looking like another application; the kit already drew a
+    # correct menu but only right-click could reach it. Also carries the two
+    # surface values across the floating panel's window boundary, without
+    # which a menu ignored Appearance -> Overlays while every panel around it
+    # obeyed. Purely additive: one new public type, nothing removed.
+    #
     # Pin safety, checked by hand because `make abi-check` covers only
     # AinkradAppKitContract and AinkradSignal, NOT AinkradAppKitUI where this
     # change lives: the public-declaration diff over AinkradAppKitUI between
     # 189d30f and 1601f08 is EMPTY -- nothing removed, nothing re-mangled --
     # so a plugin pinned behind this still loads.
-    revision: 1601f088b0e5a38a980a13c203ddfba27c0d7389
+    revision: e264efb5e4f6208729af195faaabe0cae171a31f
 
 targets:
   AinkradHostRuntime:
