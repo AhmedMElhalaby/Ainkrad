@@ -268,6 +268,7 @@ private struct RevokeButton: View {
     let action: () -> Void
 
     @State private var isHovering = false
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -277,7 +278,7 @@ private struct RevokeButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
     }
 
     private var tint: Color {

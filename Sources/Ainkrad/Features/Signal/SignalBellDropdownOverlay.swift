@@ -15,6 +15,8 @@ struct SignalBellDropdownOverlay: View {
     let onDismiss: () -> Void
     let onViewAll: () -> Void
 
+    @Environment(\.ainkradReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color.clear
@@ -55,9 +57,14 @@ struct SignalBellDropdownOverlay: View {
                 // suppress by hand.
                 .padding(.top, HUDBar.height + 4)
                 .padding(.trailing, 10)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity))
+                // Reduce-motion drops the slide but keeps the fade: appearing
+                // and disappearing with no change at all is a worse outcome
+                // than a short one, because the panel then seems to teleport.
+                .transition(reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .opacity))
         }
         .ignoresSafeArea()
         // Escape closes it. Outside-click alone meant a keyboard user could

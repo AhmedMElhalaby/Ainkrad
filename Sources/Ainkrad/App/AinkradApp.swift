@@ -217,6 +217,17 @@ struct AinkradHostApp: App {
                 // Motion accessibility toggle — see GlobalSettings.uiReduceMotion.
                 // Default false = motion on.
                 .environment(\.ainkradReduceMotion, environment.generalSettingsStore.uiReduceMotion)
+                // Settings -> Appearance -> Overlays, injected once here rather
+                // than threaded through every call site. Before this, only the
+                // surfaces that opted into `hudPanelChrome` obeyed the slider;
+                // anything built on the SDK's `AinkradPanel` -- the whole
+                // notification family, and every plugin panel -- was pinned at
+                // 0.94 and always blurred, so the controls looked broken to a
+                // user who had just moved them.
+                .environment(\.ainkradSurfaceOpacity,
+                             environment.generalSettingsStore.overlayBackgroundOpacity)
+                .environment(\.ainkradSurfaceBlur,
+                             environment.generalSettingsStore.overlayBlurEnabled)
                 .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
