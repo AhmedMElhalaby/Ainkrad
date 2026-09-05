@@ -3,12 +3,17 @@ import AinkradAppKit
 import AinkradHostRuntime
 import AinkradSignal
 
-/// Whether notifications are working, and the single click that fixes the
-/// worst offender.
+/// Whether notifications are working: how many arrived, how many were read,
+/// how fast.
 ///
-/// The mute control sits ON the noisiest row deliberately. A readout that
-/// names a problem and cannot fix it is half a feature; the whole point is
-/// that the diagnosis and the remedy are the same click.
+/// The "Loudest" list used to live here, with a Quiet button on each row, so
+/// that the diagnosis and the remedy were one click. That rule still holds —
+/// the remedy simply moved somewhere better. The loudest kind is now named on
+/// its own source's row in the Sources list, where the control that silences
+/// it already is, so this readout no longer needs a second copy of a source
+/// list or a second way to change a setting.
+///
+/// Plain content, not an `AinkradSettingsPanel`: it is rendered inside one.
 struct NotificationHealthPanel: View {
     enum Window: String, CaseIterable, Identifiable {
         case day, week, month
@@ -31,37 +36,26 @@ struct NotificationHealthPanel: View {
 
     @Binding var window: Window
     let health: SignalHealth
-    var displayName: (String) -> String = { $0 }
-    var onMuteKind: (SignalSource, String) -> Void = { _, _ in }
 
     @Environment(\.ainkradTheme) private var theme
-
-    private func sourceName(_ source: SignalSource) -> String {
-        if case .app(let id) = source { return displayName(id) }
-        return SignalPresentation.sourceLabel(source)
-    }
 
     /// Under this, the numbers describe noise rather than behaviour. Saying so
     /// beats rendering "0% read" at someone who has had three notifications.
     private static let minimumSample = 5
 
     var body: some View {
-        AinkradSettingsPanel(
-            title: "Notification health",
-            hint: "Measured from your own feed and kept on this machine."
-        ) {
+        VStack(alignment: .leading, spacing: 9) {
+            AinkradCaption("Delivery stats, measured from your own feed and kept on "
+                           + "this machine.")
             if health.total < Self.minimumSample {
                 AinkradCaption("Not enough history yet.")
             } else {
-                VStack(alignment: .leading, spacing: 9) {
-                    AinkradCaptionedRow("Window") {
-                        AinkradSegmentedPicker(items: Window.allCases,
-                                               selection: $window,
-                                               label: \.label)
-                    }
-                    figures
-                    if !health.noisiest.isEmpty { noisiest }
+                AinkradCaptionedRow("Window") {
+                    AinkradSegmentedPicker(items: Window.allCases,
+                                           selection: $window,
+                                           label: \.label)
                 }
+                figures
             }
         }
     }
@@ -85,42 +79,6 @@ struct NotificationHealthPanel: View {
                 .foregroundStyle(theme.foreground.opacity(0.5))
                 .textCase(.uppercase)
                 .tracking(0.5)
-        }
-    }
-
-    private var noisiest: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Loudest")
-                .font(AinkradFont.display(10, weight: .medium))
-                .foregroundStyle(theme.foreground.opacity(0.55))
-                .textCase(.uppercase)
-                .tracking(0.5)
-            ForEach(health.noisiest) { entry in
-                HStack(spacing: AinkradSpacing.sm) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(entry.kind)
-                            .font(AinkradFont.mono(11))
-                            .foregroundStyle(theme.foreground)
-                        // Named, because the same kind can come from two
-                        // sources and muting one must not read as muting both.
-                        if let source = entry.source {
-                            Text(sourceName(source))
-                                .font(AinkradFont.mono(9.5))
-                                .foregroundStyle(theme.foreground.opacity(0.45))
-                        }
-                    }
-                    Text("\(entry.count)")
-                        .font(AinkradFont.mono(10, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(theme.foreground.opacity(0.5))
-                    Spacer(minLength: AinkradSpacing.sm)
-                    if let source = entry.source {
-                        AinkradButton(title: "Mute", style: .ghost) {
-                            onMuteKind(source, entry.kind)
-                        }
-                    }
-                }
-            }
         }
     }
 

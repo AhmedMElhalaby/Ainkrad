@@ -85,6 +85,15 @@ struct SignalBellButton: View {
         }
         .buttonStyle(.plain)
         .help(helpText)
+        // One element, one sentence — the same rule `SignalFeedRow` follows.
+        // The glyph and the count are two separate views, so without this a
+        // listener gets an unlabelled image and a bare number, and the muted
+        // state — carried entirely by which glyph is drawn — is never spoken
+        // at all. `helpText` already says both facts; it is reused rather than
+        // written twice so the tooltip and the label cannot drift.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(helpText)
+        .accessibilityAddTraits(.isButton)
         .onChange(of: arrivalToken) { _, _ in
             guard arrivalToken > 0 else { return }
             // Out fast, back at the base duration — an arrival should catch

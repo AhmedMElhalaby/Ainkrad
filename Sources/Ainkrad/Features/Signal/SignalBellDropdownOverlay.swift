@@ -40,16 +40,10 @@ struct SignalBellDropdownOverlay: View {
                 onMarkAllRead: { center.markAllRead(filter: .all) },
                 onViewAll: onViewAll,
                 isMuted: center.rules.suppression.isSuppressing(at: Date()),
-                onToggleMute: {
-                    // A snooze set here is the same field quiet hours use, so
-                    // the two cannot disagree about whether now is quiet.
-                    if center.rules.suppression.isSuppressing(at: Date()) {
-                        center.rules.suppression.snoozedUntil = nil
-                    } else {
-                        center.rules.suppression.snoozedUntil =
-                            Date().addingTimeInterval(3600)
-                    }
-                })
+                // A snooze set here is the same field quiet hours use, so the
+                // two cannot disagree about whether now is quiet.
+                onSnooze: { $0.apply(to: &center.rules.suppression, at: Date()) },
+                onResume: { SignalSnooze.lift(&center.rules.suppression) })
                 // Derived from the bar's own height rather than a copy of it.
                 //
                 // Deliberately NOT an NSPopover, despite reading like one.

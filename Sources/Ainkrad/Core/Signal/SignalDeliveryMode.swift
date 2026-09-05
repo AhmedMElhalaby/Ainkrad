@@ -17,10 +17,17 @@ enum SignalDeliveryMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// One ladder, three words, spoken the same way by every surface — the
+    /// picker, the row menu, the summary badges, the health panel.
+    ///
+    /// "Feed only" named the MECHANISM, which is why every control that could
+    /// silence something had to carry a hint explaining that the feed still
+    /// gets it. "Quiet" names what the user gets — there, not shouting — and
+    /// the hint reduces to one line at the top of the pane.
     var label: String {
         switch self {
-        case .everything: return "Everything"
-        case .feedOnly: return "Feed only"
+        case .everything: return "Alert"
+        case .feedOnly: return "Quiet"
         case .off: return "Off"
         }
     }

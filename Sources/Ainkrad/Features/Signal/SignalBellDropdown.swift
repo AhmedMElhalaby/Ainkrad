@@ -23,11 +23,15 @@ struct SignalBellDropdown: View {
     var onViewAll: () -> Void = {}
     /// Quiet hours or a snooze is in force.
     var isMuted: Bool = false
-    /// Mute for an hour, or lift it. Offered HERE because this is where the
-    /// user is when they notice the noise — sending them to Settings to stop
-    /// it is asking them to go somewhere else to solve the problem in front
-    /// of them.
-    var onToggleMute: () -> Void = {}
+    /// Go quiet, or come back. Offered HERE because this is where the user is
+    /// when they notice the noise — sending them to Settings to stop it is
+    /// asking them to go somewhere else to solve the problem in front of them.
+    ///
+    /// Both durations, not just the hour this surface used to hardcode: the
+    /// same action offering different choices depending on where you invoked
+    /// it is a worse fault than offering it in only one place.
+    var onSnooze: (SignalSnooze) -> Void = { _ in }
+    var onResume: () -> Void = {}
 
     @Environment(\.ainkradTheme) private var theme
 
@@ -74,14 +78,27 @@ struct SignalBellDropdown: View {
                 AinkradBadge(text: "\(unread)", tint: theme.accentSecondary)
             }
             Spacer()
-            Button(action: onToggleMute) {
-                Image(systemName: isMuted ? "bell.slash.fill" : "bell.slash")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(isMuted ? theme.accentSecondary
-                                             : theme.foreground.opacity(0.45))
+            if isMuted {
+                Button(action: onResume) { quietGlyph }
+                    .buttonStyle(.plain)
+                    .help("Resume now")
+                    // Icon-only, so `help` is not enough: a tooltip is a
+                    // pointer affordance and a listener never receives it.
+                    .accessibilityLabel("Resume now")
+            } else {
+                Menu {
+                    ForEach(SignalSnooze.allCases) { snooze in
+                        Button(snooze.label) { onSnooze(snooze) }
+                    }
+                } label: {
+                    quietGlyph
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Go quiet")
+                .accessibilityLabel("Go quiet")
             }
-            .buttonStyle(.plain)
-            .help(isMuted ? "Resume notifications" : "Mute for an hour")
             if unread > 0 {
                 Button(action: onMarkAllRead) {
                     Text("Mark all read")
@@ -94,6 +111,15 @@ struct SignalBellDropdown: View {
         .padding(.horizontal, 14)
         .padding(.top, 12)
         .padding(.bottom, 8)
+    }
+
+    /// Shared by the menu and the resume button so the two cannot drift apart
+    /// visually while swapping in and out of the same slot.
+    private var quietGlyph: some View {
+        Image(systemName: isMuted ? "bell.slash.fill" : "bell.slash")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(isMuted ? theme.accentSecondary
+                                     : theme.foreground.opacity(0.45))
     }
 
     /// The hand-off. Chevron rather than an ellipsis: it goes somewhere.

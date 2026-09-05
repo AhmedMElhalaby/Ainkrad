@@ -24,9 +24,9 @@ struct SignalRowMenuTests {
 
     @Test("the mute item names the source and the kind")
     func muteItemIsSpecific() {
-        // "Mute this" tells the user nothing about what goes quiet. Naming both
+        // "Quiet this" tells the user nothing about what goes quiet. Naming both
         // is the difference between a control they trust and one they avoid.
-        #expect(items(.default).map(\.title).contains("Mute Raven › build.failed"))
+        #expect(items(.default).map(\.title).contains("Quiet Raven › build.failed"))
     }
 
     @Test("an already-muted kind offers to unmute instead")
@@ -34,13 +34,13 @@ struct SignalRowMenuTests {
         var rules = RoutingRules.default
         SignalDeliveryMode.feedOnly.apply(to: &rules, source: raven, kind: "build.failed")
         let titles = items(rules).map(\.title)
-        #expect(titles.contains("Unmute Raven › build.failed"))
-        #expect(!titles.contains("Mute Raven › build.failed"))
+        #expect(titles.contains("Alert me about Raven › build.failed"))
+        #expect(!titles.contains("Quiet Raven › build.failed"))
     }
 
     @Test("muting the whole source is offered once, and marked destructive")
     func muteSourceIsMarked() {
-        let item = items(.default).first { $0.title == "Mute everything from Raven" }
+        let item = items(.default).first { $0.title == "Turn off everything from Raven" }
         #expect(item?.isDestructive == true)
     }
 
@@ -48,7 +48,7 @@ struct SignalRowMenuTests {
     func mutedSourceOmitsTheItem() {
         var rules = RoutingRules.default
         SignalDeliveryMode.off.apply(to: &rules, source: raven)
-        #expect(!items(rules).map(\.title).contains("Mute everything from Raven"))
+        #expect(!items(rules).map(\.title).contains("Turn off everything from Raven"))
     }
 
     @Test("the read item flips with the row's state, both ways")

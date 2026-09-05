@@ -42,27 +42,33 @@ enum SignalRowMenu {
         items.append(AinkradMenuItem(title: "Dismiss", systemName: "xmark",
                                      action: onDismiss))
 
-        // Named, not generic. "Mute this" tells the user nothing about what
+        // Named, not generic. "Quiet this" tells the user nothing about what
         // will go quiet; naming the source and the kind is the difference
         // between a control they trust and one they avoid.
-        let isKindMuted = rules.sourceKindOverrides[
+        //
+        // The verbs are the three delivery states — Alert, Quiet, Off — and
+        // nothing else. This menu previously spoke a private dialect (mute,
+        // unmute, mute everything) that matched no control in Settings, so the
+        // user had no way to tell that the row menu and the delivery picker
+        // were the same setting.
+        let isKindQuiet = rules.sourceKindOverrides[
             SourceKind(source: event.source, kind: event.kind)] == [.feed]
-        if isKindMuted {
-            items.append(AinkradMenuItem(title: "Unmute \(sourceName) › \(event.kind)",
+        if isKindQuiet {
+            items.append(AinkradMenuItem(title: "Alert me about \(sourceName) › \(event.kind)",
                                          systemName: "bell",
                                          action: onUnmuteKind))
         } else {
-            items.append(AinkradMenuItem(title: "Mute \(sourceName) › \(event.kind)",
+            items.append(AinkradMenuItem(title: "Quiet \(sourceName) › \(event.kind)",
                                          systemName: "bell.slash",
                                          action: onMuteKind))
         }
 
-        // Muting a whole source is a bigger step, so it is marked destructive
-        // — not because it deletes anything, but because it is the item most
-        // likely to be regretted, and the styling is the only warning a menu
-        // can give.
+        // Turning a whole source off is a bigger step, so it is marked
+        // destructive — not because it deletes anything, but because it is the
+        // item most likely to be regretted, and the styling is the only warning
+        // a menu can give.
         if !rules.mutedSources.contains(event.source) {
-            items.append(AinkradMenuItem(title: "Mute everything from \(sourceName)",
+            items.append(AinkradMenuItem(title: "Turn off everything from \(sourceName)",
                                          systemName: "bell.slash.fill",
                                          isDestructive: true,
                                          action: onMuteSource))

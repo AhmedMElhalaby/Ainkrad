@@ -3,11 +3,15 @@ import AinkradAppKit
 import AinkradHostRuntime
 import AinkradSignal
 
-/// Full notification control for ONE source — an app, Host, or Sage.
+/// One source's detail, opened in place under its row in the Sources list.
 ///
-/// The same sheet for every source, deliberately: one shape the user learns
+/// The same shape for every source, deliberately: one thing the user learns
 /// once, instead of Host being a special case with two toggles while the apps
 /// that actually generate the noise have none.
+///
+/// It is a plain stack of rows, NOT a set of `AinkradSettingsPanel`s: it is
+/// already rendered inside one, and three bordered panels nested in a fourth
+/// read as a rendering fault rather than a hierarchy.
 ///
 /// Takes everything as parameters and reaches for no environment, so it renders
 /// in a snapshot. `SignalFeedOverlayView`'s comment records what happens
@@ -23,101 +27,45 @@ struct SourceNotificationSheet: View {
     var activity: [SignalKindActivity] = []
 
     @Environment(\.ainkradTheme) private var theme
+    /// Closed by default. These are the controls a user touches once a year,
+    /// and they used to sit above the kinds list — the thing the detail is
+    /// actually opened for.
+    @State private var showsFineTuning = false
 
     /// Wide enough for the longer of the two segment labels at its heaviest
-    /// weight, so no row is clipped and none is ragged.
-    private static let kindPickerWidth: CGFloat = 190
-
-    private var mode: SignalDeliveryMode {
-        SignalDeliveryMode(rules: rules, source: source)
-    }
+    /// weight, so no row is clipped and none is ragged. Narrower since the
+    /// labels became "Alert" and "Quiet" — 190 was sized for "Everything" and
+    /// "Feed only", and left the column floating well clear of its rows.
+    private static let kindPickerWidth: CGFloat = 124
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            delivery
-            // Everything below is meaningless once the source is off, so it
-            // goes away rather than sitting there inert and inviting the user
-            // to configure something that cannot happen.
-            if mode != .off {
-                interruption
-                if !activity.isEmpty { kinds }
+        VStack(alignment: .leading, spacing: AinkradSpacing.md) {
+            kinds
+            AinkradDisclosureGroup(title: "Fine tuning", isExpanded: $showsFineTuning) {
+                fineTuning
             }
         }
+        .padding(.top, AinkradSpacing.xs)
     }
 
-    private var delivery: some View {
-        AinkradSettingsPanel(
-            title: "\(sourceName) notifications",
-            hint: "Every source still lands in the feed whatever you choose — the log "
-                + "is not optional. This controls what may interrupt you."
-        ) {
-            AinkradCaptionedRow("Delivery") {
-                AinkradSegmentedPicker(
-                    items: SignalDeliveryMode.allCases,
-                    selection: Binding(get: { mode },
-                                       set: { $0.apply(to: &rules, source: source) }),
-                    label: \.label)
-            }
-        }
-    }
-
-    private var interruption: some View {
-        AinkradSettingsPanel(
-            title: "Interruptions",
-            hint: "Below the floor, events are recorded and nothing more."
-        ) {
-            VStack(alignment: .leading, spacing: 9) {
-                AinkradCaptionedRow("Interrupt me at") {
-                    AinkradSelect(
-                        items: SignalSeverity.allCases,
-                        selection: Binding(
-                            get: { rules.interruptFloor[source] ?? .info },
-                            set: { floor in
-                                // `.info` is the absence of a floor, not a
-                                // floor at the bottom: storing it would freeze
-                                // an opinion where the user expressed none.
-                                rules.interruptFloor[source] = floor == .info ? nil : floor
-                            }),
-                        label: { $0.floorLabel })
-                }
-                AinkradCaptionedRow("Sound") {
-                    AinkradSelect(
-                        items: SignalSoundChoice.offered,
-                        selection: Binding(
-                            get: { rules.soundOverride[source] ?? .bySeverity },
-                            set: { choice in
-                                rules.soundOverride[source] =
-                                    choice == .bySeverity ? nil : choice
-                            }),
-                        label: { $0.label })
-                }
-                AinkradCaptionedRow("Let urgent through quiet hours and Focus") {
-                    AinkradToggle(isOn: Binding(
-                        get: { rules.urgentBypass.contains(source) },
-                        set: { allowed in
-                            if allowed { rules.urgentBypass.insert(source) }
-                            else { rules.urgentBypass.remove(source) }
-                        }))
-                }
-                AinkradCaption("Only events the app marks urgent — something waiting "
-                               + "on you, not its usual chatter.")
-            }
-        }
-    }
-
-    /// The centrepiece. Every kind this source has emitted, noisiest first,
-    /// each with the same three-state control as the source itself.
+    /// The centrepiece, and now the FIRST thing in the detail. Every kind this
+    /// source has emitted, noisiest first, each with the same two-state control
+    /// the source itself uses.
     ///
     /// The list is discovered from the feed, so a kind an app starts emitting
     /// tomorrow appears on its own. A hand-maintained list would go stale the
     /// first time that happened, and the user would be unable to silence the
     /// one thing actually bothering them.
+    @ViewBuilder
     private var kinds: some View {
-        AinkradSettingsPanel(
-            title: "What \(sourceName) tells you",
-            hint: "Noisiest first. Turning a kind off leaves it in the feed."
-        ) {
-            VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: AinkradSpacing.xs + 2) {
+            AinkradCaption("What \(sourceName) tells you — noisiest first. Quiet keeps a "
+                           + "kind in the feed without interrupting.")
+            if activity.isEmpty {
+                // A legitimate state, and worth naming: an empty space here
+                // reads as a control that failed to load.
+                AinkradCaption("Nothing recorded from \(sourceName) yet.")
+            } else {
                 ForEach(activity) { entry in
                     HStack(spacing: AinkradSpacing.sm) {
                         VStack(alignment: .leading, spacing: 1) {
@@ -147,18 +95,45 @@ struct SourceNotificationSheet: View {
             }
         }
     }
-}
 
-private extension SignalSeverity {
-    /// Phrased as the floor it sets, not as the severity it names — the row
-    /// reads "Interrupt me at: anything", not "Interrupt me at: info".
-    var floorLabel: String {
-        switch self {
-        case .info: return "Anything"
-        case .success: return "Success and above"
-        case .warning: return "Warnings and failures"
-        case .failure: return "Failures only"
-        @unknown default: return "Anything"
+    private var fineTuning: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            AinkradCaptionedRow("Interrupt me at") {
+                AinkradSelect(
+                    items: SignalSeverity.allCases,
+                    selection: Binding(
+                        get: { rules.interruptFloor[source] ?? .info },
+                        set: { floor in
+                            // `.info` is the absence of a floor, not a floor at
+                            // the bottom: storing it would freeze an opinion
+                            // where the user expressed none.
+                            rules.interruptFloor[source] = floor == .info ? nil : floor
+                        }),
+                    label: { $0.floorLabel })
+            }
+            AinkradCaption("Below the floor, events go quiet — recorded, never "
+                           + "interrupting.")
+            AinkradCaptionedRow("Sound") {
+                AinkradSelect(
+                    items: SignalSoundChoice.offered,
+                    selection: Binding(
+                        get: { rules.soundOverride[source] ?? .bySeverity },
+                        set: { choice in
+                            rules.soundOverride[source] =
+                                choice == .bySeverity ? nil : choice
+                        }),
+                    label: { $0.label })
+            }
+            AinkradCaptionedRow("Let urgent through quiet hours and Focus") {
+                AinkradToggle(isOn: Binding(
+                    get: { rules.urgentBypass.contains(source) },
+                    set: { allowed in
+                        if allowed { rules.urgentBypass.insert(source) }
+                        else { rules.urgentBypass.remove(source) }
+                    }))
+            }
+            AinkradCaption("Only events the app marks urgent — something waiting "
+                           + "on you, not its usual chatter.")
         }
     }
 }

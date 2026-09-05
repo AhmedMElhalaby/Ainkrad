@@ -270,44 +270,6 @@ struct SignalSnapshotTests {
         try png.write(to: outputDirectory.appendingPathComponent("signal-source-sheet.png"))
     }
 
-    @Test("render the muted summary, which must show its empty state too")
-    func renderMutedSummary() throws {
-        let theme = Theme.neonBlue
-        var rules = RoutingRules.default
-        SignalDeliveryMode.off.apply(to: &rules, source: .app(appID: "lore"))
-        SignalDeliveryMode.feedOnly.apply(to: &rules, source: .app(appID: "raven"),
-                                          kind: "sync.failed")
-        let name: (SignalSource) -> String = { source in
-            if case .app(let id) = source { return id.capitalized }
-            return SignalPresentation.sourceLabel(source)
-        }
-
-        let view = ZStack {
-            HostThemeTokens(from: theme).background
-            AinkradPanel(showsBrackets: true) {
-                VStack(spacing: AinkradSpacing.md) {
-                    MutedKindsSummary(
-                        rows: MutedKindsSummary.rows(from: rules, displayName: name))
-                    // The empty state is rendered too, because it is SHOWN
-                    // rather than hidden: the user has to be able to check
-                    // that nothing is muted.
-                    MutedKindsSummary(rows: [])
-                }
-                .frame(width: 520)
-                .padding(AinkradSpacing.md)
-            }
-        }
-            .frame(width: 620, height: 460)
-            .environment(\.ainkradTheme, HostThemeTokens(from: theme))
-            .environment(\.ainkradTypography, Self.hostTypography)
-            .environment(\.ainkradStatusColors, AinkradStatusColors(
-                success: theme.tokens.success, warning: theme.tokens.warning,
-                danger: theme.tokens.danger))
-
-        let png = try Self.render(view, size: CGSize(width: 620, height: 460))
-        try png.write(to: outputDirectory.appendingPathComponent("signal-muted-summary.png"))
-    }
-
     @Test("render the toast stack")
     func renderToastStack() throws {
         let now = Date()
@@ -364,13 +326,24 @@ struct SignalSnapshotTests {
             center.emit(SignalDraft(kind: event.kind, severity: event.severity,
                                     title: event.title, body: event.body), from: event.source)
         }
-        // One muted source, so the toggles are not all in the same state.
+        // Enough configured state that the pane is not all defaults: one
+        // source off, one with per-kind overrides and a floor, so the status
+        // lines under the rows actually render.
         center.rules.mutedSources.insert(.sage)
+        SignalDeliveryMode.feedOnly.apply(to: &center.rules,
+                                          source: .app(appID: "com.ainkrad.raven"),
+                                          kind: "build.failed")
+        center.rules.interruptFloor[.app(appID: "com.ainkrad.raven")] = .warning
+        center.rules.urgentBypass.insert(.app(appID: "com.ainkrad.quest"))
 
         let view = SignalSettingsPane(
             center: center,
             sources: [.host, .sage,
-                      .app(appID: "com.ainkrad.raven"), .app(appID: "com.ainkrad.quest")])
+                      .app(appID: "com.ainkrad.raven"), .app(appID: "com.ainkrad.quest")],
+            // Real names, as the live pane supplies. Without it the rows read
+            // as raw bundle ids and wrap, which is a property of the snapshot
+            // rather than of the pane.
+            displayName: { $0.split(separator: ".").last.map(String.init)?.capitalized ?? $0 })
             .padding(16)
             .frame(width: 560, alignment: .top)
             .frame(maxHeight: .infinity, alignment: .top)
@@ -382,7 +355,11 @@ struct SignalSnapshotTests {
                 warning: theme.tokens.warning,
                 danger: theme.tokens.danger))
 
-        let png = try Self.render(view, size: CGSize(width: 560, height: 660))
+        // Tall enough for the WHOLE pane. At 660 the content overflowed its
+        // frame and the capture began part-way down, so the snapshot silently
+        // omitted the first three panels — including the caption that defines
+        // the vocabulary every control below it uses.
+        let png = try Self.render(view, size: CGSize(width: 560, height: 1500))
         try png.write(to: outputDirectory.appendingPathComponent("signal-settings.png"))
     }
 
