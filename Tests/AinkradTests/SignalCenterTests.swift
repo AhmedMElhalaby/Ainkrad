@@ -173,4 +173,61 @@ final class SignalCenterTests {
         center.emit(repeated, from: .host)
         #expect(count == 2)
     }
+
+    // MARK: - Activation goes somewhere
+
+    private func event(source: SignalSource, deepLink: SignalDeepLink? = nil) -> SignalEvent {
+        SignalEvent(source: source, kind: "test", severity: .info,
+                    title: "t", deepLink: deepLink)
+    }
+
+    @Test("an event with no deep link still reveals the app that sent it")
+    func activateFallsBackToTheSource() {
+        var revealed: [String] = []
+        var linked: [SignalDeepLink] = []
+        center.onRevealSource = { revealed.append($0) }
+        center.onActivateDeepLink = { linked.append($0) }
+
+        center.activate(event(source: .app(appID: "raven")))
+
+        // Four of the six shipped plugins never set a deep link, so this is
+        // the ordinary case, not the edge one.
+        #expect(revealed == ["raven"])
+        #expect(linked.isEmpty)
+    }
+
+    @Test("a deep link still wins, and does not also fire a bare reveal")
+    func activatePrefersTheDeepLink() {
+        var revealed: [String] = []
+        var linked: [SignalDeepLink] = []
+        center.onRevealSource = { revealed.append($0) }
+        center.onActivateDeepLink = { linked.append($0) }
+
+        let link = SignalDeepLink(appID: "rune", payload: Data("session-7".utf8))
+        center.activate(event(source: .app(appID: "rune"), deepLink: link))
+
+        #expect(linked.map(\.appID) == ["rune"])
+        #expect(revealed.isEmpty)
+    }
+
+    @Test("host and Sage events reveal nothing, because there is no pane to reveal")
+    func activateDoesNotInventADestination() {
+        var revealed: [String] = []
+        center.onRevealSource = { revealed.append($0) }
+
+        center.activate(event(source: .host))
+        center.activate(event(source: .sage))
+
+        #expect(revealed.isEmpty)
+    }
+
+    @Test("hasDestination is true for any app event, deep link or not")
+    func hasDestination() {
+        #expect(event(source: .app(appID: "raven")).hasDestination)
+        #expect(event(source: .app(appID: "rune"),
+                      deepLink: SignalDeepLink(appID: "rune", payload: Data())).hasDestination)
+        // The toast falls back to the feed only for these two.
+        #expect(!event(source: .host).hasDestination)
+        #expect(!event(source: .sage).hasDestination)
+    }
 }

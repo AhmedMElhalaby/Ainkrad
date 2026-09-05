@@ -30,10 +30,11 @@ final class SignalBannerResponderTests {
     deinit { try? FileManager.default.removeItem(at: url) }
 
     private func emit(deepLink: SignalDeepLink? = nil,
-                      actions: [SignalAction] = []) throws -> SignalEvent {
+                      actions: [SignalAction] = [],
+                      from source: SignalSource = .app(appID: "raven")) throws -> SignalEvent {
         center.emit(SignalDraft(kind: "build.failed", severity: .failure,
                                 title: "Build failed", deepLink: deepLink, actions: actions),
-                    from: .app(appID: "raven"))
+                    from: source)
         return try #require(center.recent.first)
     }
 
@@ -56,7 +57,11 @@ final class SignalBannerResponderTests {
 
     @Test("an event with nowhere to go opens the feed rather than nothing")
     func noDeepLinkOpensTheFeed() throws {
-        let event = try emit()
+        // A HOST event, which is what "nowhere to go" now means. This test
+        // used to emit from an app and pass, because an app event without a
+        // deep link went nowhere either -- the bug. It now reveals the app,
+        // so the feed fallback needs a source that genuinely has no pane.
+        let event = try emit(from: .host)
         var openedFeed = false
         let responder = SignalBannerResponder(center: center)
         responder.onOpenFeed = { openedFeed = true }
@@ -65,6 +70,21 @@ final class SignalBannerResponderTests {
 
         #expect(openedFeed)
         #expect(center.readIDs.contains(event.id))
+    }
+
+    @Test("a banner with no deep link reveals its app instead of the feed")
+    func noDeepLinkRevealsTheApp() throws {
+        let event = try emit()
+        var revealed: String?
+        var openedFeed = false
+        center.onRevealSource = { revealed = $0 }
+        let responder = SignalBannerResponder(center: center)
+        responder.onOpenFeed = { openedFeed = true }
+
+        responder.handle(eventID: event.id.uuidString, actionID: nil)
+
+        #expect(revealed == "raven")
+        #expect(openedFeed == false, "it went somewhere; the feed would be a second window")
     }
 
     @Test("an evicted event opens the feed instead of doing nothing")
