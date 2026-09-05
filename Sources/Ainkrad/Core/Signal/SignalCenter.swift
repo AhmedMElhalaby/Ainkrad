@@ -302,15 +302,43 @@ final class SignalCenter {
     /// Set by the bootstrap: opens the deep link's target app with its payload.
     var onActivateDeepLink: ((SignalDeepLink) -> Void)?
 
-    /// The user tapped a row. Marks it read and follows its deep link, if it
-    /// has one.
+    /// Set by the bootstrap: reveals an app with NOTHING to hand it.
+    ///
+    /// Separate from `onActivateDeepLink` rather than a link with an empty
+    /// payload, because the two are not the same operation. The hub holds one
+    /// pending payload per app, so enqueuing an empty one would both hand the
+    /// app a meaningless launch argument and clobber a legitimate pending
+    /// launch already waiting there.
+    var onRevealSource: ((String) -> Void)?
+
+    /// The user tapped a row. Marks it read and goes where the row points.
+    ///
+    /// A deep link is the precise answer: it names the app AND what the
+    /// notification was about. Most notifications do not carry one -- of the
+    /// six shipped plugins, four never set a deep link at all -- and until now
+    /// this method simply returned for those, so clicking a Raven message, a
+    /// Lore index or a GitMage result did nothing whatsoever. A row that
+    /// looks clickable, highlights on hover, and then does nothing reads as a
+    /// broken app rather than a missing feature.
+    ///
+    /// Every event knows which app emitted it, and revealing that app is
+    /// always better than doing nothing: the user asked to be taken to the
+    /// thing that interrupted them, and the app itself is the honest answer
+    /// when the app did not say which part of itself to open.
+    ///
+    /// `.host` and `.sage` events are left alone deliberately -- there is no
+    /// pane to reveal for them, and inventing a destination would be worse
+    /// than the row staying put.
     ///
     /// One method rather than a closure per surface: the dropdown and the
     /// overlay must behave identically, and two call sites drift.
     func activate(_ event: SignalEvent) {
         markRead(ids: [event.id])
-        guard let deepLink = event.deepLink else { return }
-        onActivateDeepLink?(deepLink)
+        if let deepLink = event.deepLink {
+            onActivateDeepLink?(deepLink)
+        } else if case .app(let appID) = event.source {
+            onRevealSource?(appID)
+        }
     }
 
     /// Takes ownership of the dispatcher. Used by the bootstrap factory, where
@@ -345,5 +373,22 @@ extension SignalCenter: SignalEmitting {
         var filter = SignalFilter.all
         filter.sources = [.app(appID: appID)]
         return page(filter: filter, before: nil, limit: limit)
+    }
+}
+
+extension SignalEvent {
+    /// Whether activating this event will actually take the user somewhere.
+    ///
+    /// Pure and shared, because two surfaces have to agree about it: the row
+    /// click uses it to decide whether to reveal, and the toast uses it to
+    /// decide whether to fall back to opening the feed. The toast used to ask
+    /// `deepLink == nil` instead, which is true for most notifications, so a
+    /// toast from any app that never sets a deep link -- four of the six
+    /// shipped plugins -- dropped the user into a list of everything rather
+    /// than the app that had just interrupted them.
+    var hasDestination: Bool {
+        if deepLink != nil { return true }
+        if case .app = source { return true }
+        return false
     }
 }

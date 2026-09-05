@@ -287,7 +287,7 @@ struct RootView: View {
                 // thing; sending the user to a list of everything makes them
                 // find it again. Only an event with nowhere to go falls back.
                 center.activate(event)
-                if event.deepLink == nil { environment.isSignalFeedPresented = true }
+                if !event.hasDestination { environment.isSignalFeedPresented = true }
                 // Acted on, so it goes: a toast still sitting there after it
                 // took you somewhere reads as though the tap did nothing.
                 environment.signalToasts.dismiss(id: event.id)

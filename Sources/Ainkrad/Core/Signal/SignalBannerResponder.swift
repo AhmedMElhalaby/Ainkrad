@@ -54,7 +54,7 @@ final class SignalBannerResponder: NSObject, UNUserNotificationCenterDelegate {
         center.activate(event)
         // Nowhere to go: show the user the record instead of appearing to
         // ignore the click.
-        if event.deepLink == nil { onOpenFeed() }
+        if !event.hasDestination { onOpenFeed() }
     }
 
     /// `nonisolated` deliberately: `UNUserNotificationCenter` calls its delegate

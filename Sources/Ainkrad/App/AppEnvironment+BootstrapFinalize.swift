@@ -91,14 +91,20 @@ extension AppEnvironment {
         // Tapping a feed row opens the app that published it, with the event's
         // payload — the same cross-app launch path `HostServices.apps` uses, so
         // a deep link behaves exactly like an app opening another app.
-        signalCenter.onActivateDeepLink = { [weak environment] link in
+        //
+        // Factored into one closure because there are now two ways in: a deep
+        // link, which names a destination and carries a payload, and a bare
+        // reveal for the far more common notification that names no
+        // destination at all. Everything after "which app" is identical, and
+        // two copies of this would drift.
+        let reveal: (String, String?, Data?) -> Void = { [weak environment] appID, locator, payload in
             guard let environment else { return }
             let declared = environment.registry.allApps
-                .first { $0.id == link.appID }?.presentation ?? .pane
+                .first { $0.id == appID }?.presentation ?? .pane
             let effective = environment.appAppearanceStore
-                .presentationOverride(link.appID) ?? declared
+                .presentationOverride(appID) ?? declared
             let action = SignalReveal.action(
-                appID: link.appID,
+                appID: appID,
                 presentsAsOverlay: effective == .overlay,
                 workspaces: environment.workspaceManager.workspaces.map { workspace in
                     SignalRevealWorkspace(
@@ -114,7 +120,7 @@ extension AppEnvironment {
                 // is about. With three Rune panes open this is what makes the
                 // click land on the session that called, instead of the first
                 // pane of that app.
-                locator: link.locator)
+                locator: locator)
 
             // Enqueue only where something will actually collect it. The hub
             // holds ONE pending payload per app, so enqueuing on the `.focus`
@@ -122,14 +128,18 @@ extension AppEnvironment {
             // payload to be picked up by the next unrelated pane and clobbered
             // any legitimate pending launch on the way. See
             // `SignalRevealAction.deliversPayload`.
-            if action.deliversPayload {
-                pluginLaunchHub.enqueue(target: link.appID,
-                                        payload: String(decoding: link.payload, as: UTF8.self))
+            //
+            // A payload-less reveal must not enqueue AT ALL, for the same
+            // reason: an empty payload is still a payload as far as the hub is
+            // concerned, and it would evict a real one.
+            if let payload, action.deliversPayload {
+                pluginLaunchHub.enqueue(target: appID,
+                                        payload: String(decoding: payload, as: UTF8.self))
             }
 
             switch action {
             case .presentOverlay:
-                environment.presentedOverlayAppID = link.appID
+                environment.presentedOverlayAppID = appID
             case .focus(let workspaceID, let blockID):
                 // Focus what is already there. Going through `requestOpen`
                 // appended a SECOND pane, so following a notification took the
@@ -139,9 +149,15 @@ extension AppEnvironment {
                 }
                 environment.workspaceManager.activeWorkspace.tileLayout.focus(blockID)
             case .openNewPane:
-                pluginLaunchHub.requestOpen(link.appID)
+                pluginLaunchHub.requestOpen(appID)
             }
         }
+        signalCenter.onActivateDeepLink = { link in
+            reveal(link.appID, link.locator, link.payload)
+        }
+        // The fallback for the majority of notifications, which name no
+        // destination: go to the app that published it, carrying nothing.
+        signalCenter.onRevealSource = { appID in reveal(appID, nil, nil) }
         environment.signalCenter = signalCenter
         environment.notificationSounds = notificationSoundStore
         // Beside the preferences, not inside them: this is where the user was
