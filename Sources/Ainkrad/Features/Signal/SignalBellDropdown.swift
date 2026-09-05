@@ -91,16 +91,17 @@ struct SignalBellDropdown: View {
                     // pointer affordance and a listener never receives it.
                     .accessibilityLabel("Resume now")
             } else {
-                Menu {
-                    ForEach(SignalSnooze.allCases) { snooze in
-                        Button(snooze.label) { onSnooze(snooze) }
+                // The kit's own menu, not SwiftUI's `Menu`: that renders a stock
+                // AppKit menu -- grey slab, system corner radius, system highlight
+                // -- which landed in the middle of the HUD looking like it belonged
+                // to another application.
+                AinkradMenuButton(items: SignalSnooze.allCases.map { snooze in
+                    AinkradMenuItem(title: snooze.label, systemName: "bell.slash") {
+                        onSnooze(snooze)
                     }
-                } label: {
+                }) {
                     quietGlyph
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
                 .help("Go quiet")
                 .accessibilityLabel("Go quiet")
             }
