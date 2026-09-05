@@ -229,3 +229,79 @@ struct SignalSnoozeTests {
         #expect(suppression.quietEndMinute == 7 * 60)
     }
 }
+
+@MainActor
+@Suite("Feed view state")
+struct SignalViewStateFilterTests {
+    private let raven = SignalSource.app(appID: "raven")
+
+    @Test("the chip count ignores the rail's source selection")
+    func chipCountExcludesSource() {
+        // The rail has its own always-visible control. Counting it would make
+        // the Filters button claim a filter the user can already see is set.
+        var state = SignalViewState(selectedSource: raven)
+        #expect(state.chipFilterCount == 0)
+        state.severities = [.failure, .warning]
+        state.unreadOnly = true
+        #expect(state.chipFilterCount == 3)
+    }
+
+    @Test("grouping by app is impossible once a source is selected")
+    func groupingCollapsesUnderASourceFilter() {
+        // Every event would be from that source, so the grouped list is one
+        // group whose header names what the rail already names.
+        var state = SignalViewState(grouping: .bySource)
+        #expect(state.canGroupBySource)
+        #expect(state.effectiveGrouping == .bySource)
+
+        state.selectedSource = raven
+        #expect(!state.canGroupBySource)
+        #expect(state.effectiveGrouping == .byTime)
+    }
+
+    @Test("the stored grouping survives a source filter and comes back")
+    func groupingIsNotRewritten() {
+        // Silently rewriting the preference would lose a choice the user made
+        // deliberately, and they would have to make it again every time they
+        // looked at one app.
+        var state = SignalViewState(grouping: .bySource, selectedSource: raven)
+        #expect(state.effectiveGrouping == .byTime)
+        #expect(state.grouping == .bySource)
+
+        state.selectedSource = nil
+        #expect(state.effectiveGrouping == .bySource)
+    }
+}
+
+@MainActor
+@Suite("Feed overlay sizing")
+struct SignalFeedOverlaySizingTests {
+    @Test("it grows with the window instead of sitting at 820x560")
+    func scalesWithTheWindow() {
+        // The feed's chief job is reading a build error, which is the payload
+        // that needs height. A fixed box meant expanding a row scrolled rather
+        // than revealed, however much screen was going spare.
+        let small = CGSize(width: 1280, height: 800)
+        let large = CGSize(width: 2560, height: 1440)
+        #expect(SignalFeedOverlayView.height(in: large)
+                > SignalFeedOverlayView.height(in: small))
+        #expect(SignalFeedOverlayView.width(in: large)
+                > SignalFeedOverlayView.width(in: small))
+    }
+
+    @Test("it never shrinks below the point the rail stops fitting")
+    func hasAFloor() {
+        let tiny = CGSize(width: 600, height: 300)
+        #expect(SignalFeedOverlayView.width(in: tiny) == 720)
+        #expect(SignalFeedOverlayView.height(in: tiny) == 480)
+    }
+
+    @Test("it never grows past a readable line length")
+    func hasACeiling() {
+        // Past this a line of body text is too long to track back to the start
+        // of the next one.
+        let huge = CGSize(width: 6016, height: 3384)
+        #expect(SignalFeedOverlayView.width(in: huge) == 1100)
+        #expect(SignalFeedOverlayView.height(in: huge) == 900)
+    }
+}

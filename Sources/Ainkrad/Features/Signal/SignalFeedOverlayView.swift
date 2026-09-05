@@ -34,7 +34,28 @@ struct SignalFeedOverlayView: View {
 
     private var events: [SignalEvent] { searchResults ?? center.recent }
 
+    /// Sized to the window rather than pinned at 820x560.
+    ///
+    /// The row's own comment says what the feed is chiefly FOR: reading a build
+    /// error. That is the payload that needs height, and a fixed box meant
+    /// expanding a row scrolled rather than revealed, however much screen was
+    /// going spare. Clamped at both ends — below the minimum the rail and the
+    /// header stop fitting side by side, and above the maximum a line of body
+    /// text gets too long to track back to the next line.
+    ///
+    /// Proportional rather than a drag handle: this is a HUD overlay like every
+    /// other one in the app, none of which the user resizes by hand, and a grip
+    /// would be the only one of its kind.
+    static func width(in container: CGSize) -> CGFloat {
+        min(max(container.width * 0.62, 720), 1100)
+    }
+
+    static func height(in container: CGSize) -> CGFloat {
+        min(max(container.height * 0.72, 480), 900)
+    }
+
     var body: some View {
+        GeometryReader { proxy in
         ZStack {
             Color.black.opacity(0.32)
                 .ignoresSafeArea()
@@ -73,8 +94,11 @@ struct SignalFeedOverlayView: View {
                     isMuted: center.rules.suppression.isSuppressing(at: Date()),
                     onSnooze: { $0.apply(to: &center.rules.suppression, at: Date()) },
                     onResume: { SignalSnooze.lift(&center.rules.suppression) })
-                    .frame(width: 820, height: 560)
+                    .frame(width: Self.width(in: proxy.size),
+                           height: Self.height(in: proxy.size))
             }
+        }
+        .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .onAppear { if let stored = viewStateStore?.load() { viewState = stored } }
         .onChange(of: viewState) { _, new in viewStateStore?.save(new) }
@@ -102,8 +126,8 @@ struct SignalFeedOverlayView: View {
         }
     }
 
-    /// The row's right-click menu, built against live rules so the mute item
-    /// reads "Mute" or "Unmute" according to what is actually set.
+    /// The row's right-click menu, built against live rules so the item reads
+    /// "Quiet" or "Alert me about" according to what is actually set.
     private func menuItems(for event: SignalEvent) -> [AinkradMenuItem] {
         SignalRowMenu.items(
             for: event,

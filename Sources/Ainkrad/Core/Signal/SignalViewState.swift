@@ -49,6 +49,27 @@ struct SignalViewState: Codable, Equatable {
         selectedSource == nil && severities.isEmpty && !unreadOnly
     }
 
+    /// How many of the CHIP filters are on. The rail's source selection is
+    /// deliberately excluded: it has its own always-visible control, and
+    /// counting it would make the Filters button claim a filter the user can
+    /// already see is set.
+    var chipFilterCount: Int {
+        severities.count + (unreadOnly ? 1 : 0)
+    }
+
+    /// Whether grouping by app can say anything. With one source selected every
+    /// event is from that source, so the grouped list is a single group with a
+    /// header naming what the rail already names — the state that made two
+    /// controls answer one question.
+    var canGroupBySource: Bool { selectedSource == nil }
+
+    /// What the list should actually do, as opposed to what is stored. Stored
+    /// grouping survives selecting a source and comes back when the user
+    /// returns to All, rather than being silently rewritten.
+    var effectiveGrouping: Grouping {
+        canGroupBySource ? grouping : .byTime
+    }
+
     /// The store filter this view describes. Grouping and collapse are
     /// presentation only and deliberately absent.
     var filter: SignalFilter {

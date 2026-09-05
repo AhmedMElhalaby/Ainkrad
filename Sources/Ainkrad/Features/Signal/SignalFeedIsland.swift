@@ -37,6 +37,10 @@ struct SignalFeedIsland: View {
 
     @Environment(\.ainkradTheme) private var theme
     @Environment(\.ainkradStatusColors) private var status
+    /// Whether the chip row is showing. Not persisted: a row with filters set
+    /// is shown regardless, so the only thing this remembers is whether an
+    /// empty chip row is currently open, which is not a view the user built.
+    @State private var showsFilters = false
 
     /// Severity, source and unread are applied here rather than by re-querying:
     /// the caller may have handed us search results, and re-filtering in the
@@ -60,7 +64,7 @@ struct SignalFeedIsland: View {
                              onConfigure: onConfigureSource)
             VStack(alignment: .leading, spacing: 0) {
                 header
-                filterBar
+                if showsFilters || viewState.chipFilterCount > 0 { filterBar }
                 if isDegraded { degradedNotice }
                 content
             }
@@ -71,7 +75,7 @@ struct SignalFeedIsland: View {
     private var content: some View {
         if filtered.isEmpty && !events.isEmpty {
             noMatches
-        } else if viewState.grouping == .bySource {
+        } else if viewState.effectiveGrouping == .bySource {
             SignalFeedGroupedList(
                 groups: SignalPresentation.sourceGroups(filtered, readIDs: readIDs,
                                                         name: displayName),
@@ -92,12 +96,24 @@ struct SignalFeedIsland: View {
             Text("Notifications")
                 .font(AinkradFont.display(15, weight: .semibold))
                 .foregroundStyle(theme.foreground)
+                // Never wrapped. The header grew a Filters control, and at the
+                // overlay's minimum width SwiftUI paid for it by breaking the
+                // title across two lines — which reads as a layout fault, not
+                // as a tight fit.
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             if unread > 0 {
                 AinkradBadge(text: "\(unread) new", tint: theme.accentSecondary)
+                    .fixedSize()
             }
-            Spacer()
+            Spacer(minLength: AinkradSpacing.sm)
+            filtersButton
+                .fixedSize()
+            // The one flexible element in the row. Everything else here is a
+            // label or a glyph whose width is its content; the search field is
+            // the only thing that can give, so it is the only thing allowed to.
             AinkradSearchField(text: searchText, placeholder: "Search")
-                .frame(width: 190)
+                .frame(minWidth: 120, maxWidth: 190)
             quietControl
             if unread > 0 {
                 Button(action: onMarkAllRead) {
@@ -109,6 +125,8 @@ struct SignalFeedIsland: View {
                          : "Mark \(filtered.filter { !readIDs.contains($0.id) }.count) read")
                         .font(AinkradFont.display(10.5, weight: .medium))
                         .foregroundStyle(theme.accentPrimary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.plain)
             }
@@ -116,6 +134,32 @@ struct SignalFeedIsland: View {
         .padding(.horizontal, AinkradSpacing.lg)
         .padding(.top, AinkradSpacing.lg - 2)
         .padding(.bottom, AinkradSpacing.sm + 2)
+    }
+
+    /// One affordance instead of five chips sitting above a list that is
+    /// usually short. Chips appear on demand — and stay visible whenever
+    /// anything is actually filtering, because a hidden active filter is how a
+    /// user concludes the feed has lost their events.
+    private var filtersButton: some View {
+        let count = viewState.chipFilterCount
+        return Button {
+            withAnimation(.easeOut(duration: AinkradMotion.durationFast)) {
+                showsFilters.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 9.5, weight: .medium))
+                Text(count > 0 ? "Filters · \(count)" : "Filters")
+                    .font(AinkradFont.display(10.5, weight: .medium))
+            }
+            .foregroundStyle(count > 0 ? theme.accentSecondary
+                                       : theme.foreground.opacity(0.55))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(count > 0 ? "\(count) filters active" : "Filter this feed")
+        .accessibilityLabel(count > 0 ? "Filters, \(count) active" : "Filters")
     }
 
     /// The same shape the bell dropdown uses: a menu offering both durations,
@@ -175,10 +219,16 @@ struct SignalFeedIsland: View {
                     .font(AinkradFont.mono(9.5))
                     .foregroundStyle(theme.foreground.opacity(0.5))
             }
-            AinkradSegmentedPicker(
-                items: [SignalViewState.Grouping.byTime, .bySource],
-                selection: $viewState.grouping,
-                label: { $0 == .byTime ? "Time" : "App" })
+            // Only where it can say anything. With a source selected every
+            // event is from that source, so this and the rail were two controls
+            // answering one question — and their combination was a single
+            // group whose header named what the rail already named.
+            if viewState.canGroupBySource {
+                AinkradSegmentedPicker(
+                    items: [SignalViewState.Grouping.byTime, .bySource],
+                    selection: $viewState.grouping,
+                    label: { $0 == .byTime ? "Time" : "App" })
+            }
         }
         .padding(.horizontal, AinkradSpacing.lg)
         .padding(.bottom, AinkradSpacing.sm)
