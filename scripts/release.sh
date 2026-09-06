@@ -192,7 +192,13 @@ if [[ "$PUBLISH" == true ]]; then
     gh release upload "$TAG" "$ASSET" --clobber
   else
     echo "▸ Creating release ${TAG}…"
+    # `--target` is NOT optional. Without it `gh release create` tags the
+    # repository's DEFAULT BRANCH head, not the commit this bundle was built
+    # from -- so the uploaded zip and its sha256 can come from code the tag does
+    # not contain. That shipped: the host's v0.17.1 tag landed on the previous
+    # release's commit while its asset held 79 newer commits.
     gh release create "$TAG" "$ASSET" \
+      --target "$(git rev-parse HEAD)" \
       --title "Ainkrad ${VERSION}" \
       --generate-notes
   fi
