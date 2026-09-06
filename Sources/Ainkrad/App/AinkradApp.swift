@@ -17,6 +17,10 @@ struct AinkradHostApp: App {
     @State private var environment: AppEnvironment
 
     init() {
+        // FIRST statement in the process's own code: everything below this line,
+        // including Home resolution and its `exit(0)` recovery path, is then
+        // covered by the handler.
+        CrashSentinel.install()
         FontRegistrar.registerBundledFonts()
         let home: Home
         // First run: no pointer, so nothing to resolve. The app does NOT ask for a

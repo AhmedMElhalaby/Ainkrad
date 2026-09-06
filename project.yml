@@ -194,6 +194,7 @@ targets:
       # diagram renderer in CanvasDiagramView (Task 10). Everything else
       # stays native SwiftUI per the Cardinal HUD design language.
       - sdk: WebKit.framework
+      - sdk: MetricKit.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
