@@ -53,6 +53,14 @@ extension AppEnvironment {
         // the Notifications pane never said so.
         let notificationSoundStore = NotificationSoundStore(
             settings: loadedSignalPreferences.sound)
+        // WHETHER a notification cue plays is this store's business; WHICH
+        // asset it plays is chosen in Settings → Sound, which writes to the
+        // general store. Reading it here is what makes that choice take effect
+        // — without it the per-event picker moved, previewed correctly, and
+        // changed nothing about the sound an actual notification made.
+        notificationSoundStore.effectSource = { [weak environment] event in
+            environment?.generalSettingsStore.effect(for: event) ?? event
+        }
         let notificationSounds = SoundEngine(settings: notificationSoundStore,
                                              overrideDirectory: home.shared(.sounds))
         let signalCenter = AppEnvironment.makeSignalCenter(
