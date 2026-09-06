@@ -49,9 +49,27 @@ final class NotificationSoundStore: SoundSettingsProviding {
 
     init(settings: NotificationSoundSettings) { self.settings = settings }
 
+    /// Which asset a cue actually plays, when the user has chosen one.
+    ///
+    /// Set by the bootstrap to read `GeneralSettingsStore`. A closure rather
+    /// than a reference to that store, so this type keeps knowing nothing about
+    /// settings plumbing and the mapping stays trivially testable.
+    @ObservationIgnored var effectSource: ((UISound) -> UISound)?
+
     var soundEnabled: Bool { settings.isEnabled }
     var soundVolume: Double { settings.volume }
-    // `isEventEnabled` and `effect(for:)` take the protocol's defaults: the
-    // notification cues are not in General → Sound's per-event list, and
-    // remapping them is a later phase's concern.
+
+    /// `isEventEnabled` still takes the protocol's default. That is deliberate:
+    /// General → Sound governs interface chrome, and letting it silence a
+    /// failure alert is exactly the bug this type was split out to prevent.
+    /// The notification pane stays the authority on WHETHER a cue plays.
+    ///
+    /// The EFFECT is a different question, and the old note here — "the
+    /// notification cues are not in General → Sound's per-event list" — stopped
+    /// being true. `SoundSettingsView` iterates `UISound.allCases`, so all five
+    /// notification cues appear there with names like "Notification — Urgent".
+    /// The user picked an effect, heard the ▶ preview play it, and then heard
+    /// the default when a notification arrived, because this returned the
+    /// protocol's identity default and never read the choice.
+    func effect(for event: UISound) -> UISound { effectSource?(event) ?? event }
 }

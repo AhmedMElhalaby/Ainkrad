@@ -295,3 +295,50 @@ struct GeneralSettingsStorePerEventTests {
         _ = store
     }
 }
+
+@MainActor
+@Suite("Notification cue effect selection")
+struct NotificationCueEffectTests {
+    @Test("a notification cue plays the effect chosen in Settings -> Sound")
+    func honoursTheChosenEffect() {
+        let store = NotificationSoundStore(settings: NotificationSoundSettings())
+        // Nothing wired: the cue is its own effect, which is the old behaviour
+        // and still right for a fresh install.
+        #expect(store.effect(for: .signalUrgent) == .signalUrgent)
+
+        // The user opens Settings -> Sound, finds "Notification - Urgent" in
+        // the per-event list (it IS there: the view iterates UISound.allCases),
+        // and points it at a different asset. The preview played it; the real
+        // notification did not, because this store returned the protocol's
+        // identity default and never read that choice.
+        store.effectSource = { $0 == .signalUrgent ? .confirm : $0 }
+        #expect(store.effect(for: .signalUrgent) == .confirm)
+        #expect(store.effect(for: .signalFail) == .signalFail)
+    }
+
+    @Test("the engine plays the remapped asset, not the cue's own")
+    func enginePlaysTheRemappedAsset() {
+        let store = NotificationSoundStore(settings: NotificationSoundSettings(isEnabled: true, volume: 1))
+        store.effectSource = { $0 == .signalUrgent ? .confirm : $0 }
+        let chosen = FakeAudioPlayback()
+        let cue = FakeAudioPlayback()
+        let engine = SoundEngine(settings: store, players: [.confirm: chosen, .signalUrgent: cue])
+
+        engine.play(.signalUrgent)
+
+        #expect(chosen.playCallCount == 1)
+        #expect(cue.playCallCount == 0, "the cue's own asset must not play once remapped")
+    }
+
+    @Test("the notification master switch still governs, independent of General -> Sound")
+    func notificationMasterStillWins() {
+        let store = NotificationSoundStore(settings: NotificationSoundSettings(isEnabled: false, volume: 1))
+        store.effectSource = { _ in .confirm }
+        let chosen = FakeAudioPlayback()
+        let engine = SoundEngine(settings: store, players: [.confirm: chosen])
+
+        engine.play(.signalUrgent)
+
+        #expect(chosen.playCallCount == 0)
+    }
+}
