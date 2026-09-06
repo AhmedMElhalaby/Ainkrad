@@ -63,4 +63,26 @@ struct CrashLogWriterTests {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         #expect(CrashLogWriter(directory: dir).readAll().isEmpty)
     }
+
+    @Test func appendFailurePreservesEarlierRecordsAndDoesNotTrap() {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Write two good records through a normal writer
+        let normalWriter = CrashLogWriter(directory: dir)
+        normalWriter.append(report("first"))
+        normalWriter.append(report("second"))
+        #expect(normalWriter.readAll().map(\.summary) == ["first", "second"])
+
+        // Construct a writer with a custom appendBytes that always throws
+        let failingAppendBytes: (Data, URL) throws -> Void = { _, _ in
+            throw NSError(domain: "TestError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Simulated write failure"])
+        }
+        let failingWriter = CrashLogWriter(directory: dir, appendBytes: failingAppendBytes)
+
+        // This append should not trap; it logs the failure and continues
+        failingWriter.append(report("third"))
+
+        // The earlier good records should still be readable
+        #expect(failingWriter.readAll().map(\.summary) == ["first", "second"])
+    }
 }

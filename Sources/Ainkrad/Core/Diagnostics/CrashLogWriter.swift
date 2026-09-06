@@ -18,6 +18,9 @@ final class CrashLogWriter: @unchecked Sendable {
 
     let fileURL: URL
 
+    // Internal seam for testing: allows injection of a custom append implementation
+    internal let appendBytes: (Data, URL) throws -> Void
+
     static var defaultDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/Ainkrad", isDirectory: true)
@@ -29,6 +32,27 @@ final class CrashLogWriter: @unchecked Sendable {
         self.fileManager = fileManager
         self.fileURL = directory.appendingPathComponent("diagnostics.ndjson")
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        self.appendBytes = Self.defaultAppendBytes
+    }
+
+    // Internal initializer for testing with a custom appendBytes implementation
+    internal init(directory: URL, maxBytes: Int = 1_048_576, fileManager: FileManager = .default, appendBytes: @escaping (Data, URL) throws -> Void) {
+        self.directory = directory
+        self.maxBytes = maxBytes
+        self.fileManager = fileManager
+        self.fileURL = directory.appendingPathComponent("diagnostics.ndjson")
+        try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        self.appendBytes = appendBytes
+    }
+
+    private static func defaultAppendBytes(data: Data, to fileURL: URL) throws {
+        if let handle = try? FileHandle(forWritingTo: fileURL) {
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: data)
+        } else {
+            try data.write(to: fileURL, options: .atomic)
+        }
     }
 
     func append(_ report: CrashReport) {
@@ -39,18 +63,16 @@ final class CrashLogWriter: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         rotateIfNeeded(incoming: line.count)
-        if let handle = try? FileHandle(forWritingTo: fileURL) {
-            defer { try? handle.close() }
-            do {
-                try handle.seekToEnd()
-                try handle.write(contentsOf: line)
-            } catch {
-                Log.diagnostics.error("Failed to append to crash log; dropping this record: \(error)")
-                // Fall back to atomic write of the new record alone
-                try? line.write(to: fileURL, options: .atomic)
-            }
-        } else {
-            try? line.write(to: fileURL, options: .atomic)
+        do {
+            try appendBytes(line, fileURL)
+        } catch {
+            // Do NOT fall back to `line.write(to:options:.atomic)` here. Unlike the
+            // case where `FileHandle(forWritingTo:)` fails (file does not exist yet) —
+            // reaching this catch means the file EXISTS and holds earlier records.
+            // An atomic write would replace all of them with this one line.
+            // Losing the newest record is survivable; losing the crash trail is not.
+            // A partially-written tail line is fine: `readAll` drops undecodable lines.
+            Log.diagnostics.error("Failed to append to crash log; dropping this record: \(error)")
         }
     }
 
