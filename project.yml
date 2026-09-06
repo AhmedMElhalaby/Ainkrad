@@ -143,12 +143,19 @@ packages:
     # which a menu ignored Appearance -> Overlays while every panel around it
     # obeyed. Purely additive: one new public type, nothing removed.
     #
+    # 0.17.2: urgent notifications are audible. `.urgent` promised "never
+    # silent" and inserted only a toast/banner and a badge -- sound comes from
+    # the severity table, where only `.failure` earns one, so an agent BLOCKED
+    # on the user (`.info` severity, nothing has gone wrong) raised a toast and
+    # made no sound. Behaviour-only: the AinkradSignal public surface is
+    # byte-identical to e264efb.
+    #
     # Pin safety, checked by hand because `make abi-check` covers only
     # AinkradAppKitContract and AinkradSignal, NOT AinkradAppKitUI where this
     # change lives: the public-declaration diff over AinkradAppKitUI between
     # 189d30f and 1601f08 is EMPTY -- nothing removed, nothing re-mangled --
     # so a plugin pinned behind this still loads.
-    revision: e264efb5e4f6208729af195faaabe0cae171a31f
+    revision: 6cd1599a602e0a7d20f5d9d87b08c547417f3a4e
 
 targets:
   AinkradHostRuntime:
@@ -190,7 +197,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.app
-        MARKETING_VERSION: "0.17.1"
+        MARKETING_VERSION: "0.17.2"
         CURRENT_PROJECT_VERSION: "18"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
