@@ -41,8 +41,14 @@ final class CrashLogWriter: @unchecked Sendable {
         rotateIfNeeded(incoming: line.count)
         if let handle = try? FileHandle(forWritingTo: fileURL) {
             defer { try? handle.close() }
-            handle.seekToEndOfFile()
-            handle.write(line)
+            do {
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+            } catch {
+                Log.diagnostics.error("Failed to append to crash log; dropping this record: \(error)")
+                // Fall back to atomic write of the new record alone
+                try? line.write(to: fileURL, options: .atomic)
+            }
         } else {
             try? line.write(to: fileURL, options: .atomic)
         }
